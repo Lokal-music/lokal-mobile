@@ -20,7 +20,10 @@ enum AudioEngineType {
   bool get isDirectUsbExperimental =>
       this == AudioEngineType.usbDacExperimental;
 
-  bool get isAndroidManaged => this != AudioEngineType.usbDacExperimental;
+  bool get isAndroidManaged =>
+      this == AudioEngineType.normalAndroid ||
+      this == AudioEngineType.rustOboe ||
+      this == AudioEngineType.dapInternalHighRes;
 
   String get backendType => switch (this) {
     AudioEngineType.normalAndroid => 'resampled_fallback',

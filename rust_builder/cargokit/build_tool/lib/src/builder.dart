@@ -153,6 +153,7 @@ class RustBuilder {
         _toolchain,
         'cargo',
         'build',
+        '--lib',
         ...extraArgs,
         '--manifest-path',
         manifestPath,

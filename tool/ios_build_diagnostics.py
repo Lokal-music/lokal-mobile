@@ -9,7 +9,7 @@ source = Path(sys.argv[1]).read_text(errors='replace')
 lines = source.splitlines()
 selected = set()
 for index, line in enumerate(lines):
-    if re.search(r'error:|error •|compiler error|fatal error|swift.*error|\*\* BUILD FAILED', line, re.I):
+    if re.search(r'error:|error •|compiler error|fatal error|swift.*error|could not|exception|\*\* BUILD FAILED', line, re.I):
         selected.update(range(max(0, index - 2), min(len(lines), index + 5)))
 for index in sorted(selected):
     print(lines[index])

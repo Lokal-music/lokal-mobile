@@ -10,6 +10,9 @@ import UniformTypeIdentifiers
 /// configures AVAudioSession; this bridge owns system commands and documents.
 final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
   private let player: FlutterMethodChannel
+  private let integration: FlutterMethodChannel
+  private var pendingPlayback: [String: Any]?
+  private var dartReady = false
   private var channels: [FlutterMethodChannel] = []
   private var commandTargets: [(MPRemoteCommand, Any)] = []
   private var pickerResult: FlutterResult?
@@ -19,6 +22,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
 
   init(messenger: FlutterBinaryMessenger) {
     player = FlutterMethodChannel(name: "com.mossapps.flick/player", binaryMessenger: messenger)
+    integration = FlutterMethodChannel(name: "com.mossapps.flick/integration", binaryMessenger: messenger)
     super.init()
     spotify = LokalSpotifySession(messenger: messenger, presenter: { [weak self] in self?.presenter })
     player.setMethodCallHandler { [weak self] call, result in
@@ -42,9 +46,14 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
         "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
       ])
     }
-    register("com.mossapps.flick/integration", messenger) { call, result in
+    integration.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { return }
       switch call.method {
-      case "consumePendingExternalPlayback": result(nil)
+      case "consumePendingExternalPlayback":
+        self.dartReady = true
+        let payload = self.pendingPlayback
+        self.pendingPlayback = nil
+        result(payload)
       case "returnToLocker": result(false)
       default: result(FlutterMethodNotImplemented)
       }
@@ -205,6 +214,32 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
 
   func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
     guard let result = pickerResult else { return }
+    copyDocuments(urls) { imported in
+      self.pickerResult = nil
+      switch imported {
+      case .success: result(try? self.libraryRoot().path)
+      case .failure:
+        result(FlutterError(code: "IMPORT_FAILED", message: "Music could not be copied. Check available space and file access.", details: nil))
+      }
+    }
+  }
+
+  /// Open-in from Files uses the same scoped, transactional copy as the picker.
+  /// Never retain a temporary external URL as a library or playback location.
+  func openDocuments(_ urls: [URL]) {
+    let files = urls.filter { $0.isFileURL }
+    guard !files.isEmpty else { return }
+    copyDocuments(files) { imported in
+      guard case .success(let destination) = imported,
+            let first = files.first else { return }
+      let local = destination.appendingPathComponent(first.lastPathComponent)
+      let payload: [String: Any] = ["uri": local.path, "displayName": first.lastPathComponent]
+      if self.dartReady { self.integration.invokeMethod("externalPlaybackIntent", arguments: payload) }
+      else { self.pendingPlayback = payload }
+    }
+  }
+
+  private func copyDocuments(_ urls: [URL], completion: @escaping (Result<URL, Error>) -> Void) {
     // Keep the import busy until copying is complete, including remote providers.
     fileQueue.async {
       do {
@@ -232,12 +267,9 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
         }
         let destination = root.appendingPathComponent("Import-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.moveItem(at: staging, to: destination)
-        DispatchQueue.main.async { self.pickerResult = nil; result(root.path) }
+        DispatchQueue.main.async { completion(.success(destination)) }
       } catch {
-        DispatchQueue.main.async {
-          self.pickerResult = nil
-          result(FlutterError(code: "IMPORT_FAILED", message: "Music could not be copied. Check available space and file access.", details: nil))
-        }
+        DispatchQueue.main.async { completion(.failure(error)) }
       }
     }
   }

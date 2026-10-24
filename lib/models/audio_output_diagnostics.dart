@@ -7,6 +7,7 @@ enum AudioPathManagement {
   directUsbExperimental,
   alsaDirectDap,
   managedDirectExclusive,
+  iosSystemManaged,
 }
 
 @immutable
@@ -128,9 +129,11 @@ class AudioOutputDiagnostics {
   final String? fallbackReason;
   final AudioCapabilityFlags capabilityFlags;
   final UrbTransportInfo? urbTransport;
+
   /// Actual negotiated DSD delivery mode from the engine (`native`/`dop`/`pcm`),
   /// not the preference-derived format shown by the device status.
   final String? dsdEffectiveMode;
+
   /// Actual wire DSD transport label (e.g. `usb-dop-24-bit`, `usb-dsd-native`);
   /// null for PCM.
   final String? dsdTransport;

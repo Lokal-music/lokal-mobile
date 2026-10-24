@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flick/core/utils/uri_display_utils.dart';
+import 'package:flick/src/rust/api/scanner.dart' as rust_scanner;
 
 import 'permission_service.dart';
 import 'fingerprint_cache_service.dart';
@@ -460,6 +461,39 @@ class MusicFolderService {
 
   /// Fetch rich metadata for a list of audio file URIs.
   Future<List<AudioFileInfo>> fetchMetadata(List<String> uris) async {
+    if (Platform.isIOS) {
+      final files = <AudioFileInfo>[];
+      for (final uri in uris) {
+        final path = uri.startsWith('file:')
+            ? Uri.parse(uri).toFilePath()
+            : uri;
+        final metadata = await rust_scanner.extractFileMetadata(path: path);
+        if (metadata == null) continue;
+        files.add(
+          AudioFileInfo(
+            uri: path,
+            name: Uri.file(path).pathSegments.last,
+            size: metadata.fileSize.toInt(),
+            lastModified: metadata.lastModified.toInt(),
+            extension: metadata.format,
+            filePath: path,
+            title: metadata.title,
+            artist: metadata.artist,
+            album: metadata.album,
+            albumArtist: metadata.albumArtist,
+            trackNumber: metadata.trackNumber,
+            discNumber: metadata.discNumber,
+            duration: metadata.durationMs?.toInt(),
+            bitrate: metadata.bitrate?.toString(),
+            bitDepth: metadata.bitDepth,
+            sampleRate: metadata.sampleRate,
+            genre: metadata.genre,
+            year: metadata.year,
+          ),
+        );
+      }
+      return files;
+    }
     try {
       final result = await _channel.invokeMethod<List<dynamic>>(
         'fetchAudioMetadata',
@@ -478,6 +512,10 @@ class MusicFolderService {
   }
 
   Future<Uint8List?> fetchEmbeddedArtwork(String uri) async {
+    if (Platform.isIOS) {
+      final path = uri.startsWith('file:') ? Uri.parse(uri).toFilePath() : uri;
+      return rust_scanner.extractEmbeddedArtwork(path: path);
+    }
     try {
       return await _channel.invokeMethod<Uint8List>('fetchEmbeddedArtwork', {
         'uri': uri,

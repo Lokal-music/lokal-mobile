@@ -2601,6 +2601,7 @@ class PlayerService {
   /// only available on the software and system tiers when the toggle is on;
   /// hardware, passthrough, DoP and casting paths stay clamped at 1.0.
   double get maxVolume {
+    if (Platform.isIOS && !_usingRustBackend) return 1.0;
     if (!_extendedVolumeEnabled || _castingService.isActive) return 1.0;
     final tier = _determineCurrentTier();
     return (tier == VolumeTier.software || tier == VolumeTier.system)
@@ -2731,6 +2732,21 @@ class PlayerService {
     final mode = currentEngineType;
     final activeEngineType = _playbackManager.activeEngineType ?? mode;
     final usesRustDiagnostics = activeEngineType.usesRustBackend;
+    Map<String, dynamic>? iosRoute;
+    if (Platform.isIOS) {
+      try {
+        iosRoute = await const MethodChannel('lokal/ios')
+            .invokeMapMethod<String, dynamic>('audioRoute');
+      } on PlatformException {
+        // Do not invent a negotiated output rate when Apple cannot report it.
+      } on MissingPluginException {
+        // The integration smoke test separately verifies native registration.
+      }
+    }
+    final iosOutputs = (iosRoute?['outputs'] as List?)
+        ?.whereType<Map>()
+        .toList();
+    final iosOutput = iosOutputs?.isNotEmpty == true ? iosOutputs!.first : null;
     final song = activeSong ?? currentSongNotifier.value;
     final trackFormat = _deriveUac2FormatFromSong(song);
     final deviceInfo = Platform.isAndroid
@@ -2836,7 +2852,9 @@ class PlayerService {
         deviceInfo.hasAttachedUac2Device ||
         deviceInfo.looksLikeUsbAudioRoute;
 
-    final pathManagement = !Platform.isAndroid
+    final pathManagement = Platform.isIOS
+        ? AudioPathManagement.iosSystemManaged
+        : !Platform.isAndroid
         ? AudioPathManagement.androidManagedShared
         : !usesRustDiagnostics
         ? AudioPathManagement.androidManagedShared
@@ -2852,24 +2870,32 @@ class PlayerService {
         pathManagement != AudioPathManagement.directUsbExperimental &&
         pathManagement != AudioPathManagement.alsaDirectDap &&
         pathManagement != AudioPathManagement.managedDirectExclusive;
-    final requestedOutputSampleRate =
-        (!usesRustDiagnostics ? trackFormat?.sampleRate : null) ??
-        engineRequestedSampleRate ??
-        (pathManagement == AudioPathManagement.directUsbExperimental
-            ? directUsbConfiguredSampleRate
-            : engineConfiguredSampleRate ?? trackFormat?.sampleRate);
-    final reportedOutputSampleRate = !usesRustDiagnostics
+    final requestedOutputSampleRate = Platform.isIOS
+        ? engineRequestedSampleRate
+        : (!usesRustDiagnostics ? trackFormat?.sampleRate : null) ??
+              engineRequestedSampleRate ??
+              (pathManagement == AudioPathManagement.directUsbExperimental
+                  ? directUsbConfiguredSampleRate
+                  : engineConfiguredSampleRate ?? trackFormat?.sampleRate);
+    final reportedOutputSampleRate = Platform.isIOS
+        ? (iosRoute?['sampleRate'] as num?)?.round()
+        : !usesRustDiagnostics
         ? null
         : directUsbActive
         ? directUsbClockReportedSampleRate
         : engineActualSampleRate ?? engineConfiguredSampleRate;
     final resamplerActive =
+        (Platform.isIOS &&
+            trackFormat?.sampleRate != null &&
+            reportedOutputSampleRate != null &&
+            trackFormat!.sampleRate != reportedOutputSampleRate) ||
         (usesRustDiagnostics && engineResamplerActive) ||
         (requestedOutputSampleRate != null &&
             usesRustDiagnostics &&
             reportedOutputSampleRate != null &&
             requestedOutputSampleRate != reportedOutputSampleRate);
-    final passthroughAllowed = usesRustDiagnostics && enginePassthroughAllowed;
+    final passthroughAllowed =
+        !Platform.isIOS && usesRustDiagnostics && enginePassthroughAllowed;
     // These checks describe the active configuration, clock and framing.
     // They are not an independent byte-for-byte comparison against the source.
     final effectiveBitPerfect = directUsbActive
@@ -2889,7 +2915,9 @@ class PlayerService {
                       ? 'Direct USB verification failed'
                       : null)
             : null);
-    final outputStrategyLabel = !usesRustDiagnostics
+    final outputStrategyLabel = Platform.isIOS
+        ? 'iOS system-managed'
+        : !usesRustDiagnostics
         ? 'Android shared'
         : switch (outputStrategy) {
             'dap_native' => 'DAP native',
@@ -2902,7 +2930,11 @@ class PlayerService {
             'resampled_fallback' => 'Resampled fallback',
             _ => 'Adaptive',
           };
-    final backendDescription = !usesRustDiagnostics
+    final backendDescription = Platform.isIOS
+        ? (usesRustDiagnostics
+              ? 'Rust decoders / Core Audio'
+              : 'just_audio / AVPlayer')
+        : !usesRustDiagnostics
         ? 'just_audio / ExoPlayer'
         : switch (outputStrategy) {
             'usb_dsd_native' => 'Rust engine via USB direct native DSD',
@@ -2936,7 +2968,9 @@ class PlayerService {
             _ => 'Rust adaptive playback engine',
           };
 
-    final capabilityStateLabel = !usesRustDiagnostics
+    final capabilityStateLabel = Platform.isIOS
+        ? 'System audio · bit-perfect output not verified'
+        : !usesRustDiagnostics
         ? (androidManagedUsbRoute
               ? 'Android shared (USB route)'
               : 'Android shared')
@@ -3118,9 +3152,11 @@ class PlayerService {
       outputStrategyLabel: outputStrategyLabel,
       capabilityStateLabel: capabilityStateLabel,
       backendDescription: backendDescription,
-      routeType: deviceInfo.routeType ?? 'unknown',
-      routeLabel: deviceInfo.routeSummary,
+      routeType:
+          iosOutput?['type'] as String? ?? deviceInfo.routeType ?? 'unknown',
+      routeLabel: iosOutput?['name'] as String? ?? deviceInfo.routeSummary,
       outputDeviceLabel:
+          iosOutput?['name'] as String? ??
           _stringValue(
             directUsbState?['product_name'] ?? directUsbState?['productName'],
           ) ??
