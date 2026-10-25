@@ -3,6 +3,7 @@ package com.mossapps.flick.widgets
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.os.Bundle
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.os.Build
@@ -17,6 +18,15 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         WidgetUpdateDispatcher.submit(this, context, manager, ids) { id ->
             render(context.applicationContext, manager, id)
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        manager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        onUpdate(context, manager, intArrayOf(appWidgetId))
     }
 
     private fun render(context: Context, manager: AppWidgetManager, id: Int): RemoteViews {
