@@ -726,11 +726,11 @@ class AndroidAudioEngine implements AudioEngine {
       }
       _loadedSingleTrackOnly = true;
       _playlistSignature = const <String>[];
-      // _configurePlayer may have set native Repeat All before the single
-      // source was installed. Never loop a one-item Media3 sequence when
-      // the logical queue still contains different upcoming songs.
+      // Reapply the *logical* loop preference after entering fast-start.
+      // Repeat All becomes manual advancement for a one-item native source,
+      // while Repeat One must remain native LoopMode.one.
       if (playlist.length > 1) {
-        await player.setLoopMode(just_audio.LoopMode.off);
+        await _configurePlayer(player);
       }
     } else {
       devLog('[Playback] Android load(${track.id}) rebuilding playlist');
