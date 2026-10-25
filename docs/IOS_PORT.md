@@ -7,9 +7,10 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
 The first unsigned engineering IPA passed package inspection (33 Mach-O binaries,
 iPhone arm64 platform, bundle metadata and checksum). Native Rust probes pass for
-both device and Apple Silicon simulator with raw USB excluded. **The simulator
-app exits during startup, before the Dart VM service appears. Runtime acceptance
-has not passed.** Native console/crash-report collection is now part of CI.
+both device and Apple Silicon simulator with raw USB excluded. **Runtime acceptance
+has not passed: the automatically selected iOS 18.5 simulator aborts loading
+`libswiftWebKit`, matching [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831).
+CI now explicitly selects iOS 26.0; this runtime correction is awaiting its run.** Native console/crash-report collection is now part of CI.
 No signed installation or physical iPhone behavior is validated.
 
 The engineering artifact is in
@@ -35,7 +36,10 @@ It is a diagnostic build, not a qualified release. See
   operations; the current native launch failure blocks execution.
 
 Chromecast sender integration, WidgetKit, Discord feasibility and resumable
-background transfers remain open work. Shared UI and source availability do not
+background transfers remain open work. Live add-on stream handles currently
+retain the system streaming adapter and explicitly report Rust DSP bypass;
+DSP support for those sources remains open rather than attempting to open an
+opaque stream handle as a native file. Shared UI and source availability do not
 establish iOS parity.
 
 ## Product brief
@@ -412,8 +416,18 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
   a crossfade timeout. All 26 other failing test cases reproduced on the untouched
   audit baseline; the crossfade hang reproduced separately there too. The full
   suite remains red; this comparison does not turn baseline failures into passes.
-- Simulator startup currently exits before Dart attachment. The smoke test has
-  not passed. Screenshots from a terminated app are not product UI evidence.
+- Native console identified the startup abort: iOS 18.5 simulator cannot load
+  `libswiftWebKit`, matching WebKit bug 293831. The launcher subprocess can linger
+  after this dyld failure, so the probe now also checks the actual app service.
+  CI selects iOS 26.0 explicitly. The smoke test has not passed yet.
+- The smoke harness uses the supported Flutter drive existing-app adapter and
+  probes the real loopback Dart VM directly, with native console capture and
+  bounded timeouts. Its HTTP handshake was checked against a real local Dart VM;
+  that check is not an iOS runtime pass.
+- FFmpeg's 25,612,207-byte native archive matches the pinned GitHub release digest
+  `63da3becdd2c7cefd77292054683e4f9b712efd09a4d8a8b2319d92f9fbcdd30`.
+  CI verifies it before regenerating native dependency outputs; the archive-fetch
+  and CI handoff were exercised in an isolated temporary package fixture.
 - No physical iPhone, Windows re-sign/install/update, background playback,
   Bluetooth/USB/AirPlay receiver, or live-account acceptance has occurred.
 

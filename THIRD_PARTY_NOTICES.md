@@ -40,6 +40,17 @@ Keep the license files distributed with `rust/vendor`, `rust_builder/cargokit`, 
 
 No affiliation with or endorsement by Google, YouTube, Spotify, Tidal, Deezer, Discord, Last.fm or ListenBrainz is implied.
 
+## iPhone native dependencies
+
+The locked `ffmpeg_kit_flutter_new_audio` 2.5.7 plugin uses the FFmpegKit 8.1.2
+audio distribution from [sk3llo/ffmpeg_kit_flutter](https://github.com/sk3llo/ffmpeg_kit_flutter/releases/tag/8.1.2-audio).
+The plugin and native FFmpeg/FFmpegKit framework notices identify LGPL-3.0;
+bundled codecs retain their separate licenses. The IPA preserves the native
+framework `LICENSE` and codec `LICENSE.*` files, together with Flutter's generated
+`NOTICES.Z` license registry. Do not strip these when repackaging or re-signing.
+The application's source archive and dependency lockfiles accompany engineering
+artifacts; upstream source/build scripts remain available from the linked project.
+
 ## Mornye Discord Social SDK bridge
 
 Android native bridge adapted from [Mornye](https://github.com/mornyeapp/Mornye) (Copyright © 2026 zarzet), under the MIT License. Full license: `third_party/mornye_discord/LICENSE`. Discord SDK binaries are separately licensed; when staged, their official notices are packaged in Android assets.

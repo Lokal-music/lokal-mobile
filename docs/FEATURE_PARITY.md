@@ -9,8 +9,8 @@ The iPhone port is **implemented in part, not runtime-qualified**. Hosted builds
 produce a simulator app and unsigned release/AOT IPA; both native Rust targets
 compile. iOS storage, audio/session/media adapters, Spotify session bridge and
 platform settings are implemented, with focused shared regression checks. The
-simulator currently exits before Dart attachment; native startup investigation
-continues. No iPhone installation or hardware behavior is validated.
+selected iOS 18.5 simulator failed loading `libswiftWebKit` (WebKit bug 293831);
+CI now explicitly selects iOS 26.0, with runtime acceptance still pending. No iPhone installation or hardware behavior is validated.
 
 See the [iOS architecture and evidence ledger](IOS_PORT.md) and
 [Windows sideloading guide](IOS_SIDELOADING.md). The tables below describe the

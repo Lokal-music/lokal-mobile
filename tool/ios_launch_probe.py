@@ -22,6 +22,11 @@ with (output / 'ios-launch.log').open('w') as console:
         exited = True
     except subprocess.TimeoutExpired:
         exited = False
+    processes = subprocess.check_output(
+        ['xcrun', 'simctl', 'spawn', device, 'launchctl', 'list'], text=True)
+    services = [line.split() for line in processes.splitlines()
+                if 'UIKitApplication:app.lokal.mobile[' in line]
+    alive = any(parts and parts[0].isdigit() for parts in services)
     subprocess.run(['xcrun', 'simctl', 'io', device, 'screenshot',
                     str(output / 'lokal-iphone.png')], check=True)
     if not exited:
@@ -43,6 +48,6 @@ for root in roots:
             if report.is_file() and report.stat().st_mtime >= started and report.suffix in ('.ips', '.crash'):
                 shutil.copy2(report, reports / report.name)
 print((output / 'ios-launch.log').read_text(errors='replace')[-20000:])
-if exited:
+if exited or not alive:
     raise SystemExit('Native app exited during the first 15 seconds; inspect launch log and crash reports')
 print('Native app remained running through the first-launch probe')

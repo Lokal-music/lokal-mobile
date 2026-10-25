@@ -88,6 +88,7 @@ def main() -> None:
     metadata["rust"] = command("rustc", "+1.98.0", "--version")
     metadata["cocoapods"] = command("pod", "--version")
     metadata["iphoneos_sdk"] = command("xcrun", "--sdk", "iphoneos", "--show-sdk-version")
+    metadata["ffmpeg_ios_archive_sha256"] = os.environ.get("LOKAL_FFMPEG_IOS_SHA256", "not recorded")
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         raise ValueError("Refusing to overwrite an existing IPA; clean the output first")

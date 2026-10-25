@@ -29,6 +29,7 @@ jobs:
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
       IPHONEOS_DEPLOYMENT_TARGET: '15.0'
       DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+      IOS_SIMULATOR_RUNTIME_VERSION: '26.0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,6 +52,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/lokal-ios-assets"
           "$RUNNER_TEMP/lokal-ios-assets/bin/pip" install -r tool/requirements-release-art.txt
           "$RUNNER_TEMP/lokal-ios-assets/bin/python" tool/gen_ios_icons.py
+      - name: Verify the FFmpeg native dependency
+        run: python3 tool/ios_prepare_ffmpeg.py
       - name: Check application and integration-test compilation
         run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib integration_test
       - name: Check the native build helper before Xcode
@@ -67,6 +70,7 @@ jobs:
       - name: Build the release iPhone app without signing credentials
         run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}'
       - name: Inspect and package the engineering IPA
+        id: package
         run: |
           python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa
           git archive --format=tar.gz HEAD -o build/ios/ipa/Lokal-source.tar.gz
@@ -82,11 +86,24 @@ jobs:
       - name: Boot an iPhone simulator
         run: python3 tool/ios_simulator.py
       - name: Capture the actual first launch
+        id: launch
         run: python3 tool/ios_launch_probe.py
+      - name: Preserve the first-launch evidence before testing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-first-launch-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/ios-launch.log
+            ${{ runner.temp }}/lokal-iphone.png
       - name: Exercise actual startup, FFI and playback
+        id: smoke
         timeout-minutes: 12
         run: |
-          if ! flutter test integration_test/ios_smoke_test.dart --no-pub -d "$IOS_SIMULATOR_UDID" --timeout 5m --verbose > "$RUNNER_TEMP/ios-smoke.log" 2>&1; then
+          if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-build.log"
+            exit 1
+          fi
+          if ! python3 tool/ios_smoke_runner.py > "$RUNNER_TEMP/ios-smoke.log" 2>&1; then
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke.log"
             exit 1
           fi
@@ -94,7 +111,12 @@ jobs:
         run: git diff --exit-code -- pubspec.lock rust/Cargo.lock
       - name: Collect simulator diagnostics
         if: failure() && env.IOS_SIMULATOR_UDID != ''
-        run: xcrun simctl spawn "$IOS_SIMULATOR_UDID" log show --last 5m --style compact --predicate 'process == "Runner"' > "$RUNNER_TEMP/ios-simulator-console.log" || true
+        run: |
+          xcrun simctl spawn "$IOS_SIMULATOR_UDID" log show --last 5m --info --debug --style compact --predicate 'process == "Runner"' > "$RUNNER_TEMP/ios-simulator-console.log" || true
+          mkdir -p "$RUNNER_TEMP/ios-crash-reports"
+          if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
+            find "$HOME/Library/Logs/DiagnosticReports" -name 'Runner*.ips' -type f -exec cp '{}' "$RUNNER_TEMP/ios-crash-reports/" \;
+          fi
       - name: Preserve build and runtime diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -103,8 +125,26 @@ jobs:
           path: |
             ${{ runner.temp }}/ios-simulator-build.log
             ${{ runner.temp }}/ios-smoke.log
+            ${{ runner.temp }}/ios-smoke-build.log
+            ${{ runner.temp }}/ios-smoke-console.log
+            ${{ runner.temp }}/ios-smoke-iphone.png
             ${{ runner.temp }}/ios-simulator-console.log
             ${{ runner.temp }}/ios-launch.log
             ${{ runner.temp }}/ios-crash-reports/
             ${{ runner.temp }}/lokal-iphone.png
           if-no-files-found: ignore
+      - name: Summarize validation gates
+        if: always()
+        env:
+          PACKAGE_RESULT: ${{ steps.package.outcome }}
+          LAUNCH_RESULT: ${{ steps.launch.outcome }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+        run: |
+          {
+            printf '## iPhone engineering build\n\n'
+            printf '| Gate | Result |\n| --- | --- |\n'
+            printf '| Device binary/package inspection | %s |\n' "$PACKAGE_RESULT"
+            printf '| Native first launch | %s |\n' "$LAUNCH_RESULT"
+            printf '| Real startup, scanner, QuickJS and playback | %s |\n' "$SMOKE_RESULT"
+            printf '\nAn engineering IPA is not a qualified release. Physical iPhone and Windows installation acceptance remain separate.\n'
+          } >> "$GITHUB_STEP_SUMMARY"

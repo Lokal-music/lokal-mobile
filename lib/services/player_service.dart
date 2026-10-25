@@ -5051,12 +5051,24 @@ class PlayerService {
 
     if (Platform.isIOS) {
       _sessionManager.clearFallbackReason();
+      final systemStreaming =
+          song.sourcePackage == 'konnekted.progressive' ||
+          song.sourcePackage == 'konnekted.morneye-live';
+      if (systemStreaming && normalizedEngine == AudioEngineType.iosRust) {
+        await _sessionManager.recordFallback(
+          requestedMode: normalizedEngine,
+          fallbackMode: AudioEngineType.iosSystem,
+          reason:
+              'This add-on stream uses system playback; Rust DSP is bypassed',
+        );
+      }
       final needsRust =
           song.requiresRustDecoder ||
           const {'ogg', 'oga', 'ogx', 'opus'}.contains(_playbackFileType(song));
       return resolveEngineForSong(
         preferred: normalizedEngine,
         requiresRustDecoder: needsRust,
+        requiresSystemStreaming: systemStreaming,
       );
     }
     if (!Platform.isAndroid) {

@@ -87,6 +87,33 @@ void main() {
       );
     });
 
+    test(
+      'iPhone add-on streaming retains its adapter when DSP is selected',
+      () {
+        for (final preferred in [
+          AudioEngineType.iosSystem,
+          AudioEngineType.iosRust,
+        ]) {
+          expect(
+            resolveEngineForSong(
+              preferred: preferred,
+              requiresRustDecoder: true,
+              requiresSystemStreaming: true,
+            ),
+            AudioEngineType.iosSystem,
+          );
+        }
+        expect(
+          resolveEngineForSong(
+            preferred: AudioEngineType.rustOboe,
+            requiresRustDecoder: false,
+            requiresSystemStreaming: true,
+          ),
+          AudioEngineType.rustOboe,
+        );
+      },
+    );
+
     test('routes Rust-decoder containers to the shared Rust output', () {
       expect(
         resolveEngineForSong(

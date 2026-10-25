@@ -2,8 +2,9 @@
 
 The iPhone port now builds on hosted macOS using Xcode 26.0.1, Flutter 3.47.1
 and Rust 1.98.0. The workflow inspects and saves an unsigned release/AOT IPA,
-checksum, source and notices before running simulator acceptance. **The current
-engineering build exits during simulator startup; runtime acceptance is pending.**
+checksum, source and notices before running simulator acceptance. **Runtime
+acceptance is pending: the iOS 18.5 simulator failed loading `libswiftWebKit`
+(upstream WebKit bug 293831); CI now explicitly selects iOS 26.0.**
 See the [architecture and validation ledger](IOS_PORT.md) and
 [Windows signing/install guide](IOS_SIDELOADING.md). A saved artifact alone does
 not establish a usable iPhone release.
