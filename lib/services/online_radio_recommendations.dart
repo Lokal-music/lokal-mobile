@@ -16,6 +16,33 @@ class OnlineRadioRecommendations {
 
   static const _clientVersion = '1.20250901.03.00';
   static const _maxBatch = 20;
+  static String? _liveVersion;
+  static DateTime? _versionReadAt;
+
+  /// YouTube retires old WEB_REMIX client versions. Use the live published
+  /// version for anonymous requests, caching it to avoid a homepage lookup on
+  /// every track change.
+  Future<String> _guestVersion(http.Client client) async {
+    final at = _versionReadAt;
+    if (at != null && DateTime.now().difference(at) < const Duration(hours: 1)) {
+      return _liveVersion ?? _clientVersion;
+    }
+    _versionReadAt = DateTime.now();
+    try {
+      final response = await client.get(
+        Uri.parse('https://music.youtube.com/'),
+        headers: const {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36'},
+      ).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        _liveVersion = RegExp(r'"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"')
+            .firstMatch(response.body)?.group(1) ?? _liveVersion;
+      }
+    } catch (_) {
+      // A stale-but-known fallback is preferable to no radio at all.
+    }
+    return _liveVersion ?? _clientVersion;
+  }
+
   static final _videoId = RegExp(r'^[A-Za-z0-9_-]{11}$');
 
   Future<List<Song>> recommend(
@@ -128,22 +155,23 @@ class OnlineRadioRecommendations {
     String endpoint,
     Map<String, Object?> body,
   ) async {
+    final version = await _guestVersion(client);
     final response = await client.post(
       Uri.https('music.youtube.com', '/youtubei/v1/$endpoint', {
         'prettyPrint': 'false',
       }),
-      headers: const {
+      headers: {
         'Content-Type': 'application/json',
         'Origin': 'https://music.youtube.com',
         'Referer': 'https://music.youtube.com/',
         'X-YouTube-Client-Name': '67',
-        'X-YouTube-Client-Version': _clientVersion,
+        'X-YouTube-Client-Version': version,
       },
       body: jsonEncode({
         'context': {
           'client': {
             'clientName': 'WEB_REMIX',
-            'clientVersion': _clientVersion,
+            'clientVersion': version,
             'hl': 'en',
             'gl': 'US',
           },
