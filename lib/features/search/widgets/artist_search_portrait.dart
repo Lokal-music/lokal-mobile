@@ -9,10 +9,11 @@ import 'package:flick/widgets/common/cached_image_widget.dart';
 /// its dedicated editorial portrait. Cache lookups across scrolling tiles.
 class ArtistSearchPortrait extends StatefulWidget {
   const ArtistSearchPortrait({
-    super.key, required this.name, this.artworkUrl, this.size = 48,
+    super.key, required this.name, this.artworkUrl, this.localPath, this.size = 48,
   });
   final String name;
   final String? artworkUrl;
+  final String? localPath;
   final double size;
 
   @override
@@ -53,6 +54,7 @@ class _ArtistSearchPortraitState extends State<ArtistSearchPortrait> {
   }
 
   Future<String?> _future() {
+    if (widget.localPath?.trim().isNotEmpty == true) return Future.value(widget.localPath);
     if (widget.artworkUrl?.startsWith('https://') == true) {
       return Future.value(widget.artworkUrl);
     }
@@ -63,7 +65,8 @@ class _ArtistSearchPortraitState extends State<ArtistSearchPortrait> {
   void didUpdateWidget(covariant ArtistSearchPortrait oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.name != widget.name ||
-        oldWidget.artworkUrl != widget.artworkUrl) {
+        oldWidget.artworkUrl != widget.artworkUrl ||
+        oldWidget.localPath != widget.localPath) {
       _fallback = _future();
     }
   }
