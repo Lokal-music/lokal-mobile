@@ -79,6 +79,12 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         if (art != null) views.setImageViewBitmap(R.id.widget_art_bg, art)
         else if (lastArt != null) views.setImageViewBitmap(R.id.widget_art_bg, lastArt)
         else views.setImageViewResource(R.id.widget_art_bg, R.drawable.widget_art_placeholder)
+        // Honor explicit background opacity; at the default opacity, use a
+        // dark shade derived from the cover like Apple Music's music surfaces.
+        if (WidgetPrefs.getBgOpacityAlpha(context) == 0xC0) {
+            views.setInt(R.id.widget_root, "setBackgroundResource",
+                WidgetArtworkPalette.background(art ?: lastArt))
+        }
         views.setOnClickPendingIntent(R.id.widget_art_bg, WidgetIntents.openApp(context, 10))
         views.setViewVisibility(R.id.widget_scrim, View.GONE)
 
