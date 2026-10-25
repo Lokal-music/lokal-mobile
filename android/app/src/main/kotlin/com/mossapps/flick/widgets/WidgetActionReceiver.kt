@@ -31,7 +31,7 @@ class WidgetActionReceiver : BroadcastReceiver() {
             } catch (_: Exception) { 0 }
             if (count > 0) {
                 val key = WidgetPrefs.recommendationCursor(id)
-                val next = (prefs.getInt(key, 0) + step).mod(count)
+                val next = (prefs.getInt(key, count / 2) + step).mod(count)
                 prefs.edit().putInt(key, next).apply()
                 val mgr = AppWidgetManager.getInstance(context)
                 CoverFlowRecommendationWidgetProvider()
