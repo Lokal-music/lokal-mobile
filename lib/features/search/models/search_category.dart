@@ -23,7 +23,7 @@ extension SearchCategoryX on SearchCategory {
       case SearchCategory.albums:
         return l10n.albums;
       case SearchCategory.lyrics:
-        return 'Lyrics';
+        return l10n.lyrics;
       case SearchCategory.albumArtists:
         return l10n.albumArtists;
       case SearchCategory.folders:
