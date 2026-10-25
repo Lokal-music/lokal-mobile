@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../models/song.dart';
+import '../player/widgets/player_artwork_quality.dart';
 import '../../services/metadata_editor_service.dart';
 import '../../src/rust/api/audio_api.dart' as native;
 import '../../src/rust/api/morneye_api.dart' as morneye;
@@ -15,7 +16,6 @@ import '../../services/catalogue_quality.dart';
 import 'discovery_http.dart';
 import 'discovery_models.dart';
 import 'discovery_sources.dart';
-import '../player/widgets/player_artwork_quality.dart';
 
 typedef DiscoveryAudioProbe = Future<native.AudioProbeFormat> Function(
   String path,
@@ -271,6 +271,9 @@ class DiscoveryPlaybackCache {
       fileType: 'E-AC-3 JOC',
       filePath: ready.path,
       sourcePackage: 'konnekted.discovery',
+      sourceDisplayName: track.sourceName ??
+          (track.source == DiscoverySource.youtubeMusic ? 'YouTube Music' : null),
+      fileSizeBytes: await ready.length(),
       isExternal: true,
       atmosAvailable: true,
       atmosEncoded: true,
@@ -354,6 +357,9 @@ class DiscoveryPlaybackCache {
       // Signed media URLs remain in memory, never in the playback queue.
       remoteId: track.sourceUrl?.toString() ?? track.id,
       sourcePackage: 'konnekted.discovery',
+      sourceDisplayName: track.sourceName ??
+          (track.source == DiscoverySource.youtubeMusic ? 'YouTube Music' : null),
+      fileSizeBytes: await ready.length(),
       atmosAvailable: track.atmosAvailable,
       isExternal: true,
     );
@@ -369,38 +375,61 @@ class DiscoveryPlaybackCache {
   /// Downloads [track]'s cover next to [ready]; null when it has none or
   /// it can't be fetched (the song still plays, without a picture).
   Future<String?> _cover(DiscoveryTrack track, File ready, {bool embed = true}) async {
-    final initial = Uri.tryParse(track.artwork ?? '');
-    if (initial == null || initial.scheme != 'https') return null;
+    final url = Uri.tryParse(track.artwork ?? '');
+    if (url == null || url.scheme != 'https') return null;
     final file = File(coverPath(ready.path));
-    // Use the original-size Amazon artwork when possible. A missing larger
-    // rendition must not erase the working thumbnail.
-    for (final urlText in PlayerArtworkQuality.candidates(track.artwork)) {
-      final url = Uri.tryParse(urlText);
-      if (url == null || url.scheme != 'https') continue;
-      IOSink? sink;
-      try {
-        sink = file.openWrite();
-        await http.transfer(
-          url,
-          headers: const {'Accept': 'image/*'},
-          maxBytes: _maxCoverBytes,
-          deadline: const Duration(seconds: 15),
-          onChunk: sink.add,
-        );
-        await sink.close();
-        sink = null;
-        if (await file.length() == 0) throw const FileSystemException('Empty artwork');
-        // Also embed the matched image in saved audio metadata when possible.
+    IOSink? sink;
+    try {
+      // YouTube's search thumbnails are usually only 120 pixels. Download
+      // the high-resolution *same artwork* instead of permanently embedding
+      // the tiny search rendition into the cached audio file.
+      var completed = false;
+      final coverDeadline = DateTime.now().add(const Duration(seconds: 15));
+      for (final candidate in PlayerArtworkQuality.candidates(track.artwork)) {
+        final remaining = coverDeadline.difference(DateTime.now());
+        if (remaining <= Duration.zero) break;
+        final image = Uri.tryParse(candidate);
+        if (image == null || image.scheme != 'https') continue;
         try {
-          if (embed) await _embedCover(ready.path, file.path);
-        } catch (_) {}
-        return file.path;
-      } catch (_) {
-        try { await sink?.close(); } catch (_) {}
-        try { if (await file.exists()) await file.delete(); } catch (_) {}
+          sink = file.openWrite();
+          await http.transfer(
+            image,
+            headers: const {'Accept': 'image/*'},
+            maxBytes: _maxCoverBytes,
+            deadline: remaining,
+            onChunk: sink!.add,
+          );
+          await sink!.close();
+          sink = null;
+          // An empty 200 response is not usable artwork. Try the next
+          // provider image, preserving the original as last fallback.
+          if (await file.length() == 0) {
+            throw const FileSystemException('Empty artwork');
+          }
+          completed = true;
+          break;
+        } catch (_) {
+          try { await sink?.close(); } catch (_) {}
+          sink = null;
+          if (await file.exists()) await file.delete();
+        }
       }
+      if (!completed) return null;
+      // Also embed it in the audio's tags, so the file keeps its cover if
+      // it is saved to the library.
+      try {
+        if (embed) await _embedCover(ready.path, file.path);
+      } catch (_) {}
+      return file.path;
+    } catch (_) {
+      try {
+        await sink?.close();
+      } catch (_) {}
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+      return null;
     }
-    return null;
   }
 
   static Future<void> _embedCoverInFile(String audio, String cover) async {
