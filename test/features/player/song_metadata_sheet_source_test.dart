@@ -76,7 +76,7 @@ void main() {
     await tester.pump();
     expect(find.text('Source'), findsOneWidget);
     expect(find.text('My Qobuz extension'), findsOneWidget);
-    expect(find.text('File size'), findsOneWidget);
+    expect(find.text('Size'), findsOneWidget);
     expect(find.text('25.20 MB'), findsOneWidget);
   });
 }
