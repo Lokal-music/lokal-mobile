@@ -8,17 +8,38 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:isar_community/isar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/database.dart';
 import '../models/song.dart';
 import '../src/rust/api/scanner.dart';
 import 'music_folder_service.dart';
+import 'background_metadata_budget.dart';
+import '../core/utils/dev_log.dart';
 
 /// Reads the actual local audio header; remote labels are only a fallback.
 /// One worker repairs old rows and new imports without decoding or downloading audio.
 class LocalMetadataRepair {
   static final instance = LocalMetadataRepair();
+
+  LocalMetadataRepair({
+    Future<SongEntity?> Function(int)? loadSong,
+    Future<bool> Function(SongEntity)? inspect,
+    bool Function()? databaseReady,
+    Future<void> Function(Duration)? rest,
+  }) : _loadSong = loadSong ?? ((id) => Database.songs.get(id)),
+       _inspect = inspect ?? ((row) => probe(row)),
+       _databaseReady = databaseReady ?? (() => Database.isInitialized),
+       _rest = rest ?? Future<void>.delayed;
+
+  final Future<SongEntity?> Function(int) _loadSong;
+  final Future<bool> Function(SongEntity) _inspect;
+  final bool Function() _databaseReady;
+  final Future<void> Function(Duration) _rest;
+
+  @visibleForTesting
+  Future<void> get idle => _running ?? Future<void>.value();
   bool ultraPerformanceMode = false;
   static const _version = 'lokal.local_metadata.v2';
   Set<int> _pending = <int>{};
@@ -89,47 +110,77 @@ class LocalMetadataRepair {
     // as Flutter initializes its first scene. Explicit user-requested
     // repairs bypass the grace period.
     if (_waiters.isEmpty) {
-      await Future<void>.delayed(const Duration(seconds: 2));
+      await _rest(const Duration(seconds: 2));
     }
     if (!_loaded) {
       _seen.addAll(prefs.getStringList(_version) ?? const []);
       _loaded = true;
     }
-    while (_pending.isNotEmpty && Database.isInitialized) {
-      // User-requested repairs keep priority. Automatic backfill yields while
-      // a list is being scrolled instead of competing for storage/CPU.
-      if (_waiters.isEmpty && artworkExtractionPaused) {
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-        continue;
-      }
-      final id = _pending.first;
-      _pending.remove(id);
-      var read = false;
-      try {
-        read = await _repairOne(id);
-      } finally {
-        _waiters.remove(id)?.complete();
-      }
-      if (read && _pending.isNotEmpty)
-        await Future<void>.delayed(
-          Duration(
-            milliseconds: _waiters.isNotEmpty
-                ? 20
-                : ultraPerformanceMode ? 200 : 80,
-          ),
-        );
+    devLog(
+      '[MetadataRepair] start: pending=${_pending.length}, cached=${_seen.length}',
+    );
+    var uncheckpointed = 0;
+    var skipped = 0;
+    var savedCount = _seen.length;
+    Future<void> checkpoint() async {
+      if (_seen.length == savedCount) return;
+      await prefs.setStringList(_version, _seen.toList());
+      savedCount = _seen.length;
+      uncheckpointed = 0;
+      devLog(
+        '[MetadataRepair] checkpoint: cached=$savedCount, pending=${_pending.length}',
+      );
     }
-    await prefs.setStringList(_version, _seen.toList());
+
+    try {
+      while (_pending.isNotEmpty && _databaseReady()) {
+        if (_waiters.isEmpty && artworkExtractionPaused) {
+          await _rest(const Duration(milliseconds: 150));
+          continue;
+        }
+        final id = _pending.first;
+        _pending.remove(id);
+        final explicit = _waiters.isNotEmpty;
+        final stopwatch = Stopwatch()..start();
+        var read = false;
+        try {
+          read = await _repairOne(id);
+        } finally {
+          _waiters.remove(id)?.complete();
+        }
+        if (read) {
+          // Persist the first result promptly and then at most 15 further
+          // successes can be lost if Android kills the process mid-backfill.
+          uncheckpointed++;
+          if (savedCount == 0 || uncheckpointed >= 16) await checkpoint();
+          if (_pending.isNotEmpty) {
+            await _rest(
+              explicit
+                  ? const Duration(milliseconds: 20)
+                  : backgroundMetadataDelay(
+                      stopwatch.elapsed,
+                      ultra: ultraPerformanceMode,
+                    ),
+            );
+          }
+        } else if (++skipped % 64 == 0) {
+          // A fully repaired library still needs to yield during cache checks.
+          await _rest(Duration.zero);
+        }
+      }
+    } finally {
+      await checkpoint();
+    }
   }
 
   Future<bool> _repairOne(int id) async {
-    final row = await Database.songs.get(id);
+    final row = await _loadSong(id);
     if (row == null || row.sourceType != null) return false;
     final signature =
         '$id:${row.filePath}:${row.fileSize}:${row.lastModified?.millisecondsSinceEpoch}';
     if (_seen.contains(signature)) return false;
     try {
-      if (await probe(row)) _seen.add(signature);
+      if (await _inspect(row)) _seen.add(signature);
     } catch (_) {
       /* Retry inaccessible files next session. */
     }
@@ -167,49 +218,90 @@ class LocalMetadataRepair {
     } catch (_) {
       /* DSD and other formats retain Lofty's specialized metadata. */
     }
-    void apply(SongEntity target) {
-      if ((meta.sampleRate ?? 0) > 0) target.sampleRate = meta.sampleRate;
-      if ((meta.bitDepth ?? 0) > 0) target.bitDepth = meta.bitDepth;
-      // Lofty's audio_bitrate() is already kilobits per second.
-      if ((meta.bitrate ?? 0) > 0) target.bitrate = meta.bitrate;
-      if (meta.format.isNotEmpty) target.fileType = meta.format.toUpperCase();
-      if (codec != null) target.fileType = codec;
-      if ((target.sampleRate ?? 0) <= 0 && (probedRate ?? 0) > 0)
-        target.sampleRate = probedRate;
-      if ((target.bitDepth ?? 0) <= 0 && (probedBits ?? 0) > 0)
-        target.bitDepth = probedBits;
-      if (target.genre?.trim().isNotEmpty != true &&
-          meta.genre?.trim().isNotEmpty == true)
-        target.genre = meta.genre;
-      const lossless = {
-        'FLAC',
-        'ALAC',
-        'WAV',
-        'WAVE',
-        'AIFF',
-        'AIF',
-        'APE',
-        'WV',
-        'WAVPACK',
-      };
-      target.metadataComplete =
-          (target.sampleRate ?? 0) > 0 &&
-          (target.bitrate ?? 0) > 0 &&
-          (!lossless.contains(target.fileType?.toUpperCase()) ||
-              (target.bitDepth ?? 0) > 0);
-    }
 
-    apply(row);
+    applyMetadata(
+      row,
+      meta,
+      codec: codec,
+      probedRate: probedRate,
+      probedBits: probedBits,
+    );
     if (!persist) return row.metadataComplete;
     await Database.instance.writeTxn(() async {
       final current = await Database.songs.get(row.id);
       if (current == null ||
           current.filePath != row.filePath ||
-          current.sourceType != null)
+          current.sourceType != null) {
         return;
-      apply(current);
-      await Database.songs.put(current);
+      }
+      if (applyMetadata(
+        current,
+        meta,
+        codec: codec,
+        probedRate: probedRate,
+        probedBits: probedBits,
+      )) {
+        await Database.songs.put(current);
+      }
     });
     return row.metadataComplete;
+  }
+
+  static bool applyMetadata(
+    SongEntity target,
+    AudioFileMetadata meta, {
+    String? codec,
+    int? probedRate,
+    int? probedBits,
+  }) {
+    final before = (
+      target.sampleRate,
+      target.bitDepth,
+      target.bitrate,
+      target.fileType,
+      target.genre,
+      target.metadataComplete,
+    );
+    if ((meta.sampleRate ?? 0) > 0) target.sampleRate = meta.sampleRate;
+    if ((meta.bitDepth ?? 0) > 0) target.bitDepth = meta.bitDepth;
+    // Lofty's audio_bitrate() is already kilobits per second.
+    if ((meta.bitrate ?? 0) > 0) target.bitrate = meta.bitrate;
+    if (meta.format.isNotEmpty) target.fileType = meta.format.toUpperCase();
+    if (codec != null) target.fileType = codec;
+    if ((target.sampleRate ?? 0) <= 0 && (probedRate ?? 0) > 0) {
+      target.sampleRate = probedRate;
+    }
+    if ((target.bitDepth ?? 0) <= 0 && (probedBits ?? 0) > 0) {
+      target.bitDepth = probedBits;
+    }
+    if (target.genre?.trim().isNotEmpty != true &&
+        meta.genre?.trim().isNotEmpty == true) {
+      target.genre = meta.genre;
+    }
+    const lossless = {
+      'FLAC',
+      'ALAC',
+      'WAV',
+      'WAVE',
+      'AIFF',
+      'AIF',
+      'APE',
+      'WV',
+      'WAVPACK',
+    };
+    target.metadataComplete =
+        (target.sampleRate ?? 0) > 0 &&
+        (target.bitrate ?? 0) > 0 &&
+        (!lossless.contains(target.fileType?.toUpperCase()) ||
+            (target.bitDepth ?? 0) > 0);
+    return before !=
+        (
+          target.sampleRate,
+          target.bitDepth,
+          target.bitrate,
+          target.fileType,
+          target.genre,
+          target.metadataComplete,
+        );
   }
 }
