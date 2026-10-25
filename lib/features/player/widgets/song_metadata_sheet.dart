@@ -100,12 +100,12 @@ class SongMetadataSheet extends StatelessWidget {
           if (song.album != null)
             _buildMetadataRow(context, l10n.album, song.album!),
           _buildMetadataRow(context, l10n.duration, song.formattedDuration),
-          _buildMetadataRow(context, 'Source', metadataSourceLabel(song)),
+          _buildMetadataRow(context, l10n.source, metadataSourceLabel(song)),
           FutureBuilder<int?>(
             future: metadataFileBytes(song),
             builder: (context, snapshot) => _buildMetadataRow(
-              context, 'File size',
-              metadataFileSizeMb(snapshot.data) ?? 'Not available',
+              context, l10n.size,
+              metadataFileSizeMb(snapshot.data) ?? l10n.unknown,
             ),
           ),
           _buildMetadataRow(
