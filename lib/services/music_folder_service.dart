@@ -480,6 +480,7 @@ class MusicFolderService {
             title: metadata.title,
             artist: metadata.artist,
             album: metadata.album,
+            albumArtist: metadata.albumArtist,
             trackNumber: metadata.trackNumber,
             discNumber: metadata.discNumber,
             duration: metadata.durationMs?.toInt(),

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flick/app/app.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
@@ -21,6 +20,7 @@ import 'package:flick/providers/equalizer_provider.dart';
 import 'package:flick/features/morneye/morneye_bootstrap.dart';
 import 'package:flick/src/rust/api/morneye_api.dart';
 import 'package:flick/src/rust/api/scanner.dart' as scanner;
+import 'package:flick/src/rust/api/metadata_editor.dart' as tags;
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show SizedBox;
@@ -30,39 +30,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
+
+import '../test/fixtures/generated_audio.dart';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-Uint8List _tone() {
-  const rate = 44100, frames = rate * 8;
-  final bytes = ByteData(44 + frames * 2);
-  void tag(int offset, String value) {
-    for (var i = 0; i < value.length; i++) {
-      bytes.setUint8(offset + i, value.codeUnitAt(i));
-    }
-  }
-
-  tag(0, 'RIFF');
-  bytes.setUint32(4, bytes.lengthInBytes - 8, Endian.little);
-  tag(8, 'WAVE');
-  tag(12, 'fmt ');
-  bytes.setUint32(16, 16, Endian.little);
-  bytes.setUint16(20, 1, Endian.little);
-  bytes.setUint16(22, 1, Endian.little);
-  bytes.setUint32(24, rate, Endian.little);
-  bytes.setUint32(28, rate * 2, Endian.little);
-  bytes.setUint16(32, 2, Endian.little);
-  bytes.setUint16(34, 16, Endian.little);
-  tag(36, 'data');
-  bytes.setUint32(40, frames * 2, Endian.little);
-  for (var i = 0; i < frames; i++) {
-    bytes.setInt16(
-      44 + i * 2,
-      (math.sin(i * 2 * math.pi * 440 / rate) * 1000).round(),
-      Endian.little,
-    );
-  }
-  return bytes.buffer.asUint8List();
-}
 
 Future<int> _expectPlaybackProgress(
   WidgetTester tester,
@@ -173,7 +144,17 @@ void main() {
       if (await directory.exists()) await directory.delete(recursive: true);
     });
     final audio = File('${directory.path}/Generated tone.wav');
-    await audio.writeAsBytes(_tone(), flush: true);
+    await audio.writeAsBytes(generatedPcmTone(), flush: true);
+    final tagged = await tags.writeTags(
+      path: audio.path,
+      fields: const tags.TagEditFields(
+        title: 'Generated tone',
+        artist: 'Lokal test',
+        album: 'Native fixtures',
+        albumArtist: 'Various fixtures',
+      ),
+    );
+    expect(tagged.success, true, reason: tagged.error);
     final scan = await scanner.scanRootDir(
       rootPath: directory.path,
       knownFiles: {},
@@ -184,6 +165,7 @@ void main() {
     );
     expect(scan.totalFiles, 1);
     expect(scan.newOrModified.single.sampleRate, 44100);
+    expect(scan.newOrModified.single.albumArtist, 'Various fixtures');
 
     debugPrint('iOS smoke: native scanner passed; executing QuickJS');
 
@@ -312,6 +294,7 @@ void main() {
       'version': identity?['version'],
       'native_scan_files': scan.totalFiles,
       'native_scan_sample_rate': scan.newOrModified.single.sampleRate,
+      'native_scan_album_artist': scan.newOrModified.single.albumArtist,
       'quickjs_echo': quickJsResult,
       'system_wav_progress_ms': systemProgress,
       'rust_dsp_progress_ms': dspProgress,

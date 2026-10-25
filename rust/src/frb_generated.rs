@@ -5186,6 +5186,7 @@ impl SseDecode for crate::api::scanner::AudioFileMetadata {
         let mut var_title = <Option<String>>::sse_decode(deserializer);
         let mut var_artist = <Option<String>>::sse_decode(deserializer);
         let mut var_album = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtist = <Option<String>>::sse_decode(deserializer);
         let mut var_durationMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_format = <String>::sse_decode(deserializer);
         let mut var_lastModified = <i64>::sse_decode(deserializer);
@@ -5206,6 +5207,7 @@ impl SseDecode for crate::api::scanner::AudioFileMetadata {
             title: var_title,
             artist: var_artist,
             album: var_album,
+            album_artist: var_albumArtist,
             duration_ms: var_durationMs,
             format: var_format,
             last_modified: var_lastModified,
@@ -6849,6 +6851,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::scanner::AudioFileMetadata {
             self.title.into_into_dart().into_dart(),
             self.artist.into_into_dart().into_dart(),
             self.album.into_into_dart().into_dart(),
+            self.album_artist.into_into_dart().into_dart(),
             self.duration_ms.into_into_dart().into_dart(),
             self.format.into_into_dart().into_dart(),
             self.last_modified.into_into_dart().into_dart(),
@@ -7681,6 +7684,7 @@ impl SseEncode for crate::api::scanner::AudioFileMetadata {
         <Option<String>>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.artist, serializer);
         <Option<String>>::sse_encode(self.album, serializer);
+        <Option<String>>::sse_encode(self.album_artist, serializer);
         <Option<u64>>::sse_encode(self.duration_ms, serializer);
         <String>::sse_encode(self.format, serializer);
         <i64>::sse_encode(self.last_modified, serializer);

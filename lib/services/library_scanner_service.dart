@@ -1992,7 +1992,11 @@ class LibraryScannerService {
             ..album = (metadata.album?.trim().isNotEmpty ?? false)
                 ? metadata.album!.trim()
                 : l10n.unknownAlbum
-            ..albumArtist = existing?.albumArtist ?? artist
+            ..albumArtist =
+                Platform.isIOS &&
+                    (metadata.albumArtist?.trim().isNotEmpty ?? false)
+                ? metadata.albumArtist!.trim()
+                : existing?.albumArtist ?? artist
             ..trackNumber = metadata.trackNumber ?? existing?.trackNumber ?? 0
             ..discNumber = metadata.discNumber ?? existing?.discNumber ?? 1
             ..durationMs = metadata.durationMs?.toInt() ?? 0
@@ -2899,7 +2903,8 @@ class LibraryScannerService {
       title: base?.title ?? rust.title,
       artist: base?.artist ?? rust.artist,
       album: base?.album ?? rust.album,
-      albumArtist: base?.albumArtist,
+      albumArtist:
+          base?.albumArtist ?? (Platform.isIOS ? rust.albumArtist : null),
       trackNumber: base?.trackNumber ?? rust.trackNumber,
       discNumber: base?.discNumber ?? rust.discNumber,
       genre: base?.genre ?? rust.genre,
