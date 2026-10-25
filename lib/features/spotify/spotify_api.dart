@@ -54,7 +54,7 @@ class SpotifyApi implements SpotifyLibraryApi {
   /// Spotify cookie-backed session and the same refresh implementation.
   static SpotifyApi withCredentials(
     SpotifyTokenStore store, SpotifyOAuthService oauth,
-  ) => SpotifyApi(_tokenStore: store, _oauth: oauth);
+  ) => SpotifyApi(tokenStore: store, oauth: oauth);
 
   void close() => _http.client.close();
 

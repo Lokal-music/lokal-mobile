@@ -21,13 +21,16 @@ String? _catalogueVideoId(String? id) {
 /// Convert streamed or pending Flow items into a rehydratable playlist entry.
 /// The hash is a cross-platform stable recording identity, independent of
 /// ephemeral discovery cache IDs or the chosen playback extension.
-Song stableOnlinePlaylistSong(Song song) {
+Song stableOnlinePlaylistSong(Song song, {QueuePreResolver? resolver}) {
   final normalized = [
     song.artist.trim().toLowerCase(),
     song.title.trim().toLowerCase(),
     song.album?.trim().toLowerCase() ?? '',
   ].join('\u001f');
-  final stable = sha256.convert(utf8.encode(normalized)).toString().substring(0, 24);
+  final stable = sha256
+      .convert(utf8.encode(normalized))
+      .toString()
+      .substring(0, 24);
   final id = '$onlinePlaylistPrefix$stable';
   return _onlinePending(
     id: id,
@@ -37,21 +40,26 @@ Song stableOnlinePlaylistSong(Song song) {
     artwork: song.albumArt,
     duration: song.duration,
     videoId: _catalogueVideoId(song.remoteId),
+    resolver: resolver,
   );
 }
 
 /// Re-register a resolver whenever a stored playlist is opened. A snapshot
 /// alone would be a visible but permanently unplayable pending Song.
-Song restoreOnlinePlaylistSong(String id, PlaylistSongSnapshot snapshot) =>
-    _onlinePending(
-      id: id,
-      title: snapshot.title,
-      artist: snapshot.artist,
-      album: snapshot.album,
-      artwork: snapshot.albumArt,
-      duration: Duration(milliseconds: snapshot.durationMs),
-      videoId: _catalogueVideoId(snapshot.remoteId),
-    );
+Song restoreOnlinePlaylistSong(
+  String id,
+  PlaylistSongSnapshot snapshot, {
+  QueuePreResolver? resolver,
+}) => _onlinePending(
+  id: id,
+  title: snapshot.title,
+  artist: snapshot.artist,
+  album: snapshot.album,
+  artwork: snapshot.albumArt,
+  duration: Duration(milliseconds: snapshot.durationMs),
+  videoId: _catalogueVideoId(snapshot.remoteId),
+  resolver: resolver,
+);
 
 Song _onlinePending({
   required String id,
@@ -61,6 +69,7 @@ Song _onlinePending({
   String? artwork,
   required Duration duration,
   String? videoId,
+  QueuePreResolver? resolver,
 }) {
   if (!id.startsWith('pending:')) {
     throw ArgumentError.value(id, 'id', 'Expected pending track identity');
@@ -73,8 +82,8 @@ Song _onlinePending({
     videoId: videoId,
     duration: duration,
   );
-  final resolver = QueuePreResolver.shared;
-  final song = resolver.pending(
+  final queueResolver = resolver ?? QueuePreResolver.shared;
+  final song = queueResolver.pending(
     key: id.substring('pending:'.length),
     title: title,
     artist: artist,
@@ -85,7 +94,7 @@ Song _onlinePending({
       record,
       onStatus: onStatus,
       cancel: cancel,
-      additionalProtectedPaths: () => resolver.resolvedPaths,
+      additionalProtectedPaths: () => queueResolver.resolvedPaths,
     ),
   );
   return song.copyWith(remoteId: videoId == null ? null : 'yt:$videoId');

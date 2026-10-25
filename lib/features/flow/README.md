@@ -30,9 +30,9 @@ bottom space for the shell mini-player.
 - Weighted seeded recommendations enforce discovery gates at <=15% familiar
   and >=85% unfamiliar, bans, three-skip exclusion, genre exclusion, and ID /
   metadata recording deduplication. Mood/affinity rely on file metadata.
-- The temporary session starts with up to 24 tracks, adds batches of 10 at the
-  last track, and stops growing at 200 or local candidate exhaustion. Provider
-  ownership keeps growth alive after leaving the screen. Growth yields to a
+- The temporary session starts with up to 3 tracks, adds batches of up to 10
+  when three or fewer remain, and stops growing at 200 or candidate exhaustion.
+  Provider ownership keeps growth alive after leaving the screen. Growth yields to a
   different/edited host queue. Starting Flow sets host shuffle/repeat off;
   runtime random queue-end autoplay is suppressed while Flow owns playback,
   and its prior value is restored when another queue takes over.
