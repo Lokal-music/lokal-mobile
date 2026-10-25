@@ -33,7 +33,7 @@ void main() {
       calls++;
       expect(request.url.host, 'itunes.apple.com');
       expect(request.url.queryParameters['entity'], 'song');
-      expect(request.url.queryParameters['country'], 'FR');
+      expect(request.url.queryParameters['country'], 'fr');
       return http.Response(jsonEncode({
         'resultCount': 3,
         'results': [
