@@ -37,7 +37,7 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
 
     private fun render(context: Context, manager: AppWidgetManager, id: Int): RemoteViews {
         val prefs = WidgetPrefs.get(context)
-        val layout = if (WidgetSize.width(manager, id) >= 280 && WidgetSize.height(manager, id) >= 230)
+        val layout = if (WidgetSize.width(manager, id) >= 280 && WidgetSize.height(manager, id) >= 280)
             R.layout.widget_recommended_flow else R.layout.widget_recommended_flow_small
         val views = RemoteViews(context.packageName, layout)
         val data = try {
