@@ -71,7 +71,7 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
         fun art(viewId: Int, offset: Int) {
             val artPath = if (count > 0) data.optJSONObject((position + offset).mod(count))
                 ?.optString("artwork").orEmpty() else ""
-            val image = WidgetArtLoader.load(artPath, if (offset == 0) 240 else 168)
+            val image = WidgetArtLoader.load(context, artPath, if (offset == 0) 240 else 168)
             // Avoid filling the launcher with three giant app-logo placeholders
             // while artwork is being asynchronously cached. Only real adjacent
             // covers are shown; the selected slot uses a neutral surface.
