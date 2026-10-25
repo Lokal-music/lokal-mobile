@@ -49,6 +49,8 @@ class FlowRadioWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.flow_cover, View.VISIBLE)
         if (art != null) views.setImageViewBitmap(R.id.flow_cover, art)
         else views.setImageViewResource(R.id.flow_cover, R.drawable.widget_art_placeholder)
+        views.setInt(R.id.flow_root, "setBackgroundResource",
+            WidgetArtworkPalette.background(art))
         views.setTextViewText(R.id.flow_title, "Your Flow")
         views.setTextViewText(R.id.flow_status,
             state.ifBlank { "Play a mix curated for you" })
