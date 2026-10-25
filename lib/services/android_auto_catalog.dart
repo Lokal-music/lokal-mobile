@@ -5,6 +5,7 @@ import 'package:flick/models/playback_context.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/favorites_service.dart';
 import 'package:flick/services/player_service.dart';
+import 'package:flick/services/online_playlist_reference.dart';
 import 'package:flick/services/playlist_service.dart';
 
 /// MediaBrowser catalog for Android Auto. No second player or MediaStore-only
@@ -126,7 +127,9 @@ class AndroidAutoCatalog {
       for (final id in playlist.songIds)
         if (byId[id] != null) byId[id]!
         else if (playlist.songSnapshots[id] != null)
-          playlist.songSnapshots[id]!.toSong(id),
+          id.startsWith(onlinePlaylistPrefix)
+              ? restoreOnlinePlaylistSong(id, playlist.songSnapshots[id]!)
+              : playlist.songSnapshots[id]!.toSong(id),
     ];
   }
 
