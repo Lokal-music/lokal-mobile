@@ -180,11 +180,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ? _buildEmptyState(context)
                   : scope == SearchScope.library &&
                           enabled.singleOrNull == SearchCategory.lyrics && hasQuery
-                  ? SingleChildScrollView(
-                      child: LyricsSearchSection(
-                        key: ValueKey('library-lyrics:$repoQuery'),
-                        query: repoQuery, online: false,
-                      ),
+                  ? LyricsSearchSection(
+                      key: ValueKey('library-lyrics:$repoQuery'),
+                      query: repoQuery, online: false,
+                      onPlayLocal: _playSong,
                     )
                   : scope == SearchScope.online && hasQuery
                   ? CustomScrollView(
@@ -637,6 +636,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: LyricsSearchSection(
           key: ValueKey('online-lyrics:$query'),
           query: query, online: true,
+          onPlayLocal: _playSong,
         ),
       );
     }
