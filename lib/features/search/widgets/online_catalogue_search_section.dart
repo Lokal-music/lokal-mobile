@@ -8,6 +8,7 @@ import 'package:flick/services/apple_music/apple_music_models.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flick/features/konnekted/library/lokal_music_detail_page.dart';
 import 'package:flick/features/konnekted/library/lokal_online_catalogue.dart';
+import 'artist_search_portrait.dart';
 
 import '../models/search_category.dart';
 import '../providers/search_filter_provider.dart';
@@ -166,10 +167,7 @@ class _OnlineCatalogueSearchSectionState
                     else if (row is AppleMusicArtist)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: CircleAvatar(
-                          backgroundColor: t.surface2,
-                          child: Icon(Icons.person_outline, color: t.muted),
-                        ),
+                        leading: ArtistSearchPortrait(name: row.name),
                         title: Text(row.name),
                         subtitle: Text(row.genre ?? lokalText('Artist')),
                         trailing: const Icon(Icons.chevron_right),
