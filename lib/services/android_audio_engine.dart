@@ -438,6 +438,10 @@ class AndroidAudioEngine implements AudioEngine {
         if (failedTrack != null) {
           _onTrackError?.call(failedTrack);
         }
+        // Source errors often leave Media3's native decoder poisoned. A
+        // subsequent user tap must get a fresh player, rather than entering
+        // another load/seek on the same failed instance indefinitely.
+        unawaited(_retireTimedOutPlayer(player));
       }),
     );
   }
@@ -522,10 +526,13 @@ class AndroidAudioEngine implements AudioEngine {
             ? survivor
             : null;
     if (identical(player, _providerPlayer)) _providerPlayer = null;
-    for (final subscription in _subscriptions) {
+    final oldSubscriptions = List<StreamSubscription<dynamic>>.of(
+      _subscriptions,
+    );
+    _subscriptions.clear();
+    for (final subscription in oldSubscriptions) {
       await subscription.cancel();
     }
-    _subscriptions.clear();
     if (orphanedFadePlayer != null) {
       try {
         await orphanedFadePlayer.dispose().timeout(
@@ -567,8 +574,10 @@ class AndroidAudioEngine implements AudioEngine {
       } catch (_) {}
       _playlistSignature = const [];
       _loadedSingleTrackOnly = false;
+      // Error 0 ("Source error") is just as capable of wedging ExoPlayer
+      // as a timeout. The old player cannot be reused for a new selection.
+      await _retireTimedOutPlayer(player);
       if (error is TimeoutException) {
-        await _retireTimedOutPlayer(player);
         throw TimeoutException(
           'Audio source did not become ready. The audio engine was reset; retry playback.',
         );
