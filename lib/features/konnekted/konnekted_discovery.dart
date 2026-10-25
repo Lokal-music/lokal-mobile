@@ -880,6 +880,12 @@ Future<List<_PlaybackSource>> _morneyeSources(
                 unawaited(
                   transfer.then((completed) async {
                     try {
+                      // A CDN can report a misleading HEAD length for
+                      // segments. Never promote a decoder that was given a
+                      // different sourceLength than the actual assembled file.
+                      if (await completed.file.length() != session.total) {
+                        throw StateError('Live media size changed during transfer');
+                      }
                       final cached = await cache().adopt(
                         found, completed.file, sourceInfo: completed.info,
                       );
