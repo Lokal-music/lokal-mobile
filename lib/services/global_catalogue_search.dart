@@ -194,7 +194,7 @@ class GlobalCatalogueSearchService {
   Future<GlobalCatalogueMatches> _spotify(String query) async {
     final store = SecureSpotifyTokenStore();
     final oauth = SpotifyOAuthService(tokenStore: store);
-    final api = SpotifyApi(store, oauth);
+    final api = SpotifyApi.withCredentials(store, oauth);
     try {
       final payload = await api.getJson(Uri.https('api.spotify.com', '/v1/search', {
         'q': query, 'type': 'track,album,artist', 'limit': '40',
@@ -213,6 +213,8 @@ class GlobalCatalogueSearchService {
       } finally {
         web.close();
       }
+    } finally {
+      api.close();
     }
   }
 
