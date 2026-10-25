@@ -1,4 +1,4 @@
-HTTP ADDON LINK:
+HTTP LOSSLESS ADDON LINK:
 https://soundfean-music.vercel.app/qobuz-de/a/30a0c6091e194c8c7785f0d7bb6e1eac9b76c0528f02213d1b6a5fbcc76ceff4/manifest.json
 
 <p align="center"><img src="docs/images/hero.png" alt="Lokal Mobile — Your music. Everywhere you go." width="100%"></p>
