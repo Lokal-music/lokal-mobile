@@ -81,7 +81,11 @@ class FlowLibrary {
     }
   }
   late final List<FlowTrack> tracks;
-  int get favoriteCount => favoriteIds.intersection(byId.keys.toSet()).length;
+  // Replayed online references must not inflate the original library
+  // unlock threshold; only actual local library likes count.
+  int get favoriteCount => favoriteIds.intersection(
+    songs.map((song) => song.id).toSet(),
+  ).length;
   bool get unlocked => FlowRules.isUnlocked(favoriteCount);
 
   List<Song> mix(FlowData data, DateTime now) {
