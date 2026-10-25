@@ -11,6 +11,14 @@ import com.mossapps.flick.R
 
 /** A dedicated, resizable Flow and online Radio launcher with live metadata. */
 class FlowRadioWidgetProvider : AppWidgetProvider() {
+    override fun onEnabled(context: Context) {
+        WidgetPrefs.get(context).edit().putBoolean(WidgetPrefs.KEY_FLOW_ENABLED, true).apply()
+    }
+
+    override fun onDisabled(context: Context) {
+        WidgetPrefs.get(context).edit().putBoolean(WidgetPrefs.KEY_FLOW_ENABLED, false).apply()
+    }
+
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         WidgetUpdateDispatcher.submit(this, context, manager, ids) { id ->
             render(context.applicationContext, manager, id)
