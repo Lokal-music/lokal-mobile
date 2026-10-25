@@ -915,6 +915,8 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   sampleRate: session.sampleRate,
                   filePath: handle,
                   sourcePackage: 'konnekted.morneye-live',
+                  sourceDisplayName: addon.displayName,
+                  fileSizeBytes: session.total > 0 ? session.total : null,
                   remoteId: found.id,
                   isExternal: true,
                 );
@@ -1158,6 +1160,8 @@ Song progressiveAddonSong(DiscoveryTrack track, ResolvedDiscoveryAudio audio) {
     sampleRate: audioInfo.sampleRate,
     filePath: handle,
     sourcePackage: 'konnekted.progressive',
+    sourceDisplayName: track.sourceName,
+    fileSizeBytes: audio.length,
     remoteId: track.id,
     isExternal: true,
   );
@@ -1298,7 +1302,8 @@ Future<Song> playOnlineTrack(
         '${track.sourceName ?? 'That source'} isn’t available any more.',
       );
     }
-    final song = await source.play(track);
+    final resolved = await source.play(track);
+    final song = resolved.copyWith(sourceDisplayName: source.name);
     if (!forDownload && sourceId.startsWith('a-')) {
       _rememberOnlineAddon(song, sourceId.substring(2), track);
     }
@@ -1416,11 +1421,12 @@ Future<Song?> findDiscoverySong(
             sourceUrl: Uri.tryParse(track.url),
             artwork: _artworkOf(track),
           );
-          final song = await youtube.prepare(
+          final resolved = await youtube.prepare(
             direct,
             _playbackCache(web, additionalProtectedPaths),
             cancel: cancel,
           );
+          final song = resolved.copyWith(sourceDisplayName: 'YouTube Music');
           OnlineSongSaveRegistry.instance.register(
             song,
             () => playOnlineTrack('yt', direct, forDownload: true),
@@ -1469,7 +1475,8 @@ Future<Song?> findDiscoverySong(
         onStatus?.call('Getting ${track.title} from ${source.name}…');
         try {
           final selected = found.withArtwork(_artworkOf(track));
-          final song = await source.play(selected);
+          final resolved = await source.play(selected);
+          final song = resolved.copyWith(sourceDisplayName: source.name);
           if (source.id.startsWith('a-')) {
             _rememberOnlineAddon(song, source.id.substring(2), selected);
           }
