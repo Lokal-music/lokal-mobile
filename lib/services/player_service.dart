@@ -3821,7 +3821,8 @@ class PlayerService {
       usingRustBackend: _usingRustBackend,
       loopMode: loopModeNotifier.value,
       androidSingleTrackOnly: !_usingRustBackend &&
-          (_androidEngine?.isSingleTrackOnly ?? false),
+          ((_androidEngine?.isSingleTrackOnly ?? false) ||
+           hasUnresolvedAudioSources(_playlist)),
     )) {
       _debugLog('_onSongFinished: skipping manual completion handling');
       return;
@@ -4102,7 +4103,9 @@ class PlayerService {
   }
 
   Future<void> _insertIntoAudioSequence(int playlistIndex, Song song) async {
-    if (_usingRustBackend || _audioSourceSequence == null) return;
+    if (_usingRustBackend || _audioSourceSequence == null ||
+        song.isPending || song.filePath?.isNotEmpty != true ||
+        hasUnresolvedAudioSources(_playlist)) return;
     final source = await _buildAudioSourceForSong(song);
     _audioSourceSequence!.insert(playlistIndex, source);
   }
@@ -6365,7 +6368,8 @@ class PlayerService {
         // native all on a one-item sequence: it would repeat that same song.
         // Manual completion advances through the logical playlist until an
         // asynchronous in-place restore has populated the full sequence.
-        final nativeMode = _androidEngine?.isSingleTrackOnly == true &&
+        final nativeMode = (_androidEngine?.isSingleTrackOnly == true ||
+                hasUnresolvedAudioSources(_playlist)) &&
                 _playlist.length > 1
             ? just_audio.LoopMode.off
             : just_audio.LoopMode.all;
@@ -6822,7 +6826,25 @@ class PlayerService {
       _playlistQueueEntryIds.insert(insertIndex, entry.id);
 
       if (!_usingRustBackend && _audioSourceSequence != null) {
-        await _insertIntoAudioSequence(insertIndex, song);
+        if (hasUnresolvedAudioSources(_playlist)) {
+          // The player's source list cannot contain a pending Discovery
+          // entry. Keep only currently playing/past native items, and hand
+          // upcoming selection to QueuePreResolver in logical order.
+          final native = _audioSourceSequence!;
+          final cursor = _justAudioPlayer?.currentIndex ?? _currentIndex;
+          if (cursor >= 0 && cursor + 1 < native.children.length) {
+            native.removeRange(cursor + 1, native.children.length);
+          }
+          _audioSourceSequence = null;
+          unawaited(_justAudioPlayer?.setLoopMode(just_audio.LoopMode.off)
+              ?? Future<void>.value());
+        } else {
+          try {
+            await _insertIntoAudioSequence(insertIndex, song);
+          } catch (error) {
+            _debugLog('Native queue append failed; preserving logical queue: $error');
+          }
+        }
       }
     }
     _notifyQueueChanged();
