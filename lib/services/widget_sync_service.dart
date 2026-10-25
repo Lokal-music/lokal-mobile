@@ -252,11 +252,17 @@ class WidgetSyncService {
     }
   }
 
+  /// App lifecycle PAUSED is not audio paused. In particular, media keeps
+  /// playing when the user returns to the launcher. Never falsify the player
+  /// state simply because Flutter's activity lost focus.
   Future<void> pushPaused() async {
-    _savedData.remove(keyIsPlaying);
     try {
+      final latest = _lastKnownState;
+      if (latest != null) {
+        _pendingState = latest;
+        await _drainPushes();
+      }
       await _ensureInit();
-      await HomeWidget.saveWidgetData<bool>(keyIsPlaying, false);
       await _updateAll();
     } catch (e, st) {
       devLog('WidgetSyncService pushPaused failed: $e\n$st');
