@@ -324,7 +324,132 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
       'images.amazon.com',
       'ecx.images-amazon.com',
     }.contains(host);
-    final urls = (youtubeArtwork || amazonArtwork)
+    final appleArtwork =
+        host == 'a1.mzstatic.com' ||
+        RegExp(r'^is[1-5]-ssl\.mzstatic\.com
+
+    Widget attempt(int index) => Image.network(
+      urls[index],
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      frameBuilder: (context, child, frame, synchronous) {
+        if (synchronous || frame != null) return child;
+        return SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
+        );
+      },
+      errorBuilder: (context, error, trace) =>
+          index + 1 < urls.length
+              ? attempt(index + 1)
+              : SizedBox(
+                  width: widget.width,
+                  height: widget.height,
+                  child: widget.errorWidget ??
+                      CachedImageWidget.defaultErrorWidget(),
+                ),
+      loadingBuilder: (context, child, progress) =>
+          progress == null
+              ? child
+              : SizedBox(
+                  width: widget.width,
+                  height: widget.height,
+                  child: widget.placeholder ??
+                      CachedImageWidget.defaultPlaceholder(),
+                ),
+      cacheWidth: decodeWidth,
+      cacheHeight: widget.useThumbnail && widget.thumbnailHeight != null
+          ? widget.thumbnailHeight
+          : null,
+    );
+    return attempt(0);
+  }
+}
+
+/// Helper class for preloading images
+class ImagePreloader {
+  static final DefaultCacheManager _cacheManager = DefaultCacheManager();
+
+  static Future<void> preloadFile(
+    String filePath,
+    BuildContext context, {
+    required bool Function() isMounted,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      return;
+    }
+
+    // Check if widget is still mounted before using context
+    if (!isMounted()) {
+      return;
+    }
+
+    try {
+      // Decode the image to cache it in memory
+      final imageProvider = FileImage(file);
+      // Check again before precaching (context might be invalid)
+      if (isMounted()) {
+        await precacheImage(imageProvider, context);
+      }
+    } catch (e) {
+      // Ignore errors during preloading (context might be invalid)
+    }
+  }
+
+  static Future<void> preloadNetwork(
+    String url,
+    BuildContext context, {
+    required bool Function() isMounted,
+  }) async {
+    try {
+      // First cache the file
+      await _cacheManager.getSingleFile(url);
+
+      // Check if widget is still mounted before using context
+      if (!isMounted()) {
+        return;
+      }
+
+      // Then decode it into memory
+      final imageProvider = NetworkImage(url);
+      // Check again before precaching (context might be invalid)
+      if (isMounted()) {
+        await precacheImage(imageProvider, context);
+      }
+    } catch (e) {
+      // Ignore errors during preloading (context might be invalid)
+    }
+  }
+
+  /// Preload multiple images
+  ///
+  /// [isMounted] callback should return true if the widget is still mounted.
+  /// This prevents using BuildContext across async gaps.
+  ///
+  /// Usage:
+  /// ```dart
+  /// ImagePreloader.preloadImages(['path1.jpg', 'path2.jpg'], context, isMounted: () => mounted);
+  /// ```
+  static Future<void> preloadImages(
+    List<String> imagePaths,
+    BuildContext context, {
+    required bool Function() isMounted,
+  }) async {
+    final futures = imagePaths.map((path) {
+      if (path.startsWith('http')) {
+        return preloadNetwork(path, context, isMounted: isMounted);
+      } else {
+        return preloadFile(path, context, isMounted: isMounted);
+      }
+    });
+    await Future.wait(futures);
+  }
+}
+).hasMatch(host);
+    final urls = (youtubeArtwork || amazonArtwork || appleArtwork)
         ? PlayerArtworkQuality.candidates(imagePath)
         : [imagePath];
 
