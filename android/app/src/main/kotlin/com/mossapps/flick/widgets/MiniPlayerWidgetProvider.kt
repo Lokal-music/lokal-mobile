@@ -46,6 +46,10 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.widget_mini_player)
         views.setInt(R.id.widget_root, "setBackgroundResource",
             WidgetPrefs.getBackgroundDrawableRes(context))
+        val timeVisible = hasSong && duration > 0 && WidgetSize.height(manager, id) >= 68
+        views.setViewVisibility(R.id.widget_time, if (timeVisible) View.VISIBLE else View.GONE)
+        if (timeVisible) views.setTextViewText(R.id.widget_time,
+            WidgetSize.time(position) + " / " + WidgetSize.time(duration))
         views.setTextViewText(R.id.widget_title, title)
         views.setTextViewTextSize(R.id.widget_title, TypedValue.COMPLEX_UNIT_SP,
             WidgetPrefs.scaledSp(13, width, 360f, scale).toFloat())
