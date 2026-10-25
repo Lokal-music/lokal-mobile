@@ -11,7 +11,10 @@ compile. The actual Lokal app shell renders on iOS 26.0 and 18.6, and the integr
 driver attaches. Android-only event subscriptions are gated; native scanner, QuickJS, WAV
 play/pause/seek, Rust DSP, pitch/normalization transitions, Keychain migration,
 metadata transport, the codec corpus and mixed-codec queues pass on iOS 26.0 and
-18.6 in build 17. The newer native Bonjour adapter awaits its hosted check. Storage,
+18.6 in build 17. Build 18 passes real Bonjour discovery and the advertised HTTP
+probe on iOS 18.6 (iOS 26 simulator boot failed before testing). Shared changes
+from mobile PRs through #196 are merged; [the review](IOS_POST172_REVIEW.md)
+separates carried UI behavior from pending native WidgetKit work. Storage,
 media/session adapters, ordinary DSP/codec routing, Files playlist/recap exports,
 Spotify session bridge and platform settings are implemented. No physical iPhone
 installation or hardware behavior is validated.

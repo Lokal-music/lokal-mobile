@@ -5,6 +5,12 @@ import 'package:flick/app/app.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
 import 'package:flick/features/konnekted/konnekted_library.dart';
 import 'package:flick/features/konnekted/konnekted_you.dart';
+import 'package:flick/features/konnekted/konnekted_dock.dart';
+import 'package:flick/features/search/screens/search_screen.dart';
+import 'package:flick/features/search/widgets/search_filter_chips.dart';
+import 'package:flick/features/search/providers/search_filter_provider.dart';
+import 'package:flick/features/search/models/search_category.dart';
+import 'package:flick/features/player/screens/full_player_screen.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_page.dart';
 import 'package:flick/features/onboarding/screens/onboarding_screen.dart';
 import 'package:flick/l10n/l10n.dart';
@@ -24,7 +30,7 @@ import 'package:flick/src/rust/api/scanner.dart' as scanner;
 import 'package:flick/src/rust/api/metadata_editor.dart' as tags;
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show SizedBox;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -117,6 +123,51 @@ void main() {
     await tester.tap(find.byTooltip(lokalText('Home')));
     await tester.pump(const Duration(milliseconds: 750));
 
+    // Exercise the post-#172 UX through the actual app and native plugins.
+    // Empty queries make this independent of optional catalogue accounts/network.
+    debugPrint('iOS smoke: updated search scopes and exclusive categories');
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(SearchScreen), findsOneWidget);
+    for (final scope in SearchScope.values) {
+      final scopeControl = find.byType(SegmentedButton<SearchScope>);
+      await tester.tap(
+        find.descendant(
+          of: scopeControl,
+          matching: find.text(
+            lokalText(scope == SearchScope.library ? 'Library' : 'Online'),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      for (final category in visibleSearchCategories) {
+        final chip = find.widgetWithText(ChoiceChip, category.label);
+        await tester.ensureVisible(chip);
+        await tester.tap(chip);
+        await tester.pump(const Duration(milliseconds: 200));
+        final filters = tester.widget<SearchFilterChips>(
+          find.byType(SearchFilterChips),
+        );
+        expect(filters.scope, scope);
+        expect(filters.enabled, {category});
+      }
+    }
+    await binding.takeScreenshot('ios-search-lyrics-filters');
+    await tester.tap(find.byTooltip(lokalText('You')));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byTooltip('Edit profile'));
+    await tester.pump(const Duration(seconds: 1));
+    final saveProfile = find.widgetWithText(FilledButton, 'Save profile');
+    expect(saveProfile, findsOneWidget);
+    expect(saveProfile.hitTestable(), findsOneWidget);
+    await binding.takeScreenshot('ios-profile-editor');
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(saveProfile, findsNothing);
+    await tester.tap(find.byTooltip(lokalText('Home')));
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(tester.takeException(), isNull, reason: startupErrors.join('\n'));
+
     // Exercise the actual Keychain, including a legacy when-unlocked item.
     // No account tokens are needed, and fixture values never enter the report.
     debugPrint('iOS smoke: native Keychain legacy migration');
@@ -136,6 +187,8 @@ void main() {
       ...?binding.reportData,
       'keychain_legacy_migration': 'passed',
       'library_you_settings_navigation': 'passed',
+      'post172_search_scopes_and_four_exclusive_filters': 'passed',
+      'post172_profile_editor_above_dock': 'passed',
     };
 
     final directory = await (await getTemporaryDirectory()).createTemp(
@@ -146,6 +199,14 @@ void main() {
     });
     final audio = File('${directory.path}/Generated tone.wav');
     await audio.writeAsBytes(generatedPcmTone(), flush: true);
+    final artwork = File('${directory.path}/Generated artwork.png');
+    final artworkData = await rootBundle.load('assets/branding/lokal_icon.png');
+    await artwork.writeAsBytes(
+      artworkData.buffer.asUint8List(
+        artworkData.offsetInBytes,
+        artworkData.lengthInBytes,
+      ),
+    );
     final tagged = await tags.writeTags(
       path: audio.path,
       fields: const tags.TagEditFields(
@@ -204,6 +265,7 @@ void main() {
       sampleRate: 44100,
       bitDepth: 16,
       filePath: audio.path,
+      albumArt: artwork.path,
     );
     await player.play(song, playlist: [song]);
     final systemProgress = await _expectPlaybackProgress(tester, player);
@@ -211,6 +273,41 @@ void main() {
     await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
+
+    // Repeat the queue/lyrics visit before dismissing: stale artwork anchors
+    // after these temporary covers were the regression addressed by PR #174.
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(KonnektedMiniPlayerContent),
+        matching: find.text(song.title),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(FullPlayerScreen), findsOneWidget);
+    for (var visit = 0; visit < 2; visit++) {
+      for (final panel in [l10n.queue, l10n.lyrics]) {
+        final toggle = find
+            .descendant(
+              of: find.byType(FullPlayerScreen),
+              matching: find.text(panel),
+            )
+            .first;
+        await tester.tap(toggle);
+        await tester.pump(const Duration(milliseconds: 750));
+        await tester.tap(toggle);
+        await tester.pump(const Duration(milliseconds: 750));
+      }
+    }
+    await binding.takeScreenshot('ios-full-player-after-panels');
+    Navigator.of(tester.element(find.byType(FullPlayerScreen))).pop();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(FullPlayerScreen), findsNothing);
+    expect(find.byType(KonnektedMiniPlayerContent), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: startupErrors.join('\n'));
+    await binding.takeScreenshot('ios-mini-player-after-return');
+    binding.reportData!['post172_queue_lyrics_repeat_and_artwork_return'] =
+        'passed';
     await player.seek(const Duration(seconds: 2));
     expect(
       player.positionNotifier.value.inMilliseconds,

@@ -90,6 +90,9 @@ void main() {
       closeTo(first, .01),
     );
     expect(tester.takeException(), isNull);
+    // Retire the overflow marquee and drain its already scheduled pause.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('metadata slot also scales with accessibility text', (tester) async {

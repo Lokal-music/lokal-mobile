@@ -1,6 +1,6 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-Status: implementation and hosted native validation, 25 October 2026.
+Status: implementation and hosted native validation, 26 October 2026 (Europe/Paris).
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
@@ -35,9 +35,14 @@ check requires more than 300 ms beyond a settled baseline. The queue handoff
 advances 544 / 555 ms respectively. These are native execution measurements,
 not output-fidelity or physical-accessory certification.
 
-Native desktop Bonjour discovery is the next addition; its implementation and
-controlled-service test await their hosted run. No signed installation or physical
-iPhone behavior is validated.
+Build 18 additionally passes real Bonjour discovery, protocol filtering and an
+advertised HTTP endpoint on iOS 18.6. Its iOS 26 simulator failed to boot before
+app execution, so that newer suite has no iOS 26 result. No signed installation
+or physical iPhone behavior is validated.
+
+The branch now integrates every merged mobile PR after #172 through #196. See
+[the PR-by-PR UI/behavior review and revised WidgetKit design](IOS_POST172_REVIEW.md)
+for applied shared changes, test scope and remaining native acceptance.
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
@@ -83,8 +88,8 @@ flowchart LR
   coverage remain acceptance work.
 
 Chromecast sender integration, WidgetKit, Discord feasibility and resumable
-background transfers remain open work. Native desktop Bonjour discovery is
-implemented after build 17 and awaits validation. Live add-on stream handles currently
+background transfers remain open work. Native desktop Bonjour discovery
+passes its controlled service/HTTP checks on build 18 / iOS 18.6. Live add-on stream handles currently
 retain the system streaming adapter and explicitly report Rust DSP bypass;
 DSP support for those sources remains open rather than attempting to open an
 opaque stream handle as a native file. Shared UI and source availability do not
@@ -315,7 +320,9 @@ protocol-2 service on the Mac, using a run/attempt-specific identifier. The app
 must discover the compatible service, reject the incompatible one, and reach the
 advertised HTTP probe endpoint. This controlled fixture does not establish actual
 Windows desktop pairing, transfer behavior, or real-device permission denial.
-These new native checks remain pending. Shared Desktop Link/remote-service
+These native checks pass on build 18 / iOS 18.6 (run 40242638631, attempt 1,
+source `d345edb3dae4b3a41c4524d163d44bdb83fd5309`). iOS 26 did not execute them
+because its simulator failed to boot. Shared Desktop Link/remote-service
 regressions pass 40 tests, including actionable native error propagation.
 
 ## Source audit and feature disposition

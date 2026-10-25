@@ -152,6 +152,12 @@ class _ArtworkPortal extends SingleChildRenderObjectWidget {
 class _RenderArtworkPortal extends RenderProxyBox {
   _RenderArtworkPortal(this._progress, this._sheetOffset, this._sourceArtwork);
 
+  // Chrome is repainted through an OpacityLayer even when its child has no
+  // repaint boundary. Its enclosing transforms must therefore be layers too;
+  // a canvas-only transform cannot position a subsequently composited layer.
+  @override
+  bool get alwaysNeedsCompositing => true;
+
   double _progress;
   double _sheetOffset;
   Rect? Function() _sourceArtwork;

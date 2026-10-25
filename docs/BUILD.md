@@ -5,9 +5,11 @@ Rust 1.98.0. CI inspects and saves an unsigned release/AOT IPA, checksum, source
 and notices. Build 17 reaches the full app shell and passes real metadata,
 Keychain, QuickJS, pitch/normalization, codec-corpus and mixed-codec queue checks
 on iOS 26.0 and 18.6. Matching
-native and Dart crash symbols are preserved. The later Bonjour adapter
-and discovery fixture remain under hosted validation. Physical iPhone and Windows
-installation are untested.
+native and Dart crash symbols are preserved. Build 18 additionally passes real
+Bonjour discovery and its advertised HTTP probe on iOS 18.6; iOS 26 failed to boot
+before that suite could execute. Physical iPhone and Windows installation are
+untested. The branch integrates mobile PRs through #196; see the
+[UI/behavior review and revised widget plan](IOS_POST172_REVIEW.md).
 
 See the [architecture and validation ledger](IOS_PORT.md) and
 [Windows signing/install guide](IOS_SIDELOADING.md). An engineering artifact does
