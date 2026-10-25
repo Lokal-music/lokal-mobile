@@ -33,15 +33,19 @@ internal object WidgetUpdateDispatcher {
         if (ids.isEmpty()) return
         val result = provider.goAsync()
         val appContext = context.applicationContext
-        val token = generations.getOrPut(provider.javaClass.name) { AtomicLong() }
-        val requested = token.incrementAndGet()
+        // A resize for widget A cannot invalidate a still-needed state push
+        // for widget B of the same provider. Coalesce per (provider, ID).
+        val requested = ids.associateWith { id ->
+            val token = generations.getOrPut("${provider.javaClass.name}:$id") {
+                AtomicLong()
+            }
+            token.incrementAndGet()
+        }
         executor.execute {
             try {
-                // Sliders, resize events and rapid tracks can enqueue many
-                // broadcasts; draw only the newest state for each provider.
-                if (requested != token.get()) return@execute
                 for (id in ids) {
-                    if (requested != token.get()) break
+                    val key = "${provider.javaClass.name}:$id"
+                    if (requested[id] != generations[key]?.get()) continue
                     try {
                         manager.updateAppWidget(id, render(id))
                     } catch (e: Exception) {
