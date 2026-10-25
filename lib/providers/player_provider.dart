@@ -35,6 +35,7 @@ class PlayerState {
   final Duration? sleepTimerRemaining;
   final List<Song> queue;
   final List<Song> upNext;
+  final List<Song> autoplayUpNext;
   final int currentIndex;
 
   const PlayerState({
@@ -50,6 +51,7 @@ class PlayerState {
     this.sleepTimerRemaining,
     this.queue = const [],
     this.upNext = const [],
+    this.autoplayUpNext = const [],
     this.currentIndex = -1,
   });
 
@@ -66,6 +68,7 @@ class PlayerState {
     Duration? sleepTimerRemaining,
     List<Song>? queue,
     List<Song>? upNext,
+    List<Song>? autoplayUpNext,
     int? currentIndex,
     bool clearSong = false,
     bool clearSleepTimer = false,
@@ -85,6 +88,7 @@ class PlayerState {
           : (sleepTimerRemaining ?? this.sleepTimerRemaining),
       queue: queue ?? this.queue,
       upNext: upNext ?? this.upNext,
+      autoplayUpNext: autoplayUpNext ?? this.autoplayUpNext,
       currentIndex: currentIndex ?? this.currentIndex,
     );
   }
@@ -148,6 +152,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
       sleepTimerRemaining: _service.sleepTimerRemainingNotifier.value,
       queue: _service.queueNotifier.value,
       upNext: _service.upNextNotifier.value,
+      autoplayUpNext: _service.autoplayQueueNotifier.value,
       currentIndex: _service.currentIndexNotifier.value,
     );
 
@@ -201,6 +206,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
         sleepTimerRemaining: _service.sleepTimerRemainingNotifier.value,
         queue: _service.queueNotifier.value,
         upNext: _service.upNextNotifier.value,
+        autoplayUpNext: _service.autoplayQueueNotifier.value,
         currentIndex: _service.currentIndexNotifier.value,
         clearSong: _service.currentSongNotifier.value == null,
         clearSleepTimer: _service.sleepTimerRemainingNotifier.value == null,
@@ -286,6 +292,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
               : LoopMode.off,
           queue: remote.queue.map(convert).toList(),
           upNext: const [],
+          autoplayUpNext: const [],
           currentIndex: remote.currentIndex,
         );
       } else if (previous?.controlsDesktop == true) {
@@ -306,6 +313,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
     _service.sleepTimerRemainingNotifier.addListener(syncState);
     _service.queueNotifier.addListener(syncState);
     _service.upNextNotifier.addListener(syncState);
+    _service.autoplayQueueNotifier.addListener(syncState);
     _service.currentIndexNotifier.addListener(syncState);
 
     // Cleanup listeners when provider is disposed
@@ -322,6 +330,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
       _service.sleepTimerRemainingNotifier.removeListener(syncState);
       _service.queueNotifier.removeListener(syncState);
       _service.upNextNotifier.removeListener(syncState);
+      _service.autoplayQueueNotifier.removeListener(syncState);
       _service.currentIndexNotifier.removeListener(syncState);
     });
 
@@ -510,6 +519,10 @@ class PlayerNotifier extends Notifier<PlayerState> {
     await _service.playFromUpNextIndex(index);
   }
 
+  Future<void> playFromAutoplayIndex(int index) async {
+    await _service.playFromAutoplayIndex(index);
+  }
+
   Future<void> clearQueue() async {
     final desktop = _desktop;
     if (desktop != null) {
@@ -685,6 +698,12 @@ final queueProvider = Provider<List<Song>>((ref) {
 
 final upNextProvider = Provider<List<Song>>((ref) {
   return ref.watch(playerProvider.select((state) => state.upNext));
+});
+
+/// Preview of Autoplay tracks beyond the explicit queue. Not part of the
+/// reorderable manual queue until the first suggestion starts playing.
+final autoplayUpNextProvider = Provider<List<Song>>((ref) {
+  return ref.watch(playerProvider.select((state) => state.autoplayUpNext));
 });
 
 /// Position selector - updates frequently during playback.
