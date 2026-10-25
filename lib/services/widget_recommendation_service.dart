@@ -194,6 +194,7 @@ class WidgetRecommendationService {
   /// IO asynchronously and reuses its usual response cache.
   static Future<String> widgetSafeArtwork(String? raw) async {
     if (raw == null || raw.trim().isEmpty) return '';
+    if (raw.startsWith('content://')) return raw;
     try {
       if (!raw.startsWith('https://') && !raw.startsWith('http://')) {
         final path = raw.startsWith('file://') ? raw.substring(7) : raw;
