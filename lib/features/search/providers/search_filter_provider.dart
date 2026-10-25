@@ -72,15 +72,9 @@ class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
   }
 
   void toggle(SearchCategory category) => select(category);
-  void toggleAll() => select(SearchCategory.songs);
-  bool get isAllEnabled => false;
 }
 
 final searchFilterProvider =
     NotifierProvider<SearchFilterNotifier, Set<SearchCategory>>(
       SearchFilterNotifier.new,
     );
-final searchAllEnabledProvider = Provider<bool>(
-  (ref) =>
-      false,
-);
