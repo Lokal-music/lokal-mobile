@@ -23,7 +23,7 @@ class WidgetIntentHandler {
     _channel = const MethodChannel('com.mossapps.flick/widget');
     _channel!.setMethodCallHandler((call) async {
       if (call.method == 'dispatchPending') {
-        await _drainNativeAction();
+        return _drainNativeAction();
       } else if (call.method == 'dispatch') {
         final uri = Uri.tryParse(call.arguments as String? ?? '');
         _dispatch(uri);
