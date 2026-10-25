@@ -4,6 +4,8 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.os.Bundle
+import android.view.View
+import org.json.JSONArray
 import android.widget.RemoteViews
 import com.mossapps.flick.R
 
@@ -26,13 +28,31 @@ class FlowRadioWidgetProvider : AppWidgetProvider() {
         val layout = if (compact) R.layout.widget_flow_radio_small else R.layout.widget_flow_radio
         val views = RemoteViews(context.packageName, layout)
         val state = preferences.getString(WidgetPrefs.KEY_FLOW_STATUS, "").orEmpty()
-        // Flow/Radio is a discovery launcher, not a second Now Playing widget.
-        // Never repeat the track title/artist or duplicate the cover art.
-        views.setTextViewText(R.id.flow_title, "Music for your mood")
+        // Keep Flow's content distinct from Now Playing while always displaying
+        // artwork. Prefer a fresh recommendation sleeve, otherwise use the
+        // current/previous real cover until a new recommendation is available.
+        var art = try {
+            val recommendations = JSONArray(
+                preferences.getString(WidgetPrefs.KEY_RECOMMENDATIONS, "[]").orEmpty())
+            var found: android.graphics.Bitmap? = null
+            for (i in 0 until minOf(recommendations.length(), 7)) {
+                val path = recommendations.optJSONObject(i)?.optString("artwork").orEmpty()
+                found = WidgetArtLoader.load(context, path, if (compact) 160 else 240)
+                if (found != null) break
+            }
+            found
+        } catch (_: Exception) { null }
+        if (art == null) art = WidgetArtLoader.load(context,
+            preferences.getString(WidgetPrefs.KEY_ALBUM_ART, ""), if (compact) 160 else 240)
+        if (art == null) art = WidgetArtLoader.load(context,
+            preferences.getString(WidgetPrefs.KEY_LAST_ALBUM_ART, ""), if (compact) 160 else 240)
+        views.setViewVisibility(R.id.flow_cover, View.VISIBLE)
+        if (art != null) views.setImageViewBitmap(R.id.flow_cover, art)
+        else views.setImageViewResource(R.id.flow_cover, R.drawable.widget_art_placeholder)
+        views.setTextViewText(R.id.flow_title, "Your Flow")
         views.setTextViewText(R.id.flow_status,
-            state.ifBlank { "Start Flow, create a fresh mix or tune into radio" })
+            state.ifBlank { "Play a mix curated for you" })
         views.setTextColor(R.id.flow_heading, WidgetPrefs.getAccentColor(context))
-        views.setViewVisibility(R.id.flow_cover, android.view.View.GONE)
         views.setOnClickPendingIntent(R.id.flow_heading, WidgetIntents.openApp(context, 680))
         views.setOnClickPendingIntent(R.id.flow_title, WidgetIntents.openApp(context, 681))
         views.setOnClickPendingIntent(R.id.flow_action, WidgetIntents.flow(context, "play"))
