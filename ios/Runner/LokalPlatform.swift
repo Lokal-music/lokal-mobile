@@ -3,6 +3,7 @@ import AVKit
 import Flutter
 import MediaPlayer
 import Photos
+import Security
 import UIKit
 import UniformTypeIdentifiers
 
@@ -82,6 +83,30 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
     }
     register("lokal/ios", messenger) { [weak self] call, result in
       switch call.method {
+      case "preparePlaybackCredentials":
+        // flutter_secure_storage 10.3.4's default service and unlocked class.
+        // Change only accessibility, atomically, without retrieving/replacing
+        // credential bytes. Other services and synchronized items stay unchanged;
+        // no shared access group is requested.
+        DispatchQueue.global(qos: .utility).async {
+          let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "flutter_secure_storage_service",
+            kSecAttrSynchronizable as String: false,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+          ]
+          let attributes: [String: Any] = [
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+          ]
+          let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+          DispatchQueue.main.async {
+            if status == errSecSuccess || status == errSecItemNotFound {
+              result(nil)
+            } else {
+              result(FlutterError(code: "KEYCHAIN_ACCESS", message: "Credential protection could not be prepared.", details: Int(status)))
+            }
+          }
+        }
       case "libraryRoot": result(try? self?.libraryRoot().path)
       case "audioRoute":
         let session = AVAudioSession.sharedInstance()

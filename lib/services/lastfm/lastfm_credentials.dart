@@ -1,9 +1,10 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 
 /// Manages Last.fm API credentials and session data storage.
 class LastFmCredentials {
   LastFmCredentials({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const PlaybackSecureStorage();
 
   final FlutterSecureStorage _storage;
 

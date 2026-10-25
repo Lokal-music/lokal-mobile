@@ -1,13 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 
 import 'youtube_music_account.dart';
 
 /// Stores provider cookies only in the platform's secure storage.
 class YoutubeMusicSessionStore {
   YoutubeMusicSessionStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const PlaybackSecureStorage();
 
   static const _key = 'lokal.ytmusic.session.v1';
   final FlutterSecureStorage _storage;

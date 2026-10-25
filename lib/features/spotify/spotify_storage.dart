@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'spotify_models.dart';
@@ -58,7 +59,7 @@ abstract interface class SpotifyTokenStore {
 /// ordinary preferences because they are not credentials.
 class SecureSpotifyTokenStore implements SpotifyTokenStore {
   SecureSpotifyTokenStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const PlaybackSecureStorage();
 
   static const _key = 'konnekted.spotify.tokens.v1';
   static final sessionRevision = ValueNotifier<int>(0);

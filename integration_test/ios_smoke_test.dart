@@ -4,6 +4,9 @@ import 'dart:math' as math;
 
 import 'package:flick/app/app.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
+import 'package:flick/features/konnekted/konnekted_library.dart';
+import 'package:flick/features/konnekted/konnekted_you.dart';
+import 'package:flick/features/settings/lokal/lokal_settings_page.dart';
 import 'package:flick/features/onboarding/screens/onboarding_screen.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/main.dart' as app;
@@ -12,6 +15,7 @@ import 'package:flick/models/song.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/services/app_preferences_service.dart';
 import 'package:flick/services/replaygain_service.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 import 'package:flick/services/equalizer_service.dart';
 import 'package:flick/providers/equalizer_provider.dart';
 import 'package:flick/features/morneye/morneye_bootstrap.dart';
@@ -26,6 +30,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 Uint8List _tone() {
   const rate = 44100, frames = rate * 8;
@@ -122,6 +127,44 @@ void main() {
     final identity = await const MethodChannel('lokal/app_info')
         .invokeMapMethod<String, dynamic>('get');
     expect(identity?['version'], isNotEmpty);
+
+    for (final destination in [
+      (label: 'Library', type: KonnektedLibrary, screenshot: 'ios-library'),
+      (label: 'You', type: KonnektedYou, screenshot: 'ios-you'),
+      (label: 'Settings', type: LokalSettingsPage, screenshot: 'ios-settings'),
+    ]) {
+      debugPrint('iOS smoke: navigate ${destination.label}');
+      await tester.tap(find.byTooltip(lokalText(destination.label)));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 250));
+      }
+      expect(find.byType(destination.type), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: startupErrors.join('\n'));
+      await binding.takeScreenshot(destination.screenshot);
+    }
+    await tester.tap(find.byTooltip(lokalText('Home')));
+    await tester.pump(const Duration(milliseconds: 750));
+
+    // Exercise the actual Keychain, including a legacy when-unlocked item.
+    // No account tokens are needed, and fixture values never enter the report.
+    debugPrint('iOS smoke: native Keychain legacy migration');
+    const legacyStorage = FlutterSecureStorage();
+    const playbackStorage = PlaybackSecureStorage();
+    final credentialKey =
+        'lokal.ios-smoke.${DateTime.now().microsecondsSinceEpoch}';
+    addTearDown(() => playbackStorage.delete(key: credentialKey));
+    await legacyStorage.write(key: credentialKey, value: 'generated-fixture');
+    expect(await playbackStorage.read(key: credentialKey), 'generated-fixture');
+    expect(await playbackStorage.containsKey(key: credentialKey), true);
+    await playbackStorage.write(key: credentialKey, value: 'updated-fixture');
+    expect((await playbackStorage.readAll())[credentialKey], 'updated-fixture');
+    await playbackStorage.delete(key: credentialKey);
+    expect(await playbackStorage.containsKey(key: credentialKey), false);
+    binding.reportData = {
+      ...?binding.reportData,
+      'keychain_legacy_migration': 'passed',
+      'library_you_settings_navigation': 'passed',
+    };
 
     final directory = await (await getTemporaryDirectory()).createTemp(
       'ios-native-smoke-',

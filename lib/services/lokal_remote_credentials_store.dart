@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/lokal_remote_state.dart';
@@ -20,7 +21,7 @@ class SecureLokalRemoteCredentialsStore implements LokalRemoteCredentialsStore {
   SecureLokalRemoteCredentialsStore({
     FlutterSecureStorage? secureStorage,
     this._preferences,
-  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  }) : _secureStorage = secureStorage ?? const PlaybackSecureStorage();
 
   static const originKey = 'konnekted.lokal_remote.origin.v1';
   static const secureKey = 'konnekted.lokal_remote.secrets.v1';

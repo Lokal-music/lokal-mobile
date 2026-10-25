@@ -214,6 +214,28 @@ and still wanted. Headphone removal pauses without unexpectedly moving audio to
 the speaker. Rebuild routes/streams after media-services reset and report the
 actual rate/channel count, rather than requested values.
 
+### Playback credentials while the screen is locked
+
+The locked secure-storage plugin defaults to `WhenUnlocked` on iOS. Playback
+credentials now use `AfterFirstUnlock`, without synchronization or a shared access
+group, so normal screen locking need not interrupt token refresh, scrobbling or
+add-on vault access. Android keeps the plugin's existing default options.
+
+A small Swift Keychain operation changes legacy nonsynchronized items in the
+locked plugin's default service in place. It changes the accessibility attribute
+without retrieving, deleting or copying credential values. Reads/writes retry
+preparation after a failure; concurrent requests share the in-flight operation.
+Failures propagate instead of reporting migration success. Device-bound storage
+is deliberately avoided because restoring encrypted add-on files also requires
+their backed-up master key. No new signing entitlement is required.
+
+The native smoke test creates a synthetic legacy Keychain item, migrates/reads it,
+updates it through the playback store and deletes it. It also navigates Library,
+You and Settings through the actual UI and captures each screen. These additional
+checks await their hosted run. The simulator cannot establish protected-data
+behavior after a real device reboot/lock, free-account re-signing continuity or
+live-account refresh; those remain explicit device acceptance gates.
+
 ### Files, imports and desktop transfers
 
 Default to copying listener-selected files into app-owned persistent storage
@@ -509,6 +531,11 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
   `63da3becdd2c7cefd77292054683e4f9b712efd09a4d8a8b2319d92f9fbcdd30`.
   CI verifies it before regenerating native dependency outputs; the archive-fetch
   and CI handoff were exercised in an isolated temporary package fixture.
+- The credential-store regression selection records **83 passes and one known
+  baseline failure** (`cover metadata reaches player track; quality goes to
+  search/stream`, an existing HTTP request-order expectation). The secure settings
+  persistence case passes; this is the same failure already reproduced on the
+  untouched baseline, not a newly green full suite.
 - No physical iPhone, Windows re-sign/install/update, background playback,
   Bluetooth/USB/AirPlay receiver, or live-account acceptance has occurred.
 
