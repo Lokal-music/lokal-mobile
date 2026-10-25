@@ -6,6 +6,7 @@ enum SearchCategory {
   songs,
   artists,
   albums,
+  lyrics,
   albumArtists,
   folders,
   year,
@@ -21,6 +22,8 @@ extension SearchCategoryX on SearchCategory {
         return l10n.artists;
       case SearchCategory.albums:
         return l10n.albums;
+      case SearchCategory.lyrics:
+        return 'Lyrics';
       case SearchCategory.albumArtists:
         return l10n.albumArtists;
       case SearchCategory.folders:
@@ -42,6 +45,8 @@ extension SearchCategoryX on SearchCategory {
         return LucideIcons.mic;
       case SearchCategory.albums:
         return LucideIcons.disc3;
+      case SearchCategory.lyrics:
+        return LucideIcons.listMusic;
       case SearchCategory.albumArtists:
         return LucideIcons.users;
       case SearchCategory.folders:
