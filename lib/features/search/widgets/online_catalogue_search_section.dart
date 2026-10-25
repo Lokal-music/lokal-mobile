@@ -170,7 +170,7 @@ class _OnlineCatalogueSearchSectionState
                         onTap: () => _open(
                           LokalMusicDetailPage.album(
                             title: row.name,
-                            artist: row.artistName,
+                            artist: row.artist,
                             localSongs: const [],
                             initialOnline: true,
                           ),
