@@ -57,4 +57,42 @@ void main() {
     expect(inbox, contains('putString(KEY_PENDING, uri)'));
     expect(inbox, contains('prefs.edit().remove(KEY_PENDING).commit()'));
   });
+
+  test('Flow and Cover Flow widgets are registered, responsive and actionable', () {
+    final manifest = File('$root/AndroidManifest.xml').readAsStringSync();
+    final base = '$root/kotlin/com/mossapps/flick/widgets';
+    expect(manifest, contains('FlowRadioWidgetProvider'));
+    expect(manifest, contains('CoverFlowRecommendationWidgetProvider'));
+    final flow = File('$base/FlowRadioWidgetProvider.kt').readAsStringSync();
+    final cover = File('$base/CoverFlowRecommendationWidgetProvider.kt').readAsStringSync();
+    expect(flow, contains('WidgetUpdateDispatcher.submit'));
+    expect(cover, contains('WidgetUpdateDispatcher.submit'));
+    expect(flow, contains('onAppWidgetOptionsChanged'));
+    expect(cover, contains('onAppWidgetOptionsChanged'));
+    expect(File('$root/res/xml/flow_radio_widget_info.xml').readAsStringSync(),
+      contains('resizeMode="horizontal|vertical"'));
+    expect(File('$root/res/xml/recommended_flow_widget_info.xml').readAsStringSync(),
+      contains('resizeMode="horizontal|vertical"'));
+    expect(File('$base/WidgetSize.kt').readAsStringSync(),
+      contains('OPTION_APPWIDGET_MIN_HEIGHT'));
+    final intents = File('$base/WidgetIntents.kt').readAsStringSync();
+    expect(intents, contains('flickwidget://recommend/play'));
+    expect(intents, contains('flickwidget://flow/'));
+    final actions = File('lib/services/widget_intent_handler.dart').readAsStringSync();
+    expect(actions, contains("case 'flow':"));
+    expect(actions, contains("case 'recommend':"));
+    expect(actions, contains('stableOnlinePlaylistSong'));
+    final sync = File('lib/services/widget_sync_service.dart').readAsStringSync();
+    expect(sync, contains('WidgetRecommendationService.instance.refreshFor'));
+    expect(sync, contains('widgetSafeArtwork'));
+  });
+
+  test('failed rich updates still show real track metadata and transport', () {
+    final dispatcher = File('$root/kotlin/com/mossapps/flick/widgets/WidgetUpdateDispatcher.kt')
+        .readAsStringSync();
+    expect(dispatcher, contains('WidgetPrefs.KEY_TITLE'));
+    expect(dispatcher, contains('WidgetPrefs.KEY_ARTIST'));
+    expect(dispatcher, contains('WidgetIntents.playerPlayPause'));
+    expect(dispatcher, isNot(contains('R.string.widget_tap_to_open')));
+  });
 }
