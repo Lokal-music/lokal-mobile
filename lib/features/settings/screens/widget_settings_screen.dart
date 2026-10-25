@@ -11,8 +11,7 @@ import 'package:flick/providers/providers.dart';
 import 'package:flick/services/widget_sync_service.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
 
-/// Home screen widgets: one tab per widget size, each with its background,
-/// content, text size (with a preview) and accent.
+/// Shared Now Playing customization; widget sizes adapt automatically on Android.
 class WidgetSettingsScreen extends ConsumerStatefulWidget {
   const WidgetSettingsScreen({super.key});
 
@@ -22,28 +21,14 @@ class WidgetSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
-  int _tab = 0;
-
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(appPreferencesProvider);
-    final tab = _tabs[_tab];
+    final tab = _tabs.first;
     return LokalSettingsScaffold(
       title: l10n.widgets,
-      subtitle: 'Now Playing, Flow / Radio and Cover Flow. All widgets resize on your Android home screen; these controls customize the existing Now Playing layouts.',
+      subtitle: 'Now Playing, Flow & Radio, and Cover Flow adapt to every size. Album artwork is always visible; customize text and colors below.',
       children: [
-        LokalSettingsBlock(
-          top: 16,
-          child: LokalSegmented<int>(
-            expand: true,
-            value: _tab,
-            segments: [
-              for (final (i, tab) in _tabs.indexed)
-                LokalSegment(i, tab.label()),
-            ],
-            onChanged: (i) => setState(() => _tab = i),
-          ),
-        ),
         ..._sections(context, tab, prefs),
       ],
     );
@@ -214,13 +199,6 @@ final _tabs = <_WidgetTab>[
     withOpacity: (p, v) => p.copyWith(widgetBgOpacity: v),
     toggles: [
       _WidgetToggle(
-        label: () => l10n.albumArt,
-        description: () => l10n.showAlbumArtworkOnTheMini,
-        value: (p) => p.widgetShowAlbumArt,
-        set: (n, v) => n.setWidgetShowAlbumArt(v),
-        copy: (p, v) => p.copyWith(widgetShowAlbumArt: v),
-      ),
-      _WidgetToggle(
         label: () => l10n.artistName,
         description: () => l10n.showArtistBelowSongTitle,
         value: (p) => p.widgetShowArtist,
@@ -237,56 +215,7 @@ final _tabs = <_WidgetTab>[
     preview: (13, 11),
     centered: false,
   ),
-  _WidgetTab(
-    label: () => '4×3 Flagship',
-    toggles: [
-      _WidgetToggle(
-        label: () => l10n.artistName,
-        description: () => l10n.showArtistBelowSongTitle,
-        value: (p) => p.widgetFlagshipShowArtist,
-        set: (n, v) => n.setWidgetFlagshipShowArtist(v),
-        copy: (p, v) => p.copyWith(widgetFlagshipShowArtist: v),
-      ),
-    ],
-    textScale: (p) => p.widgetFlagshipTextScale,
-    setTextScale: (n, v) => n.setWidgetFlagshipTextScale(v),
-    withTextScale: (p, v) => p.copyWith(widgetFlagshipTextScale: v),
-    accent: (p) => p.widgetFlagshipAccent,
-    setAccent: (n, v) => n.setWidgetFlagshipAccent(v),
-    withAccent: (p, v) => p.copyWith(widgetFlagshipAccent: v),
-    preview: (15, 12),
-    centered: true,
-  ),
-  _WidgetTab(
-    label: () => '2×2',
-    opacity: (p) => p.widgetCompactBgOpacity,
-    setOpacity: (n, v) => n.setWidgetCompactBgOpacity(v),
-    withOpacity: (p, v) => p.copyWith(widgetCompactBgOpacity: v),
-    toggles: [
-      _WidgetToggle(
-        label: () => l10n.albumArt,
-        description: () => l10n.useAlbumArtAsBackground,
-        value: (p) => p.widgetCompactShowAlbumArt,
-        set: (n, v) => n.setWidgetCompactShowAlbumArt(v),
-        copy: (p, v) => p.copyWith(widgetCompactShowAlbumArt: v),
-      ),
-      _WidgetToggle(
-        label: () => l10n.artistName,
-        description: () => l10n.showArtistBelowSongTitle,
-        value: (p) => p.widgetCompactShowArtist,
-        set: (n, v) => n.setWidgetCompactShowArtist(v),
-        copy: (p, v) => p.copyWith(widgetCompactShowArtist: v),
-      ),
-    ],
-    textScale: (p) => p.widgetCompactTextScale,
-    setTextScale: (n, v) => n.setWidgetCompactTextScale(v),
-    withTextScale: (p, v) => p.copyWith(widgetCompactTextScale: v),
-    accent: (p) => p.widgetCompactAccent,
-    setAccent: (n, v) => n.setWidgetCompactAccent(v),
-    withAccent: (p, v) => p.copyWith(widgetCompactAccent: v),
-    preview: (15, 12),
-    centered: true,
-  ),
+
 ];
 
 /// The widget accents, as the home screen widgets draw them.

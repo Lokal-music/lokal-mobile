@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_mini_player_name">Lokal · Now Playing bar</string>
+    <string name="widget_mini_player_name">Lokal · Now Playing</string>
 
-    <string name="widget_mini_player_desc">Compact player with transport controls</string>
+    <string name="widget_mini_player_desc">One resizable player: artwork, track details and controls adapt to every size</string>
 
     <string name="widget_nothing_playing">Nothing playing</string>
     <string name="widget_tap_to_open">Tap to open Lokal</string>

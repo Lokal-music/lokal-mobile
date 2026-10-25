@@ -1,124 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_root"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/widget_bg_3">
-
-    <ImageView
-        android:id="@+id/widget_art_bg"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:contentDescription="@string/widget_open_app"
-        android:scaleType="centerCrop"
-        android:src="@drawable/widget_default_art" />
-
-    <ImageView
-        android:id="@+id/widget_scrim"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#80000000"
-        android:contentDescription="@string/widget_open_app"
-        android:visibility="gone" />
-
-    <LinearLayout
-        android:id="@+id/widget_content"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="10dp">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/widget_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/widget_nothing_playing"
-            android:fontFamily="@font/product_sans_bold"
-            android:textColor="#FFFFFF"
-            android:textSize="15sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:gravity="start|center_vertical"
-            />
-
-            <TextView
-                android:id="@+id/widget_time"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#C7FFFFFF"
-                android:textSize="10sp"
-                android:visibility="gone"
-                android:singleLine="true" />
-            <TextView
-                android:id="@+id/widget_artist"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:visibility="gone"
-            android:fontFamily="@font/product_sans_regular"
-            android:textColor="#DDFFFFFF"
-            android:textSize="12sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:gravity="start|center_vertical"
-            />
-        </LinearLayout>
-
-        <ImageButton
-            android:id="@+id/widget_prev"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginStart="2dp"
-            android:background="@drawable/widget_button_transport_bg"
-            android:contentDescription="@string/widget_previous"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/widget_ic_lucide_skip_back" />
-
-        <ImageButton
-            android:id="@+id/widget_play_pause"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="4dp"
-            android:background="@drawable/widget_button_play_bg"
-            android:contentDescription="@string/widget_play_pause"
-            android:padding="8dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/widget_ic_lucide_play" />
-
-        <ImageButton
-            android:id="@+id/widget_next"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginStart="4dp"
-            android:background="@drawable/widget_button_transport_bg"
-            android:contentDescription="@string/widget_next"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/widget_ic_lucide_skip_forward" />
-
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/widget_bg_3">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="horizontal" android:paddingStart="12dp" android:paddingEnd="12dp" android:paddingTop="4dp" android:paddingBottom="4dp">
+    <ImageView android:id="@+id/widget_art_bg" android:layout_width="42dp" android:layout_height="42dp" android:background="@drawable/widget_art_background" android:clipToOutline="true" android:scaleType="centerCrop" android:src="@drawable/widget_art_placeholder" android:contentDescription="@string/widget_open_app" />
+    <ImageView android:id="@+id/widget_scrim" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:layout_marginEnd="4dp" android:orientation="vertical">
+      <TextView android:id="@+id/widget_title" android:text="@string/widget_nothing_playing" android:layout_width="match_parent" android:layout_height="wrap_content" android:singleLine="true" android:ellipsize="end" android:gravity="start" android:fontFamily="@font/product_sans_bold" android:textColor="#FFFFFF" android:textSize="14sp" />
+<TextView android:id="@+id/widget_artist" android:text="Lokal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:singleLine="true" android:ellipsize="end" android:gravity="start" android:fontFamily="@font/product_sans_regular" android:textColor="#BFFFFFFF" android:textSize="11sp" />
+      <TextView android:id="@+id/widget_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone" android:textColor="#B3FFFFFF" android:textSize="10sp" />
     </LinearLayout>
-
-    <ProgressBar
-        android:id="@+id/widget_progress"
-        style="@android:style/Widget.ProgressBar.Horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="3dp"
-        android:layout_gravity="bottom"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="2dp"
-        android:max="1000"
-        android:progress="0"
-        android:progressDrawable="@drawable/widget_progress_white" />
-
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <ImageButton android:id="@+id/widget_prev" android:layout_width="32dp" android:layout_height="32dp" android:background="@drawable/widget_button_transport_bg" android:contentDescription="@string/widget_previous" android:padding="7dp" android:scaleType="centerInside" android:src="@drawable/widget_ic_lucide_skip_back" />
+  <ImageButton android:id="@+id/widget_play_pause" android:layout_width="38dp" android:layout_height="38dp" android:layout_marginHorizontal="5dp" android:background="@drawable/widget_button_play_bg" android:contentDescription="@string/widget_play_pause" android:padding="10dp" android:scaleType="centerInside" android:src="@drawable/widget_ic_lucide_play" />
+  <ImageButton android:id="@+id/widget_next" android:layout_width="32dp" android:layout_height="32dp" android:background="@drawable/widget_button_transport_bg" android:contentDescription="@string/widget_next" android:padding="7dp" android:scaleType="centerInside" android:src="@drawable/widget_ic_lucide_skip_forward" />
+</LinearLayout>
+  </LinearLayout>
+  <ProgressBar android:id="@+id/widget_progress" style="@android:style/Widget.ProgressBar.Horizontal" android:layout_width="match_parent" android:layout_height="2dp" android:layout_gravity="bottom" android:layout_marginHorizontal="12dp" android:max="1000" android:visibility="gone" android:progressDrawable="@drawable/widget_progress_white"/>
 </FrameLayout>

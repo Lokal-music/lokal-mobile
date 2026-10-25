@@ -15,6 +15,7 @@ internal object WidgetPrefs {
     const val KEY_TITLE = "flick_widget_title"
     const val KEY_ARTIST = "flick_widget_artist"
     const val KEY_ALBUM_ART = "flick_widget_album_art"
+    const val KEY_LAST_ALBUM_ART = "flick_widget_last_album_art"
     const val KEY_IS_PLAYING = "flick_widget_is_playing"
     const val KEY_HAS_SONG = "flick_widget_has_song"
     const val KEY_IS_SHUFFLE = "flick_widget_is_shuffle"
@@ -31,6 +32,7 @@ internal object WidgetPrefs {
     const val KEY_FLOW_STATUS = "flick_widget_flow_status"
     const val KEY_RECOMMENDATIONS = "flick_widget_recommendations"
     const val KEY_RECOMMEND_ENABLED = "flick_widget_recommend_enabled"
+    const val KEY_FLOW_ENABLED = "flick_widget_flow_enabled"
     fun recommendationCursor(id: Int) = "flick_widget_recommend_cursor_$id"
 
     private val BG_OPACITY_MAP = mapOf(
@@ -52,14 +54,12 @@ internal object WidgetPrefs {
     fun get(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // ponytail: rebuild all three home widgets from current prefs; used when the
+    // Rebuild the three distinct widget types from current preferences; used when the
     // app process is about to die so the play/pause state can't drift stale.
     fun updateAllWidgets(context: Context) {
         val mgr = AppWidgetManager.getInstance(context)
         listOf(
             MiniPlayerWidgetProvider::class.java,
-            FlagshipWidgetProvider::class.java,
-            CompactWidgetProvider::class.java,
             FlowRadioWidgetProvider::class.java,
             CoverFlowRecommendationWidgetProvider::class.java,
         ).forEach { cls ->

@@ -59,6 +59,7 @@ class WidgetSyncService {
   static const String keyTitle = 'flick_widget_title';
   static const String keyArtist = 'flick_widget_artist';
   static const String keyAlbumArt = 'flick_widget_album_art';
+  static const String keyLastAlbumArt = 'flick_widget_last_album_art';
   static const String keyIsPlaying = 'flick_widget_is_playing';
   static const String keyHasSong = 'flick_widget_has_song';
 
@@ -89,7 +90,7 @@ class WidgetSyncService {
       ? _cachedArt : _resolveLocalArt(song?.albumArt);
 
   Future<void> _refreshArtwork(Song song, String? path) async {
-    final art = await WidgetRecommendationService.widgetSafeArtwork(path);
+    final art = await WidgetRecommendationService.resolveTrackArtwork(song);
     if (art.isEmpty || _artSongId != song.id || _artRaw != path) return;
     _cachedArt = art;
     _savedData.remove(keyAlbumArt);
@@ -127,8 +128,6 @@ class WidgetSyncService {
 
   Future<void> _updateAll() async {
     await HomeWidget.updateWidget(qualifiedAndroidName: miniPlayerProvider);
-    await HomeWidget.updateWidget(qualifiedAndroidName: flagshipProvider);
-    await HomeWidget.updateWidget(qualifiedAndroidName: compactProvider);
     await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
     await HomeWidget.updateWidget(qualifiedAndroidName: recommendationProvider);
   }
@@ -153,7 +152,6 @@ class WidgetSyncService {
       _cachedArt = '';
       if (song != null) {
         unawaited(_refreshArtwork(song, song.albumArt));
-        WidgetRecommendationService.instance.refreshFor(song, state.upNext);
       }
     }
     final structuralChange =
@@ -204,6 +202,9 @@ class WidgetSyncService {
     try {
       await _ensureInit();
       final Song? song = state.currentSong;
+      if (song != null) {
+        WidgetRecommendationService.instance.refreshFor(song, state.upNext);
+      }
       final structuralChange =
           _savedData[keySongId] != (song?.id ?? '') ||
           _savedData[keyIsPlaying] != state.isPlaying ||
@@ -221,7 +222,11 @@ class WidgetSyncService {
       await _save<String>(keySongId, song?.id ?? '');
       await _save<String>(keyTitle, song?.title ?? '');
       await _save<String>(keyArtist, song?.artist ?? '');
-      await _save<String>(keyAlbumArt, _coverFor(song));
+      final currentCover = _coverFor(song);
+      await _save<String>(keyAlbumArt, currentCover);
+      if (currentCover.isNotEmpty) {
+        await _save<String>(keyLastAlbumArt, currentCover);
+      }
       await _save<int>(keyPositionMs, state.position.inMilliseconds);
       await _save<int>(keyDurationMs, state.duration.inMilliseconds);
       await _save<bool>(keyIsShuffle, state.isShuffle);
@@ -231,8 +236,7 @@ class WidgetSyncService {
       if (structuralChange) {
         await _updateAll();
       } else if (positionChanged) {
-        // Only the mini widget has a progress bar. Avoid rebuilding the two
-        // artwork/text bitmap widgets for every position-only update.
+        // Now Playing is the only widget needing position-only updates.
         await HomeWidget.updateWidget(qualifiedAndroidName: miniPlayerProvider);
       }
 
@@ -384,6 +388,7 @@ class WidgetSyncService {
   String _resolveLocalArt(String? raw) {
     if (raw == null || raw.isEmpty) return '';
     if (raw.startsWith('http://') || raw.startsWith('https://')) return '';
+    if (raw.startsWith('content://')) return raw;
     final cleaned = raw.startsWith('file://') ? raw.substring(7) : raw;
     if (!File(cleaned).existsSync()) return '';
     return cleaned;

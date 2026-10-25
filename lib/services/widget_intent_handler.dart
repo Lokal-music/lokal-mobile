@@ -172,7 +172,7 @@ class WidgetIntentHandler {
     if (rows.isEmpty) return;
     await HomeWidget.setAppGroupId('group.com.mossapps.flick.widgets');
     final cursor = await HomeWidget.getWidgetData<int>(
-      'flick_widget_recommend_cursor_$widgetId', defaultValue: 0,
+      'flick_widget_recommend_cursor_$widgetId', defaultValue: rows.length ~/ 2,
     ) ?? 0;
     final idx = cursor % rows.length;
     final records = <Song>[];
