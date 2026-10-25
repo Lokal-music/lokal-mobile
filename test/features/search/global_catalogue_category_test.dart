@@ -79,12 +79,23 @@ void main() {
         await tester.pumpWidget(section(true));
         await tester.pumpAndSettle();
         expect(find.text('Wanted song'), findsOneWidget);
+        expect(find.text('Online songs'), findsOneWidget);
+        expect(find.text('Global'), findsNothing);
+        expect(find.text('Songs'), findsNothing); // No redundant subheading
+        final headingPadding = tester.widget<Padding>(
+          find.ancestor(
+            of: find.text('Online songs'), matching: find.byType(Padding),
+          ).first,
+        );
+        expect(headingPadding.padding, const EdgeInsets.all(16));
         expect(find.text('Unrelated album'), findsNothing);
         expect(find.text('Unrelated artist'), findsNothing);
         expect(find.text('Albums'), findsNothing);
         expect(find.text('Artists'), findsNothing);
         await tester.pumpWidget(section(false));
         await tester.pumpAndSettle();
+        expect(find.text('Global'), findsOneWidget);
+        expect(find.text('Online songs'), findsNothing);
         expect(find.text('Unrelated album'), findsOneWidget);
         expect(find.text('Unrelated artist'), findsOneWidget);
         await tester.pumpWidget(section(true));
