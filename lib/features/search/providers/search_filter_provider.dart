@@ -7,10 +7,13 @@ import '../models/search_category.dart';
 
 enum SearchScope { library, online }
 
+const visibleSearchCategories = [
+  SearchCategory.songs, SearchCategory.artists,
+  SearchCategory.albums, SearchCategory.lyrics,
+];
+
 bool supportsOnlineCategory(SearchCategory? category) =>
-    category == SearchCategory.songs ||
-    category == SearchCategory.artists ||
-    category == SearchCategory.albums;
+    category != null && visibleSearchCategories.contains(category);
 
 class SearchScopeNotifier extends Notifier<SearchScope> {
   @override
@@ -47,10 +50,7 @@ class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
       final category = stored == null
           ? null
           : SearchCategoryX.fromStorageKey(stored);
-      if (category != null &&
-          (supportsOnlineCategory(category) ||
-              ref.read(searchScopeProvider) != SearchScope.online))
-        state = {category};
+      if (supportsOnlineCategory(category)) state = {category!};
     } catch (_) {
       /* Search remains usable if preference storage fails. */
     }
@@ -58,15 +58,13 @@ class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
 
   void select(SearchCategory? category) {
     _changed = true;
-    state = {category ?? SearchCategory.songs};
-    if (!supportsOnlineCategory(category) &&
-        ref.read(searchScopeProvider) == SearchScope.online) {
-      ref.read(searchScopeProvider.notifier).select(SearchScope.library);
-    }
+    final selected = supportsOnlineCategory(category)
+        ? category! : SearchCategory.songs;
+    state = {selected};
     _saving = _saving
         .then((_) async {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_key, (category ?? SearchCategory.songs).storageKey);
+          await prefs.setString(_key, selected.storageKey);
         })
         .catchError((Object _) {});
   }
