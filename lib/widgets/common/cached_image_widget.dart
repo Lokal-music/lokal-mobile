@@ -306,31 +306,41 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
   }
 
   Widget _buildNetworkImage(String imagePath, int? decodeWidth) {
-    final host = Uri.tryParse(imagePath)?.host.toLowerCase() ?? '';
-    final isAmazon = host == 'm.media-amazon.com' ||
+    final uri = Uri.tryParse(imagePath);
+    final host = uri?.host.toLowerCase() ?? '';
+    final youtubeArtwork = host == 'i.ytimg.com' ||
+        host == 'img.youtube.com' ||
+        host == 'googleusercontent.com' ||
+        host.endsWith('.googleusercontent.com') ||
+        host == 'ggpht.com' || host.endsWith('.ggpht.com');
+    final amazonArtwork = host == 'm.media-amazon.com' ||
         host == 'images-na.ssl-images-amazon.com' ||
         host == 'images-eu.ssl-images-amazon.com' ||
         host == 'images-fe.ssl-images-amazon.com' ||
         host == 'images.amazon.com' ||
         host == 'ecx.images-amazon.com';
-    final variants = isAmazon
+    // Use the same validated higher-resolution image candidates in every
+    // player surface, with the original URL as a fallback.
+    final urls = youtubeArtwork || amazonArtwork
         ? PlayerArtworkQuality.candidates(imagePath)
-        : <String>[imagePath];
+        : [imagePath];
 
-    Widget imageAt(int index) => Image.network(
-      variants[index],
+    Widget attempt(int index) => Image.network(
+      urls[index],
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
-      frameBuilder: (context, child, frame, synchronous) =>
-          synchronous || frame != null ? child : SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
-      ),
-      errorBuilder: (context, error, stackTrace) =>
-          index + 1 < variants.length
-              ? imageAt(index + 1)
+      frameBuilder: (context, child, frame, synchronous) {
+        if (synchronous || frame != null) return child;
+        return SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
+        );
+      },
+      errorBuilder: (context, error, trace) =>
+          index + 1 < urls.length
+              ? attempt(index + 1)
               : SizedBox(
                   width: widget.width,
                   height: widget.height,
@@ -338,17 +348,20 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
                       CachedImageWidget.defaultErrorWidget(),
                 ),
       loadingBuilder: (context, child, progress) =>
-          progress == null ? child : SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
-      ),
+          progress == null
+              ? child
+              : SizedBox(
+                  width: widget.width,
+                  height: widget.height,
+                  child: widget.placeholder ??
+                      CachedImageWidget.defaultPlaceholder(),
+                ),
       cacheWidth: decodeWidth,
       cacheHeight: widget.useThumbnail && widget.thumbnailHeight != null
           ? widget.thumbnailHeight
           : null,
     );
-    return imageAt(0);
+    return attempt(0);
   }
 }
 
