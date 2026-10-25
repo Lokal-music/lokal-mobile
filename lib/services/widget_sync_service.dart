@@ -127,8 +127,6 @@ class WidgetSyncService {
 
   Future<void> _updateAll() async {
     await HomeWidget.updateWidget(qualifiedAndroidName: miniPlayerProvider);
-    await HomeWidget.updateWidget(qualifiedAndroidName: flagshipProvider);
-    await HomeWidget.updateWidget(qualifiedAndroidName: compactProvider);
     await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
     await HomeWidget.updateWidget(qualifiedAndroidName: recommendationProvider);
   }
@@ -231,8 +229,7 @@ class WidgetSyncService {
       if (structuralChange) {
         await _updateAll();
       } else if (positionChanged) {
-        // Only the mini widget has a progress bar. Avoid rebuilding the two
-        // artwork/text bitmap widgets for every position-only update.
+        // Now Playing is the only widget needing position-only updates.
         await HomeWidget.updateWidget(qualifiedAndroidName: miniPlayerProvider);
       }
 
