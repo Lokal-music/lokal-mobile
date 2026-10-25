@@ -202,6 +202,7 @@ class AndroidAudioEngine implements AudioEngine {
     // the audio sequence if another tap has selected a different source.
     final before = <just_audio.AudioSource>[];
     final after = <just_audio.AudioSource>[];
+    var restored = false;
     try {
       for (var i = 0; i < songs.length; i++) {
         if (!isCurrent()) return false;
@@ -229,6 +230,7 @@ class AndroidAudioEngine implements AudioEngine {
       _loadedSingleTrackOnly = false;
       _playlistSignature =
           songs.map(androidAudioSourceIdentity).toList(growable: false);
+      restored = true;
       devLog('[Playback] Restored repeat-all sequence in place '
           '(${songs.length} tracks)');
       return true;
@@ -238,9 +240,15 @@ class AndroidAudioEngine implements AudioEngine {
     } finally {
       if (_restoringFastStartPlaylist) {
         _restoringFastStartPlaylist = false;
-        if (identical(_player, player)) {
+        // A failed partial insert cannot be treated as a valid playlist.
+        // Retain manual-completion mode and force a fresh sequence on the
+        // next track instead of accidentally repeating/skipping wrong songs.
+        if (restored && identical(_player, player)) {
           _syncPlaylistStateFromPlayer();
           _syncTrackFromIndex(player.currentIndex);
+        } else if (identical(_player, player)) {
+          _loadedSingleTrackOnly = true;
+          _playlistSignature = const <String>[];
         }
       }
     }
