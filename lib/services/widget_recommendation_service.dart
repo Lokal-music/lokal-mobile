@@ -6,6 +6,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../models/song.dart';
+import 'apple_music/apple_music_metadata_service.dart';
 import 'online_radio_recommendations.dart';
 
 /// A durable, small, *metadata-only* recommendation snapshot. No stream URLs,
@@ -86,11 +87,10 @@ class WidgetRecommendationService {
       artworkSources.add(song.albumArt);
     }
     if (generation != _generation) return;
-    // Display titles and browse/play actions *immediately*. Slow remote art
-    // never blocks a working widget, and early cover loads update in place.
-    await _publish(sanitized, generation);
+    // Only publish entries with verified local artwork. In particular, do not
+    // fill the home screen with blank covers for catalogue metadata-only songs.
     if (sanitized.isNotEmpty) {
-      unawaited(_hydrateArtwork(sanitized, artworkSources, generation));
+      await _hydrateArtwork(sanitized, artworkSources, generation);
     }
   }
 
@@ -120,7 +120,10 @@ class WidgetRecommendationService {
           for (var i = start; i < end; i++)
             _cacheCover(rows[i], sources[i], generation),
         ]);
-        await _publish(rows, generation);
+        await _publish(
+          rows.where((row) => (row['artwork'] as String? ?? '').isNotEmpty)
+              .toList(), generation,
+        );
       }
     } catch (_) {
       // Browsing and playback are still functional when album art fails.
@@ -130,18 +133,60 @@ class WidgetRecommendationService {
   Future<void> _cacheCover(
     Map<String, Object?> row, String? source, int generation,
   ) async {
-    var path = await widgetSafeArtwork(source);
-    if (path.isEmpty) {
-      // Some radio sources supply no album artwork but do provide a YouTube
-      // video id. Use a public thumbnail only when the original art is absent.
-      final remoteId = row['remoteId'] as String? ?? '';
-      if (remoteId.startsWith('yt:') && remoteId.length == 14 &&
-          RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(remoteId.substring(3))) {
-        final id = remoteId.substring(3);
-        path = await widgetSafeArtwork('https://i.ytimg.com/vi/$id/hqdefault.jpg');
-      }
-    }
+    final song = Song(
+      id: 'widget:' + (row['artist'] as String? ?? '') + ':' +
+          (row['title'] as String? ?? ''),
+      title: row['title'] as String? ?? '',
+      artist: row['artist'] as String? ?? '',
+      album: row['album'] as String?,
+      albumArt: source,
+      remoteId: row['remoteId'] as String?,
+      duration: Duration.zero,
+      fileType: 'ONLINE',
+    );
+    final path = await resolveTrackArtwork(song);
     if (generation == _generation) row['artwork'] = path;
+  }
+
+  /// A widget must make the same effort to show real artwork as the player.
+  /// Try the app's cached cover, YouTube's public thumbnail for a known video
+  /// ID, then an *exact* artist/title Apple catalogue artwork match. Never
+  /// transmit catalogue tokens, audio URLs, or user credentials to widgets.
+  static Future<String> resolveTrackArtwork(Song song) async {
+    var path = await widgetSafeArtwork(song.albumArt);
+    if (path.isNotEmpty) return path;
+
+    final remoteId = song.remoteId ?? '';
+    if (remoteId.startsWith('yt:') && remoteId.length == 14 &&
+        RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(remoteId.substring(3))) {
+      final id = remoteId.substring(3);
+      path = await widgetSafeArtwork(
+        'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+      );
+      if (path.isNotEmpty) return path;
+    }
+
+    if (song.title.trim().isEmpty || song.artist.trim().isEmpty) return '';
+    try {
+      final candidates = await AppleMusicMetadataService.instance
+          .searchSongs('${song.artist} ${song.title}', limit: 8)
+          .timeout(const Duration(seconds: 6));
+      final target = radioRecordingKey(song.artist, song.title);
+      for (final candidate in candidates) {
+        if (radioRecordingKey(candidate.artist, candidate.title) != target ||
+            candidate.artworkUrl.isEmpty) continue;
+        final higherQuality = candidate.artworkUrl
+            .replaceFirst('100x100bb', '600x600bb');
+        path = await widgetSafeArtwork(higherQuality);
+        if (path.isEmpty && higherQuality != candidate.artworkUrl) {
+          path = await widgetSafeArtwork(candidate.artworkUrl);
+        }
+        if (path.isNotEmpty) return path;
+      }
+    } catch (_) {
+      // The first-party cover cache and track playback remain authoritative.
+    }
+    return '';
   }
 
   /// Enforce local, bounded artwork paths. Remote URLs and signed tokens are
