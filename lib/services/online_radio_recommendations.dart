@@ -115,7 +115,12 @@ class OnlineRadioRecommendations {
         candidates: [...youtube, ...related],
         count: count.clamp(0, _maxBatch),
       );
-      return [for (final item in candidates) discoveryPendingSong(item)];
+      return [
+        for (final item in candidates)
+          discoveryPendingSong(item).copyWith(
+            remoteId: item.videoId == null ? null : 'yt:${item.videoId}',
+          ),
+      ];
     } finally {
       transport.close();
     }
