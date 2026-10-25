@@ -208,6 +208,11 @@ void main() {
     await tester.pumpWidget(_app(onNavigate: opened.add));
     await tester.pump();
 
+    expect(find.byTooltip('Discord'), findsOneWidget);
+    expect(
+      tester.getCenter(find.byTooltip('Discord')).dx,
+      lessThan(tester.getCenter(find.byTooltip('Settings')).dx),
+    );
     await tester.tap(find.byTooltip('Settings'));
     await tester.tap(find.bySemanticsLabel('Last.fm, not connected'));
     await tester.tap(find.bySemanticsLabel('ListenBrainz, not connected'));

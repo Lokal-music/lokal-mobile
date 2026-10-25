@@ -1,3 +1,4 @@
+import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
@@ -267,6 +268,8 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              const LokalDiscordButton(),
+              const SizedBox(width: 10),
               Tooltip(
                 message: lokalText('Settings'),
                 excludeFromSemantics: true,
