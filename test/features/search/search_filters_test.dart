@@ -121,6 +121,14 @@ void main() {
       expect(find.text('Album Artists'), findsNothing);
       expect(find.text('Playlists'), findsNothing);
       expect(c.read(searchFilterProvider), {SearchCategory.albums});
+      await tester.tap(find.text('Lyrics'));
+      await tester.pumpAndSettle();
+      expect(c.read(searchFilterProvider), {SearchCategory.lyrics});
+      await tester.tap(find.text('Library'));
+      await tester.pumpAndSettle();
+      expect(c.read(searchScopeProvider), SearchScope.library);
+      expect(c.read(searchFilterProvider), {SearchCategory.lyrics});
+      expect(find.widgetWithText(ChoiceChip, 'Lyrics'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
