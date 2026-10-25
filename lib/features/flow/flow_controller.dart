@@ -323,8 +323,16 @@ class FlowController extends AsyncNotifier<FlowData> {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('Enter a playlist name.');
     final library = await ref.read(flowLibraryProvider.future);
-    final songs = library.mix(state.requireValue, DateTime.now());
-    if (songs.isEmpty) throw StateError('There are no tracks to save.');
+    // PlaylistService persists library IDs. Online streaming placeholders do
+    // not have stable library records; saving them would create dead entries.
+    // Keep the downloaded subset until playlist import supports online IDs.
+    final songs = library.mix(state.requireValue, DateTime.now()).where(
+      (song) => !song.isPending && !song.isExternal &&
+          !song.isNetworkSource && song.filePath?.isNotEmpty == true,
+    ).toList();
+    if (songs.isEmpty) {
+      throw StateError('No downloaded tracks to save from this Flow.');
+    }
     final service = ref.read(playlistServiceProvider);
     final playlist = await service.createPlaylist(trimmed);
     if (playlist == null) {
