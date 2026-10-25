@@ -45,29 +45,46 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
         } catch (_: Exception) { JSONArray() }
         val count = data.length().coerceAtMost(8)
         val indexKey = WidgetPrefs.recommendationCursor(id)
-        val position = if (count > 0) prefs.getInt(indexKey, 0).mod(count) else 0
-        if (count > 0) {
-            val item = data.optJSONObject(position)
-            val title = item?.optString("title").orEmpty()
-            val artist = item?.optString("artist").orEmpty()
-            views.setTextViewText(R.id.rec_title, title.ifBlank { "Recommended for you" })
-            views.setTextViewText(R.id.rec_artist,
-                artist.ifBlank { "From your listening" } + "  •  " + (position + 1) + "/" + count)
-        } else {
-            views.setTextViewText(R.id.rec_title, "Discover your next song")
-            views.setTextViewText(R.id.rec_artist, "Play music in Lokal to discover similar tracks")
-        }
+        // Start in the middle like the in-app Cover Flow, preserving an
+        // individual browsing cursor for every widget instance afterwards.
+        val position = if (count > 0)
+            prefs.getInt(indexKey, count / 2).mod(count) else 0
+        val hasSelection = count > 0
+        val item = if (hasSelection) data.optJSONObject(position) else null
+        val title = item?.optString("title").orEmpty()
+        val artist = item?.optString("artist").orEmpty()
+        views.setTextViewText(R.id.rec_title,
+            if (hasSelection) title.ifBlank { "Recommended track" }
+            else "Your next favourite")
+        views.setTextViewText(R.id.rec_artist,
+            if (hasSelection) artist.ifBlank { "From your listening" }
+            else "Play something in Lokal to build your picks")
+        views.setTextViewText(R.id.rec_heading, "COVER FLOW")
+        views.setViewVisibility(R.id.rec_art_strip,
+            if (hasSelection) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.rec_prev,
+            if (count > 1) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.rec_next,
+            if (count > 1) View.VISIBLE else View.GONE)
+        views.setTextViewText(R.id.rec_play, if (hasSelection) "Play pick" else "Open Lokal")
 
-        fun art(viewId: Int, position: Int) {
-            val path = if (count == 0) "" else
-                data.optJSONObject(position.mod(count))?.optString("artwork").orEmpty()
-            val image = WidgetArtLoader.load(path, 184)
+        fun art(viewId: Int, offset: Int) {
+            val artPath = if (count > 0) data.optJSONObject((position + offset).mod(count))
+                ?.optString("artwork").orEmpty() else ""
+            val image = WidgetArtLoader.load(artPath, if (offset == 0) 240 else 168)
+            // Avoid filling the launcher with three giant app-logo placeholders
+            // while artwork is being asynchronously cached. Only real adjacent
+            // covers are shown; the selected slot uses a neutral surface.
+            views.setViewVisibility(viewId, if (offset == 0 || image != null)
+                View.VISIBLE else View.INVISIBLE)
             if (image != null) views.setImageViewBitmap(viewId, image)
-            else views.setImageViewResource(viewId, R.drawable.widget_default_art)
+            else views.setImageViewResource(viewId, R.drawable.widget_art_placeholder)
         }
-        art(R.id.rec_center, position)
-        art(R.id.rec_left, position - 1)
-        art(R.id.rec_right, position + 1)
+        if (hasSelection) {
+            art(R.id.rec_center, 0)
+            art(R.id.rec_left, -1)
+            art(R.id.rec_right, 1)
+        }
         views.setOnClickPendingIntent(R.id.rec_prev,
             WidgetIntents.recommendationBrowse(context, id, -1))
         views.setOnClickPendingIntent(R.id.rec_next,
@@ -77,9 +94,11 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.rec_right,
             WidgetIntents.recommendationBrowse(context, id, 1))
         views.setOnClickPendingIntent(R.id.rec_center,
-            WidgetIntents.recommendationPlay(context, id))
+            if (hasSelection) WidgetIntents.recommendationPlay(context, id)
+            else WidgetIntents.openApp(context, 701))
         views.setOnClickPendingIntent(R.id.rec_play,
-            WidgetIntents.recommendationPlay(context, id))
+            if (hasSelection) WidgetIntents.recommendationPlay(context, id)
+            else WidgetIntents.openApp(context, 702))
         views.setOnClickPendingIntent(R.id.rec_heading, WidgetIntents.openApp(context, 700))
         return views
     }
