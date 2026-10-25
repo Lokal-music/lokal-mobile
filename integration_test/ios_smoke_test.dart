@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flick/app/app.dart';
 import 'package:flick/main.dart' as app;
@@ -14,6 +13,7 @@ import 'package:flick/features/morneye/morneye_bootstrap.dart';
 import 'package:flick/src/rust/api/morneye_api.dart';
 import 'package:flick/src/rust/api/scanner.dart' as scanner;
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -53,6 +53,25 @@ Uint8List _tone() {
   return bytes.buffer.asUint8List();
 }
 
+Future<void> _expectPlaybackProgress(
+  WidgetTester tester,
+  PlayerService player,
+) async {
+  // Establish a baseline after initial seek/position events have arrived. A
+  // retained position from a previous backend must not pass a playback check.
+  await tester.pump(const Duration(milliseconds: 500));
+  final initial = player.positionNotifier.value;
+  for (var i = 0; i < 24; i++) {
+    await tester.pump(const Duration(milliseconds: 250));
+    if (player.positionNotifier.value - initial >
+        const Duration(milliseconds: 300)) {
+      expect(player.isPlayingNotifier.value, true);
+      return;
+    }
+  }
+  fail('The actual playback position did not advance after $initial');
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -61,6 +80,7 @@ void main() {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lyrics_auto_fetch', false);
+    debugPrint('iOS smoke: real application bootstrap');
     await app.bootstrapForIntegrationTest();
     for (
       var i = 0;
@@ -90,6 +110,8 @@ void main() {
     );
     expect(scan.totalFiles, 1);
     expect(scan.newOrModified.single.sampleRate, 44100);
+
+    debugPrint('iOS smoke: native scanner passed; executing QuickJS');
 
     final guest = await MorneyeEngine.start(
       code: 'registerExtension({echo(value) { return {value}; }});',
@@ -125,15 +147,8 @@ void main() {
       filePath: audio.path,
     );
     await player.play(song, playlist: [song]);
-    for (
-      var i = 0;
-      i < 20 && player.positionNotifier.value.inMilliseconds < 300;
-      i++
-    ) {
-      await tester.pump(const Duration(milliseconds: 250));
-    }
+    await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosSystem);
-    expect(player.positionNotifier.value.inMilliseconds, greaterThan(250));
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
     await player.seek(const Duration(seconds: 2));
@@ -151,15 +166,8 @@ void main() {
     );
     await player.syncIosProcessingRoute();
     await player.play(song, playlist: [song]);
-    for (
-      var i = 0;
-      i < 24 && player.positionNotifier.value.inMilliseconds < 300;
-      i++
-    ) {
-      await tester.pump(const Duration(milliseconds: 250));
-    }
+    await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
-    expect(player.positionNotifier.value.inMilliseconds, greaterThan(250));
     await player.pause();
     await applyEqualizer(EqualizerState.initial());
     await player.syncIosProcessingRoute();
@@ -181,15 +189,8 @@ void main() {
       fileType: 'WV',
     );
     await player.play(wvSong, playlist: [wvSong]);
-    for (
-      var i = 0;
-      i < 24 && player.positionNotifier.value.inMilliseconds < 300;
-      i++
-    ) {
-      await tester.pump(const Duration(milliseconds: 250));
-    }
+    await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
-    expect(player.positionNotifier.value.inMilliseconds, greaterThan(250));
     await player.pause();
     player.dispose();
     await directory.delete(recursive: true);

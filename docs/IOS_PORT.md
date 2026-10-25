@@ -1,8 +1,42 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-Status: investigation and test tooling prepared, 25 October 2026. Audited source:
-`42f8f1dbc939` in `lokal-music/lokal-mobile`. No iOS app, simulator run, signed
-installation, or IPA is validated yet.
+Status: implementation and hosted runtime investigation, 25 October 2026.
+The original audit used `42f8f1dbc939`; implementation is tracked in
+[PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
+
+Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
+The first unsigned engineering IPA passed package inspection (33 Mach-O binaries,
+iPhone arm64 platform, bundle metadata and checksum). Native Rust probes pass for
+both device and Apple Silicon simulator with raw USB excluded. **The simulator
+app exits during startup, before the Dart VM service appears. Runtime acceptance
+has not passed.** Native console/crash-report collection is now part of CI.
+No signed installation or physical iPhone behavior is validated.
+
+The engineering artifact is in
+[build 7](https://github.com/lokal-music/lokal-mobile/actions/runs/40147725974).
+It is a diagnostic build, not a qualified release. See
+[Windows installation and acceptance](IOS_SIDELOADING.md) for distribution limits.
+
+### Implementation already in place
+
+- iPhone-only runner, iOS 15 floor, generated alternate icons, pinned build tools
+  and locked dependencies, source/license bundle and unsigned IPA inspection.
+- Swift document imports with scoped/coordinated transactional copies; persistent
+  app-owned library root and ID-preserving sandbox-path rebasing; database files
+  in Application Support with a nondestructive legacy migration.
+- Explicit iOS system and Rust/Core Audio modes; single audio-session owner,
+  interruptions, Now Playing/remote controls, route diagnostics and AirPlay UI.
+  Rust is selected for DSP or unsupported system formats without claiming direct
+  USB or bit-perfect output. These native routes still need runtime validation.
+- Spotify's existing web-session protocol ported to isolated WKWebView and the
+  existing Keychain-backed credential store. Live account checks remain pending.
+- Integration smoke test exercises real startup, scanner, QuickJS, system WAV
+  playback, Rust DSP and WavPack fallback. No native mocks substitute for these
+  operations; the current native launch failure blocks execution.
+
+Chromecast sender integration, WidgetKit, Discord feasibility and resumable
+background transfers remain open work. Shared UI and source availability do not
+establish iOS parity.
 
 ## Product brief
 
@@ -59,8 +93,9 @@ flowchart TB
   IOS --> OS
 ```
 
-These are proposed boundaries, not existing classes. Introduce them incrementally
-with Android regression coverage, rather than rewriting the player in one change.
+These are architectural boundaries, not a requirement for a new class per box.
+The current adapters extend the existing player and platform channels; focused
+regression coverage protects the shared Android paths.
 
 | Boundary | Responsibility and rule |
 | --- | --- |
@@ -83,17 +118,14 @@ documentation.
 
 The shared Rust engine remains needed by metadata and add-ons at startup. Compile
 it with `--no-default-features --features native_audio,rquickjs/bindgen` on iOS. Prove the dependency
-graph contains no `rusb`/`libusb1-sys`. The current Cargokit configuration explicitly
-adds `uac2` for every profile; it needs platform-aware flags before app integration.
-Do not change Android's existing feature set.
+graph contains no `rusb`/`libusb1-sys`. Cargokit now selects the iOS feature set
+by platform, while Android retains its default `native_audio` and `uac2` features.
 
 The resolved `rquickjs-sys` 0.14.0 ships macOS bindings but no
-`aarch64-apple-ios` or simulator bindings. The manifest enables generated bindings
-only for Android. Add iOS-specific bindgen support with the matching Xcode SDK
-and host libclang; do not substitute the macOS ABI bindings. The native probe
-passes `rquickjs/bindgen` explicitly to test this proposed configuration without
-changing the shared manifest. The pod integration must subsequently select it
-for iOS too.
+`aarch64-apple-ios` or simulator bindings. The manifest now enables generated
+bindings for iOS with the matching Xcode SDK
+and explicit Clang device/simulator triples; macOS ABI bindings are not reused.
+The native probes and Cargokit integration compile this configuration.
 
 For formats that AVPlayer cannot play, investigate the already-vendored CPAL iOS
 Core Audio backend with Rust decoders. Its source exists, but includes TODOs for
@@ -144,8 +176,10 @@ justified transport policy; do not disable ATS globally as a shortcut.
 
 ## Source audit and feature disposition
 
-All statuses below describe the **plan**. Shared source and plugin registration
-are not evidence that the iOS feature works.
+The source findings below record the **original audit**, not the current tree.
+The last column remains the acceptance target. Consult the implementation and
+validation ledger above for current evidence. Shared source and plugin
+registration are not evidence that an iOS feature works.
 
 | Area | Finding in audited source | iPhone plan / acceptance evidence |
 | --- | --- | --- |
@@ -155,7 +189,7 @@ are not evidence that the iOS feature works.
 | Player, radio and controls | `NotificationService` uses `com.mossapps.flick/player`; session selection and interruption setup assume Android. | iOS media/session adapter, background audio mode, system controls and ownership handoffs. |
 | Codec coverage | Rust scanner lists MP3/FLAC/Ogg/Opus/M4A/WAV/AIFF/ALAC/DSF/DFF/WavPack. | Fixture matrix per container/codec; system path first, Rust fallback where needed. DSD-to-PCM remains a normal codec goal. |
 | Lyrics | Timed lyrics, translation, romanization and imported files already shared. | Preserve all modes, provider ordering and manual correction; test iOS file import and Reduce Motion. |
-| Discovery/accounts | Shared online sources, in-app webviews and secure storage; Spotify OAuth has an Android channel. | Port system OAuth via `ASWebAuthenticationSession` with PKCE and exact callback checks; audit each service's sign-in/cookies in WKWebView and Keychain. No embedded client secret. |
+| Discovery/accounts | Shared online sources, in-app webviews and secure storage; Spotify OAuth has an Android channel. | Preserve each existing protocol: browser PKCE for the Web API integration; isolated WKWebView for the existing Spotify web-session bridge. Audit callback origins, cookies and Keychain. No embedded client secret. |
 | Downloads and add-ons | Rust `rquickjs` plus Dart host/network/package manager; FFmpeg plugin declares iOS. | Preserve opt-in add-ons for the sideload build. Test QuickJS without JIT, filesystem sandbox, cancellations, binary slices and provider authentication. Persist/restart jobs interrupted by suspension. |
 | Network libraries/scrobbling | Shared Subsonic/Jellyfin/WebDAV/SMB/UPnP and Last.fm/ListenBrainz integration. | Per-service contract tests plus representative live integration; offline/error states, TLS and credential redaction. |
 | Desktop link | Pairing, remote controls, merge and bidirectional copying already exist; destination storage is Android-specific. | Retain the full feature set using iOS destinations, local-network permission and restartable transfer state. |
@@ -176,16 +210,15 @@ different Android/iOS package names, so subtracting those name lists would creat
 false missing-plugin findings.
 
 The locked file picker, FFmpeg audio and home-widget native specifications declare
-iOS 14 floors. Propose iOS **15+**, pending the complete native dependency/SDK
-audit; the Rust plugin's template iOS 11 setting is not the app's support floor.
-Record the exact Xcode version after the first hosted run, then pin that tested
-combination. The manually dispatched native probe initially records the runner's
-selected Xcode rather than claiming a fully reproducible Apple toolchain.
+iOS 14 floors. The app targets **iOS 15+**; all 33 device Mach-O binaries in the
+first engineering package declare minimum versions at or below that floor.
+Actual OS-version compatibility still needs runtime and physical-device tests.
+The hosted workflows now pin Xcode 26.0.1 (17A400), Flutter 3.47.1 and Rust 1.98.0.
+Binary compilation is proven for that combination; runtime compatibility remains
+under investigation.
 
-Before building through Cargokit, remove the standalone `env` command in
-`rust_builder/cargokit/build_pod.sh` (it prints the entire build environment).
-Correct shell invocation as needed: this template has a `/bin/sh` header but uses
-Bash arrays. Inspect pod linker flags/static symbol retention and the
+The standalone environment dump has been removed from
+`rust_builder/cargokit/build_pod.sh`, and the pod explicitly invokes Bash. Inspect pod linker flags/static symbol retention and the
 flutter_rust_bridge loader on iOS; staticlib support in the manifest alone is
 insufficient. FFmpeg downloads and all vendored native libraries need device and
 Apple Silicon simulator slice checks plus their redistribution notices.
@@ -300,8 +333,8 @@ python3 tool/ios_readiness.py --json
 python3 tool/ios_readiness.py --require-scaffold
 ```
 
-The last command deliberately fails while the iOS runner is absent; it is only a
-structural gate. After `flutter pub get --enforce-lockfile`, the inventory also
+The last command checks that the iOS scaffold exists; it is only a structural
+gate, and currently passes. After `flutter pub get --enforce-lockfile`, the inventory also
 lists the actual resolved iOS plugins and all discovered literal channel
 callsites. JSON contains source-relative locations and no credential values.
 
@@ -312,8 +345,8 @@ bash tool/ios_native_probe.sh aarch64-apple-ios
 bash tool/ios_native_probe.sh aarch64-apple-ios-sim
 ```
 
-The manual `iOS native feasibility probe` Actions workflow runs both targets
-without Apple credentials. It is prepared locally and has **not been dispatched**.
+The `iOS native feasibility probe` Actions workflow runs both targets without
+Apple credentials and has passed on the pull request.
 GitHub requires the manual workflow to exist on the default branch before the
 normal Run workflow UI is available. Public/private repository runner quotas and
 costs follow the repository's Actions plan. This probe bypasses Cargokit to isolate
@@ -321,7 +354,10 @@ native-engine feasibility; it does not exercise the pod script, Flutter plugin
 linkage, simulator runtime, or IPA packaging. Do not count a green probe as an
 iPhone app build.
 
-### Baseline evidence from this investigation
+### Original baseline evidence
+
+The following observations were recorded before implementation. They remain
+historical evidence; the current validation ledger follows this section.
 
 - Locked Flutter dependency resolution passed with Flutter 3.47.1 / Dart 3.13.1;
   `pubspec.lock` was preserved.
@@ -351,6 +387,27 @@ Re-run the focused baseline with:
 flutter test --no-pub test/services/player_service_engine_failure_test.dart test/services/player_service_notification_test.dart test/services/scan_session_controller_test.dart test/widgets/lokal/lokal_player_route_test.dart test/spotify test/morneye test/services/song_engine_routing_test.dart
 flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart lib/services/external_playback_service.dart lib/services/permission_service.dart lib/services/player_service.dart
 ```
+
+## Current validation ledger
+
+- Full simulator and release iPhone builds passed on hosted macOS/Xcode 26.0.1.
+  Engineering IPA inspection passed; its SHA-256 is published with the artifact.
+- Both native Rust target probes passed with no `rusb`/`libusb1-sys` dependency.
+- A selected shared regression run passed 158 tests; the later iOS storage,
+  routing and processing regression run passed 63 tests. These counts overlap.
+- Follow-up storage/routing/session tests passed 15 tests; download tests passed
+  eight, including the iPhone app-owned fallback. The existing Cargokit helper
+  checks passed for Android arm64/armv7, native linker failure and Rust pinning.
+- Application/integration analysis has no errors; existing warnings/information
+  remain. This is not a clean repository-wide lint claim.
+- The broad Flutter run recorded 578 passes, two skips and 27 failures before a
+  crossfade test stalled. Selected discovery failures and the crossfade hang
+  reproduced on the untouched audit baseline. Other failures remain unclassified;
+  the full suite is not green.
+- Simulator startup currently exits before Dart attachment. The smoke test has
+  not passed. Screenshots from a terminated app are not product UI evidence.
+- No physical iPhone, Windows re-sign/install/update, background playback,
+  Bluetooth/USB/AirPlay receiver, or live-account acceptance has occurred.
 
 ## Reference material checked
 

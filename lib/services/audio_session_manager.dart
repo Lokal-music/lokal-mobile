@@ -38,7 +38,9 @@ class AudioSessionManager {
   final AudioSessionPlaybackActiveReader _isPlaybackActive;
 
   final ValueNotifier<AudioEngineType> selectedModeNotifier = ValueNotifier(
-    AudioEngineType.normalAndroid,
+    defaultTargetPlatform == TargetPlatform.iOS
+        ? AudioEngineType.iosSystem
+        : AudioEngineType.normalAndroid,
   );
   final ValueNotifier<AudioEngineType?> initializedModeNotifier = ValueNotifier(
     null,

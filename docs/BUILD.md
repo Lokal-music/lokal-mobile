@@ -1,9 +1,12 @@
 # Build Konnekted2
 
-The iPhone port is in the investigation stage. See [the iOS architecture and
-sideloading plan](IOS_PORT.md) for the Windows-to-hosted-Mac build approach,
-feature audit, validation gates and manual native feasibility probe. No iOS app
-or IPA is currently validated.
+The iPhone port now builds on hosted macOS using Xcode 26.0.1, Flutter 3.47.1
+and Rust 1.98.0. The workflow inspects and saves an unsigned release/AOT IPA,
+checksum, source and notices before running simulator acceptance. **The current
+engineering build exits during simulator startup; runtime acceptance is pending.**
+See the [architecture and validation ledger](IOS_PORT.md) and
+[Windows signing/install guide](IOS_SIDELOADING.md). A saved artifact alone does
+not establish a usable iPhone release.
 
 ## Prerequisites
 

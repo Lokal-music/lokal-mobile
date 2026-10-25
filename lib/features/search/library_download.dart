@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flick/services/link/link_download_outbox.dart';
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'package:flick/data/entities/song_entity.dart';
 import 'package:flick/data/repositories/song_repository.dart';
@@ -58,7 +59,7 @@ class LibraryDownloadResult {
 class LibraryDownloader {
   LibraryDownloader({
     Future<List<LibraryDownloadFolder>> Function()? folders,
-    this.fallbackRoot = '/storage/emulated/0/Music',
+    this.fallbackRoot,
     Future<void> Function(String path, String name)? registerFolder,
     Future<void> Function(SongEntity entity)? upsert,
     Future<bool> Function(String path, Song song)? tag,
@@ -75,9 +76,9 @@ class LibraryDownloader {
 
   static const folderName = 'Lokal Downloads';
 
-  /// Where Lokal's own Downloads folder goes when no library folder can be
-  /// written to (shared storage's Music folder).
-  final String fallbackRoot;
+  /// Optional destination override. Otherwise use Android's shared Music or
+  /// the persistent app-owned Music directory on iPhone.
+  final String? fallbackRoot;
   final Future<List<LibraryDownloadFolder>> Function() _folders;
   final Future<void> Function(String path, String name) _registerFolder;
   final Future<void> Function(SongEntity entity) _upsert;
@@ -157,10 +158,12 @@ class LibraryDownloader {
 
   /// Copies [prepared] into the library. [artwork] is the cover to give it.
   Future<LibraryDownloadResult> save(Song prepared, {String? artwork}) async {
-    if (prepared.atmosEncoded) AtmosDiagnostics.record('library_save_start', {
-      'codec': 'eac3_joc',
-      'stage': 'copy',
-    });
+    if (prepared.atmosEncoded) {
+      AtmosDiagnostics.record('library_save_start', {
+        'codec': 'eac3_joc',
+        'stage': 'copy',
+      });
+    }
     final source = prepared.filePath;
     if (source == null || !File(source).existsSync()) {
       throw const DiscoveryException('The downloaded song is gone. Try again.');
@@ -170,7 +173,8 @@ class LibraryDownloader {
     // filesystem scan may replace the codec field with the MP4 container
     // extension; the suffix keeps the original JOC routing identifiable.
     final savedExtension = prepared.atmosEncoded
-        ? '.atmos$extension' : extension;
+        ? '.atmos$extension'
+        : extension;
     final folders = await _folders();
     final directories = MusicLibraryPath.directories(
       artist: prepared.artist,
@@ -190,7 +194,12 @@ class LibraryDownloader {
                 fallback: false,
               ),
         ];
-    final fallbackDir = p.join(fallbackRoot, folderName);
+    final root =
+        fallbackRoot ??
+        (defaultTargetPlatform == TargetPlatform.iOS
+            ? p.join((await getApplicationDocumentsDirectory()).path, 'Music')
+            : '/storage/emulated/0/Music');
+    final fallbackDir = p.join(root, folderName);
     final covering = folders
         .where((f) => f.path != null && _inside(fallbackDir, f.path!))
         .firstOrNull;
@@ -222,7 +231,9 @@ class LibraryDownloader {
       if (target.fallback) await _registerFolder(target.root, folderName);
       // Rust tag editors may rewrite the MP4 audio sample description;
       // preserve E-AC-3 JOC bitstream metadata byte for byte.
-      final tagged = prepared.atmosEncoded ? false : await _tag(copy.path, prepared);
+      final tagged = prepared.atmosEncoded
+          ? false
+          : await _tag(copy.path, prepared);
       final stat = await copy.stat();
       final now = _now();
       await _upsert(
@@ -258,11 +269,13 @@ class LibraryDownloader {
         }
       }
       unawaited(LinkDownloadOutbox.enqueue(copy.path));
-      if (prepared.atmosEncoded) AtmosDiagnostics.record('library_save_complete', {
-        'codec': 'eac3_joc',
-        'outcome': 'saved',
-        'reason': target.fallback ? 'fallback_folder' : 'chosen_folder',
-      });
+      if (prepared.atmosEncoded) {
+        AtmosDiagnostics.record('library_save_complete', {
+          'codec': 'eac3_joc',
+          'outcome': 'saved',
+          'reason': target.fallback ? 'fallback_folder' : 'chosen_folder',
+        });
+      }
       return LibraryDownloadResult(
         path: copy.path,
         folderName: target.name,
@@ -270,7 +283,7 @@ class LibraryDownloader {
       );
     }
     throw const DiscoveryException(
-      'Android didn’t let Lokal write to your music folders or to Music.',
+      'Lokal couldn’t write to your music folders or to Music.',
     );
   }
 }

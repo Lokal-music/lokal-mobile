@@ -29,6 +29,11 @@ def inspect_bundle(app: Path) -> dict:
         raise ValueError("IPA must contain a device app, never a simulator app")
     if "audio" not in info.get("UIBackgroundModes", []):
         raise ValueError("Background playback configuration is absent")
+    def version(value: str) -> tuple[int, ...]:
+        parts = tuple(int(p) for p in value.split('.'))
+        return parts + (0,) * (3 - len(parts))
+
+    minimum = version(info["MinimumOSVersion"])
     binaries = [executable]
     for framework in app.glob("Frameworks/*.framework"):
         metadata = plistlib.loads((framework / "Info.plist").read_bytes())
@@ -42,6 +47,12 @@ def inspect_bundle(app: Path) -> dict:
         platforms = re.findall(r"^\s*platform\s+(\S+)", load_commands, re.M)
         if not platforms or any(p != "IOS" for p in platforms):
             raise ValueError(f"Wrong Mach-O platform in {binary.name}: {platforms}")
+        floors = re.findall(r"^\s*minos\s+(\S+)", load_commands, re.M)
+        if not floors or any(version(v) > minimum for v in floors):
+            raise ValueError(
+                f"{binary.name} requires iOS {floors}, above the app's "
+                f"declared minimum {info['MinimumOSVersion']}"
+            )
     return {
         "bundle_id": info["CFBundleIdentifier"],
         "version": info["CFBundleShortVersionString"],
