@@ -31,6 +31,10 @@ It is a diagnostic build, not a qualified release. See
   USB or bit-perfect output. These native routes still need runtime validation.
 - Spotify's existing web-session protocol ported to isolated WKWebView and the
   existing Keychain-backed credential store. Live account checks remain pending.
+- Native Files export for recap CSV/TXT and M3U/M3U8 playlists; manual playlist
+  import persists an app-owned snapshot before resolving existing song IDs.
+  Cancellation/provider errors and bounded UTF-8 input have contract coverage.
+  The native picker UI and exports still need iPhone acceptance.
 - Integration smoke test exercises real startup, scanner, QuickJS, system WAV
   playback, Rust DSP and WavPack fallback. No native mocks substitute for these
   operations; the current native launch failure blocks execution.
@@ -410,6 +414,9 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
 - Follow-up storage/routing/session tests passed 15 tests; download tests passed
   eight, including the iPhone app-owned fallback. The existing Cargokit helper
   checks passed for Android arm64/armv7, native linker failure and Rust pinning.
+- iOS document adapter and shared playlist regressions passed 27 tests, including
+  Unicode export, provider removal after import, stable-song matching, cancellation,
+  oversized/malformed input, provider failure and scoped cleanup.
 - Application/integration analysis has no errors; existing warnings/information
   remain. This is not a clean repository-wide lint claim.
 - The broad Flutter run recorded 578 passes, two skips and 27 failures including

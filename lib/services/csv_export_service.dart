@@ -3,27 +3,39 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 import '../data/repositories/recently_played_repository.dart';
+import 'ios_document_service.dart';
 
 class CsvExportService {
   static const _channel = MethodChannel('com.mossapps.flick/storage');
 
   Future<String?> saveCsv(ListeningRecap recap) async {
+    if (Platform.isIOS) {
+      final name = _buildFileName(recap, 'csv');
+      final saved = await IosDocumentService().saveText(
+        fileName: name,
+        mimeType: 'text/csv',
+        content: _buildCsv(recap),
+      );
+      return saved ? name : null;
+    }
     if (!Platform.isAndroid) {
-      throw UnsupportedError('CSV export is currently supported on Android only.');
+      throw UnsupportedError(
+        'CSV export is supported on Android and iPhone.',
+      );
     }
 
     final content = _buildCsv(recap);
     final fileName = _buildFileName(recap, 'csv');
-    final documentUri = await _channel.invokeMethod<String>(
-      'createDocument',
-      {'fileName': fileName, 'mimeType': 'text/csv'},
-    );
+    final documentUri = await _channel.invokeMethod<String>('createDocument', {
+      'fileName': fileName,
+      'mimeType': 'text/csv',
+    });
     if (documentUri == null || documentUri.trim().isEmpty) return null;
 
-    final success = await _channel.invokeMethod<bool>(
-      'writeTextDocument',
-      {'uri': documentUri, 'content': content},
-    );
+    final success = await _channel.invokeMethod<bool>('writeTextDocument', {
+      'uri': documentUri,
+      'content': content,
+    });
     if (success != true) {
       throw const FileSystemException('Failed to write CSV file');
     }
@@ -32,22 +44,33 @@ class CsvExportService {
   }
 
   Future<String?> saveTxt(ListeningRecap recap) async {
+    if (Platform.isIOS) {
+      final name = _buildFileName(recap, 'txt');
+      final saved = await IosDocumentService().saveText(
+        fileName: name,
+        mimeType: 'text/plain',
+        content: _buildTxt(recap),
+      );
+      return saved ? name : null;
+    }
     if (!Platform.isAndroid) {
-      throw UnsupportedError('TXT export is currently supported on Android only.');
+      throw UnsupportedError(
+        'TXT export is supported on Android and iPhone.',
+      );
     }
 
     final content = _buildTxt(recap);
     final fileName = _buildFileName(recap, 'txt');
-    final documentUri = await _channel.invokeMethod<String>(
-      'createDocument',
-      {'fileName': fileName, 'mimeType': 'text/plain'},
-    );
+    final documentUri = await _channel.invokeMethod<String>('createDocument', {
+      'fileName': fileName,
+      'mimeType': 'text/plain',
+    });
     if (documentUri == null || documentUri.trim().isEmpty) return null;
 
-    final success = await _channel.invokeMethod<bool>(
-      'writeTextDocument',
-      {'uri': documentUri, 'content': content},
-    );
+    final success = await _channel.invokeMethod<bool>('writeTextDocument', {
+      'uri': documentUri,
+      'content': content,
+    });
     if (success != true) {
       throw const FileSystemException('Failed to write TXT file');
     }
@@ -91,9 +114,13 @@ class CsvExportService {
 
     buf.writeln('Lokal Replay — ${recap.period.label} Recap');
     buf.writeln();
-    buf.writeln('Period: ${_formatDateTime(recap.start)} → ${_formatDateTime(recap.endExclusive)}');
+    buf.writeln(
+      'Period: ${_formatDateTime(recap.start)} → ${_formatDateTime(recap.endExclusive)}',
+    );
     buf.writeln('Total Plays: ${recap.totalPlays}');
-    buf.writeln('Total Listening Time: ${_formatDuration(recap.totalListeningTime)}');
+    buf.writeln(
+      'Total Listening Time: ${_formatDuration(recap.totalListeningTime)}',
+    );
     buf.writeln('Unique Songs: ${recap.uniqueSongs}');
     buf.writeln('Unique Artists: ${recap.uniqueArtists}');
     buf.writeln('Active Days: ${recap.activeDays}');
@@ -134,7 +161,9 @@ class CsvExportService {
     buf.writeln();
 
     buf.writeln('Top Albums');
-    buf.writeln('Rank,Album,Artist,Plays,Unique Songs,Listening Time,Last Played');
+    buf.writeln(
+      'Rank,Album,Artist,Plays,Unique Songs,Listening Time,Last Played',
+    );
     for (var i = 0; i < recap.topAlbums.length; i++) {
       final a = recap.topAlbums[i];
       buf.writeln(
@@ -154,9 +183,13 @@ class CsvExportService {
   String _buildTxt(ListeningRecap recap) {
     final buf = StringBuffer();
 
-    buf.writeln('=== FLICK REPLAY: ${recap.period.label.toUpperCase()} RECAP ===');
+    buf.writeln(
+      '=== FLICK REPLAY: ${recap.period.label.toUpperCase()} RECAP ===',
+    );
     buf.writeln();
-    buf.writeln('Period:       ${_formatDateTime(recap.start)} → ${_formatDateTime(recap.endExclusive)}');
+    buf.writeln(
+      'Period:       ${_formatDateTime(recap.start)} → ${_formatDateTime(recap.endExclusive)}',
+    );
     buf.writeln('Total Plays:  ${recap.totalPlays}');
     buf.writeln('Listening:    ${_formatDuration(recap.totalListeningTime)}');
     buf.writeln('Songs:        ${recap.uniqueSongs} unique');
@@ -171,7 +204,9 @@ class CsvExportService {
     for (var i = 0; i < recap.topSongs.length; i++) {
       final s = recap.topSongs[i];
       buf.writeln('  ${i + 1}. ${s.song.title} — ${s.song.artist}');
-      buf.writeln('     Plays: ${s.plays} | Time: ${_formatDuration(s.listeningTime)} | Last: ${_formatDateTime(s.lastPlayedAt)}');
+      buf.writeln(
+        '     Plays: ${s.plays} | Time: ${_formatDuration(s.listeningTime)} | Last: ${_formatDateTime(s.lastPlayedAt)}',
+      );
     }
     buf.writeln();
 
@@ -179,7 +214,9 @@ class CsvExportService {
     for (var i = 0; i < recap.topArtists.length; i++) {
       final a = recap.topArtists[i];
       buf.writeln('  ${i + 1}. ${a.artist}');
-      buf.writeln('     Plays: ${a.plays} | Songs: ${a.uniqueSongs} | Time: ${_formatDuration(a.listeningTime)} | Last: ${_formatDateTime(a.lastPlayedAt)}');
+      buf.writeln(
+        '     Plays: ${a.plays} | Songs: ${a.uniqueSongs} | Time: ${_formatDuration(a.listeningTime)} | Last: ${_formatDateTime(a.lastPlayedAt)}',
+      );
     }
     buf.writeln();
 
@@ -187,7 +224,9 @@ class CsvExportService {
     for (var i = 0; i < recap.topAlbums.length; i++) {
       final a = recap.topAlbums[i];
       buf.writeln('  ${i + 1}. ${a.album} — ${a.artist}');
-      buf.writeln('     Plays: ${a.plays} | Songs: ${a.uniqueSongs} | Time: ${_formatDuration(a.listeningTime)} | Last: ${_formatDateTime(a.lastPlayedAt)}');
+      buf.writeln(
+        '     Plays: ${a.plays} | Songs: ${a.uniqueSongs} | Time: ${_formatDuration(a.listeningTime)} | Last: ${_formatDateTime(a.lastPlayedAt)}',
+      );
     }
 
     return buf.toString();

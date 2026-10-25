@@ -64,6 +64,15 @@ it is not guaranteed merely because an auto-refresh option is enabled.
   output picker. Ordinary USB DAC playback uses iOS's system route. The app does
   not certify that route as bit-perfect or native DSD.
 
+Import music before importing an M3U/M3U8 playlist from Library's playlist menu;
+playlist entries are matched to the existing library. iPhone manual imports keep
+an app-owned playlist snapshot, so removing the selected File Provider source
+does not invalidate it. Later edits to that external source require another
+import. M3U/M3U8 export and Replay's CSV/TXT export use the native Files save
+picker; cancelling leaves the library unchanged. Playlist text must be UTF-8 and
+no larger than 10 MB. These adapters have contract coverage; native picker and
+File Provider acceptance remains pending.
+
 ## Refresh and update without losing the library
 
 Use the same Apple account and stable app identity in the signing tool. Install
