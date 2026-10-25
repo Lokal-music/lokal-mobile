@@ -5,6 +5,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/features/morneye/morneye_host.dart';
 import 'package:flick/features/morneye/morneye_live_playback.dart';
 
+List<int> verifiedFlacHeader(int depth, int rate) {
+  final h = List<int>.filled(42, 0);
+  h.setRange(0, 4, [0x66, 0x4c, 0x61, 0x43]);
+  h[7] = 34;
+  h[18] = (rate >> 12) & 0xff;
+  h[19] = (rate >> 4) & 0xff;
+  h[20] = ((rate & 0x0f) << 4) | (((depth - 1) >> 4) & 1);
+  h[21] = ((depth - 1) & 0x0f) << 4;
+  return h;
+}
+
+List<int> mp4Box(String kind, List<int> data) {
+  final size = data.length + 8;
+  return [
+    (size >> 24) & 255, (size >> 16) & 255,
+    (size >> 8) & 255, size & 255, ...kind.codeUnits, ...data,
+  ];
+}
+
 void main() {
   late Directory directory;
   setUp(() async {
@@ -19,7 +38,10 @@ void main() {
   test('64 KiB of actual FLAC makes a growing download playable', () async {
     final session = MorneyeLiveSession();
     final file = File('${directory.path}/audio.flac.part');
-    final ready = <int>[0x66, 0x4c, 0x61, 0x43, ...List<int>.filled(65532, 1)];
+    final ready = <int>[
+      ...verifiedFlacHeader(16, 44100),
+      ...List<int>.filled(65536 - 42, 1),
+    ];
     await file.writeAsBytes(ready);
     session.observe(MorneyeTransfer(
       part: file.path,
@@ -94,6 +116,46 @@ void main() {
     await session.playable.timeout(const Duration(seconds: 1));
     expect(session.bitDepth, 16);
     expect(session.sampleRate, 44100);
+  });
+
+  test('Amazon/Tidal direct fast-start M4A can stream, DASH or DRM cannot', () async {
+    final ftyp = mp4Box('ftyp', [0x4d, 0x34, 0x41, 0x20, 0, 0, 0, 0]);
+    final moov = mp4Box('moov', [
+      ...List<int>.filled(8, 0),
+      ...'mp4a'.codeUnits,
+      ...List<int>.filled(16, 0),
+    ]);
+    final media = [...ftyp, ...moov, ...List<int>.filled(65536 - ftyp.length - moov.length, 0)];
+    expect(MorneyeLiveSession.playableMime(media, 'direct.m4a'), 'audio/mp4');
+    expect(MorneyeLiveSession.playableMime(media, 'direct.flac'), isNull);
+
+    final file = File('${directory.path}/audio.m4a.part');
+    await file.writeAsBytes(media);
+    final session = MorneyeLiveSession();
+    session.observe(MorneyeTransfer(
+      part: file.path, file: '${directory.path}/audio.m4a',
+      total: 120000, written: media.length,
+    ));
+    await session.playable.timeout(const Duration(seconds: 1));
+    expect(session.mediaType, 'audio/mp4');
+    expect((await session.request(0, 1024)).contentType, 'audio/mp4');
+    expect(session.bitDepth, isNull,
+        reason: 'A container alone does not prove the audio bit depth');
+
+    final encrypted = mp4Box('moov', [
+      ...List<int>.filled(8, 0), ...'mp4a'.codeUnits,
+      ...'sinf'.codeUnits, ...List<int>.filled(8, 0),
+    ]);
+    final drm = [...ftyp, ...encrypted, ...List<int>.filled(65536, 0)];
+    expect(MorneyeLiveSession.playableMime(drm, 'amazon.m4a'), isNull);
+    // Some Tidal DASH media have no complete moov until final assembly.
+    final incomplete = [
+      ...ftyp, ...[0, 1, 0, 0, ...'moov'.codeUnits],
+      ...List<int>.filled(65536, 0),
+    ];
+    expect(MorneyeLiveSession.playableMime(incomplete, 'tidal.m4a'), isNull);
+    final segmented = [...ftyp, ...mp4Box('mdat', [...'mp4a'.codeUnits])];
+    expect(MorneyeLiveSession.playableMime(segmented, 'tidal.m4a'), isNull);
   });
 
   test('non-FLAC header never opens a growing source', () async {
