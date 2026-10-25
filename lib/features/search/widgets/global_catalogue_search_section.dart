@@ -112,14 +112,13 @@ class _GlobalCatalogueSearchSectionState
   Widget build(BuildContext context) {
     final t = context.lokal;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Global', style: TextStyle(
+          Text(lokalText(widget.songsOnly ? 'Online songs' : 'Global'), style: TextStyle(
             color: t.text, fontSize: 17, fontWeight: FontWeight.w600,
           )),
-          const SizedBox(height: 6),
           FutureBuilder<GlobalCatalogueMatches>(
             future: _results,
             builder: (context, snapshot) {
@@ -158,7 +157,8 @@ class _GlobalCatalogueSearchSectionState
                   if (songs.isEmpty && albums.isEmpty && artists.isEmpty)
                     Text('No global results found.', style: TextStyle(color: t.muted)),
                   if (songs.isNotEmpty) ...[
-                    Text('Songs', style: TextStyle(color: t.muted, fontSize: 12)),
+                    if (!widget.songsOnly)
+                      Text(lokalText('Songs'), style: TextStyle(color: t.muted, fontSize: 12)),
                     for (final song in shown)
                       ListTile(
                         contentPadding: EdgeInsets.zero, dense: true,
