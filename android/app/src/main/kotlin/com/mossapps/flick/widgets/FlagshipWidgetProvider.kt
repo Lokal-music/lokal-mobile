@@ -54,6 +54,20 @@ class FlagshipWidgetProvider : AppWidgetProvider() {
         ) else views.setImageViewBitmap(R.id.flagship_art, art)
         views.setOnClickPendingIntent(R.id.flagship_art, WidgetIntents.openApp(context, 30))
 
+        val duration = readMs(prefs, WidgetPrefs.KEY_DURATION_MS)
+        val position = readMs(prefs, WidgetPrefs.KEY_POSITION_MS)
+        val enoughRoom = WidgetSize.height(manager, id) >= 195
+        views.setViewVisibility(R.id.flagship_time,
+            if (hasSong && duration > 0 && enoughRoom) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.flagship_progress,
+            if (hasSong && duration > 0 && enoughRoom) View.VISIBLE else View.GONE)
+        if (hasSong && duration > 0 && enoughRoom) {
+            views.setTextViewText(R.id.flagship_time,
+                WidgetSize.time(position) + " / " + WidgetSize.time(duration))
+            views.setProgressBar(R.id.flagship_progress, 1000,
+                (position.coerceIn(0, duration).toDouble() * 1000 / duration).toInt()
+                    .coerceIn(0, 1000), false)
+        }
         views.setTextViewText(R.id.flagship_title, title)
         views.setTextViewTextSize(R.id.flagship_title, TypedValue.COMPLEX_UNIT_SP,
             WidgetPrefs.scaledSp(15, width, 400f, scale).toFloat())
@@ -109,4 +123,8 @@ class FlagshipWidgetProvider : AppWidgetProvider() {
         }
         return views
     }
+    private fun readMs(prefs: android.content.SharedPreferences, key: String): Long =
+        try { prefs.getLong(key, 0L) } catch (_: ClassCastException) {
+            try { prefs.getInt(key, 0).toLong() } catch (_: ClassCastException) { 0L }
+        }
 }
