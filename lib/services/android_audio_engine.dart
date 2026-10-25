@@ -120,7 +120,6 @@ bool shouldUseFastStartCurrentTrackOnly({
 /// A Discovery/Search queue can contain placeholders that do not yet have
 /// playable sources. Never submit them to just_audio's native sequence:
 /// repeat-all would otherwise cause Media3 to prepare an empty URI.
-@visibleForTesting
 bool hasUnresolvedAudioSources(List<Song> playlist) =>
     playlist.any((song) => song.isPending ||
         song.filePath == null || song.filePath!.isEmpty);
@@ -727,11 +726,11 @@ class AndroidAudioEngine implements AudioEngine {
       }
       _loadedSingleTrackOnly = true;
       _playlistSignature = const <String>[];
-      // _configurePlayer may have set native Repeat All before the single
-      // source was installed. Never loop a one-item Media3 sequence when
-      // the logical queue still contains different upcoming songs.
+      // Reapply the *logical* loop preference after entering fast-start.
+      // Repeat All becomes manual advancement for a one-item native source,
+      // while Repeat One must remain native LoopMode.one.
       if (playlist.length > 1) {
-        await player.setLoopMode(just_audio.LoopMode.off);
+        await _configurePlayer(player);
       }
     } else {
       devLog('[Playback] Android load(${track.id}) rebuilding playlist');

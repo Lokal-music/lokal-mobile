@@ -103,6 +103,11 @@ class WidgetIntentHandler {
     // The canonical widget sync service normalizes paths and broadcasts all
     // fields with the same debounce/race handling as normal player changes.
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    WidgetSyncService.instance.schedulePush(_ref.read(playerProvider));
+    if (_channel == null) return;
+    try {
+      WidgetSyncService.instance.schedulePush(_ref.read(playerProvider));
+    } catch (error, stack) {
+      devLog('Widget intent refresh failed: $error\n$stack');
+    }
   }
 }
