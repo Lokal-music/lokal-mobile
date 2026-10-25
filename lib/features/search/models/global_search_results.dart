@@ -68,8 +68,11 @@ class GlobalSearchResults {
       yearMatches.length +
       playlists.length;
 
+  // Lyrics counts require reading song lyric sources; the metadata-only
+  // search has not measured those hits. Omit the count rather than display 0.
   Map<SearchCategory, int> get counts => {
-        for (final c in SearchCategory.values) c: countFor(c),
+        for (final c in SearchCategory.values)
+          if (c != SearchCategory.lyrics) c: countFor(c),
       };
 
   bool hasResultsFor(SearchCategory category) => countFor(category) > 0;
