@@ -37,6 +37,8 @@ import 'package:flick/features/link/lokal_ghost_availability.dart';
 import 'lokal_library_groups.dart';
 import 'lokal_library_kit.dart';
 import 'lokal_online_catalogue.dart';
+import 'package:flick/core/utils/album_match.dart';
+import 'package:flick/features/discovery/discovery_artwork.dart';
 import 'lokal_radio.dart';
 import 'package:flick/widgets/lokal/lokal_swipe_to_queue.dart';
 
@@ -203,15 +205,14 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
 
   List<Song> _local(List<Song> library) {
     final artist = recommendationKey(widget.artist);
-    final title = recommendationKey(widget.title);
     final found = library
         .where(
-          (song) =>
-              (recommendationKey(song.albumArtist ?? song.artist) == artist ||
+          (song) => widget.isArtist
+              ? (recommendationKey(song.albumArtist ?? song.artist) == artist ||
                   recommendationKey(song.artist) == artist ||
-                  (widget.isArtist &&
-                      catalogueArtistCredit(song.artist, widget.artist))) &&
-              (widget.isArtist || recommendationKey(song.album) == title),
+                  catalogueArtistCredit(song.artist, widget.artist))
+              : albumArtistsMatch(widget.artist, song.albumArtist ?? song.artist) &&
+                  albumTitlesMatch(widget.title, song.album ?? ''),
         )
         .toList();
     return found;
@@ -450,9 +451,9 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                   : _online
                   ? _page?.portrait
                   : null))
-        : (localCover ??
-              (_online ? _page?.albums.firstOrNull?.artwork : null) ??
-              widget.release?.artwork);
+        : ((_online && _page?.albums.firstOrNull?.artwork.isNotEmpty == true
+                  ? _page!.albums.first.artwork : null) ??
+              localCover ?? widget.release?.artwork);
     final moreAlbums = albums
         .where(
           (album) =>
@@ -480,7 +481,18 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (heroImage?.isNotEmpty == true)
+                  if (_online && !widget.isArtist && _page != null)
+                    DiscoveryArtwork(
+                      kind: DiscoveryArtworkKind.album,
+                      title: widget.title,
+                      artist: widget.artist,
+                      url: discoveryImageUrl(heroImage),
+                      placeholder: localCover?.isNotEmpty == true
+                          ? CachedImageWidget(imagePath: localCover, fit: BoxFit.cover,
+                              errorWidget: ColoredBox(color: pageColor))
+                          : ColoredBox(color: pageColor),
+                    )
+                  else if (heroImage?.isNotEmpty == true)
                     CachedImageWidget(
                       imagePath: heroImage,
                       fit: BoxFit.cover,
@@ -769,7 +781,9 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                 icon: Icons.music_note_rounded,
                 title: lokalText('Nothing here yet'),
                 message: lokalText(
-                  'Enable online mode to discover songs and releases.',
+                  _online
+                      ? 'No matching tracks found. Try refreshing the catalogue.'
+                      : 'Enable online mode to discover songs and releases.',
                 ),
               ),
             ),

@@ -1,4 +1,5 @@
 import 'package:flick/core/utils/artist_credits.dart';
+import 'package:flick/core/utils/album_match.dart';
 
 import 'dart:collection';
 
@@ -129,11 +130,20 @@ class LokalCataloguePage {
 /// Construction performs no requests. Called only by the page's online switch
 /// or an explicit navigation from an already-online recommendation.
 class LokalOnlineCatalogue {
+  LokalOnlineCatalogue({
+    AppleMusicMetadataService? apple,
+    Future<List<OnlineSource>> Function(http.Client)? sources,
+    Future<String> Function(String title, String artist)? albumArtwork,
+  }) : _apple = apple ?? AppleMusicMetadataService.instance,
+       _sources = sources ?? onlineSources,
+       _albumArtwork = albumArtwork;
   static final instance = LokalOnlineCatalogue();
   void invalidateArtist(String name) =>
       _cache.remove('artist:${recommendationKey(name)}');
 
-  final _apple = AppleMusicMetadataService.instance;
+  final AppleMusicMetadataService _apple;
+  final Future<List<OnlineSource>> Function(http.Client) _sources;
+  final Future<String> Function(String, String)? _albumArtwork;
   final _cache = LinkedHashMap<String, (DateTime, LokalCataloguePage)>();
   final _pending = <String, Future<LokalCataloguePage>>{};
 
@@ -307,7 +317,11 @@ class LokalOnlineCatalogue {
       List<AppleMusicTrack> tracks = const [];
       try {
         if (release?.id != null) {
-          tracks = await _apple.getAlbumTracks(release!.id!, refresh: refresh);
+          tracks = await _apple.getAlbumTracks(
+            release!.id!,
+            refresh: refresh,
+            storefront: Uri.tryParse(release.url)?.pathSegments.firstOrNull,
+          );
         } else {
           data = await _apple.getAlbumData(
             album: title,
@@ -316,16 +330,46 @@ class LokalOnlineCatalogue {
           );
           // A different release is not a substitute for the requested album.
           if (data != null &&
-              (recommendationKey(data.match.name) != recommendationKey(title) ||
-                  recommendationKey(data.match.artistName) !=
-                      recommendationKey(artist)))
+              (!albumTitlesMatch(data.match.name, title) ||
+                  !albumArtistsMatch(artist, data.match.artistName)))
             data = null;
           tracks = data?.tracks ?? const [];
         }
       } catch (_) {}
-      final album = data == null
+      var album = data == null
           ? release
           : LokalCatalogueAlbum.fromApple(data.match);
+      if (discoveryImageUrl(album?.artwork).isEmpty) {
+        String cover = '';
+        final client = http.Client();
+        try {
+          cover =
+              await (_albumArtwork?.call(title, artist) ??
+                      DiscoveryArtworkResolver(DiscoveryHttp(client)).resolve(
+                        DiscoveryArtworkRequest(
+                          kind: DiscoveryArtworkKind.album,
+                          title: title,
+                          artist: artist,
+                        ),
+                      ))
+                  .timeout(const Duration(seconds: 8));
+        } catch (_) {
+        } finally {
+          client.close();
+        }
+        if (album != null || cover.isNotEmpty) {
+          album = LokalCatalogueAlbum(
+            title: album?.title ?? title,
+            artist: album?.artist ?? artist,
+            id: album?.id,
+            artwork: cover,
+            date: album?.date,
+            trackCount: album?.trackCount,
+            url: album?.url ?? '',
+            releaseKind: album?.releaseKind,
+          );
+        }
+      }
       if (tracks.isNotEmpty) {
         final ordered = List<AppleMusicTrack>.of(tracks)
           ..sort((a, b) {
@@ -357,11 +401,16 @@ class LokalOnlineCatalogue {
         );
       }
       final found = await _search(
-        '$artist $title',
+        '$title ${splitArtistCredits(artist).firstOrNull ?? artist}',
         artist: artist,
         album: title,
       );
-      return LokalCataloguePage(tracks: found.$1, label: found.$2);
+      return LokalCataloguePage(
+        tracks: found.$1,
+        label: found.$2,
+        albums: [if (album != null) album],
+        url: album?.url ?? '',
+      );
     },
   );
 
@@ -374,7 +423,7 @@ class LokalOnlineCatalogue {
     final client = http.Client();
     final clock = Stopwatch()..start();
     try {
-      for (final source in await onlineSources(client)) {
+      for (final source in await _sources(client)) {
         final remaining = const Duration(seconds: 20) - clock.elapsed;
         if (remaining <= Duration.zero) break;
         try {
@@ -388,11 +437,8 @@ class LokalOnlineCatalogue {
           final unique = <String, LokalCatalogueTrack>{};
           for (final result in results) {
             final song = result.track;
-            if (recommendationKey(mainArtist(song.artist)) !=
-                recommendationKey(mainArtist(artist)))
-              continue;
-            if (album != null &&
-                recommendationKey(song.album) != recommendationKey(album))
+            if (!albumArtistsMatch(artist, song.artist)) continue;
+            if (album != null && !albumTitlesMatch(song.album ?? '', album))
               continue;
             final metadata = LokalDiscoveryTrack(
               title: song.title,

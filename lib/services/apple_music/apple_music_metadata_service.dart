@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'apple_music_cache.dart';
+import '../../core/utils/album_match.dart';
+import '../../core/utils/artist_credits.dart';
 import 'apple_music_models.dart';
 
 /// Raised when a lookup failed for a reason that may succeed later (timeout,
@@ -80,8 +82,7 @@ class AppleMusicMetadataService {
   static const String _itunesSearchBase = 'https://itunes.apple.com/search';
   static const String _itunesLookupBase = 'https://itunes.apple.com/lookup';
   static const String _musicBase = 'https://music.apple.com';
-  static const String _userAgent =
-      'FlickPlayer/0.22.0 (apple-music-metadata)';
+  static const String _userAgent = 'FlickPlayer/0.22.0 (apple-music-metadata)';
   static const Duration _requestTimeout = Duration(seconds: 12);
   static const Duration _infoTtl = Duration(days: 7);
   static const Duration _artistIdTtl = Duration(days: 30);
@@ -256,11 +257,7 @@ class AppleMusicMetadataService {
       ),
     ).wait;
 
-    return AppleMusicArtistData(
-      artist: artist,
-      info: info,
-      topSongs: topSongs,
-    );
+    return AppleMusicArtistData(artist: artist, info: info, topSongs: topSongs);
   }
 
   /// Finds the album in the artist's iTunes discography using exact name,
@@ -276,22 +273,79 @@ class AppleMusicMetadataService {
     if (albumName.isEmpty || artistName.isEmpty) return Future.value(null);
     final sf = _primaryStorefront(storefront);
     return _cache.fetch<AppleMusicAlbumMatch>(
-      key: _key('album', '${_normalize(artistName)}|${_normalize(albumName)}|$sf'),
+      key: _key(
+        'album-v2',
+        '${_normalize(artistName)}|${_normalize(albumName)}|$sf',
+      ),
       refresh: refresh,
       loader: () async {
-        final artistMatch = await resolveArtist(
-          artistName,
-          storefront: sf,
-          refresh: refresh,
-        );
-        if (artistMatch == null) return null;
-        final results = await _itunesLookup(
-          id: artistMatch.artistId,
-          entity: 'album',
-          limit: _albumLookupLimit,
-          storefront: sf,
-        );
-        return _bestAlbumMatch(albumName, results, sf);
+        // Searching a combined credit as one artist loses soundtrack albums.
+        // Resolve the release directly first, and verify title + credited artist.
+        final queries = <String>{
+          '$albumName ${splitArtistCredits(artistName).firstOrNull ?? artistName}',
+          albumName,
+          if (albumTitleKey(albumName) != _normalize(albumName))
+            albumTitleKey(albumName),
+        };
+        final clock = Stopwatch()..start();
+        Object? failure;
+        var searched = false;
+        for (final country in <String>{sf, 'us', 'in'}) {
+          for (final query in queries) {
+            final remaining = const Duration(seconds: 25) - clock.elapsed;
+            if (remaining <= Duration.zero) break;
+            try {
+              final rows = await _itunesSearch(
+                term: query,
+                entity: 'album',
+                limit: 25,
+                storefront: country,
+              ).timeout(remaining);
+              searched = true;
+              for (final row in rows) {
+                if (row['wrapperType'] != 'collection') continue;
+                final candidate = _albumFromJson(row, country);
+                if (albumTitlesMatch(albumName, candidate.name) &&
+                    albumArtistsMatch(artistName, candidate.artistName)) {
+                  return candidate;
+                }
+              }
+            } catch (error) {
+              failure = error;
+            }
+          }
+          if (clock.elapsed >= const Duration(seconds: 25)) break;
+        }
+        // Retain the existing artist-discography edition matching as a final
+        // fallback, but never accept an unrelated relevance-ranked artist.
+        final lead = splitArtistCredits(artistName).firstOrNull ?? artistName;
+        try {
+          final remaining = const Duration(seconds: 25) - clock.elapsed;
+          if (remaining > Duration.zero) {
+            final artistMatch = await resolveArtist(
+              lead,
+              storefront: sf,
+              refresh: refresh,
+            ).timeout(remaining);
+            if (artistMatch != null &&
+                albumArtistsMatch(artistName, artistMatch.name)) {
+              final budget = const Duration(seconds: 25) - clock.elapsed;
+              if (budget > Duration.zero) {
+                final results = await _itunesLookup(
+                  id: artistMatch.artistId,
+                  entity: 'album',
+                  limit: _albumLookupLimit,
+                  storefront: sf,
+                ).timeout(budget);
+                return _bestAlbumMatch(albumName, results, sf);
+              }
+            }
+          }
+        } catch (error) {
+          failure = error;
+        }
+        if (!searched && failure != null) throw failure;
+        return null;
       },
       encode: (match) => match.toJson(),
       decode: AppleMusicAlbumMatch.fromJson,
@@ -317,18 +371,23 @@ class AppleMusicMetadataService {
     );
     if (match == null) return null;
 
+    final matchedStorefront = Uri.tryParse(match.url)?.pathSegments.firstOrNull;
+    final region =
+        matchedStorefront != null && _storefrontRe.hasMatch(matchedStorefront)
+        ? matchedStorefront
+        : storefront;
     final (info, tracks) = await (
       getAlbumInfo(
         collectionId: match.collectionId,
         collectionUrl: match.url,
-        storefront: storefront,
+        storefront: region,
         refresh: refresh,
-      ),
+      ).catchError((Object _) => null),
       getAlbumTracks(
         match.collectionId,
-        storefront: storefront,
+        storefront: region,
         refresh: refresh,
-      ),
+      ).catchError((Object _) => <AppleMusicTrack>[]),
     ).wait;
 
     return AppleMusicAlbumData(match: match, info: info, tracks: tracks);
@@ -435,6 +494,53 @@ class AppleMusicMetadataService {
           transientTtl: _transientTtl,
         )
         .then((tracks) => tracks ?? const <AppleMusicTrack>[]);
+  }
+
+  /// Search artists as distinct results, rather than treating an artist
+  /// category as a song search with the same text.
+  Future<List<AppleMusicArtist>> searchArtists(
+    String term, {
+    int limit = 25,
+    String? storefront,
+    bool refresh = false,
+  }) async {
+    final query = term.trim();
+    if (query.isEmpty) return const [];
+    final sf = _primaryStorefront(storefront);
+    return await _cache.fetch<List<AppleMusicArtist>>(
+          key: _key('artist-search', '${_normalize(query)}|$limit|$sf'),
+          refresh: refresh,
+          loader: () async {
+            final rows = await _itunesSearch(
+              term: query,
+              entity: 'musicArtist',
+              limit: limit.clamp(1, 100),
+              storefront: sf,
+            );
+            final seen = <String>{};
+            return [
+              for (final row in rows)
+                if (row['wrapperType'] == 'artist' &&
+                    row['artistId'] != null &&
+                    seen.add('${row['artistId']}'))
+                  _artistFromJson(row, sf),
+            ];
+          },
+          encode: (artists) => {
+            'artists': [for (final artist in artists) artist.toJson()],
+          },
+          decode: (json) => (json['artists'] as List)
+              .map(
+                (row) => AppleMusicArtist.fromJson(
+                  Map<String, dynamic>.from(row as Map),
+                ),
+              )
+              .toList(),
+          ttl: _infoTtl,
+          negativeTtl: _negativeTtl,
+          transientTtl: _transientTtl,
+        ) ??
+        const [];
   }
 
   /// Free-text album search returning every plausible release, used by the
@@ -882,7 +988,8 @@ class AppleMusicMetadataService {
       final retryAfter = int.tryParse(
         response.headers['retry-after']?.trim() ?? '',
       );
-      _throttleUntilMs = now + Duration(seconds: retryAfter ?? 30).inMilliseconds;
+      _throttleUntilMs =
+          now + Duration(seconds: retryAfter ?? 30).inMilliseconds;
     } else if (response.statusCode == 403) {
       _throttleUntilMs = now + const Duration(hours: 1).inMilliseconds;
     }
@@ -1012,9 +1119,7 @@ class AppleMusicMetadataService {
         .replaceAll('&nbsp;', ' ')
         .replaceAllMapped(
           _hexEntityRe,
-          (match) => String.fromCharCode(
-            int.parse(match.group(1)!, radix: 16),
-          ),
+          (match) => String.fromCharCode(int.parse(match.group(1)!, radix: 16)),
         )
         .replaceAllMapped(
           _decEntityRe,

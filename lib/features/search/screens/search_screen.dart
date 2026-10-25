@@ -1,4 +1,5 @@
 import '../providers/recent_search_tracks.dart';
+import '../widgets/online_catalogue_search_section.dart';
 import '../widgets/recent_search_grid.dart';
 
 import 'dart:async';
@@ -42,7 +43,7 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
-  final _songRepository = SongRepository();
+  SongRepository get _songRepository => ref.read(songRepositoryProvider);
   Timer? _debounce;
   String _debouncedQuery = '';
   final Map<SearchCategory, bool> _expanded = {};
@@ -101,11 +102,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
 
     final enabled = ref.watch(searchFilterProvider);
+    final scope = ref.watch(searchScopeProvider);
     final isAllEnabled = enabled.length == SearchCategory.values.length;
     final repoQuery = _debouncedQuery;
     final hasInput = _controller.text.trim().isNotEmpty;
     final hasQuery = repoQuery.isNotEmpty;
-    final resultsAsync = hasQuery
+    final resultsAsync = hasQuery && scope != SearchScope.online
         ? ref.watch(globalSearchResultsProvider(repoQuery))
         : null;
 
@@ -158,6 +160,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   final counts = resultsAsync?.value?.counts;
                   return SearchFilterChips(
                     enabled: enabled,
+                    scope: scope,
+                    onScopeChanged: (value) =>
+                        ref.read(searchScopeProvider.notifier).select(value),
                     isAllEnabled: isAllEnabled,
                     onToggle: (cat) =>
                         ref.read(searchFilterProvider.notifier).toggle(cat),
@@ -172,6 +177,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Expanded(
               child: !hasInput
                   ? _buildEmptyState(context)
+                  : scope == SearchScope.online && hasQuery
+                  ? CustomScrollView(
+                      slivers: [
+                        if (_onlineSection(repoQuery) case final online?)
+                          online,
+                        const SliverToBoxAdapter(child: SizedBox(height: 140)),
+                      ],
+                    )
                   : _buildResultsArea(
                       context,
                       hasQuery: hasQuery,
@@ -220,7 +233,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   child: _buildNoResults(context, results.query),
                 ),
               ),
-              OnlineSearchSection(query: results.query),
+              if (_onlineSection(results.query) case final online?) online,
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           );
@@ -233,14 +246,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           strokeWidth: 2,
         ),
       ),
-      error: (e, st) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.spacingLg),
-          child: Text(
-            l10n.searchFailed2(e),
-            style: TextStyle(color: context.adaptiveTextTertiary),
+      error: (e, st) => CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.spacingLg),
+              child: Text(
+                l10n.searchFailed2(e),
+                style: TextStyle(color: context.adaptiveTextTertiary),
+              ),
+            ),
           ),
-        ),
+          if (_onlineSection(_debouncedQuery) case final online?) online,
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
+        ],
       ),
     );
   }
@@ -323,7 +342,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            l10n.tryAnotherKeywordOrEnableMore,
+            'Try another keyword or choose All result types',
             style: TextStyle(
               fontFamily: 'GoogleSansFlex',
               fontSize: 12,
@@ -381,7 +400,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }) {
       if (!enabled.contains(cat) || count == 0) return;
       final expanded = _isExpanded(cat);
-      final showSeeAll = count > _previewLimit;
+      final showSeeAll = enabled.length != 1 && count > _previewLimit;
       slivers.add(
         _SectionHeader(
           category: cat,
@@ -425,7 +444,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       cat: SearchCategory.songs,
       count: results.songs.length,
       buildItems: () {
-        final expanded = _isExpanded(SearchCategory.songs);
+        final expanded =
+            enabled.length == 1 || _isExpanded(SearchCategory.songs);
         final visible = expanded
             ? results.songs
             : results.songs.take(_previewLimit).toList();
@@ -447,7 +467,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       cat: SearchCategory.artists,
       count: results.artists.length,
       buildItems: () {
-        final expanded = _isExpanded(SearchCategory.artists);
+        final expanded =
+            enabled.length == 1 || _isExpanded(SearchCategory.artists);
         final visible = expanded
             ? results.artists
             : results.artists.take(_previewLimit).toList();
@@ -471,7 +492,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       cat: SearchCategory.albums,
       count: results.albums.length,
       buildItems: () {
-        final expanded = _isExpanded(SearchCategory.albums);
+        final expanded =
+            enabled.length == 1 || _isExpanded(SearchCategory.albums);
         final visible = expanded
             ? results.albums
             : results.albums.take(_previewLimit).toList();
@@ -494,7 +516,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       cat: SearchCategory.albumArtists,
       count: results.albumArtists.length,
       buildItems: () {
-        final expanded = _isExpanded(SearchCategory.albumArtists);
+        final expanded =
+            enabled.length == 1 || _isExpanded(SearchCategory.albumArtists);
         final visible = expanded
             ? results.albumArtists
             : results.albumArtists.take(_previewLimit).toList();
@@ -519,7 +542,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       cat: SearchCategory.folders,
       count: results.folders.length,
       buildItems: () {
-        final expanded = _isExpanded(SearchCategory.folders);
+        final expanded =
+            enabled.length == 1 || _isExpanded(SearchCategory.folders);
         final visible = expanded
             ? results.folders
             : results.folders.take(_previewLimit).toList();
@@ -542,7 +566,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       cat: SearchCategory.year,
       count: results.yearMatches.length,
       buildItems: () {
-        final expanded = _isExpanded(SearchCategory.year);
+        final expanded =
+            enabled.length == 1 || _isExpanded(SearchCategory.year);
         final visible = expanded
             ? results.yearMatches
             : results.yearMatches.take(_previewLimit).toList();
@@ -565,7 +590,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       cat: SearchCategory.playlists,
       count: results.playlists.length,
       buildItems: () {
-        final expanded = _isExpanded(SearchCategory.playlists);
+        final expanded =
+            enabled.length == 1 || _isExpanded(SearchCategory.playlists);
         final visible = expanded
             ? results.playlists
             : results.playlists.take(_previewLimit).toList();
@@ -582,12 +608,50 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
 
     return CustomScrollView(
+      key: ValueKey('${enabled.singleOrNull}:${ref.read(searchScopeProvider)}'),
       slivers: [
         ...slivers,
-        OnlineSearchSection(query: results.query),
+        if (_onlineSection(results.query) case final online?) online,
         const SliverToBoxAdapter(child: SizedBox(height: 120)),
       ],
     );
+  }
+
+  Widget? _onlineSection(String query) {
+    if (ref.read(searchScopeProvider) == SearchScope.library) return null;
+    final category = ref.read(searchFilterProvider).singleOrNull;
+    if (!supportsOnlineCategory(category)) return null;
+    if (category == SearchCategory.artists ||
+        category == SearchCategory.albums) {
+      return SliverToBoxAdapter(
+        child: OnlineCatalogueSearchSection(
+          key: ValueKey('catalogue:$category:$query'),
+          query: query,
+          category: category!,
+        ),
+      );
+    }
+    final songs = OnlineSearchSection(
+      key: ValueKey('songs:$query'),
+      query: query,
+    );
+    if (category == null) {
+      return SliverMainAxisGroup(
+        slivers: [
+          songs,
+          for (final type in [SearchCategory.albums, SearchCategory.artists])
+            SliverToBoxAdapter(
+              child: OnlineCatalogueSearchSection(
+                key: ValueKey('catalogue:$type:$query'),
+                query: query,
+                category: type,
+                previewLimit: 4,
+              ),
+            ),
+        ],
+      );
+    }
+    return songs;
   }
 
   Future<void> _playSong(Song song, List<Song> playlist) async {
@@ -789,11 +853,12 @@ class _SongTile extends ConsumerWidget {
               ),
             ),
             if (catalogueAudioDetails(
-                quality: song.resolution,
-                bitDepth: song.bitDepth,
-                sampleRate: song.sampleRate,
-                codec: song.fileType,
-              ) case final info when info.isNotEmpty)
+                  quality: song.resolution,
+                  bitDepth: song.bitDepth,
+                  sampleRate: song.sampleRate,
+                  codec: song.fileType,
+                )
+                case final info when info.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 3),
                 child: Text(
