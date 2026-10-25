@@ -25,23 +25,14 @@ class FlowRadioWidgetProvider : AppWidgetProvider() {
         val compact = !WidgetSize.isWide(manager, id) || !WidgetSize.isTall(manager, id)
         val layout = if (compact) R.layout.widget_flow_radio_small else R.layout.widget_flow_radio
         val views = RemoteViews(context.packageName, layout)
-        val playing = preferences.getBoolean(WidgetPrefs.KEY_HAS_SONG, false)
-        val title = preferences.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
-        val artist = preferences.getString(WidgetPrefs.KEY_ARTIST, "").orEmpty()
         val state = preferences.getString(WidgetPrefs.KEY_FLOW_STATUS, "").orEmpty()
-        views.setTextViewText(R.id.flow_title,
-            if (playing && title.isNotBlank()) title else "Your personal soundtrack")
+        // Flow/Radio is a discovery launcher, not a second Now Playing widget.
+        // Never repeat the track title/artist or duplicate the cover art.
+        views.setTextViewText(R.id.flow_title, "Music for your mood")
         views.setTextViewText(R.id.flow_status,
-            state.ifBlank {
-                if (playing) artist.ifBlank { "Playing now" }
-                else "Flow learns from your library and listening history"
-            })
+            state.ifBlank { "Start Flow, create a fresh mix or tune into radio" })
         views.setTextColor(R.id.flow_heading, WidgetPrefs.getAccentColor(context))
-        val artwork = if (playing) WidgetArtLoader.load(
-            preferences.getString(WidgetPrefs.KEY_ALBUM_ART, ""), if (compact) 160 else 288
-        ) else null
-        if (artwork != null) views.setImageViewBitmap(R.id.flow_cover, artwork)
-        else views.setImageViewResource(R.id.flow_cover, R.drawable.widget_default_art)
+        views.setViewVisibility(R.id.flow_cover, android.view.View.GONE)
         views.setOnClickPendingIntent(R.id.flow_heading, WidgetIntents.openApp(context, 680))
         views.setOnClickPendingIntent(R.id.flow_title, WidgetIntents.openApp(context, 681))
         views.setOnClickPendingIntent(R.id.flow_action, WidgetIntents.flow(context, "play"))
