@@ -104,7 +104,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     final enabled = ref.watch(searchFilterProvider);
     final scope = ref.watch(searchScopeProvider);
-    final isAllEnabled = enabled.length == SearchCategory.values.length;
+    final isAllEnabled = false;
     final repoQuery = _debouncedQuery;
     final hasInput = _controller.text.trim().isNotEmpty;
     final hasQuery = repoQuery.isNotEmpty;
