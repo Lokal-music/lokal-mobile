@@ -6887,6 +6887,9 @@ class PlayerService {
           await _insertIntoAudioSequence(at, song);
         } catch (error) {
           _debugLog('Flow queue tail append deferred: $error');
+          _audioSourceSequence = null;
+          unawaited(_justAudioPlayer?.setLoopMode(just_audio.LoopMode.off)
+              ?? Future<void>.value());
         }
       }
     }
