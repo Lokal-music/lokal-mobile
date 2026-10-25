@@ -98,7 +98,18 @@ class PlayerArtworkQuality {
     if (upgraded == null &&
         (host == 'i.ytimg.com' || host == 'img.youtube.com')) {
       final match = RegExp(
-        r'/(?:default|mqdefault|hqdefault|sddefault|hq720)\.jpg
+        r'/(?:default|mqdefault|hqdefault|sddefault|hq720)\.jpg      ).firstMatch(uri.path);
+      if (match != null) {
+        final maxres = uri.replace(
+          path: uri.path.replaceFirst(match[0]!, '/maxresdefault.jpg'),
+        ).toString();
+        final sd = uri.replace(
+          path: uri.path.replaceFirst(match[0]!, '/sddefault.jpg'),
+        ).toString();
+        return {maxres, sd, original}.toList(growable: false);
+      }
+    }
+    return upgraded == null ? [original] : [upgraded, original];
   }
 }
 ,
