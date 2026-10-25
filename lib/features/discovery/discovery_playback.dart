@@ -15,6 +15,7 @@ import '../../services/catalogue_quality.dart';
 import 'discovery_http.dart';
 import 'discovery_models.dart';
 import 'discovery_sources.dart';
+import '../player/widgets/player_artwork_quality.dart';
 
 typedef DiscoveryAudioProbe = Future<native.AudioProbeFormat> Function(
   String path,
@@ -368,37 +369,38 @@ class DiscoveryPlaybackCache {
   /// Downloads [track]'s cover next to [ready]; null when it has none or
   /// it can't be fetched (the song still plays, without a picture).
   Future<String?> _cover(DiscoveryTrack track, File ready, {bool embed = true}) async {
-    final url = Uri.tryParse(track.artwork ?? '');
-    if (url == null || url.scheme != 'https') return null;
+    final initial = Uri.tryParse(track.artwork ?? '');
+    if (initial == null || initial.scheme != 'https') return null;
     final file = File(coverPath(ready.path));
-    IOSink? sink;
-    try {
-      sink = file.openWrite();
-      final out = sink;
-      await http.transfer(
-        url,
-        headers: const {'Accept': 'image/*'},
-        maxBytes: _maxCoverBytes,
-        deadline: const Duration(seconds: 15),
-        onChunk: out.add,
-      );
-      await out.close();
-      sink = null;
-      // Also embed it in the audio's tags, so the file keeps its cover if
-      // it is saved to the library.
+    // Use the original-size Amazon artwork when possible. A missing larger
+    // rendition must not erase the working thumbnail.
+    for (final urlText in PlayerArtworkQuality.candidates(track.artwork)) {
+      final url = Uri.tryParse(urlText);
+      if (url == null || url.scheme != 'https') continue;
+      IOSink? sink;
       try {
-        if (embed) await _embedCover(ready.path, file.path);
-      } catch (_) {}
-      return file.path;
-    } catch (_) {
-      try {
-        await sink?.close();
-      } catch (_) {}
-      try {
-        if (await file.exists()) await file.delete();
-      } catch (_) {}
-      return null;
+        sink = file.openWrite();
+        await http.transfer(
+          url,
+          headers: const {'Accept': 'image/*'},
+          maxBytes: _maxCoverBytes,
+          deadline: const Duration(seconds: 15),
+          onChunk: sink.add,
+        );
+        await sink.close();
+        sink = null;
+        if (await file.length() == 0) throw const FileSystemException('Empty artwork');
+        // Also embed the matched image in saved audio metadata when possible.
+        try {
+          if (embed) await _embedCover(ready.path, file.path);
+        } catch (_) {}
+        return file.path;
+      } catch (_) {
+        try { await sink?.close(); } catch (_) {}
+        try { if (await file.exists()) await file.delete(); } catch (_) {}
+      }
     }
+    return null;
   }
 
   static Future<void> _embedCoverInFile(String audio, String cover) async {
