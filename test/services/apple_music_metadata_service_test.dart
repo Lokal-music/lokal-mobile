@@ -378,6 +378,44 @@ void main() {
     });
   });
 
+  test('Dude soundtrack resolves combined credits without an artist-id lookup', () async {
+    final calls = <Uri>[];
+    final api = serviceWith(MockClient((request) async {
+      calls.add(request.url);
+      return _json({'results': [
+        _collection(name: 'Dude (Telugu) [Original Motion Picture Soundtrack]', id: 1, artist: 'Sai Abhyankkar'),
+        _collection(name: 'Dude (Original Motion Picture Soundtrack)', id: 1848715390, artist: 'Unrelated Artist'),
+        _collection(name: 'Dude (Original Motion Picture Soundtrack)', id: 1848715390, artist: 'Sai Abhyankkar'),
+      ]});
+    }));
+    final match = await api.resolveAlbum(album: 'Dude (Original Motion Picture Soundtrack)',
+      artist: 'Sai Abhyankar, Paal Dabba, Bhumi, Deepthi Suresh');
+    expect(match?.collectionId, '1848715390');
+    expect(match?.artworkUrl, contains('1500x1500'));
+    expect(calls.length, 1);
+    expect(calls.single.queryParameters['entity'], 'album');
+  });
+
+  test('regional album keeps matched storefront; failed editorial notes do not hide tracks', () async {
+    final lookupRegions = <String?>[];
+    final api = serviceWith(MockClient((request) async {
+      if (request.url.host == 'music.apple.com') throw const AppleMusicTransientException('notes unavailable');
+      final q = request.url.queryParameters;
+      if (request.url.path == '/lookup') {
+        lookupRegions.add(q['country']);
+        return _json({'results': [_track(name: 'Oorum Blood', number: 1)]});
+      }
+      return _json({'results': q['country'] == 'in' ? [
+        _collection(name: 'Dude', id: 7, artist: 'Sai Abhyankkar', viewUrl: 'https://music.apple.com/in/album/dude/7'),
+      ] : []});
+    }));
+    final data = await api.getAlbumData(album: 'Dude (Original Motion Picture Soundtrack)',
+      artist: 'Sai Abhyankar, Paal Dabba', storefront: 'fr');
+    expect(data?.tracks.single.trackName, 'Oorum Blood');
+    expect(data?.info, isNull);
+    expect(lookupRegions, ['in']);
+  });
+
   group('getAlbumInfo', () {
     test('parses serialized server data paragraphs', () async {
       final client = MockClient(

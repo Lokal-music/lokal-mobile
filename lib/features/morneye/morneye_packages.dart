@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../player/widgets/player_artwork_quality.dart';
 import '../../services/tidal_atmos_metadata.dart';
 import '../../services/atmos_playback_support.dart';
 import '../../services/atmos_diagnostics.dart';
@@ -228,6 +229,41 @@ String? morneyeAlbumName(Map track) {
   return null;
 }
 
+/// Request the original resolution of the *same* Amazon image, rather
+/// than upscaling the small 120/300px variant. Unsized Amazon media images
+/// retain their content hash. Other providers are not rewritten.
+bool providerIdentityIsAmazon(String addonName, Map track) {
+  if (!addonName.toLowerCase().startsWith('amazon')) return false;
+  if (track['provider_id']?.toString().toLowerCase() != 'amazon') {
+    return false;
+  }
+  return RegExp(r'^[A-Z0-9]{10}$')
+      .hasMatch((track['id'] ?? '').toString().toUpperCase());
+}
+
+/// An installed Deezer source's own Search row contains the canonical
+/// numeric Deezer track ID. Repeating enrichTrack() issues another API call
+/// before the actual signed download ticket can even be requested.
+bool providerIdentityIsDeezer(String addonName, Map track) {
+  if (!addonName.toLowerCase().startsWith('deezer') ||
+      track['provider_id']?.toString().toLowerCase() != 'deezer') {
+    return false;
+  }
+  final id = track['id']?.toString() ?? '';
+  return RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(id);
+}
+
+String morneyeAlbumArtworkUrl(String original) {
+  final uri = Uri.tryParse(original);
+  if (uri == null || uri.scheme != 'https') return original;
+  final host = uri.host.toLowerCase();
+  if (!PlayerArtworkQuality.isAmazonArtworkHost(host)) return original;
+  final upgraded = uri.path.replaceFirst(
+    RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
+    '.',
+  );
+  return upgraded == uri.path ? original : uri.replace(path: upgraded).toString();
+}
 /// A song an add-on found.
 class MorneyeTrack {
   const MorneyeTrack({
@@ -308,6 +344,74 @@ class MorneyeTrack {
     return null;
   }
 
+  /// Provider search results can put covers in album artwork, a flat image
+  /// URL, or an array of image sizes. Prefer the largest exact-track image,
+  /// and promote Amazon CDN thumbnails to their unsized original asset.
+  static String? _artwork(Map track) {
+    double sizeOf(Map value) {
+      double dimension(Object? raw) => raw is num ? raw.toDouble() :
+          double.tryParse(raw?.toString() ?? '') ?? 0;
+      final width = dimension(value['width']);
+      final height = dimension(value['height']);
+      return width > 0 && height > 0 ? width * height : width * width + height * height;
+    }
+    double urlSize(String url) {
+      final uri = Uri.tryParse(url);
+      if (uri == null || !PlayerArtworkQuality.isAmazonArtworkHost(uri.host)) return 0;
+      final sizes = RegExp(r'_(?:SX|SY|SL|UX|UY)(\d+)').allMatches(uri.path)
+          .map((m) => double.parse(m[1]!));
+      if (sizes.isEmpty) return 0;
+      final largest = sizes.reduce((a, b) => a > b ? a : b);
+      return largest * largest;
+    }
+    ({String url, double size})? getImage(Object? value) {
+      if (value is String && Uri.tryParse(value)?.hasScheme == true) {
+        return (url: value, size: urlSize(value));
+      }
+      if (value is Map) {
+        for (final field in ['url', 'src', 'cover_url', 'coverUrl', 'original',
+            'large', 'medium', 'small']) {
+          final found = getImage(value[field]);
+          if (found != null) {
+            final explicit = sizeOf(value);
+            return (url: found.url, size: explicit > 0 ? explicit : found.size);
+          }
+        }
+      }
+      if (value is List) {
+        ({String url, double size})? best;
+        for (final image in value) {
+          final found = getImage(image);
+          if (found != null && (best == null || found.size >= best.size)) best = found;
+        }
+        return best;
+      }
+      return null;
+    }
+
+    final album = track['album'];
+    ({String url, double size})? best;
+    for (final value in [
+      // Providers frequently expose a tiny convenience thumbnail alongside
+      // a separate album images array with much larger artwork.
+      track['images'], track['image'],
+      if (album is Map) ...[
+        album['images'], album['image'], album['cover_art'],
+        album['cover_url'],
+      ],
+      track['artwork_url'], track['artworkUrl'],
+      track['album_art'], track['albumArt'],
+      track['cover_art'], track['coverArt'],
+      track['cover_url'], track['coverUrl'], track['thumbnail'],
+    ]) {
+      final found = getImage(value);
+      if (found != null && (best == null || found.size > best.size)) best = found;
+    }
+    // Keep the provider URL, so every renderer/downloader can try the master
+    // and still fall back to this known working variant.
+    return best?.url;
+  }
+
   static MorneyeTrack of(Map track, String provider) {
     final rawArtists = track['artists'];
     final artists = rawArtists is List
@@ -322,7 +426,6 @@ class MorneyeTrack {
               .toList();
     final title = '${track['name'] ?? track['title'] ?? ''}';
     final ms = (track['duration_ms'] ?? track['durationMs']) as num?;
-    final images = track['images'];
     return MorneyeTrack(
       provider: provider,
       id: '${track['id']}',
@@ -333,11 +436,7 @@ class MorneyeTrack {
           ? Duration(milliseconds: ms.toInt())
           : null,
       isrc: track['isrc'] as String?,
-      thumbnail:
-          (track['cover_url'] ??
-                  track['coverUrl'] ??
-                  (images is String ? images : null))
-              as String?,
+      thumbnail: _artwork(track),
       trackNumber: (track['track_number'] ?? track['trackNumber']) is num
           ? ((track['track_number'] ?? track['trackNumber']) as num).toInt()
           : null,
@@ -1591,7 +1690,20 @@ class MorneyePackages {
       final hasCanonicalIdentity =
           (track['id']?.toString().isNotEmpty ?? false) &&
           (track['name']?.toString().isNotEmpty ?? false);
+      final amazonNativeTrack = forPlayback &&
+          providerIdentityIsAmazon(addon.name, track) &&
+          nativeSearchResult;
+      final deezerNativeTrack = forPlayback &&
+          nativeSearchResult && providerIdentityIsDeezer(addon.name, track);
       final skipEnrichment =
+          // Only the remembered native Deezer Search row avoids enrichTrack;
+          // cross-provider matches, saving and noncanonical IDs still verify.
+          deezerNativeTrack ||
+          // A native Amazon Search result already has its canonical ASIN.
+          // enrichTrack() performs unnecessary network requests before
+          // checkAvailability can hand back the same ASIN. Keep enrichment
+          // for non-native/fallback matches where an ID must be resolved.
+          amazonNativeTrack ||
           // Respect the extension manifest even if this by-ID track came
           // from getTrack rather than a remembered Search result.
           (addon.manifest['skipMetadataEnrichment'] == true &&

@@ -1,0 +1,141 @@
+package com.mossapps.flick.widgets
+
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.Context
+import android.os.Bundle
+import android.view.View
+import android.widget.RemoteViews
+import com.mossapps.flick.R
+import org.json.JSONArray
+
+/**
+ * A launcher-safe Cover Flow inspired recommendation picker.
+ *
+ * Launcher RemoteViews cannot run Flutter 3D gestures or inertial animations.
+ * Browse buttons update selection natively without restarting Flutter; Play
+ * launches the ordinary provider-priority playback resolution through Dart.
+ */
+class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
+    override fun onEnabled(context: Context) {
+        WidgetPrefs.get(context).edit().putBoolean(WidgetPrefs.KEY_RECOMMEND_ENABLED, true).apply()
+    }
+
+    override fun onDisabled(context: Context) {
+        WidgetPrefs.get(context).edit().putBoolean(WidgetPrefs.KEY_RECOMMEND_ENABLED, false).apply()
+    }
+
+    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        WidgetUpdateDispatcher.submit(this, context, manager, ids) { id ->
+            render(context.applicationContext, manager, id)
+        }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context, manager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle,
+    ) = onUpdate(context, manager, intArrayOf(appWidgetId))
+
+    private fun render(context: Context, manager: AppWidgetManager, id: Int): RemoteViews {
+        val prefs = WidgetPrefs.get(context)
+        val layout = if (WidgetSize.width(manager, id) >= 280 && WidgetSize.height(manager, id) >= 280)
+            R.layout.widget_recommended_flow else R.layout.widget_recommended_flow_small
+        val views = RemoteViews(context.packageName, layout)
+        // Older versions persisted metadata rows without any cover. Skip
+        // them, so every selectable card in the carousel has real artwork.
+        val source = try {
+            JSONArray(prefs.getString(WidgetPrefs.KEY_RECOMMENDATIONS, "[]").orEmpty())
+        } catch (_: Exception) { JSONArray() }
+        val data = JSONArray()
+        for (i in 0 until minOf(source.length(), 8)) {
+            val item = source.optJSONObject(i) ?: continue
+            if (WidgetArtLoader.load(context, item.optString("artwork"), 64) != null) {
+                data.put(item)
+            }
+        }
+        val count = data.length()
+        val indexKey = WidgetPrefs.recommendationCursor(id)
+        // Start in the middle like the in-app Cover Flow, preserving an
+        // individual browsing cursor for every widget instance afterwards.
+        val position = if (count > 0)
+            prefs.getInt(indexKey, count / 2).mod(count) else 0
+        val hasSelection = count > 0
+        val item = if (hasSelection) data.optJSONObject(position) else null
+        val title = item?.optString("title").orEmpty()
+        val artist = item?.optString("artist").orEmpty()
+        views.setTextViewText(R.id.rec_title,
+            if (hasSelection) title.ifBlank { "Recommended track" }
+            else "Your next favourite")
+        views.setTextViewText(R.id.rec_artist,
+            if (hasSelection) artist.ifBlank { "From your listening" }
+            else "Play something in Lokal to build your picks")
+        views.setTextViewText(R.id.rec_heading, "COVER FLOW")
+        views.setTextColor(R.id.rec_heading, WidgetPrefs.getAccentColor(context))
+        views.setViewVisibility(R.id.rec_art_strip, View.VISIBLE)
+        views.setViewVisibility(R.id.rec_prev,
+            if (count > 1) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.rec_next,
+            if (count > 1) View.VISIBLE else View.GONE)
+        views.setTextViewText(R.id.rec_play, if (hasSelection) "Play pick" else "Open Lokal")
+
+        var selectedArt: android.graphics.Bitmap? = null
+        fun art(viewId: Int, offset: Int) {
+            val artPath = if (count > 0) data.optJSONObject((position + offset).mod(count))
+                ?.optString("artwork").orEmpty() else ""
+            val image = WidgetArtLoader.load(context, artPath, if (offset == 0) 240 else 168)
+            if (offset == 0) selectedArt = image
+            // Avoid filling the launcher with three giant app-logo placeholders
+            // while artwork is being asynchronously cached. Only real adjacent
+            // covers are shown; the selected slot uses a neutral surface.
+            views.setViewVisibility(viewId, if (offset == 0 || image != null)
+                View.VISIBLE else View.INVISIBLE)
+            if (image != null) views.setImageViewBitmap(viewId, image)
+            else views.setImageViewResource(viewId, R.drawable.widget_art_placeholder)
+        }
+        if (hasSelection) {
+            art(R.id.rec_center, 0)
+            if (count > 1) art(R.id.rec_left, -1)
+            if (count > 2) art(R.id.rec_right, 1)
+        } else {
+            // Retain a real recent album sleeve before resorting to the
+            // designed "no track yet" cover. Never leave artwork space blank.
+            val previous = WidgetArtLoader.load(context,
+                prefs.getString(WidgetPrefs.KEY_LAST_ALBUM_ART, ""), 240)
+            if (previous != null) {
+                selectedArt = previous
+                views.setImageViewBitmap(R.id.rec_center, previous)
+            }
+            else views.setImageViewResource(R.id.rec_center, R.drawable.widget_art_placeholder)
+        }
+        if (count <= 1) views.setViewVisibility(R.id.rec_left, View.GONE)
+        if (count <= 2) views.setViewVisibility(R.id.rec_right, View.GONE)
+        // A narrow or short launcher cell is an artwork card first. Free
+        // vertical room for its sleeve instead of compressing three covers
+        // beneath a stack of repetitive labels.
+        if (WidgetSize.width(manager, id) < 190) {
+            views.setViewVisibility(R.id.rec_left, View.GONE)
+            views.setViewVisibility(R.id.rec_right, View.GONE)
+        }
+        if (WidgetSize.height(manager, id) < 145) {
+            views.setViewVisibility(R.id.rec_heading, View.GONE)
+            views.setViewVisibility(R.id.rec_artist, View.GONE)
+        }
+        views.setInt(R.id.rec_root, "setBackgroundResource",
+            WidgetArtworkPalette.background(selectedArt))
+        views.setOnClickPendingIntent(R.id.rec_prev,
+            WidgetIntents.recommendationBrowse(context, id, -1))
+        views.setOnClickPendingIntent(R.id.rec_next,
+            WidgetIntents.recommendationBrowse(context, id, 1))
+        views.setOnClickPendingIntent(R.id.rec_left,
+            WidgetIntents.recommendationBrowse(context, id, -1))
+        views.setOnClickPendingIntent(R.id.rec_right,
+            WidgetIntents.recommendationBrowse(context, id, 1))
+        views.setOnClickPendingIntent(R.id.rec_center,
+            if (hasSelection) WidgetIntents.recommendationPlay(context, id)
+            else WidgetIntents.openApp(context, 701))
+        views.setOnClickPendingIntent(R.id.rec_play,
+            if (hasSelection) WidgetIntents.recommendationPlay(context, id)
+            else WidgetIntents.openApp(context, 702))
+        views.setOnClickPendingIntent(R.id.rec_heading, WidgetIntents.openApp(context, 700))
+        return views
+    }
+}

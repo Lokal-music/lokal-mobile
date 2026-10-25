@@ -31,7 +31,7 @@ existing Android/shared implementation, and do not establish iOS support.
 | Local songs, albums, artists, folders | Inherited | Flick screens, Isar repository and scanner |
 | Favorites and recent history | Inherited / shell integrated | Real providers feed Listen and Library |
 | Local playlist creation, editing, M3U import/export | Inherited | `PlaylistService` and playlist screens |
-| Playlist links and refresh | Delivered | Spotify public embed and YouTube Music browse; preview, partial safety, matching, refresh, unlink |
+| Playlist links and refresh | Delivered | Spotify public embed, YouTube/YouTube Music browse, built-in paginated Deezer metadata, and enabled Tidal/Apple Music/Qobuz link-handler add-ons; preview, partial safety, matching, refresh, unlink. New providers covered by fixtures; device/live-provider validation pending. |
 | Spotify OAuth and library | Delivered | PKCE, secure tokens, paginated Web API, playlist import, bounded retry |
 | Spotify Liked Songs → local likes | Delivered | Explicit one-way sync, strict title/artist/duration matching, readback verification |
 | YouTube Music catalog search | Delivered | Explicit guest catalog search; opens canonical source page |
@@ -736,3 +736,39 @@ Targeted Dart analysis has no issues. No native compilation/APK/CI run or Samsun
 M06 reproduction was performed; the OEM restart mechanism is a concrete code
 hazard consistent with the report, not a device-confirmed crash diagnosis.
 
+
+
+### Library metadata backfill CPU (issue #109)
+
+Automatic MediaStore/SAF metadata backfill uses single-file native requests and
+cost-based idle gaps, yields to the existing scroll/preload gate, and stops
+between probes when the service is stopped. Local header repair avoids unchanged
+Isar writes and checkpoints its existing file fingerprints during the backlog,
+so reopening does not repeat an entire unfinished library migration. Explicit
+scans/repairs retain their foreground scheduling. Regression coverage uses fake
+repositories/probes; Samsung S25 Ultra thermal/FPS confirmation remains pending.
+The large-library follow-up skips redundant complete-row probes and automatic SAF
+staging, yields artist-credit warmup, and bypasses desktop recording matching for
+phone-only libraries. See `docs/LARGE_LIBRARY_HANGS.md` for evidence and limits.
+
+
+### Player cover return and miniplayer queue sheet
+
+The artwork portal retains live poster anchors across temporary lyrics/queue
+cover handoffs. Fullscreen still-art dismissal uses uniform scaling with a
+continuous crop into the miniplayer's square viewport. The miniplayer queue
+opens in a themed, draggable 55%-height sheet, expandable to 90%, with song
+playback opening Now Playing after dismissal. Reorder, removal, multi-select
+and the embedded full-player queue retain their existing operations. Widget
+and pixel-render regressions cover the transitions and sheet interactions;
+Android device gesture validation remains pending.
+
+
+### Catalogue album lookup and search filters
+
+Album lookup searches releases directly and matches soundtrack credit lists
+without conflating language/score editions. Track lists and artwork survive
+independent metadata failures; missing covers use verified Deezer/iTunes fallback.
+Search categories are single-choice with an explicit All reset and separate
+Library/Online scopes. Online artist/album results open their catalogue pages.
+See `docs/SEARCH_AND_ALBUM_LOOKUP.md` for validation and remaining test limits.

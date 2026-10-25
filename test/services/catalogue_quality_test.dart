@@ -374,9 +374,10 @@ void main() {
       catalogueSampleRate: tidal.sampleRate,
       requestedQuality: 'HiRes FLAC (requested)',
     );
-    expect(firstSearch.label, 'FLAC · 24-bit / 44.1 kHz (catalogue)');
-    expect(firstSearch.requestedLabel, 'HiRes FLAC (requested)');
+    expect(firstSearch.label, 'FLAC · 24-bit / 44.1 kHz');
     expect(firstSearch.tooltip, contains('catalogue'));
+    expect(firstSearch.label, isNot(contains('catalogue')));
+    expect(firstSearch.label, isNot(contains('requested')));
 
     final low = onlineSearchAudioBadge(
       catalogueQuality: tidal.quality,
@@ -385,21 +386,24 @@ void main() {
       catalogueSampleRate: tidal.sampleRate,
       requestedQuality: 'Low (requested)',
     );
-    expect(low.label, contains('(catalogue)'),
-        reason: 'Tidal maximum must never masquerade as selected LOW');
-    expect(low.requestedLabel, 'Low (requested)',
-        reason: 'Changing Tidal quality remains visible in Search');
+    expect(low.label, 'FLAC · 24-bit / 44.1 kHz',
+        reason: 'Show only available per-track metadata; a different requested '
+            'tier must not introduce a second chip or be mistaken for playback');
+    expect(low.tooltip, contains('catalogue'));
     final onlyRequest = onlineSearchAudioBadge(
       requestedQuality: 'High (requested)',
     );
     expect(onlyRequest.label, 'High (requested)',
-        reason: 'Do not fabricate per-track quality if search omits it');
+        reason: 'Fallback to the selected tier if catalogue metadata is absent');
+    expect(onlyRequest.tooltip, contains('requested'));
     final played = onlineSearchAudioBadge(
       verifiedQuality: 'AAC · 256 kbps',
       catalogueQuality: tidal.quality,
       requestedQuality: 'High (requested)',
     );
     expect(played.label, 'AAC · 256 kbps');
+    expect(played.label, isNot(contains('catalogue')));
+    expect(played.label, isNot(contains('requested')));
   });
 
 }

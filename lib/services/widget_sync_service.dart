@@ -7,6 +7,7 @@ import 'package:home_widget/home_widget.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/app_preferences_service.dart';
+import 'widget_recommendation_service.dart';
 
 import 'package:flick/core/utils/dev_log.dart';
 
@@ -22,7 +23,10 @@ class WidgetSyncService {
     _lastLokalAccent = color;
     try {
       await _ensureInit();
-      await HomeWidget.saveWidgetData<int>('lokal_widget_accent_argb', color);
+      // Unsigned Dart ARGB values otherwise become Long preferences on Android.
+      await HomeWidget.saveWidgetData<int>(
+        'lokal_widget_accent_argb', color.toSigned(32),
+      );
       await _updateAll();
     } catch (_) {
       _lastLokalAccent = null;
@@ -37,6 +41,10 @@ class WidgetSyncService {
       'com.mossapps.flick.widgets.FlagshipWidgetProvider';
   static const String compactProvider =
       'com.mossapps.flick.widgets.CompactWidgetProvider';
+  static const String flowProvider =
+      'com.mossapps.flick.widgets.FlowRadioWidgetProvider';
+  static const String recommendationProvider =
+      'com.mossapps.flick.widgets.CoverFlowRecommendationWidgetProvider';
 
   static const String keyFlagshipAccent = 'flick_widget_flagship_accent';
   static const String keyFlagshipShowArtist =
@@ -54,6 +62,7 @@ class WidgetSyncService {
   static const String keyTitle = 'flick_widget_title';
   static const String keyArtist = 'flick_widget_artist';
   static const String keyAlbumArt = 'flick_widget_album_art';
+  static const String keyLastAlbumArt = 'flick_widget_last_album_art';
   static const String keyIsPlaying = 'flick_widget_is_playing';
   static const String keyHasSong = 'flick_widget_has_song';
 
@@ -68,22 +77,62 @@ class WidgetSyncService {
   static const String keyQueueCount = 'flick_widget_queue_count';
 
   bool _initialized = false;
+  Future<void>? _initialization;
   Timer? _debounce;
   String? _lastPushedSongId;
   bool? _lastPushedIsPlaying;
   bool? _lastPushedIsShuffle;
   int? _lastPushedLoopMode;
+  PlayerState? _lastKnownState;
+  String? _artSongId;
+  String? _artRaw;
+  String _cachedArt = '';
+
+  String _coverFor(Song? song) => song?.id == _artSongId &&
+          song?.albumArt == _artRaw && _cachedArt.isNotEmpty
+      ? _cachedArt : _resolveLocalArt(song?.albumArt);
+
+  Future<void> _refreshArtwork(Song song, String? path) async {
+    final art = await WidgetRecommendationService.resolveTrackArtwork(song);
+    if (art.isEmpty || _artSongId != song.id || _artRaw != path) return;
+    _cachedArt = art;
+    _savedData.remove(keyAlbumArt);
+    final latest = _lastKnownState;
+    if (latest != null && latest.currentSong?.id == song.id) schedulePush(latest);
+  }
+
+  Future<void> setFlowStatus(String status) async {
+    try {
+      await _ensureInit();
+      await HomeWidget.saveWidgetData<String>('flick_widget_flow_status', status);
+      await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
+    } catch (_) {}
+  }
+
+
 
   Future<void> _ensureInit() async {
     if (_initialized) return;
-    _initialized = true;
-    await HomeWidget.setAppGroupId(_appGroup);
+    if (_initialization case final ongoing?) {
+      await ongoing;
+      return;
+    }
+    final future = () async {
+      await HomeWidget.setAppGroupId(_appGroup);
+      _initialized = true;
+    }();
+    _initialization = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_initialization, future)) _initialization = null;
+    }
   }
 
   Future<void> _updateAll() async {
     await HomeWidget.updateWidget(qualifiedAndroidName: miniPlayerProvider);
-    await HomeWidget.updateWidget(qualifiedAndroidName: flagshipProvider);
-    await HomeWidget.updateWidget(qualifiedAndroidName: compactProvider);
+    await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
+    await HomeWidget.updateWidget(qualifiedAndroidName: recommendationProvider);
   }
 
   PlayerState? _pendingState;
@@ -98,6 +147,16 @@ class WidgetSyncService {
 
   void schedulePush(PlayerState state) {
     _pendingState = state;
+    _lastKnownState = state;
+    final song = state.currentSong;
+    if (song?.id != _artSongId || song?.albumArt != _artRaw) {
+      _artSongId = song?.id;
+      _artRaw = song?.albumArt;
+      _cachedArt = '';
+      if (song != null) {
+        unawaited(_refreshArtwork(song, song.albumArt));
+      }
+    }
     final structuralChange =
         state.currentSong?.id != _lastPushedSongId ||
         state.isPlaying != _lastPushedIsPlaying ||
@@ -146,12 +205,15 @@ class WidgetSyncService {
     try {
       await _ensureInit();
       final Song? song = state.currentSong;
+      if (song != null) {
+        WidgetRecommendationService.instance.refreshFor(song, state.upNext);
+      }
       final structuralChange =
           _savedData[keySongId] != (song?.id ?? '') ||
           _savedData[keyIsPlaying] != state.isPlaying ||
           _savedData[keyTitle] != (song?.title ?? '') ||
           _savedData[keyArtist] != (song?.artist ?? '') ||
-          _savedData[keyAlbumArt] != _resolveLocalArt(song?.albumArt) ||
+          _savedData[keyAlbumArt] != _coverFor(song) ||
           _savedData[keyIsShuffle] != state.isShuffle ||
           _savedData[keyLoopMode] != _loopModeToInt(state.loopMode) ||
           _savedData[keyQueueCount] != state.upNext.length;
@@ -163,7 +225,11 @@ class WidgetSyncService {
       await _save<String>(keySongId, song?.id ?? '');
       await _save<String>(keyTitle, song?.title ?? '');
       await _save<String>(keyArtist, song?.artist ?? '');
-      await _save<String>(keyAlbumArt, _resolveLocalArt(song?.albumArt));
+      final currentCover = _coverFor(song);
+      await _save<String>(keyAlbumArt, currentCover);
+      if (currentCover.isNotEmpty) {
+        await _save<String>(keyLastAlbumArt, currentCover);
+      }
       await _save<int>(keyPositionMs, state.position.inMilliseconds);
       await _save<int>(keyDurationMs, state.duration.inMilliseconds);
       await _save<bool>(keyIsShuffle, state.isShuffle);
@@ -173,8 +239,7 @@ class WidgetSyncService {
       if (structuralChange) {
         await _updateAll();
       } else if (positionChanged) {
-        // Only the mini widget has a progress bar. Avoid rebuilding the two
-        // artwork/text bitmap widgets for every position-only update.
+        // Now Playing is the only widget needing position-only updates.
         await HomeWidget.updateWidget(qualifiedAndroidName: miniPlayerProvider);
       }
 
@@ -183,15 +248,28 @@ class WidgetSyncService {
       _lastPushedIsShuffle = state.isShuffle;
       _lastPushedLoopMode = state.loopMode.index;
     } catch (e, st) {
+      // A partially saved preference batch must not suppress the next real
+      // broadcast. Recover when Android's widget host becomes available.
+      _savedData.clear();
+      _lastPushedSongId = null;
+      _lastPushedIsPlaying = null;
+      _lastPushedIsShuffle = null;
+      _lastPushedLoopMode = null;
       devLog('WidgetSyncService push failed: $e\n$st');
     }
   }
 
+  /// App lifecycle PAUSED is not audio paused. In particular, media keeps
+  /// playing when the user returns to the launcher. Never falsify the player
+  /// state simply because Flutter's activity lost focus.
   Future<void> pushPaused() async {
-    _savedData.remove(keyIsPlaying);
     try {
+      final latest = _lastKnownState;
+      if (latest != null) {
+        _pendingState = latest;
+        await _drainPushes();
+      }
       await _ensureInit();
-      await HomeWidget.saveWidgetData<bool>(keyIsPlaying, false);
       await _updateAll();
     } catch (e, st) {
       devLog('WidgetSyncService pushPaused failed: $e\n$st');
@@ -313,6 +391,7 @@ class WidgetSyncService {
   String _resolveLocalArt(String? raw) {
     if (raw == null || raw.isEmpty) return '';
     if (raw.startsWith('http://') || raw.startsWith('https://')) return '';
+    if (raw.startsWith('content://')) return raw;
     final cleaned = raw.startsWith('file://') ? raw.substring(7) : raw;
     if (!File(cleaned).existsSync()) return '';
     return cleaned;

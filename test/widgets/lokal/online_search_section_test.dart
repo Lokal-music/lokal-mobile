@@ -1,3 +1,4 @@
+import 'package:flick/features/search/providers/search_filter_provider.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -18,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
+import 'package:flick/widgets/lokal/lokal_toast.dart';
 
 OnlineSource _source(String id, String name, List<String> titles, {bool atmos = false, String? quality}) =>
     OnlineSource(
@@ -107,6 +109,7 @@ Future<void> _pump(
   Future<Song> Function(OnlineSource, DiscoveryTrack, void Function(String))?
   prepare,
   LibraryDownloader? downloader,
+  Future<String?> Function(String, Future<void>)? qualityLookup,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -121,7 +124,9 @@ Future<void> _pump(
               OnlineSearchSection(
                 query: 'song',
                 sources: (_, _) async => sources,
-                pendingSong: pendingSong,
+                qualityLookup: qualityLookup ?? (_, _) async => null,
+                pendingSong: pendingSong ?? (source, track) => onlinePendingSong(
+                  source.id, track, resolver: QueuePreResolver()),
                 prepare: prepare,
                 downloader: downloader,
               ),
@@ -135,6 +140,65 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('Online-only search hides library-status headings and switching back restores context', (tester) async {
+    await _pump(tester, sources: [_source('yt', 'YouTube Music', ['Online song'])]);
+    final container = ProviderScope.containerOf(tester.element(find.byType(OnlineSearchSection)));
+    expect(find.text('Not in your library'), findsOneWidget);
+    container.read(searchScopeProvider.notifier).select(SearchScope.online);
+    await tester.pumpAndSettle();
+    expect(find.text('Not in your library'), findsNothing);
+    expect(find.text('In your library'), findsNothing);
+    expect(find.text('Online song'), findsOneWidget);
+    container.read(searchScopeProvider.notifier).select(SearchScope.library);
+    await tester.pumpAndSettle();
+    expect(find.text('Not in your library'), findsOneWidget);
+  });
+
+  setUp(OnlineSearchSection.resetSourceSelection);
+  tearDown(LokalToast.dismiss);
+  testWidgets(
+    'Atmos action sheet scrolls to its final action on a short screen',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 320);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await _pump(
+        tester,
+        sources: [
+          _source('tidal', 'Tidal', ['Short screen'], atmos: true),
+        ],
+      );
+      await tester.longPress(find.text('Short screen'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Download Dolby Atmos'));
+      await tester.pumpAndSettle();
+      expect(find.text('Download Dolby Atmos').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'YouTube badges display measured audio once inspection completes',
+    (tester) async {
+      await _pump(
+        tester,
+        sources: [
+          _source('yt', 'YouTube Music', ['Measured song']),
+        ],
+        qualityLookup: (_, _) async => 'OPUS · 160 kbps',
+      );
+      expect(find.text('OPUS · 160 kbps'), findsOneWidget);
+      expect(
+        find.byTooltip(
+          'Audio details from a resolved stream, not inferred from search metadata.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+
   testWidgets('Atmos availability is shown in search without promising playback', (tester) async {
     await _pump(tester, sources: [
       _source('a-tidal', 'Tidal', ['Immersive catalogue track'], atmos: true, quality: '24bit/96kHz'),
@@ -149,7 +213,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Play Dolby Atmos'), findsOneWidget);
     expect(find.text('Download Dolby Atmos'), findsOneWidget);
-    await tester.pageBack();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pumpAndSettle();
     // The Tidal catalogue mode belongs to search metadata. It is not
     // promoted into a verified playback-quality or output badge.
@@ -181,11 +245,11 @@ void main() {
     );
     await _pump(tester, sources: [httpAddon]);
     expect(find.text('Reported FLAC'), findsOneWidget);
-    expect(find.text('FLAC · 24-bit / 96 kHz'), findsOneWidget);
+    expect(find.text('FLAC · 24-bit · 96 kHz'), findsOneWidget);
     expect(find.text('Quality unknown'), findsNothing);
   });
 
-  testWidgets('YouTube Search names adaptive formats without inventing kbps', (tester) async {
+  testWidgets('YouTube Search does not invent codec or bitrate before stream inspection', (tester) async {
     final youtube = OnlineSource(
       id: 'yt', name: 'YouTube Music',
       results: (_) async => [
@@ -198,7 +262,7 @@ void main() {
     );
     await _pump(tester, sources: [youtube]);
     expect(find.text('YouTube Song'), findsOneWidget);
-    expect(find.text('AAC / Opus · adaptive'), findsOneWidget);
+    expect(find.text('AAC / Opus · adaptive'), findsNothing);
     expect(find.text('Quality unknown'), findsNothing);
     expect(find.textContaining('kbps'), findsNothing);
   });
@@ -372,6 +436,8 @@ void main() {
     expect(player.queued, hasLength(2));
     expect(player.movedToNext, [0], reason: 'Add to queue goes at the end');
     expect(find.text('Added Song A to the queue'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('Download to library fetches the song and saves it', (
@@ -439,12 +505,14 @@ void main() {
     expect(saved.single.title, 'Song A');
     expect(
       saved.single.filePath,
-      p.join(root.path, 'Library', 'Lokal Downloads', 'Artist - Song A.m4a'),
+      p.join(root.path, 'Library', 'Artist', 'Unknown Album', 'Artist - Song A.m4a'),
     );
     expect(
-      find.text('Saved Song A to your library (Music/Lokal Downloads).'),
+      find.text('Saved Song A to your library (Music).'),
       findsOneWidget,
     );
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a failed download says why', (tester) async {
@@ -464,5 +532,7 @@ void main() {
       find.text('Couldn’t save Song A. Not available here.'),
       findsOneWidget,
     );
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
   });
 }

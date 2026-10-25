@@ -1,3 +1,4 @@
+import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/l10n/l10n.dart';
 
 import 'dart:async';
@@ -113,6 +114,7 @@ class KonnektedLibrary extends ConsumerWidget {
                 onPressed: () => _showAdd(context, ref),
               ),
               actions: [
+                const LokalDiscordButton(),
                 LokalRoundAction(
                   icon: Icons.settings_rounded,
                   iconSize: 24,

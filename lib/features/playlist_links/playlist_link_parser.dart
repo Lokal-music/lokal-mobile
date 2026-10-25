@@ -28,7 +28,7 @@ class PlaylistLinkParser {
     final value = input.trim();
     if (value.isEmpty) {
       throw const PlaylistLinkFormatException(
-        'Paste a Spotify or YouTube playlist link.',
+        'Paste a Spotify, YouTube, Tidal, Apple Music, Qobuz or Deezer playlist link.',
       );
     }
 
@@ -36,9 +36,11 @@ class PlaylistLinkParser {
     if (spotifyUri != null) return spotifyUri;
     final youtubeUri = _parseYoutubeUri(value);
     if (youtubeUri != null) return youtubeUri;
+    final catalogue = _parseCatalogueUri(value);
+    if (catalogue != null) return catalogue;
 
     throw const PlaylistLinkFormatException(
-      'That is not a supported public Spotify or YouTube playlist link.',
+      'That is not a supported public Spotify, YouTube, Tidal, Apple Music, Qobuz or Deezer playlist link.',
     );
   }
 
@@ -97,6 +99,63 @@ class PlaylistLinkParser {
       source: PlaylistLinkSource.youtube,
       remoteId: id,
       canonicalUrl: 'https://www.youtube.com/playlist?list=$id',
+    );
+  }
+
+  static ParsedPlaylistLink? _parseCatalogueUri(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        !_isWebUri(uri) ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasPort) {
+      return null;
+    }
+    final host = uri.host.toLowerCase();
+    final path = uri.path;
+    PlaylistLinkSource source;
+    String? id;
+    String? canonical;
+    if (host == 'tidal.com' ||
+        host == 'www.tidal.com' ||
+        host == 'listen.tidal.com') {
+      source = PlaylistLinkSource.tidal;
+      id = RegExp(r'^/(?:browse/)?playlist/([a-fA-F0-9-]{36})/?$')
+          .firstMatch(path)
+          ?.group(1);
+      if (id != null) canonical = 'https://tidal.com/browse/playlist/$id';
+    } else if (host == 'music.apple.com') {
+      source = PlaylistLinkSource.apple;
+      id = RegExp(r'^/[a-zA-Z]{2}/playlist/(?:[^/]+/)?(pl\.[A-Za-z0-9-]+)/?$')
+          .firstMatch(path)
+          ?.group(1);
+      if (id != null) {
+        canonical = uri
+            .replace(scheme: 'https', query: '', fragment: '')
+            .toString();
+      }
+    } else if (host == 'qobuz.com' ||
+        host == 'www.qobuz.com' ||
+        host == 'open.qobuz.com' ||
+        host == 'play.qobuz.com') {
+      source = PlaylistLinkSource.qobuz;
+      id = RegExp(
+        r'^/(?:[a-zA-Z]{2}-[a-zA-Z]{2}/)?playlist/(?:[^/]+/)?([0-9]+)/?$',
+      ).firstMatch(path)?.group(1);
+      if (id != null) canonical = 'https://open.qobuz.com/playlist/$id';
+    } else if (host == 'deezer.com' || host == 'www.deezer.com') {
+      source = PlaylistLinkSource.deezer;
+      id = RegExp(r'^/(?:[a-zA-Z]{2}/)?playlist/([0-9]+)/?$')
+          .firstMatch(path)
+          ?.group(1);
+      if (id != null) canonical = 'https://www.deezer.com/playlist/$id';
+    } else {
+      return null;
+    }
+    if (id == null || canonical == null) return null;
+    return ParsedPlaylistLink(
+      source: source,
+      remoteId: id,
+      canonicalUrl: canonical,
     );
   }
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'playlist_link_http.dart';
+import 'playlist_catalogue_importers.dart';
 import 'playlist_link_models.dart';
 
 abstract interface class PlaylistLinkImporter {
@@ -14,13 +15,19 @@ class PublicPlaylistImporter implements PlaylistLinkImporter {
   final PlaylistLinkTransport transport;
   final SpotifyPlaylistImporter spotify;
   final YoutubePlaylistImporter youtube;
+  final DeezerPlaylistImporter deezer;
+  final AddonPlaylistImporter addons;
 
-  PublicPlaylistImporter({PlaylistLinkTransport? transport})
-    : this._(transport ?? BoundedPlaylistLinkTransport());
+  PublicPlaylistImporter({
+    PlaylistLinkTransport? transport,
+    PlaylistAddonReader? addonReader,
+  }) : this._(transport ?? BoundedPlaylistLinkTransport(), addonReader);
 
-  PublicPlaylistImporter._(this.transport)
+  PublicPlaylistImporter._(this.transport, PlaylistAddonReader? addonReader)
     : spotify = SpotifyPlaylistImporter(transport),
-      youtube = YoutubePlaylistImporter(transport);
+      youtube = YoutubePlaylistImporter(transport),
+      deezer = DeezerPlaylistImporter(transport),
+      addons = AddonPlaylistImporter(reader: addonReader ?? readPlaylistAddon);
 
   @override
   Future<RemotePlaylistSnapshot> fetch(
@@ -32,6 +39,12 @@ class PublicPlaylistImporter implements PlaylistLinkImporter {
         return spotify.fetch(link, cancellation: cancellation);
       case PlaylistLinkSource.youtube:
         return youtube.fetch(link, cancellation: cancellation);
+      case PlaylistLinkSource.deezer:
+        return deezer.fetch(link, cancellation: cancellation);
+      case PlaylistLinkSource.tidal:
+      case PlaylistLinkSource.apple:
+      case PlaylistLinkSource.qobuz:
+        return addons.fetch(link, cancellation: cancellation);
     }
   }
 

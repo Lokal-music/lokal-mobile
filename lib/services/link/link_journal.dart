@@ -69,6 +69,16 @@ class LinkJournal {
     'track_key':
         _trackKeys[song.id] ??
         linkTrackKey(song.artist, song.title, song.duration),
+    if (song.isPending && song.id.startsWith('pending:playlist:'))
+      'online_ref': true,
+    if (song.isPending &&
+        song.id.startsWith('pending:playlist:') &&
+        RegExp(r'^yt:[A-Za-z0-9_-]{11}$').hasMatch(song.remoteId ?? ''))
+      'source_ref': song.remoteId,
+    if (song.isPending &&
+        song.id.startsWith('pending:playlist:') &&
+        (song.albumArt ?? '').startsWith('https://'))
+      'artwork_url': song.albumArt,
   };
   Future<Song?> match(
     Map<String, dynamic> track, {
@@ -225,7 +235,10 @@ class LinkJournal {
       final oldMembers = List<String>.from(prior?['members'] as List? ?? []);
       final members = <String>[];
       for (var position = 0; position < playlist.songIds.length; position++) {
-        final song = songs[playlist.songIds[position]];
+        // Online Flow entries have snapshots even when never scanned locally.
+        final songId = playlist.songIds[position];
+        final song = songs[songId] ??
+            playlist.songSnapshots[songId]?.toSong(songId);
         if (song == null) continue;
         final key = await trackKeyFor(song);
         members.add(key);

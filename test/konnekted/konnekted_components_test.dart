@@ -250,6 +250,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byTooltip('Discord'), findsOneWidget);
+    expect(
+      tester.getCenter(find.byTooltip('Discord')).dx,
+      lessThan(tester.getCenter(find.byTooltip('Settings')).dx),
+    );
     await tester.tap(find.byTooltip('Settings'));
     expect(opened, [KonnektedDestination.settings]);
     for (final gone in ['Classipod', 'Listening hub', 'Manage library']) {

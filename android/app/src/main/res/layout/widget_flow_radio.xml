@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/flow_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/widget_bg_3">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+      android:orientation="horizontal" android:gravity="center_vertical" android:padding="12dp">
+    <ImageView android:id="@+id/flow_cover" android:layout_width="112dp" android:layout_height="112dp"
+        android:background="@drawable/widget_art_background" android:clipToOutline="true"
+        android:scaleType="centerCrop" android:src="@drawable/widget_art_placeholder"
+        android:contentDescription="@string/widget_open_app"/>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:layout_marginStart="12dp" android:orientation="vertical" android:gravity="center_vertical">
+      <TextView android:id="@+id/flow_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="FLOW &amp; RADIO" android:textColor="#FF577D"
+          android:textSize="10sp" android:fontFamily="@font/product_sans_bold" />
+      <TextView android:id="@+id/flow_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:layout_marginTop="5dp" android:text="Your Flow" android:textColor="#FFFFFF"
+          android:textSize="16sp" android:fontFamily="@font/product_sans_bold"
+          android:singleLine="true" android:ellipsize="end"/>
+      <TextView android:id="@+id/flow_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:layout_marginTop="2dp" android:text="Music made for you" android:textColor="#C7FFFFFF"
+          android:textSize="11sp" android:singleLine="true" android:ellipsize="end" />
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:layout_marginTop="10dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/flow_action" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="36dp" android:text="Play" android:textSize="12sp"
+            android:gravity="center" android:textColor="#FFFFFF"
+            android:background="@drawable/widget_music_action_primary"/>
+        <TextView android:id="@+id/flow_shuffle" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="36dp" android:layout_marginStart="4dp" android:text="Mix"
+            android:gravity="center" android:textColor="#FFFFFF" android:textSize="11sp"
+            android:background="@drawable/widget_music_action_secondary"/>
+        <TextView android:id="@+id/flow_radio" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="36dp" android:layout_marginStart="4dp" android:text="Radio"
+            android:gravity="center" android:textColor="#FFFFFF" android:textSize="11sp"
+            android:background="@drawable/widget_music_action_secondary"/>
+      </LinearLayout>
+    </LinearLayout>
+  </LinearLayout>
+</FrameLayout>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rec_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/widget_bg_3">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:padding="7dp" android:orientation="vertical" android:gravity="center">
+        <TextView android:id="@+id/rec_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="COVER FLOW" android:textColor="#FF577D" android:textSize="10sp"
+            android:singleLine="true" android:fontFamily="@font/product_sans_bold"/>
+        <LinearLayout android:id="@+id/rec_art_strip" android:layout_width="match_parent" android:layout_height="0dp"
+            android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
+            <ImageView android:id="@+id/rec_left" android:layout_width="0dp"
+                android:layout_weight="0.6" android:layout_height="match_parent"
+                android:padding="4dp" android:scaleType="fitCenter" android:background="@drawable/widget_art_background" android:clipToOutline="true" android:alpha="0.65"/>
+            <ImageView android:id="@+id/rec_center" android:layout_width="0dp"
+                android:layout_weight="1.3" android:layout_height="match_parent"
+                android:scaleType="fitCenter" android:background="@drawable/widget_art_background" android:clipToOutline="true" android:src="@drawable/widget_art_placeholder"/>
+            <ImageView android:id="@+id/rec_right" android:layout_width="0dp"
+                android:layout_weight="0.6" android:layout_height="match_parent"
+                android:padding="4dp" android:scaleType="fitCenter" android:background="@drawable/widget_art_background" android:clipToOutline="true" android:alpha="0.65"/>
+        </LinearLayout>
+        <TextView android:id="@+id/rec_title" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:textColor="#FFFFFF"
+            android:gravity="center" android:textSize="11sp"
+            android:singleLine="true" android:ellipsize="end" />
+        <TextView android:id="@+id/rec_artist" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:textColor="#CCFFFFFF"
+            android:gravity="center" android:textSize="9sp"
+            android:singleLine="true" android:ellipsize="end"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center">
+            <TextView android:id="@+id/rec_prev" android:layout_width="32dp" android:layout_height="29dp"
+                android:text="‹" android:background="@drawable/widget_music_action_secondary" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>
+            <TextView android:id="@+id/rec_play" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="29dp" android:text="Play" android:background="@drawable/widget_music_action_primary" android:textColor="#FFFFFF"
+                android:textSize="11sp" android:gravity="center"/>
+            <TextView android:id="@+id/rec_next" android:layout_width="32dp" android:layout_height="29dp"
+                android:text="›" android:background="@drawable/widget_music_action_secondary" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -15,6 +15,7 @@ internal object WidgetPrefs {
     const val KEY_TITLE = "flick_widget_title"
     const val KEY_ARTIST = "flick_widget_artist"
     const val KEY_ALBUM_ART = "flick_widget_album_art"
+    const val KEY_LAST_ALBUM_ART = "flick_widget_last_album_art"
     const val KEY_IS_PLAYING = "flick_widget_is_playing"
     const val KEY_HAS_SONG = "flick_widget_has_song"
     const val KEY_IS_SHUFFLE = "flick_widget_is_shuffle"
@@ -23,11 +24,17 @@ internal object WidgetPrefs {
     const val KEY_BG_OPACITY = "flick_widget_bg_opacity"
     const val KEY_SHOW_ALBUM_ART = "flick_widget_show_album_art"
     const val KEY_SHOW_ARTIST = "flick_widget_show_artist"
+    const val KEY_LOKAL_ACCENT_ARGB = "lokal_widget_accent_argb"
     const val KEY_ACCENT_COLOR = "flick_widget_accent_color"
     const val KEY_TEXT_SCALE = "flick_widget_text_scale"
     const val KEY_POSITION_MS = "flick_widget_position_ms"
     const val KEY_DURATION_MS = "flick_widget_duration_ms"
     const val KEY_QUEUE_COUNT = "flick_widget_queue_count"
+    const val KEY_FLOW_STATUS = "flick_widget_flow_status"
+    const val KEY_RECOMMENDATIONS = "flick_widget_recommendations"
+    const val KEY_RECOMMEND_ENABLED = "flick_widget_recommend_enabled"
+    const val KEY_FLOW_ENABLED = "flick_widget_flow_enabled"
+    fun recommendationCursor(id: Int) = "flick_widget_recommend_cursor_$id"
 
     private val BG_OPACITY_MAP = mapOf(
         0 to 0x00, 1 to 0x40, 2 to 0x80, 3 to 0xC0, 4 to 0xFF
@@ -48,14 +55,14 @@ internal object WidgetPrefs {
     fun get(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // ponytail: rebuild all three home widgets from current prefs; used when the
+    // Rebuild the three distinct widget types from current preferences; used when the
     // app process is about to die so the play/pause state can't drift stale.
     fun updateAllWidgets(context: Context) {
         val mgr = AppWidgetManager.getInstance(context)
         listOf(
             MiniPlayerWidgetProvider::class.java,
-            FlagshipWidgetProvider::class.java,
-            CompactWidgetProvider::class.java,
+            FlowRadioWidgetProvider::class.java,
+            CoverFlowRecommendationWidgetProvider::class.java,
         ).forEach { cls ->
             val ids = mgr.getAppWidgetIds(ComponentName(context, cls))
             if (ids.isNotEmpty()) {
@@ -64,8 +71,10 @@ internal object WidgetPrefs {
         }
     }
 
+    // Reading via getInt throws if an earlier Dart/plugin write used putLong.
+    // Read the actual value so old persisted colours recover without resetting widgets.
     fun getBgOpacityAlpha(context: Context): Int {
-        val level = get(context).getInt(KEY_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_BG_OPACITY, 3)
         return BG_OPACITY_MAP[level] ?: 0xC0
     }
 
@@ -90,7 +99,7 @@ internal object WidgetPrefs {
     }
 
     fun getAccentColor(context: Context): Int {
-        if (getAccentName(context) == "theme") return get(context).getInt("lokal_widget_accent_argb", 0xFFFFFFFF.toInt())
+        if (getAccentName(context) == "theme") return WidgetPreferenceValue.readInt(get(context), KEY_LOKAL_ACCENT_ARGB, 0xFFFFFFFF.toInt())
         return when (getAccentName(context)) {
             "amber" -> 0xFFFFB300.toInt()
             "blue" -> 0xFF64B5F6.toInt()
@@ -111,7 +120,7 @@ internal object WidgetPrefs {
     }
 
     fun getBackgroundDrawableRes(context: Context): Int {
-        val level = get(context).getInt(KEY_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_BG_OPACITY, 3)
         return when (level) {
             0 -> R.drawable.widget_bg_0
             1 -> R.drawable.widget_bg_1
@@ -137,7 +146,7 @@ internal object WidgetPrefs {
         getWidgetDouble(context, KEY_FLAGSHIP_TEXT_SCALE, 1.0f)
 
     fun getFlagshipAccentColor(context: Context): Int {
-        if (getFlagshipAccentName(context) == "theme") return get(context).getInt("lokal_widget_accent_argb", 0xFFFFFFFF.toInt())
+        if (getFlagshipAccentName(context) == "theme") return WidgetPreferenceValue.readInt(get(context), KEY_LOKAL_ACCENT_ARGB, 0xFFFFFFFF.toInt())
         return when (getFlagshipAccentName(context)) {
             "amber" -> 0xFFFFB300.toInt()
             "blue" -> 0xFF64B5F6.toInt()
@@ -156,12 +165,12 @@ internal object WidgetPrefs {
     private const val KEY_COMPACT_TEXT_SCALE = "flick_widget_compact_text_scale"
 
     fun getCompactBgOpacityAlpha(context: Context): Int {
-        val level = get(context).getInt(KEY_COMPACT_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_COMPACT_BG_OPACITY, 3)
         return BG_OPACITY_MAP[level] ?: 0xC0
     }
 
     fun getCompactBackgroundDrawableRes(context: Context): Int {
-        val level = get(context).getInt(KEY_COMPACT_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_COMPACT_BG_OPACITY, 3)
         return when (level) {
             0 -> R.drawable.widget_bg_0
             1 -> R.drawable.widget_bg_1
@@ -184,7 +193,7 @@ internal object WidgetPrefs {
         getWidgetDouble(context, KEY_COMPACT_TEXT_SCALE, 1.0f)
 
     fun getCompactAccentColor(context: Context): Int {
-        if (getCompactAccentName(context) == "theme") return get(context).getInt("lokal_widget_accent_argb", 0xFFFFFFFF.toInt())
+        if (getCompactAccentName(context) == "theme") return WidgetPreferenceValue.readInt(get(context), KEY_LOKAL_ACCENT_ARGB, 0xFFFFFFFF.toInt())
         return when (getCompactAccentName(context)) {
             "amber" -> 0xFFFFB300.toInt()
             "blue" -> 0xFF64B5F6.toInt()

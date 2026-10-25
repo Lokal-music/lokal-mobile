@@ -1,3 +1,4 @@
+import '../providers/search_filter_provider.dart';
 import '../providers/recent_search_tracks.dart';
 
 import 'dart:async';
@@ -75,9 +76,16 @@ class OnlineSearchSection extends ConsumerStatefulWidget {
     this.pendingSong,
     this.prepare,
     this.downloader,
+    this.qualityLookup,
   });
 
   final String query;
+
+  /// Replaces native/network stream inspection in controlled widget tests.
+  final Future<String?> Function(String videoId, Future<void> cancel)? qualityLookup;
+
+  @visibleForTesting
+  static void resetSourceSelection() => _OnlineSearchSectionState._remembered = null;
 
   /// Loads the sources; replaced in tests.
   final Future<List<OnlineSource>> Function(
@@ -148,6 +156,9 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         final lookup = gate.then((_) async {
           if (!mounted || cancelled.isCompleted) return null;
           try {
+            if (widget.qualityLookup != null) {
+              return await widget.qualityLookup!(videoId, cancelled.future);
+            }
             final audio = await YoutubeAudio(DiscoveryHttp(_client))
                 .resolve(videoId, cancel: cancelled.future)
                 .timeout(const Duration(seconds: 55));
@@ -410,7 +421,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
                   'to, so it’s in Music/${LibraryDownloader.folderName}, '
                   'now part of your library.'
             : 'Saved ${track.title} to your library '
-                  '(${saved.folderName}/${LibraryDownloader.folderName}).',
+                  '(${saved.folderName}).',
       );
     } catch (error) {
       _say('Couldn’t save ${track.title}. ${discoveryError(error)}');
@@ -477,6 +488,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (ref.watch(searchScopeProvider) != SearchScope.online) ...[
             Text(
               'Not in your library',
               style: TextStyle(
@@ -486,6 +498,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
               ),
             ),
             const SizedBox(height: 2),
+            ],
             Text(
               source == null
                   ? 'Looking for places to search…'
@@ -757,23 +770,6 @@ class _OnlineTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (badge.requestedLabel case final requested?)
-                          Tooltip(
-                            message: 'Quality selected in Tidal add-on settings; the actual rendition is verified during playback.',
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: t.muted.withValues(alpha: .35)),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                requested,
-                                style: TextStyle(color: t.muted, fontSize: 10),
-                              ),
-                            ),
-                          ),
                           if (track.atmosAvailable)
                             Tooltip(
                               message: 'Play original Dolby Atmos (requires an Android E-AC-3 JOC decoder or direct output)',

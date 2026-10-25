@@ -14,6 +14,7 @@ import '../../models/lokal_remote_state.dart';
 import '../../models/playlist.dart';
 import '../favorites_service.dart';
 import '../playlist_service.dart';
+import '../online_playlist_reference.dart';
 import 'link_journal.dart';
 import 'link_playlist_order.dart';
 import 'link_profile_service.dart';
@@ -410,12 +411,47 @@ class LinkSyncCoordinator {
             await SongRepository().getAllSongs(),
           );
         }
+        final onlineSnapshots = <String, PlaylistSongSnapshot>{};
         final projection = await state.resolveMembers((member) async {
           final song = await _match({
             ...member.fields,
             'track_key': member.trackKey,
           });
-          return song?.id;
+          if (song != null) return song.id;
+
+          // A playlist entry can exist online without ever having been
+          // downloaded on this device. Rebuild a catalogue reference from
+          // explicit sender metadata instead of silently dropping it.
+          final fields = member.fields;
+          if (fields['online_ref'] != true && fields['online_ref'] != 1) {
+            return null;
+          }
+          final title = fields['title']?.toString().trim() ?? '';
+          final artist = fields['artist']?.toString().trim() ?? '';
+          if (title.isEmpty || artist.isEmpty) return null;
+          final duration = (fields['duration'] as num?)?.toDouble() ?? 0;
+          final rawArt = fields['artwork_url']?.toString() ?? '';
+          final image = Uri.tryParse(rawArt);
+          final publicArt = image != null &&
+              image.scheme == 'https' &&
+              !image.queryParameters.keys.any((name) =>
+                  RegExp(r'token|signature|expires|auth', caseSensitive: false)
+                      .hasMatch(name));
+          final reference = stableOnlinePlaylistSong(Song(
+            id: 'online-link:${member.trackKey}',
+            title: title,
+            artist: artist,
+            album: fields['album']?.toString(),
+            albumArt: publicArt ? rawArt : null,
+            duration: Duration(
+              milliseconds: (duration.clamp(0, 86400) * 1000).round(),
+            ),
+            fileType: 'ONLINE',
+            sourcePackage: Song.pendingSourcePackage,
+            remoteId: fields['source_ref']?.toString(),
+          ));
+          onlineSnapshots[reference.id] = PlaylistSongSnapshot.fromSong(reference);
+          return reference.id;
         });
         final songIds = projection.songIds;
         final old = await PlaylistService.instance.getPlaylist(localId);
@@ -424,17 +460,25 @@ class LinkSyncCoordinator {
             List.generate(songIds.length, (i) => i).every(
               (i) => old.songIds[i] == songIds[i],
             );
-        if (state.deleted || old == null || old.name != name || !sameOrder) {
+        final missingSnapshots = onlineSnapshots.keys.any(
+          (id) => !(old?.songSnapshots.containsKey(id) ?? false),
+        );
+        if (state.deleted || old == null || old.name != name ||
+            !sameOrder || missingSnapshots) {
+          final snapshots = {...?old?.songSnapshots, ...onlineSnapshots}
+            ..removeWhere((id, _) => !songIds.contains(id));
           final playlist =
               old?.copyWith(
                 name: name,
                 songIds: songIds,
+                songSnapshots: snapshots,
                 updatedAt: DateTime.now(),
               ) ??
               Playlist(
                 id: localId,
                 name: name,
                 songIds: songIds,
+                songSnapshots: snapshots,
                 createdAt: DateTime.now(),
               );
           await PlaylistService.instance.putFromLink(

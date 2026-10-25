@@ -75,10 +75,11 @@ String? catalogueStreamTierLabel({
   return null;
 }
 
-/// Keep Tidal's per-track catalogue metadata visible before playback, even
-/// when a different rendition is requested. Distinguish catalogue availability,
-/// requested settings and an actually verified stream in the visible label.
-({String label, String tooltip, String? requestedLabel}) onlineSearchAudioBadge({
+/// Exactly one Search quality badge per track. Prefer verified stream data;
+/// otherwise show available provider metadata, or the requested setting when
+/// the provider supplies no per-track details. The tooltip preserves provenance
+/// without adding "(catalogue)" to the UI or showing a competing request chip.
+({String label, String tooltip}) onlineSearchAudioBadge({
   String? verifiedQuality,
   String? requestedQuality,
   String? catalogueQuality,
@@ -91,7 +92,6 @@ String? catalogueStreamTierLabel({
     return (
       label: verified,
       tooltip: 'Audio details from a resolved stream, not inferred from search metadata.',
-      requestedLabel: null,
     );
   }
   final advertised = catalogueAudioDetails(
@@ -100,20 +100,18 @@ String? catalogueStreamTierLabel({
     bitDepth: catalogueBitDepth,
     sampleRate: catalogueSampleRate,
   );
-  final requested = requestedQuality?.trim() ?? '';
   if (advertised.isNotEmpty) {
     return (
-      label: requested.isEmpty ? advertised : '$advertised (catalogue)',
-      tooltip: 'Provider-advertised catalogue availability; the configured rendition is verified during playback.',
-      requestedLabel: requested.isEmpty ? null : requested,
+      label: advertised,
+      tooltip: 'Provider-advertised catalogue audio details; the actual delivered stream is verified during playback.',
     );
   }
+  final requested = requestedQuality?.trim() ?? '';
   return (
     label: requested,
     tooltip: requested.isEmpty
         ? ''
         : 'Quality requested in add-on settings; the delivered stream is verified during playback.',
-    requestedLabel: null,
   );
 }
 

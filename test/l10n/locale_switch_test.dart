@@ -57,31 +57,31 @@ void main() {
   testWidgets('a language switch reaches the global l10n accessor', (tester) async {
     await LocaleController.instance.select(const Locale('en'));
     await tester.pumpWidget(_app());
-    expect(l10n.flickReplay, 'Flick Replay');
-    expect(find.text('Flick Replay'), findsOneWidget);
+    expect(l10n.flickReplay, 'Lokal Replay');
+    expect(find.text('Lokal Replay'), findsOneWidget);
 
     await LocaleController.instance.select(const Locale('zh', 'CN'));
     await tester.pumpAndSettle();
 
     expect(
       l10n.flickReplay,
-      'Flick 回顾',
+      'Lokal 回顾',
       reason: 'The global accessor still points at the previous locale, so every '
           'string the service layer produces is stale.',
     );
-    expect(find.text('Flick 回顾'), findsOneWidget);
-    expect(find.text('Flick Replay'), findsNothing);
+    expect(find.text('Lokal 回顾'), findsOneWidget);
+    expect(find.text('Lokal Replay'), findsNothing);
   });
 
   testWidgets('a widget reading l10n during build follows the switch', (tester) async {
     // Two switches in a row: a cached value would freeze at the first one.
     await LocaleController.instance.select(const Locale('zh', 'CN'));
     await tester.pumpWidget(_app());
-    expect(l10n.flickReplay, 'Flick 回顾');
+    expect(l10n.flickReplay, 'Lokal 回顾');
 
     await LocaleController.instance.select(const Locale('en'));
     await tester.pumpAndSettle();
-    expect(l10n.flickReplay, 'Flick Replay');
-    expect(find.text('Flick Replay'), findsOneWidget);
+    expect(l10n.flickReplay, 'Lokal Replay');
+    expect(find.text('Lokal Replay'), findsOneWidget);
   });
 }

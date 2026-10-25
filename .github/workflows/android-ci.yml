@@ -60,5 +60,10 @@ jobs:
           flutter build apk --debug --flavor full --target-platform android-arm64 --no-pub
           flutter build apk --debug --flavor play --target-platform android-arm64 --no-pub
           bash android/gradlew -p android verifyBuiltInKotlin --console=plain --no-daemon
+      - name: Test widget preference codec compatibility
+        run: >-
+          bash android/gradlew -p android :app:testFullDebugUnitTest
+          --tests com.mossapps.flick.widgets.WidgetPreferenceValueTest
+          --console=plain --no-daemon
       - name: Check dependency locks remained unchanged
         run: git diff --exit-code -- pubspec.lock rust/Cargo.lock

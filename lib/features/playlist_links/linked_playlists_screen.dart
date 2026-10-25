@@ -19,7 +19,7 @@ final linkedPlaylistManagerProvider = Provider.autoDispose<PlaylistLinkManager>(
   },
 );
 
-/// Screen for linking public Spotify and YouTube playlists to local playlists.
+/// Screen for linking public streaming playlists to local playlists.
 /// The playlists route is owned by the host app; this widget only supplies the
 /// link/import surface.
 class LinkedPlaylistsScreen extends ConsumerStatefulWidget {
@@ -67,7 +67,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           const Text(
-            'Paste a public Spotify, YouTube or YouTube Music playlist URL, or a Spotify URI.',
+            'Paste a public Spotify, YouTube, Tidal, Apple Music, Qobuz or Deezer playlist URL. Tidal, Apple Music and Qobuz need their matching add-on in Settings → Add-ons. Use the full playlist URL, not a shortened share link.',
             style: TextStyle(fontSize: 15),
           ),
           const SizedBox(height: 12),
@@ -464,9 +464,7 @@ class _PreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final source = preview.link.source == PlaylistLinkSource.spotify
-        ? 'Spotify'
-        : 'YouTube';
+    final source = preview.link.source.label;
     final remote = preview.remote;
     return Card(
       child: Padding(

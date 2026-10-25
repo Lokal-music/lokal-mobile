@@ -1,7 +1,23 @@
 import 'package:flick/models/playlist.dart';
 import 'package:flick/models/song.dart';
 
-enum PlaylistLinkSource { spotify, youtube }
+enum PlaylistLinkSource {
+  spotify,
+  youtube,
+  tidal,
+  apple,
+  qobuz,
+  deezer;
+
+  String get label => switch (this) {
+    spotify => 'Spotify',
+    youtube => 'YouTube',
+    tidal => 'Tidal',
+    apple => 'Apple Music',
+    qobuz => 'Qobuz',
+    deezer => 'Deezer',
+  };
+}
 
 enum PlaylistLinkSyncStatus { complete, partial }
 

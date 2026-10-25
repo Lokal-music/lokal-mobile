@@ -1,3 +1,4 @@
+import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/l10n/l10n.dart';
 
 import '../link/lokal_devices_card.dart';
@@ -188,6 +189,8 @@ class _KonnektedYouState extends ConsumerState<KonnektedYou> {
       final service = ref.read(youProfileServiceProvider);
       final saved = await showModalBottomSheet<bool>(
         context: context,
+        // The tab navigator is below the persistent miniplayer/dock.
+        useRootNavigator: true,
         useSafeArea: true,
         isScrollControlled: true,
         showDragHandle: true,
@@ -404,6 +407,8 @@ class _YouHeader extends StatelessWidget {
           Row(
             children: [
               const Spacer(),
+              const LokalDiscordButton(),
+              const SizedBox(width: 10),
               Tooltip(
                 message: lokalText('Settings'),
                 excludeFromSemantics: true,
@@ -708,14 +713,15 @@ class _YouProfileEditorState extends State<_YouProfileEditor> {
                   child: Text(_error!, style: TextStyle(color: t.orange)),
                 ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   TextButton(
                     onPressed: _saving ? null : () => Navigator.of(context).pop(false),
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 12),
                   FilledButton(
                     onPressed: _saving ? null : _save,
                     child: Text(_saving ? 'Saving…' : 'Save profile'),

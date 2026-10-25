@@ -50,6 +50,14 @@ class SpotifyApi implements SpotifyLibraryApi {
   static const _trackPageSize = 50;
   static const _max429Retries = 2;
 
+  /// Construct a read-only catalogue client using the existing encrypted
+  /// Spotify cookie-backed session and the same refresh implementation.
+  static SpotifyApi withCredentials(
+    SpotifyTokenStore store, SpotifyOAuthService oauth,
+  ) => SpotifyApi(tokenStore: store, oauth: oauth);
+
+  void close() => _http.client.close();
+
   final SpotifyTokenStore _tokenStore;
   final SpotifyOAuthService _oauth;
   final SpotifyHttp _http;

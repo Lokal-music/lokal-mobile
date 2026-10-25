@@ -67,6 +67,7 @@ import android.os.storage.StorageManager
 import android.os.storage.StorageVolume
 import androidx.documentfile.provider.DocumentFile
 import com.mossapps.flick.audiofx.JustAudioProcessingController
+import com.mossapps.flick.widgets.WidgetActionInbox
 import com.mossapps.flick.youtube.YoutubeNativeResolver
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -1433,6 +1434,12 @@ class MainActivity: FlutterActivity() {
         registerVolumeContentObserver()
 
         widgetChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_CHANNEL)
+        widgetChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "takePendingAction" -> result.success(WidgetActionInbox.take(applicationContext))
+                else -> result.notImplemented()
+            }
+        }
         dispatchWidgetIntent(intent)
     }
 
@@ -1637,7 +1644,10 @@ class MainActivity: FlutterActivity() {
     private fun dispatchWidgetIntent(intent: Intent?) {
         if (intent?.action != HOME_WIDGET_LAUNCH_ACTION) return
         val uri = intent.data?.toString() ?: return
-        widgetChannel?.invokeMethod("dispatch", uri)
+        // The native activity is often ready before Dart attaches its
+        // MethodChannel handler. Retain the command and ask Dart to drain it.
+        WidgetActionInbox.store(applicationContext, uri)
+        widgetChannel?.invokeMethod("dispatchPending", null)
     }
 
     private fun emitCastEvent(event: Map<String, Any?>) {

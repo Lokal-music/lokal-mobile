@@ -13,6 +13,10 @@
 library;
 
 import 'dart:async';
+
+import '../../core/utils/album_match.dart';
+import '../../core/utils/artist_credits.dart';
+
 import 'dart:collection';
 
 import 'package:flick/features/konnekted/konnekted_data.dart';
@@ -102,8 +106,10 @@ class DiscoveryArtworkResolver {
   final DiscoveryHttp _http;
   final Future<List<DiscoveryTrack>> Function(String query)? searchSongs;
   final Future<String?> Function(String name)? artistPortrait;
+
   /// Optional diagnostics; source domains only, never request URLs or tokens.
   final void Function(String source, String reason)? onSourceFailure;
+
   /// Only Discord opts in to official multi-artist credits such as
   /// "Big Data & Joywave" for a file tagged "Big Data".
   final bool allowCollaborations;
@@ -176,13 +182,16 @@ class DiscoveryArtworkResolver {
       return data is List ? data.whereType<Map>().toList() : const [];
     } catch (error) {
       final failure = error.toString();
-      onSourceFailure?.call(url.host, failure.contains('429')
-          ? 'rate limited'
-          : failure.contains('403') || failure.contains('401')
-              ? 'access refused'
-              : failure.contains('timed out') || failure.contains('timeout')
-                  ? 'timed out'
-                  : 'request failed');
+      onSourceFailure?.call(
+        url.host,
+        failure.contains('429')
+            ? 'rate limited'
+            : failure.contains('403') || failure.contains('401')
+            ? 'access refused'
+            : failure.contains('timed out') || failure.contains('timeout')
+            ? 'timed out'
+            : 'request failed',
+      );
       return const [];
     }
   }
@@ -237,11 +246,15 @@ class DiscoveryArtworkResolver {
 
     final album = request.kind == DiscoveryArtworkKind.album;
     bool matchingTitle(Object? value) => album
-        ? same(value, request.title)
+        ? value is String && albumTitlesMatch(value, request.title)
         : value is String && titleKey(value) == titleKey(request.title);
     bool matchingArtist(Object? value) =>
+        (album &&
+            value is String &&
+            albumArtistsMatch(request.artist, value)) ||
         same(value, request.artist) ||
-        value is String && same(mainArtist(value), mainArtist(request.artist)) ||
+        value is String &&
+            same(mainArtist(value), mainArtist(request.artist)) ||
         (!album &&
             allowCollaborations &&
             value is String &&
@@ -253,7 +266,7 @@ class DiscoveryArtworkResolver {
     final deezer = await _rows(
       Uri.https('api.deezer.com', album ? '/search/album' : '/search', {
         'q': album
-            ? 'artist:"${request.artist}" album:"${request.title}"'
+            ? 'artist:"${splitArtistCredits(request.artist).firstOrNull ?? request.artist}" album:"${request.title}"'
             : 'artist:"${request.artist}" track:"${request.title}"',
         'limit': '15',
       }),
@@ -273,10 +286,12 @@ class DiscoveryArtworkResolver {
 
     // Storefront availability differs even for well-known original recordings.
     // US can return only covers (e.g. Plastic Love); GB has the original.
-    for (final country in ['us', 'gb']) {
+    for (final country in ['us', 'gb', if (album) 'in']) {
       final itunes = await _rows(
         Uri.https('itunes.apple.com', '/search', {
-          'term': '${request.artist} ${request.title}',
+          'term': album
+              ? '${request.title} ${splitArtistCredits(request.artist).firstOrNull ?? request.artist}'
+              : '${request.artist} ${request.title}',
           'country': country,
           'entity': album ? 'album' : 'song',
           'limit': '15',
@@ -286,7 +301,12 @@ class DiscoveryArtworkResolver {
       for (final row in itunes) {
         final small = row['artworkUrl100'];
         final cover = allowed(
-          small is String ? small.replaceFirst('100x100bb', '600x600bb') : null,
+          small is String
+              ? small.replaceFirst(
+                  '100x100bb',
+                  album ? '1500x1500bb' : '600x600bb',
+                )
+              : null,
         );
         if (matchingTitle(album ? row['collectionName'] : row['trackName']) &&
             matchingArtist(row['artistName']) &&
@@ -317,7 +337,20 @@ class DiscoveryArtworkResolver {
     // mismatch, search a broader phrase and accept only a high-confidence
     // match from the *same artist*. Never silently pick the first search hit.
     if (!album) {
-      const stopWords = {'a', 'an', 'and', 'at', 'by', 'for', 'in', 'of', 'on', 'the', 'to', 'with'};
+      const stopWords = {
+        'a',
+        'an',
+        'and',
+        'at',
+        'by',
+        'for',
+        'in',
+        'of',
+        'on',
+        'the',
+        'to',
+        'with',
+      };
       final keywords = titleKey(request.title)
           .split(' ')
           .where((word) => word.length >= 3 && !stopWords.contains(word))
@@ -360,7 +393,7 @@ class DiscoveryArtworkResolver {
           );
         }
 
-        for (final country in ['us', 'gb']) {
+        for (final country in ['us', 'gb', if (album) 'in']) {
           final itunesResults = await _rows(
             Uri.https('itunes.apple.com', '/search', {
               'term': '${request.artist} $broadTitle',
@@ -375,14 +408,21 @@ class DiscoveryArtworkResolver {
             consider(
               row['trackName']?.toString() ?? '',
               row['artistName']?.toString() ?? '',
-              small is String ? small.replaceFirst('100x100bb', '600x600bb') : '',
+              small is String
+                  ? small.replaceFirst(
+                      '100x100bb',
+                      album ? '1500x1500bb' : '600x600bb',
+                    )
+                  : '',
             );
           }
         }
 
         if (searchSongs != null) {
           try {
-            for (final result in await searchSongs!('${request.artist} $broadTitle')) {
+            for (final result in await searchSongs!(
+              '${request.artist} $broadTitle',
+            )) {
               consider(result.title, result.artist, result.artwork ?? '');
             }
           } catch (_) {
@@ -395,9 +435,11 @@ class DiscoveryArtworkResolver {
           final best = candidates.first;
           // Two competing, differently titled candidates with nearly equal
           // confidence are ambiguous. Avoid showing an unrelated cover.
-          final competing = candidates.where((candidate) =>
-              titleKey(candidate.title) != titleKey(best.title) &&
-              best.score - candidate.score < 0.025);
+          final competing = candidates.where(
+            (candidate) =>
+                titleKey(candidate.title) != titleKey(best.title) &&
+                best.score - candidate.score < 0.025,
+          );
           if (competing.isEmpty) return best.url;
         }
       }

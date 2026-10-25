@@ -1,101 +1,78 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/search_category.dart';
 
-class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
-  static const _key = 'search_enabled_categories';
+enum SearchScope { library, online }
 
+const visibleSearchCategories = [
+  SearchCategory.songs, SearchCategory.artists,
+  SearchCategory.albums, SearchCategory.lyrics,
+];
+
+bool supportsOnlineCategory(SearchCategory? category) =>
+    category != null && visibleSearchCategories.contains(category);
+
+class SearchScopeNotifier extends Notifier<SearchScope> {
+  @override
+  SearchScope build() => SearchScope.library;
+  void select(SearchScope scope) {
+    if (scope == SearchScope.online &&
+        !supportsOnlineCategory(ref.read(searchFilterProvider).singleOrNull)) {
+      ref.read(searchFilterProvider.notifier).select(SearchCategory.songs);
+    }
+    state = scope;
+  }
+}
+
+final searchScopeProvider = NotifierProvider<SearchScopeNotifier, SearchScope>(
+  SearchScopeNotifier.new,
+);
+
+/// Exactly one result type is always selected. Old 'all' filters migrate to Songs.
+class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
+  static const _key = 'search_selected_category_v2';
+  bool _changed = false;
+  Future<void> _saving = Future<void>.value();
   @override
   Set<SearchCategory> build() {
-    // Default: all enabled.
-    final initial = SearchCategory.values.toSet();
-    // Async hydrate – mirrors SongsNotifier pattern.
     Future.microtask(_load);
-    return initial;
+    return {SearchCategory.songs};
   }
 
   Future<void> _load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getStringList(_key);
-      if (stored == null) return;
-      if (stored.isEmpty) {
-        // Empty list persisted means user disabled all – respect it.
-        state = <SearchCategory>{};
-        return;
-      }
-      final parsed = stored
-          .map(SearchCategoryX.fromStorageKey)
-          .whereType<SearchCategory>()
-          .toSet();
-      // If stored list contained only unknown keys, keep default all.
-      if (parsed.isNotEmpty || stored.isEmpty) {
-        state = parsed;
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _save(Set<SearchCategory> value) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _key,
-        value.map((c) => c.storageKey).toList(),
-      );
-    } catch (_) {}
-  }
-
-  void toggle(SearchCategory category) {
-    final next = Set<SearchCategory>.from(state);
-    if (next.contains(category)) {
-      next.remove(category);
-    } else {
-      next.add(category);
-    }
-    state = next;
-    _save(next);
-  }
-
-  void setEnabled(SearchCategory category, bool enabled) {
-    final next = Set<SearchCategory>.from(state);
-    if (enabled) {
-      next.add(category);
-    } else {
-      next.remove(category);
-    }
-    if (next.length == state.length && next.containsAll(state)) return;
-    state = next;
-    _save(next);
-  }
-
-  void setAll(bool enabled) {
-    final next =
-        enabled ? SearchCategory.values.toSet() : <SearchCategory>{};
-    state = next;
-    _save(next);
-  }
-
-  void toggleAll() {
-    if (isAllEnabled) {
-      setAll(false);
-    } else {
-      setAll(true);
+      if (!ref.mounted || _changed) return;
+      final stored = prefs.getString(_key);
+      final category = stored == null
+          ? null
+          : SearchCategoryX.fromStorageKey(stored);
+      if (supportsOnlineCategory(category)) state = {category!};
+    } catch (_) {
+      /* Search remains usable if preference storage fails. */
     }
   }
 
-  bool isEnabled(SearchCategory category) => state.contains(category);
+  void select(SearchCategory? category) {
+    _changed = true;
+    final selected = supportsOnlineCategory(category)
+        ? category! : SearchCategory.songs;
+    state = {selected};
+    _saving = _saving
+        .then((_) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_key, selected.storageKey);
+        })
+        .catchError((Object _) {});
+  }
 
-  bool get isAllEnabled => state.length == SearchCategory.values.length;
-
-  bool get isNoneEnabled => state.isEmpty;
+  void toggle(SearchCategory category) => select(category);
 }
 
 final searchFilterProvider =
     NotifierProvider<SearchFilterNotifier, Set<SearchCategory>>(
-  SearchFilterNotifier.new,
-);
-
-final searchAllEnabledProvider = Provider<bool>((ref) {
-  final enabled = ref.watch(searchFilterProvider);
-  return enabled.length == SearchCategory.values.length;
-});
+      SearchFilterNotifier.new,
+    );

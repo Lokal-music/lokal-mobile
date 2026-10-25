@@ -17,6 +17,26 @@ http.Response _json(Object body) => http.Response(
 );
 
 void main() {
+  test('album artwork matches soundtrack credits but rejects a different language', () async {
+    final client = MockClient((request) async {
+      if (request.url.host == 'api.deezer.com') return _json({'data': []});
+      return _json({'results': [
+        {'collectionName': 'Dude (Telugu) [Original Motion Picture Soundtrack]',
+          'artistName': 'Sai Abhyankkar', 'artworkUrl100': 'https://art.example/telugu-100x100bb.jpg'},
+        {'collectionName': 'Dude', 'artistName': 'Someone Else',
+          'artworkUrl100': 'https://art.example/wrong-100x100bb.jpg'},
+        {'collectionName': 'Dude', 'artistName': 'Sai Abhyankkar',
+          'artworkUrl100': 'https://art.example/tamil-100x100bb.jpg'},
+      ]});
+    });
+    addTearDown(client.close);
+    expect(await DiscoveryArtworkResolver(DiscoveryHttp(client)).resolve(
+      const DiscoveryArtworkRequest(kind: DiscoveryArtworkKind.album,
+        artist: 'Sai Abhyankar, Paal Dabba, Bhumi, Deepthi Suresh',
+        title: 'Dude (Original Motion Picture Soundtrack)')),
+      'https://art.example/tamil-1500x1500bb.jpg');
+  });
+
   test('Discord/Discovery resolves Knuckle G local title variant from a broad lookup', () async {
     final terms = <String>[];
     final client = MockClient((request) async {
@@ -465,7 +485,7 @@ void main() {
       );
     });
 
-    test('falls back to iTunes albums with a 600px cover', () async {
+    test('falls back to iTunes albums with a 1500px cover', () async {
       responses['api.deezer.com/search/album'] = {
         'data': [
           {
@@ -491,7 +511,7 @@ void main() {
           artist: 'Air',
         ),
       );
-      expect(image, 'https://is1.test/a/600x600bb.jpg');
+      expect(image, 'https://is1.test/a/1500x1500bb.jpg');
       expect(requests.last.queryParameters['entity'], 'album');
     });
 

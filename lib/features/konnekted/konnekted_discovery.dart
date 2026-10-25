@@ -741,6 +741,8 @@ Future<List<_PlaybackSource>> _morneyeSources(
           final progress = MorneyeProgressText(found.title, addon.displayName);
           final qobuz = addon.name.toLowerCase().contains('qobuz');
           final tidal = addon.name.toLowerCase().contains('tidal');
+          final deezer = addon.name.toLowerCase().startsWith('deezer');
+          final byteProgressSource = qobuz || tidal || deezer;
           double? actualTransferPercent;
           var segmentedProgress = false;
           var finished = false;
@@ -783,9 +785,11 @@ Future<List<_PlaybackSource>> _morneyeSources(
             }
             _morneyeReadyPlayback.remove(cacheKey);
           }
-          // Mirrors desktop: only plain, unprocessed FLAC with a known
-          // byte length can be played while its download grows. Atmos,
-          // explicit Save and post-processed formats remain full-file jobs.
+          // Direct, verified FLAC (including Tidal and Amazon), or a
+          // complete-header, unencrypted fast-start M4A may start from the
+          // host's growing media file. DASH segments, encrypted Amazon
+          // containers and conversions are not exposed as live sources.
+          // Explicit Save/Atmos still require full-file validation.
           final live = !forDownload && !tryAtmos && !found.atmosDownload
               ? MorneyeLiveSession()
               : null;
@@ -805,12 +809,12 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   // Even an explicit Qobuz Save (live == null) needs the
                   // host's measured byte progress. The guest's initial 5%
                   // only means its download ticket is being resolved.
-                  onTransfer: live == null && !qobuz && !tidal ? null : (transfer) {
+                  onTransfer: live == null && !byteProgressSource ? null : (transfer) {
                     live?.observe(transfer);
                     // Qobuz's extension emits 5% during URL/ticket
                     // resolution. Only host-observed bytes are transfer
                     // progress; they must supersede guest progress numbers.
-                    if ((qobuz || tidal) && !finished && !segmentedProgress &&
+                    if (byteProgressSource && !finished && !segmentedProgress &&
                         transfer.total > 0 &&
                         transfer.written > 0) {
                       actualTransferPercent =
@@ -825,7 +829,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   },
                   onProgress: ({percent, message}) {
                     if (finished) return;
-                    if (qobuz || tidal) {
+                    if (byteProgressSource) {
                       if (message == 'Downloading audio segments…') {
                         segmentedProgress = true;
                         // Host-observed completed segments, not a guess.
@@ -841,7 +845,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
                         final text = progress.update(
                           message: qobuz
                               ? 'Resolving Qobuz stream…'
-                              : 'Resolving Tidal stream…',
+                              : tidal
+                                  ? 'Resolving Tidal stream…'
+                                  : 'Resolving Deezer stream…',
                         );
                         if (text != null) onStatus?.call(text);
                       }
@@ -862,9 +868,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
               final transfer = fetch(
                 quality: explicitTier,
               );
-              // The host only exposes a live descriptor after a 64 KiB FLAC
-              // header check and a known full length. Race that safe first
-              // buffer against ordinary completion; never delay short tracks.
+              // Race verified progressive readability against completed
+              // playback preparation; preserve early playback for direct
+              // Tidal/Amazon sources without risking the MPD/decrypt paths.
               final canStream = live != null && await Future.any<bool>([
                 live.playable.then((_) => true),
                 transfer.then((_) => false),
@@ -878,6 +884,14 @@ Future<List<_PlaybackSource>> _morneyeSources(
                 unawaited(
                   transfer.then((completed) async {
                     try {
+                      // A CDN can report a misleading HEAD length for
+                      // segments. Never promote a decoder that was given a
+                      // different sourceLength than the actual assembled file.
+                      final actualLength = await completed.file.length();
+                      final lengthMatches = actualLength == session.total;
+                      // Always validate and adopt the *complete* rendition.
+                      // A misleading CDN total must not lose a playable,
+                      // correctly probed download when the early reader fails.
                       final cached = await cache().adopt(
                         found, completed.file, sourceInfo: completed.info,
                       );
@@ -885,9 +899,40 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       if (path == null) {
                         throw StateError('Completed audio has no cache path');
                       }
-                      session.promote(path);
                       _rememberMorneyePlayback(cacheKey, cached);
                       QueuePreResolver.shared.schedule();
+                      if (lengthMatches) {
+                        session.promote(path);
+                      } else {
+                        // Media3 already knows the original length, so the
+                        // growing reader cannot safely change its response
+                        // size. Stop using it, then hand the verified complete
+                        // cache to the same logical queue entry. Keep both the
+                        // position and the current playback/pause preference.
+                        session.fail(StateError('Live media size changed during transfer'));
+                        final player = PlayerService();
+                        final liveSongId =
+                            'discovery:${found.key.hashCode}:morneye-live';
+                        if (player.currentSongNotifier.value?.id == liveSongId) {
+                          final position = player.positionNotifier.value;
+                          final wasPlaying = player.isPlayingNotifier.value;
+                          final replacement = cached.copyWith(
+                            id: liveSongId,
+                            sourceDisplayName: addon.displayName,
+                            fileSizeBytes: actualLength,
+                          );
+                          // Same song id => play() replaces its audio source
+                          // in the existing playlist, without dropping Up Next.
+                          await player.play(replacement);
+                          if (player.currentSongNotifier.value?.id == liveSongId) {
+                            if (position > Duration.zero) {
+                              await player.seek(position);
+                            }
+                            if (!wasPlaying) await player.pause();
+                          }
+                        }
+                        onStatus?.call('Stream metadata changed; switched to complete audio');
+                      }
                     } catch (error) {
                       session.fail(error);
                       QueuePreResolver.shared.schedule();
@@ -907,14 +952,17 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   album: found.album,
                   albumArt: found.artwork,
                   duration: found.duration ?? Duration.zero,
-                  fileType: 'FLAC',
-                  // The stream passed the FLAC magic/header check. Use
+                  fileType: session.fileType ?? 'ONLINE',
+                  // Verified FLAC or fast-start MP4; show bit depth/rate only
+                  // when they were measured from the actual FLAC header. Use
                   // STREAMINFO measurements; the provider's catalogue maximum
                   // can be 24-bit even when LOW/LOSSLESS was selected.
                   bitDepth: session.bitDepth,
                   sampleRate: session.sampleRate,
                   filePath: handle,
                   sourcePackage: 'konnekted.morneye-live',
+                  sourceDisplayName: addon.displayName,
+                  fileSizeBytes: session.total > 0 ? session.total : null,
                   remoteId: found.id,
                   isExternal: true,
                 );
@@ -1158,6 +1206,8 @@ Song progressiveAddonSong(DiscoveryTrack track, ResolvedDiscoveryAudio audio) {
     sampleRate: audioInfo.sampleRate,
     filePath: handle,
     sourcePackage: 'konnekted.progressive',
+    sourceDisplayName: track.sourceName,
+    fileSizeBytes: audio.length,
     remoteId: track.id,
     isExternal: true,
   );
@@ -1298,7 +1348,8 @@ Future<Song> playOnlineTrack(
         '${track.sourceName ?? 'That source'} isn’t available any more.',
       );
     }
-    final song = await source.play(track);
+    final resolved = await source.play(track);
+    final song = resolved.copyWith(sourceDisplayName: source.name);
     if (!forDownload && sourceId.startsWith('a-')) {
       _rememberOnlineAddon(song, sourceId.substring(2), track);
     }
@@ -1416,11 +1467,12 @@ Future<Song?> findDiscoverySong(
             sourceUrl: Uri.tryParse(track.url),
             artwork: _artworkOf(track),
           );
-          final song = await youtube.prepare(
+          final resolved = await youtube.prepare(
             direct,
             _playbackCache(web, additionalProtectedPaths),
             cancel: cancel,
           );
+          final song = resolved.copyWith(sourceDisplayName: 'YouTube Music');
           OnlineSongSaveRegistry.instance.register(
             song,
             () => playOnlineTrack('yt', direct, forDownload: true),
@@ -1469,7 +1521,8 @@ Future<Song?> findDiscoverySong(
         onStatus?.call('Getting ${track.title} from ${source.name}…');
         try {
           final selected = found.withArtwork(_artworkOf(track));
-          final song = await source.play(selected);
+          final resolved = await source.play(selected);
+          final song = resolved.copyWith(sourceDisplayName: source.name);
           if (source.id.startsWith('a-')) {
             _rememberOnlineAddon(song, source.id.substring(2), selected);
           }

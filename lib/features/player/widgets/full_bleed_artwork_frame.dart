@@ -35,11 +35,13 @@ class FullBleedArtworkFrame extends StatelessWidget {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (canvas)
+        if (canvas) {
           return SizedBox.expand(child: sleeve(constraints.maxHeight));
+        }
         // Hero flights pass through the mini-player's square bounds.
-        if (constraints.maxHeight <= constraints.maxWidth)
+        if (constraints.maxHeight <= constraints.maxWidth) {
           return sleeve(constraints.maxHeight);
+        }
         final height =
             (bannerBottom ??
                     constraints.maxWidth +
@@ -56,19 +58,32 @@ class FullBleedArtworkFrame extends StatelessWidget {
             child: LokalPlayerArtwork(
               enabled: morphEnabled,
               expandedRadius: 0,
-              child: ShaderMask(
-                blendMode: BlendMode.dstIn,
-                shaderCallback: (rect) => LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.white,
-                    Colors.white,
-                    Colors.white.withValues(alpha: 1 - progress),
-                  ],
-                  stops: [0, .68, 1],
-                ).createShader(rect),
-                child: SizedBox.expand(child: child),
+              child: OverflowBox(
+                alignment: Alignment.center,
+                minWidth: constraints.maxWidth,
+                maxWidth: constraints.maxWidth,
+                minHeight: LokalPlayerMorph.artworkViewportHeight(
+                  context,
+                  Size(constraints.maxWidth, height),
+                ),
+                maxHeight: LokalPlayerMorph.artworkViewportHeight(
+                  context,
+                  Size(constraints.maxWidth, height),
+                ),
+                child: ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (rect) => LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white,
+                      Colors.white,
+                      Colors.white.withValues(alpha: 1 - progress),
+                    ],
+                    stops: [0, .68, 1],
+                  ).createShader(rect),
+                  child: SizedBox.expand(child: child),
+                ),
               ),
             ),
           ),
