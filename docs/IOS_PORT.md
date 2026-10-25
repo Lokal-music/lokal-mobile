@@ -26,12 +26,12 @@ Build 12 reports system WAV / Rust DSP / WavPack position advances of
 requires more than 300 ms beyond a settled baseline. The QuickJS echo result is
 `{"value":42}` on both runtimes. These measurements establish native execution,
 not output fidelity. No signed installation or physical iPhone behavior is
-validated. The newly added pitch, positive ReplayGain, codec-corpus and mixed-codec
-queue assertions await the next hosted run.
+validated. The newer pitch, positive ReplayGain, codec-corpus, mixed-codec queue, credential
+and metadata assertions await the next hosted run.
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
-selects iOS 26.0. The old launcher-subprocess and launchctl-label checks were not
+tests iOS 18.6 first and iOS 26.0 second, using an isolated iPhone 16. The old launcher-subprocess and launchctl-label checks were not
 reliable evidence of app liveness; direct VM readiness now supplies that gate.
 Native console, process sampling, screenshots and crash reports remain available.
 
@@ -213,6 +213,22 @@ the prior playing state and subsequent user actions. Resume only when permitted
 and still wanted. Headphone removal pauses without unexpectedly moving audio to
 the speaker. Rebuild routes/streams after media-services reset and report the
 actual rate/channel count, rather than requested values.
+
+### Native metadata bridge
+
+The Rust scan DTO now carries album-artist tags from ordinary files and DSF/DFF
+ID3 tags. iPhone metadata adapters and library scans preserve compilation-album
+identity; the existing Android row-selection behavior is retained. The bridge was
+regenerated with the exact 2.13.0 CLI, without manually editing serialized fields.
+A preliminary regeneration retained all 139 native/Dart entrypoints while putting
+the add-on entrypoints in generator order.
+
+The default-feature Rust suite still passes all 303 tests, including extended WAV
+and DFF album-artist checks. A real host shared-library test passes tag write/read,
+scanner-to-Dart album-artist transport, native add-on sealing/opening and QuickJS
+echo. It loads the actual native library; it does not initialize mock bindings.
+The iOS smoke test also writes and checks a distinct album artist. Apple runtime
+validation of the regenerated bridge remains pending.
 
 ### Playback credentials while the screen is locked
 
@@ -526,7 +542,12 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
 - Run 15 stopped at the independent minimal Flutter control app: its VM never
   became ready, its console remained empty, and simulator termination timed out.
   Lokal was not built or tested in that run. Saved control evidence is retained;
-  a fresh runner is required before assessing the later application changes.
+  run 16 then timed out in iOS 26.0 boot before any app was built.
+  Both are simulator setup failures, not application-test results. CI now creates
+  an isolated iPhone 16, tests iOS 18.6 first, and retains the iOS 26.0 gate.
+  The release IPA is built before simulator setup, and boot identity/logs are
+  preserved on failure. Three coordinator contract tests pass; these do not
+  execute a simulator.
   Artifact names and provenance now include the run attempt so reruns cannot
   collide with earlier evidence.
 - The smoke harness uses the supported Flutter drive existing-app adapter and

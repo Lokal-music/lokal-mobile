@@ -21,6 +21,8 @@ No Lokal account is needed to play local files. Your library and listening histo
 
 **1.0.0 is the next stable mobile release.** Until it is published, preview APKs are available on the Releases page. Stable releases and nightlies have separate, manually triggered build flows; merging a pull request does not publish another beta.
 
+An experimental iPhone port is in progress. See the [architecture and evidence](docs/IOS_PORT.md) and [Windows IPA signing guide](docs/IOS_SIDELOADING.md). Engineering IPAs still require physical-iPhone and installation qualification.
+
 ---
 
 ## A collection that feels like yours

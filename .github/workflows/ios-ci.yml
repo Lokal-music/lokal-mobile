@@ -11,6 +11,9 @@ on:
       - 'pubspec.*'
       - 'integration_test/**'
       - 'tool/ios_*'
+      - 'tool/test_ios_simulator.py'
+      - 'test/native/**'
+      - 'test/fixtures/**'
       - '.github/workflows/ios-ci.yml'
 
 permissions:
@@ -29,7 +32,8 @@ jobs:
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
       IPHONEOS_DEPLOYMENT_TARGET: '15.0'
       DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
-      IOS_SIMULATOR_RUNTIME_VERSION: '26.0'
+      IOS_SIMULATOR_RUNTIME_VERSION: '18.6'
+      IOS_SIMULATOR_DEVICE_TYPE: com.apple.CoreSimulator.SimDeviceType.iPhone-16
       LOKAL_IOS_CARGO_CACHE_ROOT: ${{ github.workspace }}/.dart_tool/lokal-ios-cargo
       CARGO_INCREMENTAL: '0'
       CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
@@ -50,6 +54,7 @@ jobs:
           rustup target add --toolchain 1.98.0 aarch64-apple-ios aarch64-apple-ios-sim
           flutter pub get --enforce-lockfile
           python3 tool/ios_readiness.py --require-scaffold
+          python3 -m unittest discover -s tool -p test_ios_simulator.py
       - name: Generate native alternate icons
         run: |
           python3 -m venv "$RUNNER_TEMP/lokal-ios-assets"
@@ -74,7 +79,25 @@ jobs:
             ~/.cargo/registry/src
             ~/.cargo/registry/index
           key: ios-cargo-symbols-v2-${{ runner.os }}-${{ runner.arch }}-xcode26.0.1-rust1.98.0-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml', 'rust/cargokit.yaml', 'rust/**/*.rs', 'rust/vendor/**', 'rust_builder/cargokit/build_tool/lib/**', 'rust_builder/cargokit/*.sh') }}
+      - name: Build the release iPhone app without signing credentials
+        id: device_build
+        run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}' --split-debug-info=build/ios/dart-symbols
+      - name: Inspect and package the engineering IPA
+        id: package
+        run: |
+          python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa --dart-symbols build/ios/dart-symbols
+          git archive --format=tar.gz HEAD -o build/ios/ipa/Lokal-source.tar.gz
+      - name: Preserve the unsigned engineering build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Lokal-iPhone-engineering-unsigned-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: |
+            build/ios/ipa/*
+            build/ios/iphoneos/*.dSYM
+          if-no-files-found: error
+          retention-days: 14
       - name: Boot an iPhone simulator
+        timeout-minutes: 8
         run: python3 tool/ios_simulator.py
       - name: Verify the simulator with a minimal Flutter control app
         id: control
@@ -97,28 +120,12 @@ jobs:
           path: ${{ runner.temp }}/ios-control*
           if-no-files-found: ignore
       - name: Build the complete app for iOS simulator
+        id: simulator_build
         run: |
           if ! flutter build ios --simulator --debug --no-pub --verbose > "$RUNNER_TEMP/ios-simulator-build.log" 2>&1; then
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-simulator-build.log"
             exit 1
           fi
-      - name: Build the release iPhone app without signing credentials
-        id: device_build
-        run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}' --split-debug-info=build/ios/dart-symbols
-      - name: Inspect and package the engineering IPA
-        id: package
-        run: |
-          python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa --dart-symbols build/ios/dart-symbols
-          git archive --format=tar.gz HEAD -o build/ios/ipa/Lokal-source.tar.gz
-      - name: Preserve the unsigned engineering build
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: Lokal-iPhone-engineering-unsigned-${{ github.run_number }}-attempt${{ github.run_attempt }}
-          path: |
-            build/ios/ipa/*
-            build/ios/iphoneos/*.dSYM
-          if-no-files-found: error
-          retention-days: 14
       - name: Capture the actual first launch
         id: launch
         run: python3 tool/ios_launch_probe.py
@@ -134,7 +141,7 @@ jobs:
         id: smoke
         timeout-minutes: 12
         env:
-          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-26
+          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-18.6
         run: |
           if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-build.log"
@@ -144,26 +151,28 @@ jobs:
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke.log"
             exit 1
           fi
-      - name: Boot an older supported simulator runtime
+      - name: Boot the current iOS simulator runtime
+        timeout-minutes: 8
         env:
-          IOS_SIMULATOR_RUNTIME_VERSION: '18.6'
+          IOS_SIMULATOR_RUNTIME_VERSION: '26.0'
         run: |
           xcrun simctl shutdown "$IOS_SIMULATOR_UDID"
           python3 tool/ios_simulator.py
-      - name: Exercise the same native app on iOS 18.6
-        id: smoke_older
+      - name: Exercise the same native app on iOS 26.0
+        id: smoke_current
         timeout-minutes: 8
         env:
-          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-18.6
+          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-26
         run: |
-          if ! python3 tool/ios_smoke_runner.py > "$RUNNER_TEMP/ios-smoke-18.6.log" 2>&1; then
-            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-18.6.log"
+          if ! python3 tool/ios_smoke_runner.py > "$RUNNER_TEMP/ios-smoke-26.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-26.log"
             exit 1
           fi
       - name: Preserve dependency locks
         run: git diff --exit-code -- pubspec.lock rust/Cargo.lock
       - name: Collect simulator diagnostics
         if: failure() && env.IOS_SIMULATOR_UDID != ''
+        timeout-minutes: 3
         run: |
           xcrun simctl spawn "$IOS_SIMULATOR_UDID" log show --last 5m --info --debug --style compact --predicate 'process == "Runner"' > "$RUNNER_TEMP/ios-simulator-console.log" || true
           mkdir -p "$RUNNER_TEMP/ios-crash-reports"
@@ -185,7 +194,8 @@ jobs:
             ${{ runner.temp }}/ios-runtime-report.json
             ${{ runner.temp }}/ios-runtime-26/
             ${{ runner.temp }}/ios-runtime-18.6/
-            ${{ runner.temp }}/ios-smoke-18.6.log
+            ${{ runner.temp }}/ios-smoke-26.log
+            ${{ runner.temp }}/ios-simulator-boot-*/
             ${{ runner.temp }}/ios-simulator-console.log
             ${{ runner.temp }}/lokal-iphone.log
             ${{ runner.temp }}/lokal-iphone.json
@@ -203,7 +213,7 @@ jobs:
           CONTROL_RESULT: ${{ steps.control.outcome }}
           LAUNCH_RESULT: ${{ steps.launch.outcome }}
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
-          OLDER_SMOKE_RESULT: ${{ steps.smoke_older.outcome }}
+          CURRENT_SMOKE_RESULT: ${{ steps.smoke_current.outcome }}
         run: |
           {
             printf '## iPhone engineering build\n\n'
@@ -211,12 +221,12 @@ jobs:
             printf '| Minimal Flutter simulator control | %s |\n' "$CONTROL_RESULT"
             printf '| Device binary/package inspection | %s |\n' "$PACKAGE_RESULT"
             printf '| Native first launch | %s |\n' "$LAUNCH_RESULT"
-            printf '| Real startup, scanner, QuickJS and playback | %s |\n' "$SMOKE_RESULT"
-            printf '| Same integration checks on iOS 18.6 | %s |\n' "$OLDER_SMOKE_RESULT"
+            printf '| Real startup, scanner, QuickJS and playback on iOS 18.6 | %s |\n' "$SMOKE_RESULT"
+            printf '| Same integration checks on iOS 26.0 | %s |\n' "$CURRENT_SMOKE_RESULT"
             printf '\nAn engineering IPA is not a qualified release. Physical iPhone and Windows installation acceptance remain separate.\n'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Save successfully compiled native dependencies
-        if: always() && steps.device_build.outcome == 'success' && steps.rust_cache.outputs.cache-hit != 'true' && steps.rust_cache.outputs.cache-primary-key != ''
+        if: always() && steps.device_build.outcome == 'success' && steps.simulator_build.outcome == 'success' && steps.rust_cache.outputs.cache-hit != 'true' && steps.rust_cache.outputs.cache-primary-key != ''
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
