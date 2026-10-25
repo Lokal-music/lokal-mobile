@@ -1,6 +1,7 @@
 import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/morneye/morneye_live_playback.dart';
+import 'package:flick/services/online_radio_recommendations.dart';
 
 import 'link/link_journal.dart';
 
@@ -558,7 +559,7 @@ class PlayerService {
   static const Duration _queueDebounce = Duration(milliseconds: 150);
   Timer? _autoplayPreviewTimer;
   int _autoplayPreviewGeneration = 0;
-  static const int _autoplayPreviewCount = 4;
+  static const int _autoplayPreviewCount = 8;
   final RecentlyPlayedRepository _recentlyPlayedRepository =
       RecentlyPlayedRepository();
   late final ReplayPlayTracker _replayPlayTracker = ReplayPlayTracker(
@@ -1561,17 +1562,26 @@ class PlayerService {
 
   Future<void> _prepareAutoplayPreview(int generation) async {
     try {
-      final library = await _songRepository.getAllSongs();
+      final seed = _playlist.last;
+      final online = await const OnlineRadioRecommendations().recommend(
+        seed,
+        count: _autoplayPreviewCount,
+        existing: _playlist,
+      );
       if (generation != _autoplayPreviewGeneration || !_canPreviewAutoplay) {
         return;
       }
-      final excluded = <String>{
-        _playlist[_currentIndex].id,
-        ...upNext.map((song) => song.id),
-      };
+      if (online.isNotEmpty) {
+        autoplayQueueNotifier.value = online;
+        return;
+      }
+      // Offline, no public radio, or unavailable source credentials:
+      // keep ordinary local playback viable without advertising it as radio.
+      final library = await _songRepository.getAllSongs();
+      if (generation != _autoplayPreviewGeneration || !_canPreviewAutoplay) return;
       autoplayQueueNotifier.value = selectAutoplayRecommendations(
         library: library,
-        excludedIds: excluded,
+        excludedIds: {..._playlist.map((song) => song.id)},
         count: _autoplayPreviewCount,
       );
     } catch (e) {
@@ -7433,15 +7443,21 @@ class PlayerService {
       try {
         var suggestions = autoplayQueueNotifier.value;
         if (suggestions.isEmpty) {
-          final library = await _songRepository.getAllSongs();
-          if (!stillCurrent()) return;
-          suggestions = selectAutoplayRecommendations(
-            library: library,
-            excludedIds: {
-              if (currentSongNotifier.value case final current?) current.id,
-            },
+          suggestions = await const OnlineRadioRecommendations().recommend(
+            _playlist.last,
             count: _autoplayPreviewCount,
+            existing: _playlist,
           );
+          if (!stillCurrent()) return;
+          if (suggestions.isEmpty) {
+            final library = await _songRepository.getAllSongs();
+            if (!stillCurrent()) return;
+            suggestions = selectAutoplayRecommendations(
+              library: library,
+              excludedIds: {..._playlist.map((song) => song.id)},
+              count: _autoplayPreviewCount,
+            );
+          }
         }
         if (!stillCurrent()) return;
         if (loopModeNotifier.value == LoopMode.all) {
