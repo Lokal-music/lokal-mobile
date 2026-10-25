@@ -39,11 +39,9 @@ class CompactWidgetProvider : AppWidgetProvider() {
         val title = if (hasSong) {
             prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
                 .ifBlank { context.getString(R.string.widget_nothing_playing) }
-        } else context.getString(R.string.widget_tap_to_open)
+        } else context.getString(R.string.widget_nothing_playing)
         val artist = prefs.getString(WidgetPrefs.KEY_ARTIST, "").orEmpty()
-        val width = manager.getAppWidgetOptions(id).getInt(
-            AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0
-        )
+        val width = WidgetSize.width(manager, id)
         val scale = WidgetPrefs.getCompactTextScale(context)
         val views = RemoteViews(context.packageName, R.layout.widget_compact)
         views.setInt(R.id.compact_root, "setBackgroundResource",
@@ -80,7 +78,9 @@ class CompactWidgetProvider : AppWidgetProvider() {
             views.setViewVisibility(R.id.compact_scrim, View.GONE)
         }
 
-        views.setViewVisibility(R.id.compact_controls, if (hasSong) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.compact_controls,
+            if (hasSong && WidgetSize.height(manager, id) >= 104 && width >= 150) View.VISIBLE
+            else View.GONE)
         if (hasSong) {
             views.setImageViewResource(R.id.compact_play_pause,
                 if (playing) R.drawable.widget_ic_lucide_pause
