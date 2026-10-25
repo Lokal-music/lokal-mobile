@@ -401,8 +401,6 @@ class DiscoveryPlaybackCache {
           );
           await sink!.close();
           sink = null;
-          // An empty 200 response is not usable artwork. Try the next
-          // provider image, preserving the original as last fallback.
           if (await file.length() == 0) {
             throw const FileSystemException('Empty artwork');
           }
