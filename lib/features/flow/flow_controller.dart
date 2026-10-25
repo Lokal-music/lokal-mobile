@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/song.dart';
+import '../../models/playlist.dart';
+import '../../services/online_playlist_reference.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/playlist_provider.dart';
 import '../../services/online_radio_recommendations.dart';
@@ -323,16 +325,17 @@ class FlowController extends AsyncNotifier<FlowData> {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('Enter a playlist name.');
     final library = await ref.read(flowLibraryProvider.future);
-    // PlaylistService persists library IDs. Online streaming placeholders do
-    // not have stable library records; saving them would create dead entries.
-    // Keep the downloaded subset until playlist import supports online IDs.
-    final songs = library.mix(state.requireValue, DateTime.now()).where(
-      (song) => !song.isPending && !song.isExternal &&
-          !song.isNetworkSource && song.filePath?.isNotEmpty == true,
-    ).toList();
-    if (songs.isEmpty) {
-      throw StateError('No downloaded tracks to save from this Flow.');
-    }
+    // Library-backed tracks keep their native IDs. An online entry is
+    // converted to a stable catalogue reference with a replayable resolver.
+    // Do not persist temporary files or provider-signed stream handles.
+    final songs = library.mix(state.requireValue, DateTime.now()).map((song) {
+      if (song.isPending || song.isExternal || song.isNetworkSource ||
+          song.filePath?.isNotEmpty != true) {
+        return stableOnlinePlaylistSong(song);
+      }
+      return song;
+    }).toList();
+    if (songs.isEmpty) throw StateError('There are no tracks to save.');
     final service = ref.read(playlistServiceProvider);
     final playlist = await service.createPlaylist(trimmed);
     if (playlist == null) {
@@ -343,6 +346,11 @@ class FlowController extends AsyncNotifier<FlowData> {
         playlist.copyWith(
           songIds: songs.map((s) => s.id).toList(),
           songAddedAt: {for (final song in songs) song.id: DateTime.now()},
+          songSnapshots: {
+            for (final song in songs)
+              if (song.id.startsWith(onlinePlaylistPrefix))
+                song.id: PlaylistSongSnapshot.fromSong(song),
+          },
         ),
       );
       if (saved == null) throw StateError('Could not save the Flow tracks.');
