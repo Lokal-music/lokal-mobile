@@ -51,7 +51,7 @@ bottom space for the shell mini-player.
   cross-platform preference model. Signed-in YouTube Music stations can be
   personalized, while guest radio and Last.fm are best-effort. Filters with
   missing remote genre metadata cannot be guaranteed; no audio fingerprints.
-  PlaylistService only saves the downloaded subset, not transient online IDs.
+  Flow saves metadata-only references for online recommendations and re-resolves streams on playlist playback; expired stream URLs are never persisted.
 - Only the explicit Flow **Skip** action counts as a skip. The host does not
   expose a reliable natural-end versus notification/mini-player Next reason.
 - Current-track selection survives restarts; playback position remains the
