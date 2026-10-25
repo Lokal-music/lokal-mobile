@@ -1,5 +1,6 @@
 import '../providers/recent_search_tracks.dart';
 import '../widgets/online_catalogue_search_section.dart';
+import '../widgets/artist_search_portrait.dart';
 import '../widgets/global_catalogue_search_section.dart';
 import '../widgets/recent_search_grid.dart';
 
@@ -970,15 +971,7 @@ class _ArtistTile extends StatelessWidget {
           color: AppColors.surfaceLight,
           border: Border.all(color: AppColors.glassBorder),
         ),
-        child: ClipOval(
-          child: CachedImageWidget(
-            imagePath: art,
-            audioSourcePath: artSource,
-            fit: BoxFit.cover,
-            placeholder: _buildInitials(context),
-            errorWidget: _buildInitials(context),
-          ),
-        ),
+        child: ArtistSearchPortrait(name: name),
       ),
       title: Text(
         name,
