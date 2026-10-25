@@ -71,25 +71,44 @@ class MorneyeLiveSession {
       return readFlacStreamInfo(prefix) == null ? null : 'audio/flac';
     }
     if (!extension.endsWith('.m4a') && !extension.endsWith('.mp4')) return null;
-    bool atom(String name) {
-      final bytes = name.codeUnits;
-      for (var i = 4; i <= prefix.length - bytes.length; i++) {
-        if (prefix[i] == bytes[0] &&
-            prefix[i + 1] == bytes[1] &&
-            prefix[i + 2] == bytes[2] &&
-            prefix[i + 3] == bytes[3]) return true;
+    bool contains(String name, List<int> bytes) {
+      final tag = name.codeUnits;
+      for (var i = 0; i <= bytes.length - tag.length; i++) {
+        if (bytes[i] == tag[0] &&
+            bytes[i + 1] == tag[1] &&
+            bytes[i + 2] == tag[2] &&
+            bytes[i + 3] == tag[3]) return true;
       }
       return false;
     }
-    // MP4 must start with ftyp and contain a complete, fast-start moov atom.
-    if (prefix.length < 16 ||
-        String.fromCharCodes(prefix.sublist(4, 8)) != 'ftyp' ||
-        !atom('moov')) return null;
+    // Validate complete top-level boxes, not a coincidental "moov" text
+    // sequence inside media data. The moov box must be fully buffered before
+    // Media3 receives any byte, or Android may reject the source permanently.
+    if (prefix.length < 16) return null;
+    int word(int i) => (prefix[i] << 24) | (prefix[i + 1] << 16) |
+        (prefix[i + 2] << 8) | prefix[i + 3];
+    if (word(0) < 8 ||
+        String.fromCharCodes(prefix.sublist(4, 8)) != 'ftyp') return null;
+    var at = 0;
+    List<int>? moov;
+    while (at + 8 <= prefix.length) {
+      final length = word(at);
+      if (length < 8 || length > prefix.length - at) break;
+      final kind = String.fromCharCodes(prefix.sublist(at + 4, at + 8));
+      if (kind == 'mdat') break;
+      if (kind == 'moov') {
+        moov = prefix.sublist(at + 8, at + length);
+        break;
+      }
+      at += length;
+    }
+    if (moov == null) return null;
     // Never hand encrypted/delayed-conversion Amazon or Tidal media to the
     // Android player before the addon has decrypted/validated it.
-    if (atom('sinf') || atom('schm') || atom('enca') || atom('encv') ||
-        atom('pssh') || atom('drms')) return null;
-    if (!atom('mp4a') && !atom('alac')) return null;
+    if (contains('sinf', moov) || contains('schm', moov) ||
+        contains('enca', moov) || contains('encv', moov) ||
+        contains('pssh', moov) || contains('drms', moov)) return null;
+    if (!contains('mp4a', moov) && !contains('alac', moov)) return null;
     return 'audio/mp4';
   }
 
