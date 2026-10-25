@@ -164,7 +164,9 @@ class GlobalCatalogueSearchService {
     final query = rawQuery.trim();
     if (query.length < 2) return const GlobalCatalogueMatches(catalogue: 'apple');
     final source = selected ?? await GlobalCatalogueSource.load();
-    final key = source + ':' + query.toLowerCase();
+    final key = source + ':' +
+        SecureSpotifyTokenStore.sessionRevision.value.toString() +
+        ':' + query.toLowerCase();
     final hit = _cache[key];
     if (!refresh && hit != null && DateTime.now().isBefore(hit.until)) {
       return hit.value;
@@ -172,12 +174,11 @@ class GlobalCatalogueSearchService {
     if (source == GlobalCatalogueSource.spotify) {
       try {
         final result = await _spotify(query);
-        if (result.songs.isNotEmpty || result.albums.isNotEmpty ||
-            result.artists.isNotEmpty) {
-          _cache[key] = (until: DateTime.now().add(const Duration(minutes: 2)), value: result);
-          if (_cache.length > 75) _cache.remove(_cache.keys.first);
-          return result;
-        }
+        // An empty Spotify search is a valid result, not a signal to
+        // silently mix in another catalogue.
+        _cache[key] = (until: DateTime.now().add(const Duration(minutes: 2)), value: result);
+        if (_cache.length > 75) _cache.remove(_cache.keys.first);
+        return result;
       } catch (_) {
         // Never log bearer tokens, cookie values or returned auth bodies.
       }
