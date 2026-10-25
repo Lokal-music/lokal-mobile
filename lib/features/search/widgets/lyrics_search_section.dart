@@ -20,9 +20,13 @@ typedef _LyricProgress = ({List<_LyricHit> hits, int checked, int total});
 /// Online mode queries LRCLIB lyric records by track/artist/album keywords;
 /// LRCLIB does not provide a full-text lyric-line search API.
 class LyricsSearchSection extends ConsumerStatefulWidget {
-  const LyricsSearchSection({super.key, required this.query, required this.online});
+  const LyricsSearchSection({
+    super.key, required this.query, required this.online,
+    required this.onPlayLocal,
+  });
   final String query;
   final bool online;
+  final Future<void> Function(Song song, List<Song> playlist) onPlayLocal;
 
   @override
   ConsumerState<LyricsSearchSection> createState() => _LyricsSearchSectionState();
@@ -41,7 +45,21 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
   @override
   void initState() {
     super.initState();
+    LyricsService.contentRevision.addListener(_onContentChanged);
     _reload();
+  }
+
+  void _onContentChanged() {
+    _textCache.clear();
+    if (mounted && !widget.online) {
+      setState(_reload);
+    }
+  }
+
+  @override
+  void dispose() {
+    LyricsService.contentRevision.removeListener(_onContentChanged);
+    super.dispose();
   }
 
   @override
@@ -69,23 +87,32 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
         .where((s) => s.filePath != null && s.filePath!.isNotEmpty)
         .toList(growable: false);
     final needle = query.trim().toLowerCase();
+    final sourceRevision = LyricsService.contentRevision.value;
     final hits = <_LyricHit>[];
     var scanned = 0;
     for (final song in songs) {
-      if (!mounted) return;
-      final key = '${song.id}|${song.filePath}|${song.fileSizeBytes ?? 0}';
+      if (!mounted || sourceRevision != LyricsService.contentRevision.value) {
+        return;
+      }
+      final key = '${song.id}|${song.filePath}|${song.fileSizeBytes ?? 0}|$sourceRevision';
       var lines = _textCache[key];
       if (lines == null) {
+        var readSucceeded = false;
         try {
           final own = await _lyrics.loadLyricsForSong(
             song, fetchOnline: false, source: 'local',
           );
           lines = own?.lines.map((line) => line.text).toList() ?? <String>[];
+          readSucceeded = true;
         } catch (_) {
+          // Transient file/storage exceptions must be retried next time.
           lines = <String>[];
         }
-        if (_textCache.length >= 6000) _textCache.remove(_textCache.keys.first);
-        _textCache[key] = lines;
+        if (sourceRevision != LyricsService.contentRevision.value) return;
+        if (readSucceeded) {
+          if (_textCache.length >= 6000) _textCache.remove(_textCache.keys.first);
+          _textCache[key] = lines;
+        }
       }
       final matching = lines.where((line) =>
           line.toLowerCase().contains(needle)).firstOrNull;
@@ -167,40 +194,69 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
         ]),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Lyrics matches', style: TextStyle(color: t.text, fontSize: 17,
-            fontWeight: FontWeight.w600)),
-        Text('Searches lyrics saved with your local library',
-            style: TextStyle(color: t.muted, fontSize: 11)),
-        const SizedBox(height: 8),
-        StreamBuilder<_LyricProgress>(
-          stream: _localResults,
-          builder: (context, snapshot) {
-            final data = snapshot.data;
-            if (data == null) return const CircularProgressIndicator();
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (data.checked < data.total)
-                Text('Scanning saved lyrics · ${data.checked}/${data.total}',
-                    style: TextStyle(color: t.muted, fontSize: 11)),
-              if (data.checked == data.total && data.hits.isEmpty)
-                Text('No lyrics matches in your library.',
-                    style: TextStyle(color: t.muted)),
-              for (final hit in data.hits)
-                ListTile(
-                  dense: true, contentPadding: EdgeInsets.zero,
-                  title: Text(hit.song.title),
-                  subtitle: Text('${hit.song.artist} · ${hit.line}',
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: const Icon(Icons.play_arrow_rounded),
-                  onTap: () => ref.read(playerProvider.notifier)
-                      .play(hit.song, playlist: data.hits.map((h) => h.song).toList()),
+    // Owns its scroll view: SliverList.builder creates only visible rows
+    // instead of rebuilding thousands of ListTiles on every scan update.
+    return StreamBuilder<_LyricProgress>(
+      stream: _localResults,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Could not search saved lyrics.',
+                style: TextStyle(color: t.muted)),
+          );
+        }
+        final data = snapshot.data;
+        final hits = data?.hits ?? const <_LyricHit>[];
+        return CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Lyrics matches', style: TextStyle(
+                        color: t.text, fontSize: 17,
+                        fontWeight: FontWeight.w600)),
+                    Text('Searches lyrics saved with your local library',
+                        style: TextStyle(color: t.muted, fontSize: 11)),
+                    const SizedBox(height: 8),
+                    if (data == null) const CircularProgressIndicator(),
+                    if (data != null && data.checked < data.total)
+                      Text('Scanning saved lyrics · ${data.checked}/${data.total}',
+                          style: TextStyle(color: t.muted, fontSize: 11)),
+                    if (data != null && data.checked == data.total && hits.isEmpty)
+                      Text('No lyrics matches in your library.',
+                          style: TextStyle(color: t.muted)),
+                  ],
                 ),
-            ]);
-          },
-        ),
-      ]),
+              ),
+            ),
+            if (hits.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverList.builder(
+                  itemCount: hits.length,
+                  itemBuilder: (context, index) {
+                    final hit = hits[index];
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(hit.song.title),
+                      subtitle: Text('${hit.song.artist} · ${hit.line}',
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      trailing: const Icon(Icons.play_arrow_rounded),
+                      onTap: () => unawaited(widget.onPlayLocal(
+                        hit.song, hits.map((entry) => entry.song).toList(),
+                      )),
+                    );
+                  },
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 120)),
+          ],
+        );
+      },
     );
   }
 }
