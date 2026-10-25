@@ -6,6 +6,12 @@
 class PlayerArtworkQuality {
   const PlayerArtworkQuality._();
 
+  static bool isAmazonArtworkHost(String host) => const {
+    'm.media-amazon.com', 'images-na.ssl-images-amazon.com',
+    'images-eu.ssl-images-amazon.com', 'images-fe.ssl-images-amazon.com',
+    'images.amazon.com', 'ecx.images-amazon.com',
+  }.contains(host.toLowerCase());
+
   static List<String> candidates(String? original) {
     if (original == null || original.isEmpty) return const [];
     final uri = Uri.tryParse(original);
@@ -73,12 +79,7 @@ class PlayerArtworkQuality {
     // image. Prefer its original-resolution object, retaining the supplied
     // URL as a fallback when the master is unavailable.
     if (upgraded == null &&
-        (host == 'm.media-amazon.com' ||
-         host == 'images-na.ssl-images-amazon.com' ||
-         host == 'images-eu.ssl-images-amazon.com' ||
-         host == 'images-fe.ssl-images-amazon.com' ||
-         host == 'images.amazon.com' ||
-         host == 'ecx.images-amazon.com')) {
+        isAmazonArtworkHost(host)) {
       final updated = uri.path.replaceFirst(
         RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
         '.',

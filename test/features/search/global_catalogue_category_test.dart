@@ -130,7 +130,9 @@ void main() {
       c.read(searchFilterProvider.notifier).select(SearchCategory.songs);
       await tester.pumpWidget(_app(c, const SearchScreen()));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Wanted');
+      expect(find.text('Search your library'), findsNothing);
+    expect(find.text('Search online'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Wanted');
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
       expect(
