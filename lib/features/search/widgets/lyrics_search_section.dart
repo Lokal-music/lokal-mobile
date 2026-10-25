@@ -5,12 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/providers.dart';
-import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/services/link/library_song_identity.dart';
 import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/online_lyrics_service.dart';
 import 'package:flick/services/online_playlist_reference.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
+
+import 'lyrics_search_result_card.dart';
+
+final lyricsSearchLocalServiceProvider = Provider((ref) => LyricsService());
+final lyricsSearchOnlineServiceProvider = Provider((ref) => OnlineLyricsService());
 
 typedef _LyricHit = ({Song song, String line});
 typedef _LyricProgress = ({List<_LyricHit> hits, int checked, int total});
@@ -33,8 +37,8 @@ class LyricsSearchSection extends ConsumerStatefulWidget {
 }
 
 class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
-  final _lyrics = LyricsService();
-  final _online = OnlineLyricsService();
+  late final LyricsService _lyrics;
+  late final OnlineLyricsService _online;
   // Shared between query revisions: do not re-read thousands of files on
   // each keystroke or each scope/category switch.
   static final _textCache = <String, List<String>>{};
@@ -45,6 +49,8 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
   @override
   void initState() {
     super.initState();
+    _lyrics = ref.read(lyricsSearchLocalServiceProvider);
+    _online = ref.read(lyricsSearchOnlineServiceProvider);
     LyricsService.contentRevision.addListener(_onContentChanged);
     _reload();
   }
@@ -167,26 +173,25 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
           FutureBuilder<List<OnlineLyricsResult>>(
             future: _onlineResults,
             builder: (context, snapshot) {
-              if (snapshot.hasError) return Text('Online lyrics unavailable.',
-                  style: TextStyle(color: t.muted));
+              if (snapshot.hasError) {
+                return Text('Online lyrics unavailable.',
+                    style: TextStyle(color: t.muted));
+              }
               if (!snapshot.hasData) return const CircularProgressIndicator();
               final rows = snapshot.data!.where((r) =>
                   !r.instrumental && (r.hasPlainLyrics || r.hasSyncedLyrics) &&
                   (r.trackName?.isNotEmpty ?? false) &&
                   (r.artistName?.isNotEmpty ?? false)).toList();
-              if (rows.isEmpty) return Text('No online lyrics records found.',
-                  style: TextStyle(color: t.muted));
+              if (rows.isEmpty) {
+                return Text('No online lyrics records found.',
+                    style: TextStyle(color: t.muted));
+              }
               return Column(children: [
                 for (final row in rows)
-                  ListTile(
-                    dense: true, contentPadding: EdgeInsets.zero,
-                    enabled: !_playing,
-                    leading: const Icon(Icons.lyrics_outlined),
-                    title: Text(row.trackName!, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('${row.artistName} · ${row.snippet ?? ''}',
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
-                    trailing: const Icon(Icons.play_arrow_rounded),
-                    onTap: () => unawaited(_playOnline(row, rows)),
+                  LyricsSearchResultCard(
+                    title: row.trackName!, artist: row.artistName!, album: row.albumName,
+                    snippet: lyricsResultSnippet(row.bestLyrics, widget.query),
+                    onPlay: _playing ? null : () => unawaited(_playOnline(row, rows)),
                   ),
               ]);
             },
@@ -239,14 +244,10 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
                   itemCount: hits.length,
                   itemBuilder: (context, index) {
                     final hit = hits[index];
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(hit.song.title),
-                      subtitle: Text('${hit.song.artist} · ${hit.line}',
-                          maxLines: 2, overflow: TextOverflow.ellipsis),
-                      trailing: const Icon(Icons.play_arrow_rounded),
-                      onTap: () => unawaited(widget.onPlayLocal(
+                    return LyricsSearchResultCard(
+                      title: hit.song.title, artist: hit.song.artist, album: hit.song.album,
+                      snippet: hit.line,
+                      onPlay: () => unawaited(widget.onPlayLocal(
                         hit.song, hits.map((entry) => entry.song).toList(),
                       )),
                     );
