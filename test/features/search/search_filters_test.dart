@@ -27,7 +27,7 @@ void main() {
       }); // Hydration cannot undo a tap.
       f.toggle(SearchCategory.artists);
       expect(c.read(searchFilterProvider), {SearchCategory.artists});
-      f.toggleAll();
+      f.select(SearchCategory.songs);
       expect(c.read(searchFilterProvider), {SearchCategory.songs});
     },
   );
@@ -50,7 +50,7 @@ void main() {
     f.select(SearchCategory.folders);
     expect(c.read(searchScopeProvider), SearchScope.library);
     scope.select(SearchScope.online);
-    expect(c.read(searchFilterProvider).length, SearchCategory.values.length);
+    expect(c.read(searchFilterProvider), {SearchCategory.songs});
     f.select(SearchCategory.albums);
     expect(c.read(searchScopeProvider), SearchScope.online);
   });
@@ -74,14 +74,11 @@ void main() {
                   final enabled = ref.watch(searchFilterProvider);
                   return SearchFilterChips(
                     enabled: enabled,
-                    isAllEnabled: enabled.length > 1,
                     scope: ref.watch(searchScopeProvider),
                     onScopeChanged: ref
                         .read(searchScopeProvider.notifier)
                         .select,
                     onToggle: ref.read(searchFilterProvider.notifier).select,
-                    onToggleAll: () =>
-                        ref.read(searchFilterProvider.notifier).select(null),
                   );
                 },
               ),
