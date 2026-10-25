@@ -40,10 +40,19 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
         val layout = if (WidgetSize.width(manager, id) >= 280 && WidgetSize.height(manager, id) >= 280)
             R.layout.widget_recommended_flow else R.layout.widget_recommended_flow_small
         val views = RemoteViews(context.packageName, layout)
-        val data = try {
+        // Older versions persisted metadata rows without any cover. Skip
+        // them, so every selectable card in the carousel has real artwork.
+        val source = try {
             JSONArray(prefs.getString(WidgetPrefs.KEY_RECOMMENDATIONS, "[]").orEmpty())
         } catch (_: Exception) { JSONArray() }
-        val count = data.length().coerceAtMost(8)
+        val data = JSONArray()
+        for (i in 0 until minOf(source.length(), 8)) {
+            val item = source.optJSONObject(i) ?: continue
+            if (WidgetArtLoader.load(context, item.optString("artwork"), 64) != null) {
+                data.put(item)
+            }
+        }
+        val count = data.length()
         val indexKey = WidgetPrefs.recommendationCursor(id)
         // Start in the middle like the in-app Cover Flow, preserving an
         // individual browsing cursor for every widget instance afterwards.
@@ -60,8 +69,7 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
             if (hasSelection) artist.ifBlank { "From your listening" }
             else "Play something in Lokal to build your picks")
         views.setTextViewText(R.id.rec_heading, "COVER FLOW")
-        views.setViewVisibility(R.id.rec_art_strip,
-            if (hasSelection) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.rec_art_strip, View.VISIBLE)
         views.setViewVisibility(R.id.rec_prev,
             if (count > 1) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.rec_next,
@@ -82,9 +90,18 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
         }
         if (hasSelection) {
             art(R.id.rec_center, 0)
-            art(R.id.rec_left, -1)
-            art(R.id.rec_right, 1)
+            if (count > 1) art(R.id.rec_left, -1)
+            if (count > 2) art(R.id.rec_right, 1)
+        } else {
+            // Retain a real recent album sleeve before resorting to the
+            // designed "no track yet" cover. Never leave artwork space blank.
+            val previous = WidgetArtLoader.load(context,
+                prefs.getString(WidgetPrefs.KEY_LAST_ALBUM_ART, ""), 240)
+            if (previous != null) views.setImageViewBitmap(R.id.rec_center, previous)
+            else views.setImageViewResource(R.id.rec_center, R.drawable.widget_art_placeholder)
         }
+        if (count <= 1) views.setViewVisibility(R.id.rec_left, View.GONE)
+        if (count <= 2) views.setViewVisibility(R.id.rec_right, View.GONE)
         views.setOnClickPendingIntent(R.id.rec_prev,
             WidgetIntents.recommendationBrowse(context, id, -1))
         views.setOnClickPendingIntent(R.id.rec_next,
