@@ -71,7 +71,7 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
 
         // A missing cover must not create three huge identical Lokal logos.
         // Keep the artwork slot neutral until the async cache has a real image.
-        val showArt = WidgetPrefs.getShowAlbumArt(context)
+        val showArt = WidgetPrefs.getShowAlbumArt(context) && (!horizontal || width >= 190)
         views.setViewVisibility(R.id.widget_art_bg, if (showArt) View.VISIBLE else View.GONE)
         if (showArt) {
             val art = if (hasSong) WidgetArtLoader.load(
