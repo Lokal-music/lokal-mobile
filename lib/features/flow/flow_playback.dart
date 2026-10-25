@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song.dart';
 import '../../providers/player_provider.dart';
 import '../../services/player_service.dart' show PlayerService;
+import '../../services/online_radio_recommendations.dart' show radioRecordingKey;
 
 /// Injectable command boundary; production delegates every action to Flick.
 abstract class FlowPlayback {
@@ -27,6 +28,7 @@ class _HostFlowPlayback implements FlowPlayback {
   final PlayerService _service;
   int? _seed;
   final Set<String> _ownedIds = {};
+  final Set<String> _ownedRecordings = {};
   bool _starting = false;
   bool? _previousAutoplay;
   @override
@@ -34,10 +36,15 @@ class _HostFlowPlayback implements FlowPlayback {
   @override
   bool ownsSession(int seed) => _seed == seed && _matches(state);
 
+  bool _ownsTrack(Song? song) =>
+      song != null &&
+      (_ownedIds.contains(song.id) ||
+          _ownedRecordings.contains(radioRecordingKey(song.artist, song.title)));
+
   bool _matches(PlayerState state) =>
       _service.playbackContext.sourceId == 'konnekted:flow:$_seed' &&
-      _ownedIds.contains(state.currentSong?.id) &&
-      state.upNext.every((song) => _ownedIds.contains(song.id));
+      _ownsTrack(state.currentSong) &&
+      state.upNext.every(_ownsTrack);
 
   void _release() {
     // Restore the host's preference when another queue takes over. Changing
@@ -49,6 +56,7 @@ class _HostFlowPlayback implements FlowPlayback {
     _previousAutoplay = null;
     _seed = null;
     _ownedIds.clear();
+    _ownedRecordings.clear();
   }
 
   @override
@@ -60,6 +68,9 @@ class _HostFlowPlayback implements FlowPlayback {
     _ownedIds
       ..clear()
       ..addAll(songs.map((song) => song.id));
+    _ownedRecordings
+      ..clear()
+      ..addAll(songs.map((song) => radioRecordingKey(song.artist, song.title)));
     _previousAutoplay ??= service.autoplayOnQueueEndNotifier.value;
     service.setAutoplayOnQueueEnd(false);
     // The weighted order is already shuffled. Keep the engine from reordering
@@ -92,6 +103,7 @@ class _HostFlowPlayback implements FlowPlayback {
   @override
   Future<void> append(Song song) async {
     _ownedIds.add(song.id);
+    _ownedRecordings.add(radioRecordingKey(song.artist, song.title));
     await _service.appendToPlaylistTail(song);
   }
 
