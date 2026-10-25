@@ -120,7 +120,6 @@ bool shouldUseFastStartCurrentTrackOnly({
 /// A Discovery/Search queue can contain placeholders that do not yet have
 /// playable sources. Never submit them to just_audio's native sequence:
 /// repeat-all would otherwise cause Media3 to prepare an empty URI.
-@visibleForTesting
 bool hasUnresolvedAudioSources(List<Song> playlist) =>
     playlist.any((song) => song.isPending ||
         song.filePath == null || song.filePath!.isEmpty);
