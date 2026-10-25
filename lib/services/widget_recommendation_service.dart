@@ -33,6 +33,21 @@ class WidgetRecommendationService {
   }
 
   Future<void> _populate(Song seed, List<Song> next, int generation) async {
+    // Do not perform any catalogue requests for users who haven't added
+    // the Cover Flow widget. Native onEnabled/onDisabled owns this switch.
+    try {
+      await HomeWidget.setAppGroupId('group.com.mossapps.flick.widgets');
+      final enabled = await HomeWidget.getWidgetData<bool>(
+        'flick_widget_recommend_enabled', defaultValue: false,
+      );
+      if (enabled != true || generation != _generation) {
+        if (enabled != true) _seedId = null;
+        return;
+      }
+    } catch (_) {
+      _seedId = null;
+      return;
+    }
     List<Song> rows;
     try {
       rows = await const OnlineRadioRecommendations()
