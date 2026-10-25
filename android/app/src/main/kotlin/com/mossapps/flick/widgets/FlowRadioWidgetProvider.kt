@@ -57,6 +57,7 @@ class FlowRadioWidgetProvider : AppWidgetProvider() {
         views.setTextColor(R.id.flow_heading, WidgetPrefs.getAccentColor(context))
         views.setOnClickPendingIntent(R.id.flow_heading, WidgetIntents.openApp(context, 680))
         views.setOnClickPendingIntent(R.id.flow_title, WidgetIntents.openApp(context, 681))
+        views.setOnClickPendingIntent(R.id.flow_cover, WidgetIntents.openApp(context, 682))
         views.setOnClickPendingIntent(R.id.flow_action, WidgetIntents.flow(context, "play"))
         views.setOnClickPendingIntent(R.id.flow_shuffle, WidgetIntents.flow(context, "new"))
         views.setOnClickPendingIntent(R.id.flow_radio, WidgetIntents.flow(context, "radio"))
