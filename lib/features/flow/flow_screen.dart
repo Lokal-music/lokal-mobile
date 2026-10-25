@@ -276,7 +276,7 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
                 children: [
                   const Text(
                     'Continuous online-first mix · refills with three tracks remaining, up to 200 tracks. '
-                    'Save keeps a snapshot of downloaded tracks in Playlists.',
+                    'Save keeps both downloaded and online recommendations in Playlists.',
                     textAlign: TextAlign.center,
                   ),
                   if (!ownsQueue)
