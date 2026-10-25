@@ -38,10 +38,7 @@ Uint8List morneyeSeal({
 );
 
 Uint8List morneyeOpen({required List<int> data, required List<int> key}) =>
-    RustLib.instance.api.crateApiMorneyeApiMorneyeOpen(
-      data: data,
-      key: key,
-    );
+    RustLib.instance.api.crateApiMorneyeApiMorneyeOpen(data: data, key: key);
 
 /// What an add-on's download holds, shaped like desktop's ffprobe summary
 /// (codec, bit depth, sample rate, channels, duration, bitrate, container).
