@@ -85,7 +85,11 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         // Portrait and expanded widgets have room for transport controls;
         // only the thin bar needs to collapse them for narrow launchers.
         val controls = hasSong
-        val hasSkip = !horizontal || width >= 245
+        val hasSkip = when (layout) {
+            R.layout.widget_mini_player -> width >= 245
+            R.layout.widget_now_playing_portrait -> width >= 136
+            else -> true
+        }
         views.setViewVisibility(R.id.widget_prev, if (controls && hasSkip) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.widget_next, if (controls && hasSkip) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.widget_play_pause, if (controls) View.VISIBLE else View.GONE)
