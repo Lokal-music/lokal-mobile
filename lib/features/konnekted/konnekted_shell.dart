@@ -133,7 +133,7 @@ class _KonnektedShellState extends ConsumerState<KonnektedShell>
   void _navigate(KonnektedDestination destination) {
     LokalPerformanceAdvisor.noteNavigation();
     if (destination == KonnektedDestination.queue) {
-      unawaited(NavigationHelper.navigateToQueue<void>(context));
+      unawaited(NavigationHelper.navigateToQueue<void>(context, onOpenPlayer: _openPlayer));
       return;
     }
     final navigator = nestedNavigatorKey.currentState;

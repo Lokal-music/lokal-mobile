@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flick/core/constants/app_constants.dart';
 import 'package:flick/core/navigation/root_navigator.dart';
 import 'package:flick/features/player/screens/full_player_screen.dart';
-import 'package:flick/features/queue/screens/queue_screen.dart';
+import 'package:flick/features/queue/screens/queue_sheet.dart';
 import 'package:flick/widgets/lokal/lokal_player_route.dart';
 
 /// Helper class to prevent duplicate navigation to FullPlayerScreen
@@ -137,35 +137,18 @@ class NavigationHelper {
     );
   }
 
-  static Future<T?> navigateToQueue<T>(BuildContext context) {
-    final navigator = rootNavigatorKey.currentState != null
-        ? rootNavigatorKey.currentState!
-        : Navigator.of(context);
-    return navigator.push<T>(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const QueueScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          if (AppConstants.animationNormal == Duration.zero) {
-            return child;
-          }
-
-          final curvedAnimation = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          );
-
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.0, 1.0),
-              end: Offset.zero,
-            ).animate(curvedAnimation),
-            child: child,
-          );
-        },
-        transitionDuration: AppConstants.animationNormal,
-      ),
-    );
+  static Future<T?> navigateToQueue<T>(
+    BuildContext context, {
+    Future<void> Function()? onOpenPlayer,
+  }) async {
+    final openPlayer = await showQueueSheet(context);
+    if (!openPlayer || !context.mounted) return null;
+    if (onOpenPlayer != null) {
+      await onOpenPlayer();
+    } else {
+      await navigateToFullPlayer(context, heroTag: 'album_art_hero');
+    }
+    return null;
   }
 
   /// Push on the root navigator so the persistent bottom bar is hidden.

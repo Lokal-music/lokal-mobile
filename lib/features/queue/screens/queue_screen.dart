@@ -12,6 +12,8 @@ import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flick/widgets/common/flick_artwork_placeholder.dart';
 import 'package:flick/widgets/common/surface_icon_button.dart';
 import 'package:flick/l10n/l10n.dart';
+import 'package:flick/core/theme/lokal_tokens.dart';
+import 'package:flick/core/theme/lokal_theme.dart';
 
 class QueueScreen extends StatelessWidget {
   const QueueScreen({super.key});
@@ -33,7 +35,17 @@ class QueueScreen extends StatelessWidget {
 /// the player's own header already shows the current song and the rows sit on
 /// the player's dark backdrop as glass.
 class QueueList extends ConsumerStatefulWidget {
-  const QueueList({super.key, this.embedded = false});
+  const QueueList({
+    super.key,
+    this.embedded = false,
+    this.sheet = false,
+    this.scrollController,
+    this.onOpenPlayer,
+  });
+
+  final bool sheet;
+  final ScrollController? scrollController;
+  final VoidCallback? onOpenPlayer;
 
   final bool embedded;
 
@@ -43,6 +55,14 @@ class QueueList extends ConsumerStatefulWidget {
 
 class _QueueListState extends ConsumerState<QueueList> {
   bool _selectionMode = false;
+  bool _openingPlayer = false;
+
+  void _openPlayer() {
+    if (!mounted || _openingPlayer || widget.onOpenPlayer == null) return;
+    _openingPlayer = true;
+    widget.onOpenPlayer!();
+  }
+
   final Set<String> _selectedKeys = {};
 
   String _upNextKey(int i) => 'upnext-$i';
@@ -131,14 +151,16 @@ class _QueueListState extends ConsumerState<QueueList> {
               await ref.read(playerProvider.notifier).clearAllUpcoming();
             },
             onSelectMode: () => _enterSelectionMode(null),
-            showBack: !embedded,
+            showBack: !embedded && !widget.sheet,
+            sheet: widget.sheet,
           ),
         Expanded(
-          child: upNext.isEmpty && currentSong == null
+          child: upNext.isEmpty && queue.isEmpty && currentSong == null
               ? const _EmptyQueue()
               : _fadeTop(
                   embedded,
                   CustomScrollView(
+                    controller: widget.scrollController,
                     slivers: [
                       if (currentSong != null && !embedded)
                         SliverToBoxAdapter(
@@ -149,7 +171,12 @@ class _QueueListState extends ConsumerState<QueueList> {
                               hPad,
                               AppConstants.spacingMd,
                             ),
-                            child: _NowPlayingCard(song: currentSong),
+                            child: _NowPlayingCard(
+                              song: currentSong,
+                              onOpen: widget.onOpenPlayer == null
+                                  ? null
+                                  : _openPlayer,
+                            ),
                           ),
                         ),
                       SliverToBoxAdapter(
@@ -221,6 +248,9 @@ class _QueueListState extends ConsumerState<QueueList> {
                                         await ref
                                             .read(playerProvider.notifier)
                                             .playFromUpNextIndex(index);
+                                        if (mounted) {
+                                          _openPlayer();
+                                        }
                                       },
                                       onLongPress: () => _enterSelectionMode(
                                         _upNextKey(index),
@@ -259,7 +289,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                             hPad,
                             0,
                             hPad,
-                            embedded
+                            embedded || widget.sheet
                                 ? AppConstants.spacingLg
                                 : AppConstants.navBarHeight + 120,
                           ),
@@ -313,6 +343,9 @@ class _QueueListState extends ConsumerState<QueueList> {
                                         await ref
                                             .read(playerProvider.notifier)
                                             .playFromQueueIndex(index);
+                                        if (mounted) {
+                                          _openPlayer();
+                                        }
                                       },
                                       onLongPress: () =>
                                           _enterSelectionMode(_queueKey(index)),
@@ -383,11 +416,13 @@ class _QueueListState extends ConsumerState<QueueList> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.queue,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: context.adaptiveTextPrimary,
-                  ),
+                  widget.sheet ? l10n.queue.toUpperCase() : l10n.queue,
+                  style: widget.sheet
+                      ? LokalTheme.label(context.lokal)
+                      : Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: context.adaptiveTextPrimary,
+                        ),
                 ),
                 Text(
                   l10n.selectedOfSong(count, queueCount),
@@ -431,9 +466,11 @@ class _Header extends StatelessWidget {
     required this.onClear,
     required this.onSelectMode,
     this.showBack = true,
+    this.sheet = false,
   });
 
   final bool showBack;
+  final bool sheet;
 
   @override
   Widget build(BuildContext context) {
@@ -457,11 +494,13 @@ class _Header extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.queue,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: context.adaptiveTextPrimary,
-                  ),
+                  sheet ? l10n.queue.toUpperCase() : l10n.queue,
+                  style: sheet
+                      ? LokalTheme.label(context.lokal)
+                      : Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: context.adaptiveTextPrimary,
+                        ),
                 ),
                 Text(
                   l10n.upcomingSong(queueCount),
@@ -565,61 +604,69 @@ class _EmptyUpcomingState extends StatelessWidget {
 class _NowPlayingCard extends StatelessWidget {
   final Song song;
 
-  const _NowPlayingCard({required this.song});
+  const _NowPlayingCard({required this.song, this.onOpen});
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacingMd),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.surfaceLight.withValues(alpha: 0.92),
-            AppColors.surface.withValues(alpha: 0.98),
-          ],
-        ),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          _Artwork(song: song),
-          const SizedBox(width: AppConstants.spacingMd),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Semantics(
+      button: onOpen != null,
+      label: onOpen == null ? null : 'Open player: ${song.title}',
+      child: Material(
+        color: context.lokal.surface2,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          key: const ValueKey('queue-now-playing'),
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.all(AppConstants.spacingMd),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+              border: Border.all(color: context.lokal.border),
+            ),
+            child: Row(
               children: [
-                Text(
-                  l10n.nowPlaying2,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AppColors.accent,
-                    fontWeight: FontWeight.w700,
+                _Artwork(song: song),
+                const SizedBox(width: AppConstants.spacingMd),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.nowPlaying2,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: context.lokal.accent,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        song.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: context.adaptiveTextPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        song.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: context.adaptiveTextSecondary),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: context.adaptiveTextPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  song.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: context.adaptiveTextSecondary),
-                ),
+                if (onOpen != null)
+                  Icon(Icons.chevron_right_rounded, color: context.lokal.muted),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

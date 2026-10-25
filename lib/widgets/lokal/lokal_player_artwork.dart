@@ -1,4 +1,5 @@
 import 'dart:ui' show lerpDouble;
+import 'dart:math' as math;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
@@ -29,9 +30,28 @@ class LokalPlayerMorph extends StatelessWidget {
           ?.progress ??
       1;
 
+  /// Reframe still art to the traveling viewport before scaling it. A tall
+  /// fullscreen poster must reach the mini player's square crop without
+  /// squeezing the image or switching crops on the final frame.
+  static double artworkViewportHeight(BuildContext context, Size expanded) {
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<_MorphProgressScope>();
+    final source = scope?.sourceSize;
+    if (source == null || source.isEmpty || expanded.isEmpty) {
+      return expanded.height;
+    }
+    final viewport = Size.lerp(
+      source,
+      expanded,
+      scope!.progress.clamp(0.0, 1.0),
+    )!;
+    return expanded.width * viewport.height / viewport.width;
+  }
+
   @override
   Widget build(BuildContext context) => _MorphProgressScope(
     progress: progress,
+    sourceSize: sourceArtwork()?.size,
     child: _MorphScope(
       child: _ArtworkPortal(
         progress: progress,
@@ -44,11 +64,16 @@ class LokalPlayerMorph extends StatelessWidget {
 }
 
 class _MorphProgressScope extends InheritedWidget {
-  const _MorphProgressScope({required this.progress, required super.child});
+  const _MorphProgressScope({
+    required this.progress,
+    required this.sourceSize,
+    required super.child,
+  });
   final double progress;
+  final Size? sourceSize;
   @override
   bool updateShouldNotify(_MorphProgressScope oldWidget) =>
-      progress != oldWidget.progress;
+      progress != oldWidget.progress || sourceSize != oldWidget.sourceSize;
 }
 
 class _MorphScope extends InheritedWidget {
@@ -105,7 +130,24 @@ class _RenderArtworkPortal extends RenderProxyBox {
   double _progress;
   double _sheetOffset;
   Rect? Function() _sourceArtwork;
-  _RenderArtworkAnchor? artwork;
+  // Queue/lyrics may briefly mount a second anchor before retiring it.
+  // Retain the other live anchors so removing that temporary thumbnail cannot
+  // erase the poster that must morph back into the miniplayer.
+  final _anchors = <_RenderArtworkAnchor>[];
+  _RenderArtworkAnchor? get artwork => _anchors.isEmpty ? null : _anchors.last;
+
+  void register(_RenderArtworkAnchor anchor) {
+    artwork?.markNeedsPaint();
+    _anchors.remove(anchor);
+    _anchors.add(anchor);
+    markNeedsPaint();
+  }
+
+  void unregister(_RenderArtworkAnchor anchor) {
+    _anchors.remove(anchor);
+    artwork?.markNeedsPaint();
+    markNeedsPaint();
+  }
 
   bool get lifting => _progress < 1 && _sourceArtwork() != null;
 
@@ -129,8 +171,9 @@ class _RenderArtworkPortal extends RenderProxyBox {
         !anchor.hasSize ||
         anchor.child == null ||
         source == null ||
-        anchor.size.isEmpty)
+        anchor.size.isEmpty) {
       return;
+    }
     final natural = MatrixUtils.transformRect(
       anchor.getTransformTo(this),
       Offset.zero & anchor.size,
@@ -139,31 +182,38 @@ class _RenderArtworkPortal extends RenderProxyBox {
     final from = source.shift(-origin);
     final to = natural.shift(Offset(0, -_sheetOffset));
     final rect = Rect.lerp(from, to, _progress.clamp(0.0, 1.0))!;
-    final scaleX = rect.width / anchor.size.width;
-    final scaleY = rect.height / anchor.size.height;
+    // One scale preserves the artwork's aspect ratio. Independent X/Y
+    // scaling squashed tall fullscreen art into a square and snapped when
+    // the actual miniplayer cover took over.
+    final scale = math.max(
+      rect.width / anchor.size.width,
+      rect.height / anchor.size.height,
+    );
     final radius = lerpDouble(
       source.shortestSide / 2,
       anchor.expandedRadius,
       _progress,
     )!;
     final transform = Matrix4.identity()
-      ..translateByDouble(rect.left, rect.top, 0, 1)
-      ..scaleByDouble(scaleX, scaleY, 1, 1);
-    context.pushTransform(needsCompositing, offset, transform, (context, at) {
-      context.pushClipRRect(
+      ..translateByDouble(
+        rect.center.dx - anchor.size.width * scale / 2,
+        rect.center.dy - anchor.size.height * scale / 2,
+        0,
+        1,
+      )
+      ..scaleByDouble(scale, scale, 1, 1);
+    context.pushClipRRect(
+      needsCompositing,
+      offset,
+      rect,
+      RRect.fromRectAndRadius(rect, Radius.circular(radius)),
+      (context, at) => context.pushTransform(
         needsCompositing,
         at,
-        Offset.zero & anchor.size,
-        RRect.fromRectAndCorners(
-          Offset.zero & anchor.size,
-          topLeft: Radius.elliptical(radius / scaleX, radius / scaleY),
-          topRight: Radius.elliptical(radius / scaleX, radius / scaleY),
-          bottomLeft: Radius.elliptical(radius / scaleX, radius / scaleY),
-          bottomRight: Radius.elliptical(radius / scaleX, radius / scaleY),
-        ),
+        transform,
         (context, at) => context.paintChild(anchor.child!, at),
-      );
-    });
+      ),
+    );
   }
 }
 
@@ -219,8 +269,7 @@ class _RenderArtworkAnchor extends RenderProxyBox {
     _unregister();
     _portal = next;
     if (next != null) {
-      next.artwork = this;
-      next.markNeedsPaint();
+      next.register(this);
     }
     markNeedsPaint();
   }
@@ -228,10 +277,7 @@ class _RenderArtworkAnchor extends RenderProxyBox {
   void _unregister() {
     final portal = _portal;
     _portal = null;
-    if (portal != null && identical(portal.artwork, this)) {
-      portal.artwork = null;
-      portal.markNeedsPaint();
-    }
+    portal?.unregister(this);
   }
 
   @override

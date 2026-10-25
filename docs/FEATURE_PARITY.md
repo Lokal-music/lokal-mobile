@@ -732,3 +732,15 @@ Isar writes and checkpoints its existing file fingerprints during the backlog,
 so reopening does not repeat an entire unfinished library migration. Explicit
 scans/repairs retain their foreground scheduling. Regression coverage uses fake
 repositories/probes; Samsung S25 Ultra thermal/FPS confirmation remains pending.
+
+
+### Player cover return and miniplayer queue sheet
+
+The artwork portal retains live poster anchors across temporary lyrics/queue
+cover handoffs. Fullscreen still-art dismissal uses uniform scaling with a
+continuous crop into the miniplayer's square viewport. The miniplayer queue
+opens in a themed, draggable 55%-height sheet, expandable to 90%, with song
+playback opening Now Playing after dismissal. Reorder, removal, multi-select
+and the embedded full-player queue retain their existing operations. Widget
+and pixel-render regressions cover the transitions and sheet interactions;
+Android device gesture validation remains pending.
