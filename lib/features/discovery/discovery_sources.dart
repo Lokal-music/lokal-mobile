@@ -227,8 +227,8 @@ class YoutubeMusicCatalog {
     return results.values.toList(growable: false);
   }
 
-  /// The row's cover: the largest https thumbnail, asked for at 544 px when
-  /// it is a resizable Google image (YouTube Music sends 60 or 120 px).
+  /// The row's cover: the largest https thumbnail, requested at 1200 px
+  /// on Google's resizable artwork CDN (YouTube Music often sends 60/120 px).
   @visibleForTesting
   static String? thumbnail(Map row) {
     final list = _path(row, [
@@ -253,7 +253,8 @@ class YoutubeMusicCatalog {
     if (best == null) return null;
     final host = Uri.parse(best).host;
     if (RegExp(r'(^|\.)googleusercontent\.com$').hasMatch(host)) {
-      return best.replaceFirst(RegExp(r'=w\d+-h\d+'), '=w544-h544');
+      final sized = best.replaceFirst(RegExp(r'=w\d+-h\d+'), '=w1200-h1200');
+      return sized.replaceFirst(RegExp(r'=s\d+(?=-|$)'), '=s1200');
     }
     return best;
   }
