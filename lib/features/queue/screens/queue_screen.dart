@@ -826,7 +826,9 @@ class _UpcomingTile extends StatelessWidget {
                 ),
                 if (!isSelectionMode) ...[
                   Text(
-                    song.formattedDuration,
+                    song.duration > Duration.zero
+                        ? song.formattedDuration
+                        : (song.isPending ? '…' : '—'),
                     style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: context.adaptiveTextTertiary),
                   ),

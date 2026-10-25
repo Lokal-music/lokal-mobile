@@ -37,23 +37,32 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <ImageView
+            <TextView
                 android:id="@+id/widget_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:adjustViewBounds="true"
                 android:contentDescription="@string/widget_nothing_playing"
-                android:scaleType="fitStart" />
+            android:fontFamily="@font/product_sans_bold"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:gravity="start|center_vertical"
+            />
 
-            <ImageView
+            <TextView
                 android:id="@+id/widget_artist"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:adjustViewBounds="true"
-                android:contentDescription="@string/widget_nothing_playing"
-                android:scaleType="fitStart"
-                android:visibility="gone" />
+                android:visibility="gone"
+            android:fontFamily="@font/product_sans_regular"
+            android:textColor="#DDFFFFFF"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:gravity="start|center_vertical"
+            />
         </LinearLayout>
 
         <ImageButton

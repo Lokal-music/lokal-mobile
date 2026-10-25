@@ -277,4 +277,103 @@ void main() {
     expect(stale.loads, 1);
   });
 
+  testWidgets('Discovery Repeat All never prepares unresolved native sources', (tester) async {
+    final native = _Player();
+    var fullSequenceBuilds = 0;
+    var individualBuilds = 0;
+    final first = Song(
+      id: 'discovery-first',
+      title: 'Playing discovery song',
+      artist: 'Artist',
+      duration: const Duration(minutes: 3),
+      fileType: 'FLAC',
+      filePath: '/cached/first.flac',
+    );
+    final queued = [
+      first,
+      for (var i = 0; i < 29; i++)
+        Song(
+          id: 'pending:$i',
+          title: 'Next track $i',
+          artist: 'Artist',
+          duration: Duration.zero,
+          fileType: 'ONLINE',
+          sourcePackage: Song.pendingSourcePackage,
+        ),
+    ];
+    expect(hasUnresolvedAudioSources(queued), isTrue);
+
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => native,
+      sourcesBuilder: () async {
+        fullSequenceBuilds++;
+        throw StateError('Pending URL was passed to native player');
+      },
+      sourceBuilder: (_) async {
+        individualBuilds++;
+        return ja.AudioSource.uri(Uri.parse('file:///cached/first.flac'));
+      },
+      playlistProvider: () => queued,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      // Repeat All used to force constructing the full 30-item native queue.
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await native.errors.close();
+      await native.positions.close();
+    });
+    await engine.load(first);
+    expect(fullSequenceBuilds, 0);
+    expect(individualBuilds, 1);
+    expect(native.loads, 1);
+    expect(engine.isSingleTrackOnly, isTrue);
+  });
+
+  testWidgets('asynchronous source error retires decoder for next selection', (tester) async {
+    final firstNative = _Player();
+    final replacement = _Player();
+    var created = 0;
+    final retired = <ja.AudioPlayer>[];
+    final tracks = [
+      Song(id: 'bad', title: 'Bad remote', artist: 'Artist',
+          duration: const Duration(minutes: 2), fileType: 'FLAC',
+          filePath: '/cache/bad.flac'),
+      Song(id: 'good', title: 'Next recording', artist: 'Artist',
+          duration: const Duration(minutes: 2), fileType: 'FLAC',
+          filePath: '/cache/good.flac'),
+    ];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => created++ == 0 ? firstNative : replacement,
+      sourcesBuilder: () async =>
+          ja.AudioSource.uri(Uri.parse('file:///cache/bad.flac')),
+      sourceBuilder: (_) async =>
+          ja.AudioSource.uri(Uri.parse('file:///cache/good.flac')),
+      playlistProvider: () => tracks,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      retireStalledPlayer: (player) async => retired.add(player),
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await firstNative.errors.close();
+      await replacement.errors.close();
+      await firstNative.positions.close();
+      await replacement.positions.close();
+    });
+    await engine.load(tracks.first);
+    firstNative.errors.add(ja.PlayerException(0, 'Source error', 0));
+    await tester.pump();
+    await engine.load(tracks.last);
+    expect(created, 2);
+    expect(retired, [same(firstNative)]);
+    expect(replacement.loads, 1);
+  });
+
 }

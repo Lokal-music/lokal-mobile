@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
+import 'widget_sync_service.dart';
 
 import '../models/song.dart';
 import '../providers/player_provider.dart';
@@ -21,18 +22,34 @@ class WidgetIntentHandler {
 
     _channel = const MethodChannel('com.mossapps.flick/widget');
     _channel!.setMethodCallHandler((call) async {
-      if (call.method == 'dispatch') {
-        final uriStr = call.arguments as String?;
-        if (uriStr != null) {
-          final uri = Uri.tryParse(uriStr);
-          if (uri != null) _dispatch(uri);
-        }
+      if (call.method == 'dispatchPending') {
+        return _drainNativeAction();
+      } else if (call.method == 'dispatch') {
+        final uri = Uri.tryParse(call.arguments as String? ?? '');
+        _dispatch(uri);
       }
     });
 
-    final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
-    if (launchUri != null) {
-      _dispatch(launchUri);
+    // Native widget broadcasts are delivered before the Dart handler exists
+    // during a cold launch. Atomically consume any saved action exactly once.
+    final consumed = await _drainNativeAction();
+    if (!consumed) {
+      final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
+      if (launchUri != null) _dispatch(launchUri);
+    }
+  }
+
+  Future<bool> _drainNativeAction() async {
+    try {
+      final raw = await _channel?.invokeMethod<String>('takePendingAction');
+      if (raw == null || raw.isEmpty) return false;
+      _dispatch(Uri.tryParse(raw));
+      return true;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      devLog('WidgetIntentHandler could not consume action: $e');
+      return false;
     }
   }
 
@@ -81,29 +98,16 @@ class WidgetIntentHandler {
     }
   }
 
-  static const _provider = 'com.mossapps.flick.widgets.MiniPlayerWidgetProvider';
-  static const _flagshipProvider = 'com.mossapps.flick.widgets.FlagshipWidgetProvider';
-  static const _compactProvider = 'com.mossapps.flick.widgets.CompactWidgetProvider';
-
   Future<void> _pushWidgetState() async {
+    // Do not write raw remote artwork URLs or only part of playback state.
+    // The canonical widget sync service normalizes paths and broadcasts all
+    // fields with the same debounce/race handling as normal player changes.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (_channel == null) return;
     try {
-      await Future.delayed(const Duration(milliseconds: 100));
-      final state = _ref.read(playerProvider);
-      final Song? song = state.currentSong;
-      await HomeWidget.saveWidgetData('flick_widget_is_playing', state.isPlaying);
-      await HomeWidget.saveWidgetData('flick_widget_has_song', song != null);
-      if (song != null) {
-        await HomeWidget.saveWidgetData('flick_widget_title', song.title);
-        await HomeWidget.saveWidgetData('flick_widget_artist', song.artist);
-        await HomeWidget.saveWidgetData('flick_widget_album_art', song.albumArt ?? '');
-      }
-      await HomeWidget.saveWidgetData('flick_widget_is_shuffle', state.isShuffle);
-      await HomeWidget.saveWidgetData('flick_widget_loop_mode', state.loopMode.index);
-      await HomeWidget.updateWidget(qualifiedAndroidName: _provider);
-      await HomeWidget.updateWidget(qualifiedAndroidName: _flagshipProvider);
-      await HomeWidget.updateWidget(qualifiedAndroidName: _compactProvider);
-    } catch (e) {
-      devLog('WidgetIntentHandler: failed to push widget state: $e');
+      WidgetSyncService.instance.schedulePush(_ref.read(playerProvider));
+    } catch (error, stack) {
+      devLog('Widget intent refresh failed: $error\n$stack');
     }
   }
 }

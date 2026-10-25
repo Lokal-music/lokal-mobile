@@ -68,6 +68,7 @@ class WidgetSyncService {
   static const String keyQueueCount = 'flick_widget_queue_count';
 
   bool _initialized = false;
+  Future<void>? _initialization;
   Timer? _debounce;
   String? _lastPushedSongId;
   bool? _lastPushedIsPlaying;
@@ -76,8 +77,20 @@ class WidgetSyncService {
 
   Future<void> _ensureInit() async {
     if (_initialized) return;
-    _initialized = true;
-    await HomeWidget.setAppGroupId(_appGroup);
+    if (_initialization case final ongoing?) {
+      await ongoing;
+      return;
+    }
+    final future = () async {
+      await HomeWidget.setAppGroupId(_appGroup);
+      _initialized = true;
+    }();
+    _initialization = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_initialization, future)) _initialization = null;
+    }
   }
 
   Future<void> _updateAll() async {
@@ -183,6 +196,13 @@ class WidgetSyncService {
       _lastPushedIsShuffle = state.isShuffle;
       _lastPushedLoopMode = state.loopMode.index;
     } catch (e, st) {
+      // A partially saved preference batch must not suppress the next real
+      // broadcast. Recover when Android's widget host becomes available.
+      _savedData.clear();
+      _lastPushedSongId = null;
+      _lastPushedIsPlaying = null;
+      _lastPushedIsShuffle = null;
+      _lastPushedLoopMode = null;
       devLog('WidgetSyncService push failed: $e\n$st');
     }
   }

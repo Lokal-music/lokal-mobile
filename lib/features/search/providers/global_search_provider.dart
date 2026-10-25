@@ -8,6 +8,7 @@ import 'package:flick/providers/playlist_provider.dart';
 import 'package:flick/providers/songs_provider.dart';
 import '../models/global_search_results.dart';
 import 'package:flick/l10n/l10n.dart';
+import 'package:flick/core/utils/artist_credits.dart';
 
 final globalSearchResultsProvider =
     FutureProvider.autoDispose.family<GlobalSearchResults, String>((ref, rawQuery) async {
@@ -16,8 +17,11 @@ final globalSearchResultsProvider =
 
   final lower = query.toLowerCase();
 
+  ref.watch(libraryChangeRevisionProvider);
+  ref.watch(playlistsProvider);
   final repo = ref.watch(songRepositoryProvider);
-  final allSongs = preferLocalLibrarySongs(await repo.getAllSongs());
+  final loaded = ref.watch(songsProvider).value?.songs;
+  final allSongs = preferLocalLibrarySongs(loaded ?? await repo.getAllSongs());
 
   // Playlists – via service provider.
   List<Playlist> allPlaylists = const [];
@@ -38,11 +42,13 @@ final globalSearchResultsProvider =
 
   // --- Artists: distinct artist names where artist contains ---
   final artistMap = <String, List<Song>>{};
+  final artistNames = <String, String>{};
   for (final s in allSongs) {
-    final artist = s.artist.trim();
-    if (artist.isEmpty) continue;
-    if (!artist.toLowerCase().contains(lower)) continue;
-    artistMap.putIfAbsent(artist, () => []).add(s);
+    for (final artist in songArtistNames(s)) {
+      if (!artist.toLowerCase().contains(lower)) continue;
+      final key = artistNames.putIfAbsent(artist.toLowerCase(), () => artist);
+      artistMap.putIfAbsent(key, () => []).add(s);
+    }
   }
   for (final list in artistMap.values) {
     list.sort((a, b) => compareCaseInsensitive(a.title, b.title));
@@ -72,7 +78,7 @@ final globalSearchResultsProvider =
         ? s.album!.trim()
         : l10n.unknownAlbum;
     if (!albumName.toLowerCase().contains(lower)) continue;
-    final key = albumName;
+    final key = '${albumName.toLowerCase()}\u0000${SongRepository.albumArtistForSong(s).toLowerCase()}';
     albumGroupsRaw.putIfAbsent(key, () => []).add(s);
     albumNames[key] = albumName;
     albumArtistsByKey

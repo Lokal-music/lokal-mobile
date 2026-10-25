@@ -17,6 +17,7 @@ import '../src/rust/api/scanner.dart';
 import 'music_folder_service.dart';
 import 'background_metadata_budget.dart';
 import '../core/utils/dev_log.dart';
+import '../core/utils/app_log.dart';
 
 /// Reads the actual local audio header; remote labels are only a fallback.
 /// One worker repairs old rows and new imports without decoding or downloading audio.
@@ -25,16 +26,15 @@ class LocalMetadataRepair {
 
   LocalMetadataRepair({
     Future<SongEntity?> Function(int)? loadSong,
-    Future<bool> Function(SongEntity)? inspect,
+    this.inspect,
     bool Function()? databaseReady,
     Future<void> Function(Duration)? rest,
   }) : _loadSong = loadSong ?? ((id) => Database.songs.get(id)),
-       _inspect = inspect ?? ((row) => probe(row)),
        _databaseReady = databaseReady ?? (() => Database.isInitialized),
        _rest = rest ?? Future<void>.delayed;
 
   final Future<SongEntity?> Function(int) _loadSong;
-  final Future<bool> Function(SongEntity) _inspect;
+  final Future<bool> Function(SongEntity)? inspect;
   final bool Function() _databaseReady;
   final Future<void> Function(Duration) _rest;
 
@@ -54,9 +54,13 @@ class LocalMetadataRepair {
     final incoming = <int>{};
     for (final song in songs) {
       if (song.isNetworkSource || song.isPending) continue;
+      // SAF metadata already has a serial native backfill worker. Do not
+      // enqueue a second pass that stages every document into playback cache.
+      if (song.filePath?.startsWith('content://') ?? false) continue;
       final id = int.tryParse(song.id);
       if (id != null && _scheduled.add(id)) incoming.add(id);
     }
+    if (incoming.isEmpty) return;
     _pending = _seeded
         ? {...incoming, ..._pending}
         : {..._pending, ...incoming};
@@ -116,7 +120,10 @@ class LocalMetadataRepair {
       _seen.addAll(prefs.getStringList(_version) ?? const []);
       _loaded = true;
     }
-    devLog(
+    final started = Stopwatch()..start();
+    var probed = 0;
+    var skippedRows = 0;
+    AppLog.instance.add(
       '[MetadataRepair] start: pending=${_pending.length}, cached=${_seen.length}',
     );
     var uncheckpointed = 0;
@@ -149,6 +156,7 @@ class LocalMetadataRepair {
           _waiters.remove(id)?.complete();
         }
         if (read) {
+          probed++;
           // Persist the first result promptly and then at most 15 further
           // successes can be lost if Android kills the process mid-backfill.
           uncheckpointed++;
@@ -163,24 +171,41 @@ class LocalMetadataRepair {
                     ),
             );
           }
-        } else if (++skipped % 64 == 0) {
-          // A fully repaired library still needs to yield during cache checks.
-          await _rest(Duration.zero);
+        } else {
+          skippedRows++;
+          if (++skipped % 64 == 0) {
+            // A fully repaired library still needs to yield during cache checks.
+            await _rest(Duration.zero);
+          }
         }
       }
     } finally {
       await checkpoint();
+      AppLog.instance.add(
+        '[MetadataRepair] finished: probed=$probed skipped=$skippedRows '
+        'pending=${_pending.length} elapsedMs=${started.elapsedMilliseconds}',
+      );
     }
   }
 
   Future<bool> _repairOne(int id) async {
     final row = await _loadSong(id);
     if (row == null || row.sourceType != null) return false;
+    final explicit = _waiters.containsKey(id);
+    // Complete scanner rows need no second header read. Desktop copies are
+    // the exception: older downloads may contain catalogue codec labels.
+    if (!explicit &&
+        row.metadataComplete &&
+        !row.filePath.contains('/desktop_music/')) {
+      return false;
+    }
     final signature =
         '$id:${row.filePath}:${row.fileSize}:${row.lastModified?.millisecondsSinceEpoch}';
     if (_seen.contains(signature)) return false;
     try {
-      if (await _inspect(row)) _seen.add(signature);
+      final repaired =
+          await (inspect?.call(row) ?? probe(row, allowStaging: explicit));
+      if (repaired) _seen.add(signature);
     } catch (_) {
       /* Retry inaccessible files next session. */
     }
@@ -188,10 +213,17 @@ class LocalMetadataRepair {
   }
 
   /// Call before committing a newly copied file; also used to repair old rows.
-  static Future<bool> probe(SongEntity row, {bool persist = true}) async {
+  static Future<bool> probe(
+    SongEntity row, {
+    bool persist = true,
+    bool allowStaging = true,
+  }) async {
     var path = row.filePath;
     if (path.startsWith('file://')) path = Uri.parse(path).toFilePath();
     if (path.startsWith('content://') || !await File(path).exists()) {
+      // Automatic repair must not copy an entire audio file just to inspect
+      // tags. Explicit copy/repair actions retain the staging fallback.
+      if (!allowStaging) return false;
       final uri = path.startsWith('content://') ? path : row.mediaStoreUri;
       if (uri == null) return false;
       path =

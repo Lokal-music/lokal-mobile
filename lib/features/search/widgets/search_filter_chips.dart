@@ -1,121 +1,141 @@
 import 'package:flutter/material.dart';
-import 'package:flick/core/constants/app_constants.dart';
-import 'package:flick/core/theme/adaptive_color_provider.dart';
-import 'package:flick/core/theme/app_colors.dart';
+import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/core/utils/app_haptics.dart';
+
 import '../models/search_category.dart';
+import '../providers/search_filter_provider.dart';
+
 import 'package:flick/l10n/l10n.dart';
 
+/// Source and result type are separate single-choice controls. Selecting a
+/// category isolates it immediately; All always restores results.
 class SearchFilterChips extends StatelessWidget {
-  final Set<SearchCategory> enabled;
-  final ValueChanged<SearchCategory> onToggle;
-  final VoidCallback onToggleAll;
-  final bool isAllEnabled;
-  final Map<SearchCategory, int>? counts;
-  final String query;
-
   const SearchFilterChips({
     super.key,
     required this.enabled,
     required this.onToggle,
     required this.onToggleAll,
     required this.isAllEnabled,
+    required this.scope,
+    required this.onScopeChanged,
     this.counts,
     this.query = '',
   });
-
+  final Set<SearchCategory> enabled;
+  final ValueChanged<SearchCategory> onToggle;
+  final VoidCallback onToggleAll;
+  final bool isAllEnabled;
+  final SearchScope scope;
+  final ValueChanged<SearchScope> onScopeChanged;
+  final Map<SearchCategory, int>? counts;
+  final String query;
   @override
   Widget build(BuildContext context) {
-    final hasQuery = query.trim().isNotEmpty;
-
-    return SizedBox(
-      height: 38,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingLg),
-        children: [
-          _Chip(
-            label: _labelForAll(hasQuery),
-            selected: isAllEnabled,
-            onTap: () {
-              AppHaptics.tap();
-              onToggleAll();
-            },
-            showCount: false,
-          ),
-          for (final cat in SearchCategory.values)
-            _Chip(
-              label: cat.label,
-              count: hasQuery && counts != null ? counts![cat] : null,
-              selected: enabled.contains(cat),
-              onTap: () {
-                AppHaptics.tap();
-                onToggle(cat);
-              },
+    final t = context.lokal;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SegmentedButton<SearchScope>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              textStyle: Theme.of(context).textTheme.labelLarge
+                  ?.copyWith(fontSize: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             ),
-        ],
-      ),
+            segments: [
+              ButtonSegment(
+                value: SearchScope.all,
+                label: Text(lokalText('All sources')),
+              ),
+              ButtonSegment(
+                value: SearchScope.library,
+                label: Text(lokalText('Library')),
+              ),
+              ButtonSegment(
+                value: SearchScope.online,
+                label: Text(lokalText('Online')),
+              ),
+            ],
+            selected: {scope},
+            onSelectionChanged: (value) {
+              AppHaptics.tap();
+              onScopeChanged(value.single);
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              _chip(context, l10n.all, isAllEnabled, onToggleAll),
+              for (final category in SearchCategory.values)
+                if (scope != SearchScope.online ||
+                    supportsOnlineCategory(category))
+                  _chip(
+                    context,
+                    category.label,
+                    !isAllEnabled && enabled.contains(category),
+                    () => onToggle(category),
+                    count:
+                        scope == SearchScope.library && query.trim().isNotEmpty
+                        ? (counts ?? const <SearchCategory, int>{})[category]
+                        : null,
+                  ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 2, 16, 0),
+          child: Text(
+            scope == SearchScope.online
+                ? lokalText('Search online catalogues and playback sources')
+                : !supportsOnlineCategory(enabled.singleOrNull)
+                ? lokalText('This category searches your library')
+                : lokalText('Choose one result type, or All'),
+            style: TextStyle(color: t.muted, fontSize: 11),
+          ),
+        ),
+      ],
     );
   }
 
-  String _labelForAll(bool hasQuery) => l10n.all;
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-  final int? count;
-  final bool selected;
-  final VoidCallback onTap;
-  final bool showCount;
-
-  const _Chip({
-    required this.label,
-    this.count,
-    required this.selected,
-    required this.onTap,
-    this.showCount = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasCount = showCount && count != null && count! > 0;
-    final displayLabel = hasCount ? '$label · $count' : label;
-
+  Widget _chip(
+    BuildContext context,
+    String label,
+    bool selected,
+    VoidCallback tap, {
+    int? count,
+  }) {
+    final t = context.lokal;
     return Padding(
-      padding: const EdgeInsets.only(right: AppConstants.spacingXs),
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppConstants.spacingMd,
-            vertical: AppConstants.spacingXs,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accent.withValues(alpha: 0.18)
-                : AppColors.glassBackgroundStrong,
-            borderRadius: BorderRadius.circular(AppConstants.radiusRound),
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.glassBorder,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              displayLabel,
-              style: TextStyle(
-                fontFamily: 'GoogleSansFlex',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: selected
-                    ? AppColors.accent
-                    : context.adaptiveTextSecondary,
-              ),
-            ),
-          ),
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label),
+            if (count != null) ...[
+              const SizedBox(width: 6),
+              Text('$count', style: TextStyle(color: t.muted)),
+            ],
+          ],
         ),
+        selected: selected,
+        showCheckmark: false,
+        selectedColor: t.accent.withValues(alpha: .18),
+        labelStyle: TextStyle(
+          color: selected ? t.accent : t.text,
+          fontSize: 12,
+        ),
+        onSelected: (_) {
+          AppHaptics.tap();
+          tap();
+        },
       ),
     );
   }

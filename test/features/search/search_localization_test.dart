@@ -1,0 +1,133 @@
+import 'package:flick/l10n/l10n.dart';
+import 'package:flick/l10n/lokal_ui_translations.dart';
+import 'package:flick/features/search/widgets/search_filter_chips.dart';
+import 'package:flick/features/search/widgets/online_catalogue_search_section.dart';
+import 'package:flick/features/search/models/search_category.dart';
+import 'package:flick/features/search/providers/search_filter_provider.dart';
+import 'package:flick/providers/apple_music_provider.dart';
+import 'package:flick/services/apple_music/apple_music_metadata_service.dart';
+import 'package:flick/services/apple_music/apple_music_models.dart';
+import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/theme/lokal_tokens.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _Api implements AppleMusicMetadataService {
+  final refreshes = <bool>[];
+  @override
+  Future<List<AppleMusicAlbumMatch>> searchAlbums(
+    String term, {
+    int limit = 25,
+    String? storefront,
+    bool refresh = false,
+  }) async {
+    refreshes.add(refresh);
+    if (!refresh) throw StateError('offline');
+    return [];
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+  tearDown(
+    () => LocaleController.instance.bind(
+      lookupAppLocalizations(const Locale('en')),
+    ),
+  );
+  test('all shipped non-English locales have the new fixed search phrases', () {
+    const phrases = [
+      'All sources',
+      'Library',
+      'Online',
+      'Artist',
+      'Search online catalogues and playback sources',
+      'This category searches your library',
+      'Choose one result type, or All',
+      'Try another keyword or choose All result types',
+      'Online albums',
+      'Online artists',
+      'Apple Music catalogue · plays through your configured sources',
+      'Could not search. Retry',
+      'No albums found online.',
+      'No artists found online.',
+      'See all albums',
+      'See all artists',
+      'No matching tracks found. Try refreshing the catalogue.',
+    ];
+    for (final locale in kSupportedLocales.where(
+      (locale) => locale.languageCode != 'en',
+    )) {
+      final map =
+          lokalUiTranslations[locale.toString()] ??
+          lokalUiTranslations[locale.languageCode]!;
+      for (final phrase in phrases)
+        expect(map[phrase], isNotEmpty, reason: '$locale: $phrase');
+    }
+  });
+  testWidgets(
+    'French scope, catalogue, retry and empty-state labels follow the active locale',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = _Api();
+      final c = ProviderContainer(
+        overrides: [appleMusicMetadataServiceProvider.overrideWithValue(api)],
+      );
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp(
+            locale: const Locale('fr'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            theme: LokalTheme.build(LokalTokens.themes[LokalThemeId.dark]!),
+            builder: (context, child) {
+              LocaleController.instance.bind(AppLocalizations.of(context));
+              return child!;
+            },
+            home: Scaffold(
+              body: Column(
+                children: [
+                  SearchFilterChips(
+                    enabled: const {SearchCategory.albums},
+                    isAllEnabled: false,
+                    scope: SearchScope.online,
+                    onToggle: (_) {},
+                    onToggleAll: () {},
+                    onScopeChanged: (_) {},
+                  ),
+                  const Expanded(
+                    child: SingleChildScrollView(
+                      child: OnlineCatalogueSearchSection(
+                        query: 'Dude',
+                        category: SearchCategory.albums,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Toutes les sources'), findsOneWidget);
+      expect(find.text('En ligne'), findsOneWidget);
+      expect(find.text('Albums en ligne'), findsOneWidget);
+      await tester.tap(find.text('Recherche impossible. Réessayer'));
+      await tester.pumpAndSettle();
+      expect(api.refreshes, [false, true]);
+      expect(find.text('Aucun album trouvé en ligne.'), findsOneWidget);
+      expect(find.text('No albums found online.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+}

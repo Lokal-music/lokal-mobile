@@ -58,6 +58,30 @@ class MorneyeTransfer {
   final bool done;
 }
 
+/// Bytes must describe the actual segment payload, not audio duration.
+@pragma('vm:entry-point')
+int? morneyeSegmentBytes(Object? segment) {
+  if (segment is! Map) return null;
+  for (final key in ['byteLength', 'byte_length', 'contentLength',
+                     'content_length', 'sizeBytes', 'size_bytes']) {
+    final raw = segment[key];
+    final bytes = raw is num ? raw.toInt() : int.tryParse('${raw ?? ''}');
+    if (bytes != null && bytes > 0 && bytes <= _maxAudio) return bytes;
+  }
+  return null;
+}
+
+int? morneyeKnownSegmentTotal(List segments) {
+  var total = 0;
+  for (final segment in segments) {
+    final length = morneyeSegmentBytes(segment);
+    if (length == null) return null;
+    total += length;
+    if (total > _maxAudio) return null;
+  }
+  return total > 0 ? total : null;
+}
+
 class MorneyeCancelled implements Exception {
   const MorneyeCancelled();
   @override
@@ -578,6 +602,10 @@ class MorneyeHost {
     throw StateError('Download failed');
   }
 
+  // Segmented or DASH media are assembled in complete, verified form before
+  // playback. Individual HEAD lengths do not reliably describe their final
+  // container: never publish a speculative ranged length to Media3.
+
   Future<Map<String, Object?>> segments(
     List segmentsList,
     String destination,
@@ -630,7 +658,9 @@ class MorneyeHost {
             .toInt()
             .clamp(1, 8);
     try {
-      final temp = file('$output.tmp');
+      // Assemble contiguous segments privately; publish only the complete
+      // file through the standard download result.
+      final temp = file('$output.part');
       final sink = await File(temp).open(mode: FileMode.write);
       var size = 0;
       try {
@@ -685,6 +715,10 @@ class MorneyeHost {
               }
               await sink.writeFrom(chunk);
             }
+            // Publish only contiguous bytes in original segment order. A
+            // completed future segment must never expose a gap to the decoder.
+            await sink.flush();
+
             await piece.delete();
           }
         }

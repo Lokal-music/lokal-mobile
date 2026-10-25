@@ -10,6 +10,7 @@ import 'package:flick/services/local_metadata_repair.dart';
 import 'package:flick/services/music_folder_service.dart';
 import 'package:flick/src/rust/api/scanner.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Repository implements SongRepository {
@@ -89,6 +90,7 @@ AudioFileMetadata _metadata({
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test(
@@ -211,6 +213,119 @@ void main() {
     expect(row.bitDepth, 24);
     expect(row.metadataComplete, true);
   });
+
+  test(
+    '5500 complete local songs do not trigger startup header probes',
+    () async {
+      final rows = {
+        for (var i = 1; i <= 5500; i++)
+          i: (_row(i)
+            ..filePath = '/music/$i.flac'
+            ..metadataComplete = true),
+      };
+      var probes = 0;
+      var yields = 0;
+      final worker = LocalMetadataRepair(
+        databaseReady: () => true,
+        loadSong: (id) async => rows[id],
+        inspect: (_) async {
+          probes++;
+          return true;
+        },
+        rest: (_) async => yields++,
+      );
+      final songs = [for (var i = 1; i <= 5500; i++) _song(i)];
+      worker.warm(songs);
+      await worker.idle;
+      worker.warm(songs); // An artwork/metadata refresh must stay idle too.
+      await worker.idle;
+      expect(probes, 0);
+      expect(yields, greaterThan(80)); // Cached checks still yield in batches.
+    },
+  );
+
+  test(
+    'SAF library has one metadata owner and is never queued for repair',
+    () async {
+      var loads = 0;
+      final worker = LocalMetadataRepair(
+        databaseReady: () => true,
+        loadSong: (_) async {
+          loads++;
+          return null;
+        },
+        rest: (_) async {},
+      );
+      worker.warm([
+        for (var i = 0; i < 5500; i++)
+          _song(i).copyWith(filePath: 'content://music/$i'),
+      ]);
+      await worker.idle;
+      expect(loads, 0);
+    },
+  );
+
+  test(
+    'automatic repair never stages inaccessible files or SAF documents',
+    () async {
+      for (final path in ['content://music/1', '/missing/audio/1.flac']) {
+        final row = _row(1)..filePath = path;
+        // No platform channel or Rust initialization: these must return before
+        // any copy or parser is invoked, even for unknown source sizes.
+        expect(
+          await LocalMetadataRepair.probe(
+            row,
+            persist: false,
+            allowStaging: false,
+          ),
+          false,
+        );
+      }
+    },
+  );
+
+  test('explicit repair retains the staging fallback and size cap', () async {
+    const channel = MethodChannel('com.mossapps.flick/storage');
+    final calls = <MethodCall>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return null; // Provider refuses this copy; do not invoke a Rust parser.
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    expect(await LocalMetadataRepair.probe(_row(1), persist: false), false);
+    expect(calls.map((call) => call.method), ['cacheUriForPlayback']);
+    expect((calls.single.arguments as Map)['maxSizeBytes'], 256 * 1024 * 1024);
+  });
+
+  test(
+    'desktop codec corrections and incomplete files still get inspected',
+    () async {
+      final rows = {
+        1: (_row(1)..filePath = '/music/1.flac'),
+        2: (_row(2)
+          ..filePath = '/data/desktop_music/2.flac'
+          ..metadataComplete = true),
+        3: (_row(3)
+          ..filePath = '/music/3.flac'
+          ..metadataComplete = true),
+      };
+      final inspected = <int>[];
+      final worker = LocalMetadataRepair(
+        databaseReady: () => true,
+        loadSong: (id) async => rows[id],
+        inspect: (row) async {
+          inspected.add(row.id);
+          return true;
+        },
+        rest: (_) async {},
+      );
+      worker.warm([_song(1), _song(2), _song(3)]);
+      await worker.idle;
+      expect(inspected, [1, 2]);
+    },
+  );
 
   test(
     'repair checkpoints during a backlog and resumes without reprobes',

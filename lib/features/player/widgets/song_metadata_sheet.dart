@@ -1,9 +1,52 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flick/core/theme/adaptive_color_provider.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/widgets/common/glass_bottom_sheet.dart';
 import 'package:flick/l10n/l10n.dart';
+
+/// Audio source names come from the selected provider, not its media URL.
+/// Content length is only shown if the actual rendition reports its bytes.
+String metadataSourceLabel(Song song) {
+  final configured = song.sourceDisplayName?.trim();
+  if (configured != null && configured.isNotEmpty) return configured;
+  if (song.sourcePackage == 'konnekted.morneye-live') return 'Morneye';
+  if (song.sourcePackage == 'konnekted.progressive') return 'HTTP add-on';
+  if (song.sourcePackage == 'konnekted.discovery') return 'Online source';
+  final source = song.sourceType?.trim();
+  if (source != null && source.isNotEmpty) {
+    return switch (source.toLowerCase()) {
+      'subsonic' => 'Subsonic / Navidrome',
+      'jellyfin' => 'Jellyfin',
+      'webdav' => 'WebDAV',
+      _ => source,
+    };
+  }
+  return song.isExternal ? 'External source' : 'Local file';
+}
+
+String? metadataFileSizeMb(int? bytes) =>
+    bytes != null && bytes > 0
+        ? '${(bytes / 1000000).toStringAsFixed(2)} MB'
+        : null;
+
+/// Local files can be measured without network activity. Opaque Morneye and
+/// progressive handles are not ordinary paths and must never be stat'ed.
+Future<int?> metadataFileBytes(Song song) async {
+  if (song.fileSizeBytes case final known? when known > 0) return known;
+  final path = song.filePath;
+  if (path == null || path.isEmpty ||
+      path.contains('://') || song.isNetworkSource) return null;
+  try {
+    final file = File(path);
+    final size = await file.length();
+    return size > 0 ? size : null;
+  } on FileSystemException {
+    return null;
+  }
+}
 
 class SongMetadataSheet extends StatelessWidget {
   final Song song;
@@ -57,6 +100,14 @@ class SongMetadataSheet extends StatelessWidget {
           if (song.album != null)
             _buildMetadataRow(context, l10n.album, song.album!),
           _buildMetadataRow(context, l10n.duration, song.formattedDuration),
+          _buildMetadataRow(context, l10n.source, metadataSourceLabel(song)),
+          FutureBuilder<int?>(
+            future: metadataFileBytes(song),
+            builder: (context, snapshot) => _buildMetadataRow(
+              context, l10n.size,
+              metadataFileSizeMb(snapshot.data) ?? l10n.unknown,
+            ),
+          ),
           _buildMetadataRow(
             context,
             l10n.format,

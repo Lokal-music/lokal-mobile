@@ -732,6 +732,9 @@ Isar writes and checkpoints its existing file fingerprints during the backlog,
 so reopening does not repeat an entire unfinished library migration. Explicit
 scans/repairs retain their foreground scheduling. Regression coverage uses fake
 repositories/probes; Samsung S25 Ultra thermal/FPS confirmation remains pending.
+The large-library follow-up skips redundant complete-row probes and automatic SAF
+staging, yields artist-credit warmup, and bypasses desktop recording matching for
+phone-only libraries. See `docs/LARGE_LIBRARY_HANGS.md` for evidence and limits.
 
 
 ### Player cover return and miniplayer queue sheet
@@ -744,3 +747,13 @@ playback opening Now Playing after dismissal. Reorder, removal, multi-select
 and the embedded full-player queue retain their existing operations. Widget
 and pixel-render regressions cover the transitions and sheet interactions;
 Android device gesture validation remains pending.
+
+
+### Catalogue album lookup and search filters
+
+Album lookup searches releases directly and matches soundtrack credit lists
+without conflating language/score editions. Track lists and artwork survive
+independent metadata failures; missing covers use verified Deezer/iTunes fallback.
+Search categories are single-choice with an explicit All reset and separate
+Library/Online scopes. Online artist/album results open their catalogue pages.
+See `docs/SEARCH_AND_ALBUM_LOOKUP.md` for validation and remaining test limits.
