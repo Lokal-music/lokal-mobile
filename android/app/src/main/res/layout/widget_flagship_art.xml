@@ -103,7 +103,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:contentDescription="@string/widget_nothing_playing"
             android:visibility="gone"
             android:fontFamily="@font/product_sans_regular"
             android:textColor="#DDFFFFFF"
