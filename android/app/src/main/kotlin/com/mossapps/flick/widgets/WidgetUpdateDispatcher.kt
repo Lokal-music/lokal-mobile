@@ -52,15 +52,34 @@ internal object WidgetUpdateDispatcher {
                         Log.e(TAG, "Widget update failed for id=$id; using safe fallback", e)
                         try {
                             val fallback = RemoteViews(appContext.packageName, R.layout.widget_compact)
+                            // Preserve the saved track metadata and useful
+                            // transport commands even if a rich layout fails.
+                            val prefs = WidgetPrefs.get(appContext)
+                            val hasSong = prefs.getBoolean(WidgetPrefs.KEY_HAS_SONG, false)
                             fallback.setTextViewText(
                                 R.id.compact_title,
-                                appContext.getString(R.string.widget_tap_to_open),
+                                if (hasSong) prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
+                                else appContext.getString(R.string.widget_nothing_playing),
                             )
+                            fallback.setTextViewText(
+                                R.id.compact_artist,
+                                prefs.getString(WidgetPrefs.KEY_ARTIST, "").orEmpty(),
+                            )
+                            fallback.setViewVisibility(R.id.compact_artist,
+                                if (hasSong) android.view.View.VISIBLE else android.view.View.GONE)
+                            fallback.setViewVisibility(R.id.compact_controls,
+                                if (hasSong) android.view.View.VISIBLE else android.view.View.GONE)
+                            fallback.setImageViewResource(R.id.compact_play_pause,
+                                if (prefs.getBoolean(WidgetPrefs.KEY_IS_PLAYING, false))
+                                    R.drawable.widget_ic_lucide_pause else R.drawable.widget_ic_lucide_play)
                             fallback.setOnClickPendingIntent(
-                                R.id.compact_title, WidgetIntents.openApp(appContext, 60),
-                            )
-                            fallback.setViewVisibility(R.id.compact_artist, android.view.View.GONE)
-                            fallback.setViewVisibility(R.id.compact_controls, android.view.View.GONE)
+                                R.id.compact_title, WidgetIntents.openApp(appContext, 60))
+                            fallback.setOnClickPendingIntent(
+                                R.id.compact_prev, WidgetIntents.playerPrevious(appContext))
+                            fallback.setOnClickPendingIntent(
+                                R.id.compact_play_pause, WidgetIntents.playerPlayPause(appContext))
+                            fallback.setOnClickPendingIntent(
+                                R.id.compact_next, WidgetIntents.playerNext(appContext))
                             manager.updateAppWidget(id, fallback)
                         } catch (error: Exception) {
                             Log.e(TAG, "Widget fallback failed for id=$id", error)

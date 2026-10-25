@@ -30,7 +30,7 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
     final tab = _tabs[_tab];
     return LokalSettingsScaffold(
       title: l10n.widgets,
-      subtitle: 'How Lokal looks on your home screen.',
+      subtitle: 'Now Playing, Flow / Radio and Cover Flow. All widgets resize on your Android home screen; these controls customize the existing Now Playing layouts.',
       children: [
         LokalSettingsBlock(
           top: 16,

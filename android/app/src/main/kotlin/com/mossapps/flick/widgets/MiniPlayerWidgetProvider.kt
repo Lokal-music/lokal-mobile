@@ -37,17 +37,19 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         val title = if (hasSong) {
             prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
                 .ifBlank { context.getString(R.string.widget_nothing_playing) }
-        } else context.getString(R.string.widget_tap_to_open)
+        } else context.getString(R.string.widget_nothing_playing)
         val position = readMs(prefs, WidgetPrefs.KEY_POSITION_MS)
         val duration = readMs(prefs, WidgetPrefs.KEY_DURATION_MS)
         val accent = WidgetPrefs.getAccentColor(context)
-        val width = manager.getAppWidgetOptions(id).getInt(
-            AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0
-        )
+        val width = WidgetSize.width(manager, id)
         val scale = WidgetPrefs.getMiniTextScale(context)
         val views = RemoteViews(context.packageName, R.layout.widget_mini_player)
         views.setInt(R.id.widget_root, "setBackgroundResource",
             WidgetPrefs.getBackgroundDrawableRes(context))
+        val timeVisible = hasSong && duration > 0 && WidgetSize.height(manager, id) >= 68
+        views.setViewVisibility(R.id.widget_time, if (timeVisible) View.VISIBLE else View.GONE)
+        if (timeVisible) views.setTextViewText(R.id.widget_time,
+            WidgetSize.time(position) + " / " + WidgetSize.time(duration))
         views.setTextViewText(R.id.widget_title, title)
         views.setTextViewTextSize(R.id.widget_title, TypedValue.COMPLEX_UNIT_SP,
             WidgetPrefs.scaledSp(13, width, 360f, scale).toFloat())
@@ -80,9 +82,11 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.widget_art_bg, WidgetIntents.openApp(context, 10))
 
         val visible = if (hasSong) View.VISIBLE else View.GONE
-        views.setViewVisibility(R.id.widget_prev, visible)
+        views.setViewVisibility(R.id.widget_prev,
+            if (width >= 245) visible else View.GONE)
         views.setViewVisibility(R.id.widget_play_pause, visible)
-        views.setViewVisibility(R.id.widget_next, visible)
+        views.setViewVisibility(R.id.widget_next,
+            if (width >= 245) visible else View.GONE)
         if (hasSong) {
             views.setImageViewResource(R.id.widget_play_pause,
                 if (playing) R.drawable.widget_ic_lucide_pause

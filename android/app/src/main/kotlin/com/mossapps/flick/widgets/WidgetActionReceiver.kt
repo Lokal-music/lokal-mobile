@@ -6,6 +6,8 @@ import android.content.Intent
 import android.util.Log
 import android.os.Handler
 import android.os.Looper
+import android.appwidget.AppWidgetManager
+import org.json.JSONArray
 import java.util.concurrent.atomic.AtomicBoolean
 import com.mossapps.flick.MainActivity
 import io.flutter.embedding.engine.FlutterEngineCache
@@ -16,6 +18,27 @@ class WidgetActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val uri = intent.data?.toString() ?: return
         if (!uri.startsWith("flickwidget://")) return
+        // Browsing does not need to start Flutter. Update just the selected
+        // widget ID, so the launcher responds instantly even when Lokal is
+        // not running. Playback still uses the durable Dart action inbox.
+        val parsed = android.net.Uri.parse(uri)
+        if (parsed.host == "recommend" && parsed.path == "/browse") {
+            val id = parsed.getQueryParameter("id")?.toIntOrNull() ?: return
+            val step = parsed.getQueryParameter("step")?.toIntOrNull()?.coerceIn(-1, 1) ?: return
+            val prefs = WidgetPrefs.get(context)
+            val count = try {
+                JSONArray(prefs.getString(WidgetPrefs.KEY_RECOMMENDATIONS, "[]")).length().coerceAtMost(8)
+            } catch (_: Exception) { 0 }
+            if (count > 0) {
+                val key = WidgetPrefs.recommendationCursor(id)
+                val next = (prefs.getInt(key, 0) + step).mod(count)
+                prefs.edit().putInt(key, next).apply()
+                val mgr = AppWidgetManager.getInstance(context)
+                CoverFlowRecommendationWidgetProvider()
+                    .onUpdate(context, mgr, intArrayOf(id))
+            }
+            return
+        }
         WidgetActionInbox.store(context, uri)
         // Keep this broadcast alive until MethodChannel reports whether a UI
         // handler consumed the command. Otherwise Android may kill a headless

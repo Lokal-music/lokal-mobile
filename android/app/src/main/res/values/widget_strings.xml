@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_mini_player_name">Lokal</string>
+    <string name="widget_mini_player_name">Lokal · Now Playing bar</string>
 
     <string name="widget_mini_player_desc">Compact player with transport controls</string>
 
@@ -14,9 +14,13 @@
     <string name="widget_repeat">Toggle repeat</string>
     <string name="widget_queue">Queue</string>
 
-    <string name="widget_flagship_name">Lokal 4×3</string>
+    <string name="widget_flagship_name">Lokal · Now Playing artwork</string>
     <string name="widget_flagship_desc">Full player with album art and controls</string>
 
-    <string name="widget_compact_name">Lokal 2×2</string>
+    <string name="widget_compact_name">Lokal · Now Playing square</string>
     <string name="widget_compact_desc">Title and artist with transport controls</string>
+    <string name="widget_flow_radio_name">Lokal · Flow &amp; Radio</string>
+    <string name="widget_flow_radio_desc">Adaptive personal Flow, new mixes and song radio, with playback status</string>
+    <string name="widget_recommended_flow_name">Lokal · Cover Flow</string>
+    <string name="widget_recommended_flow_desc">Browse and play recommended songs with three cover artworks</string>
 </resources>

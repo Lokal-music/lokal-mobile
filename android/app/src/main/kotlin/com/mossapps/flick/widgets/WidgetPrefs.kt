@@ -28,6 +28,10 @@ internal object WidgetPrefs {
     const val KEY_POSITION_MS = "flick_widget_position_ms"
     const val KEY_DURATION_MS = "flick_widget_duration_ms"
     const val KEY_QUEUE_COUNT = "flick_widget_queue_count"
+    const val KEY_FLOW_STATUS = "flick_widget_flow_status"
+    const val KEY_RECOMMENDATIONS = "flick_widget_recommendations"
+    const val KEY_RECOMMEND_ENABLED = "flick_widget_recommend_enabled"
+    fun recommendationCursor(id: Int) = "flick_widget_recommend_cursor_$id"
 
     private val BG_OPACITY_MAP = mapOf(
         0 to 0x00, 1 to 0x40, 2 to 0x80, 3 to 0xC0, 4 to 0xFF
@@ -56,6 +60,8 @@ internal object WidgetPrefs {
             MiniPlayerWidgetProvider::class.java,
             FlagshipWidgetProvider::class.java,
             CompactWidgetProvider::class.java,
+            FlowRadioWidgetProvider::class.java,
+            CoverFlowRecommendationWidgetProvider::class.java,
         ).forEach { cls ->
             val ids = mgr.getAppWidgetIds(ComponentName(context, cls))
             if (ids.isNotEmpty()) {

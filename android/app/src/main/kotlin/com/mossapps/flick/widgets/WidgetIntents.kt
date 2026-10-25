@@ -54,6 +54,16 @@ internal object WidgetIntents {
     fun playerRepeat(context: Context): PendingIntent =
         broadcast(context, Uri.parse("flickwidget://player/repeat"), 5)
 
+    fun flow(context: Context, action: String): PendingIntent =
+        broadcast(context, Uri.parse("flickwidget://flow/$action"), 600 + action.hashCode().and(0xFF))
+
+    fun recommendationBrowse(context: Context, id: Int, direction: Int): PendingIntent =
+        broadcast(context, Uri.parse("flickwidget://recommend/browse?id=$id&step=$direction"),
+            1000 + id * 3 + if (direction < 0) 0 else 1)
+
+    fun recommendationPlay(context: Context, id: Int): PendingIntent =
+        broadcast(context, Uri.parse("flickwidget://recommend/play?id=$id"), 1000 + id * 3 + 2)
+
     fun openApp(context: Context, requestCode: Int): PendingIntent =
         activity(context, Uri.parse("flickwidget://player/open"), requestCode)
 }
