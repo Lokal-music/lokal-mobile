@@ -69,6 +69,43 @@ class PlayerArtworkQuality {
       if (updated != uri.path) upgraded = uri.replace(path: updated).toString();
     }
 
+    // Amazon Music returns the *same* cover asset in tiny transformed
+    // variants (e.g. ._SL75_.jpg or ._AC_SX160_SY160_.jpg). Request a
+    // higher-quality rendition of that asset, keeping the original as a
+    // fallback when Amazon's CDN does not serve it.
+    if (upgraded == null &&
+        (host == 'm.media-amazon.com' ||
+         host == 'images-na.ssl-images-amazon.com' ||
+         host == 'images-eu.ssl-images-amazon.com' ||
+         host == 'images-fe.ssl-images-amazon.com' ||
+         host == 'images.amazon.com' ||
+         host == 'ecx.images-amazon.com')) {
+      final path = uri.path;
+      final transform = RegExp(
+        r'\._(?:AC_)?[^/]*?(?:SL|SX|SY|SS|UX|UY)\d+[^/]*?_\.(jpe?g|png)
+    // original remains an explicit fallback.
+    if (upgraded == null &&
+        (host == 'i.ytimg.com' || host == 'img.youtube.com')) {
+      final updated = uri.path.replaceFirst(
+        RegExp(r'/(?:default|mqdefault|hqdefault|sddefault)\.jpg$'),
+        '/maxresdefault.jpg',
+      );
+      if (updated != uri.path) upgraded = uri.replace(path: updated).toString();
+    }
+    return upgraded == null ? [original] : [upgraded, original];
+  }
+}
+,
+        caseSensitive: false,
+      ).firstMatch(path);
+      if (transform != null) {
+        final updated = path.replaceRange(
+          transform.start, transform.end, '._SL1200_.${transform[1]}',
+        );
+        if (updated != path) upgraded = uri.replace(path: updated).toString();
+      }
+    }
+
     // YouTube artwork's max-res rendition is not always uploaded, so the
     // original remains an explicit fallback.
     if (upgraded == null &&
