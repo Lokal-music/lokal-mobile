@@ -32,6 +32,7 @@ jobs:
       IOS_SIMULATOR_RUNTIME_VERSION: '26.0'
       LOKAL_IOS_CARGO_CACHE_ROOT: ${{ github.workspace }}/.dart_tool/lokal-ios-cargo
       CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,7 +73,7 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/registry/src
             ~/.cargo/registry/index
-          key: ios-cargo-${{ runner.os }}-${{ runner.arch }}-xcode26.0.1-rust1.98.0-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml', 'rust/cargokit.yaml', 'rust/**/*.rs', 'rust/vendor/**', 'rust_builder/cargokit/build_tool/lib/**', 'rust_builder/cargokit/*.sh') }}
+          key: ios-cargo-symbols-v2-${{ runner.os }}-${{ runner.arch }}-xcode26.0.1-rust1.98.0-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml', 'rust/cargokit.yaml', 'rust/**/*.rs', 'rust/vendor/**', 'rust_builder/cargokit/build_tool/lib/**', 'rust_builder/cargokit/*.sh') }}
       - name: Boot an iPhone simulator
         run: python3 tool/ios_simulator.py
       - name: Verify the simulator with a minimal Flutter control app
@@ -103,11 +104,11 @@ jobs:
           fi
       - name: Build the release iPhone app without signing credentials
         id: device_build
-        run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}'
+        run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}' --split-debug-info=build/ios/dart-symbols
       - name: Inspect and package the engineering IPA
         id: package
         run: |
-          python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa
+          python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa --dart-symbols build/ios/dart-symbols
           git archive --format=tar.gz HEAD -o build/ios/ipa/Lokal-source.tar.gz
       - name: Preserve the unsigned engineering build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -132,6 +133,8 @@ jobs:
       - name: Exercise actual startup, FFI and playback
         id: smoke
         timeout-minutes: 12
+        env:
+          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-26
         run: |
           if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-build.log"
@@ -139,6 +142,22 @@ jobs:
           fi
           if ! python3 tool/ios_smoke_runner.py > "$RUNNER_TEMP/ios-smoke.log" 2>&1; then
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke.log"
+            exit 1
+          fi
+      - name: Boot an older supported simulator runtime
+        env:
+          IOS_SIMULATOR_RUNTIME_VERSION: '18.6'
+        run: |
+          xcrun simctl shutdown "$IOS_SIMULATOR_UDID"
+          python3 tool/ios_simulator.py
+      - name: Exercise the same native app on iOS 18.6
+        id: smoke_older
+        timeout-minutes: 8
+        env:
+          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-18.6
+        run: |
+          if ! python3 tool/ios_smoke_runner.py > "$RUNNER_TEMP/ios-smoke-18.6.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-18.6.log"
             exit 1
           fi
       - name: Preserve dependency locks
@@ -162,6 +181,11 @@ jobs:
             ${{ runner.temp }}/ios-smoke-build.log
             ${{ runner.temp }}/ios-smoke-console.log
             ${{ runner.temp }}/ios-smoke-iphone.png
+            ${{ runner.temp }}/ios-main-player.png
+            ${{ runner.temp }}/ios-runtime-report.json
+            ${{ runner.temp }}/ios-runtime-26/
+            ${{ runner.temp }}/ios-runtime-18.6/
+            ${{ runner.temp }}/ios-smoke-18.6.log
             ${{ runner.temp }}/ios-simulator-console.log
             ${{ runner.temp }}/lokal-iphone.log
             ${{ runner.temp }}/lokal-iphone.json
@@ -179,6 +203,7 @@ jobs:
           CONTROL_RESULT: ${{ steps.control.outcome }}
           LAUNCH_RESULT: ${{ steps.launch.outcome }}
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          OLDER_SMOKE_RESULT: ${{ steps.smoke_older.outcome }}
         run: |
           {
             printf '## iPhone engineering build\n\n'
@@ -187,6 +212,7 @@ jobs:
             printf '| Device binary/package inspection | %s |\n' "$PACKAGE_RESULT"
             printf '| Native first launch | %s |\n' "$LAUNCH_RESULT"
             printf '| Real startup, scanner, QuickJS and playback | %s |\n' "$SMOKE_RESULT"
+            printf '| Same integration checks on iOS 18.6 | %s |\n' "$OLDER_SMOKE_RESULT"
             printf '\nAn engineering IPA is not a qualified release. Physical iPhone and Windows installation acceptance remain separate.\n'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Save successfully compiled native dependencies

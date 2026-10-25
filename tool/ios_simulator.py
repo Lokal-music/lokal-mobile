@@ -15,7 +15,17 @@ runtime_id = 'com.apple.CoreSimulator.SimRuntime.iOS-' + version.replace('.', '-
 candidates = [d for runtime, entries in devices.items() if runtime == runtime_id
               for d in entries if d.get('isAvailable') and d['name'].startswith('iPhone')]
 if not candidates:
-    raise SystemExit(f'No available iPhone for required iOS {version}; installed runtimes: {list(devices)}')
+    runtimes = json.loads(subprocess.check_output(
+        ['xcrun', 'simctl', 'list', 'runtimes', 'available', '--json'], text=True))['runtimes']
+    runtime = next((r for r in runtimes if r['identifier'] == runtime_id and r.get('isAvailable')), None)
+    types = [] if runtime is None else [t for t in runtime.get('supportedDeviceTypes', []) if t['name'].startswith('iPhone')]
+    if not types:
+        raise SystemExit(f'No available iPhone for required iOS {version}; installed runtimes: {list(devices)}')
+    device_type = sorted(types, key=lambda t: t['name'])[0]
+    name = f'Lokal iPhone iOS {version}'
+    udid = subprocess.check_output(['xcrun', 'simctl', 'create', name,
+        device_type['identifier'], runtime_id], text=True).strip()
+    candidates = [{'udid': udid, 'name': name, 'state': 'Shutdown'}]
 device = sorted(candidates, key=lambda d: (d['state'] != 'Booted', d['name']))[0]
 if device['state'] != 'Booted':
     subprocess.run(['xcrun', 'simctl', 'boot', device['udid']], check=True)

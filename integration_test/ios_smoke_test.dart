@@ -3,6 +3,9 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flick/app/app.dart';
+import 'package:flick/features/konnekted/konnekted_shell.dart';
+import 'package:flick/features/onboarding/screens/onboarding_screen.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flick/main.dart' as app;
 import 'package:flick/models/audio_engine_type.dart';
 import 'package:flick/models/song.dart';
@@ -54,7 +57,7 @@ Uint8List _tone() {
   return bytes.buffer.asUint8List();
 }
 
-Future<void> _expectPlaybackProgress(
+Future<int> _expectPlaybackProgress(
   WidgetTester tester,
   PlayerService player,
 ) async {
@@ -67,14 +70,14 @@ Future<void> _expectPlaybackProgress(
     if (player.positionNotifier.value - initial >
         const Duration(milliseconds: 300)) {
       expect(player.isPlayingNotifier.value, true);
-      return;
+      return (player.positionNotifier.value - initial).inMilliseconds;
     }
   }
   fail('The actual playback position did not advance after $initial');
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('iPhone cold launch, native scanner/add-ons and real playback', (
     tester,
@@ -98,6 +101,17 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     }
     expect(find.byType(FlickPlayerApp), findsOneWidget);
+    if (find.byType(OnboardingScreen).evaluate().isNotEmpty) {
+      await tester.tap(find.text(lokalText('Skip Setup')));
+    }
+    for (
+      var i = 0;
+      i < 30 && find.byType(KonnektedShell).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    expect(find.byType(KonnektedShell), findsOneWidget);
     expect(tester.takeException(), isNull, reason: startupErrors.join('\n\n'));
     final identity = await const MethodChannel('lokal/app_info')
         .invokeMapMethod<String, dynamic>('get');
@@ -133,6 +147,7 @@ void main() {
       }),
       host: (_, _) => 'null',
     );
+    late final Object? quickJsResult;
     try {
       final echoed = jsonDecode(
         await guest.invoke(
@@ -142,6 +157,7 @@ void main() {
         ),
       );
       expect(echoed, {'value': 42});
+      quickJsResult = echoed;
     } finally {
       guest.close();
     }
@@ -158,8 +174,9 @@ void main() {
       filePath: audio.path,
     );
     await player.play(song, playlist: [song]);
-    await _expectPlaybackProgress(tester, player);
+    final systemProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosSystem);
+    await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
     await player.seek(const Duration(seconds: 2));
@@ -177,7 +194,7 @@ void main() {
     );
     await player.syncIosProcessingRoute();
     await player.play(song, playlist: [song]);
-    await _expectPlaybackProgress(tester, player);
+    final dspProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
     await player.pause();
     await applyEqualizer(EqualizerState.initial());
@@ -200,8 +217,20 @@ void main() {
       fileType: 'WV',
     );
     await player.play(wvSong, playlist: [wvSong]);
-    await _expectPlaybackProgress(tester, player);
+    final wavpackProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
+    binding.reportData = {
+      ...?binding.reportData,
+      'version': identity?['version'],
+      'native_scan_files': scan.totalFiles,
+      'native_scan_sample_rate': scan.newOrModified.single.sampleRate,
+      'quickjs_echo': quickJsResult,
+      'system_wav_progress_ms': systemProgress,
+      'rust_dsp_progress_ms': dspProgress,
+      'rust_wavpack_progress_ms': wavpackProgress,
+      'ffmpeg_wavpack_conversion': 'passed',
+      'onboarding_to_app_shell': 'passed',
+    };
     await player.pause();
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();

@@ -7,7 +7,8 @@ import time
 from ios_runtime import capture, copy_crashes, run, start, stop, wait_for_vm
 
 device = os.environ['IOS_SIMULATOR_UDID']
-output = Path(os.environ['RUNNER_TEMP'])
+output = Path(os.environ.get('LOKAL_IOS_RUNTIME_EVIDENCE_DIR', os.environ['RUNNER_TEMP']))
+output.mkdir(parents=True, exist_ok=True)
 bundle = 'app.lokal.mobile'
 started = time.time()
 run('xcrun', 'simctl', 'install', device,

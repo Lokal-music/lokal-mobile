@@ -5,18 +5,43 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
-The first unsigned engineering IPA passed package inspection (33 Mach-O binaries,
-iPhone arm64 platform, bundle metadata and checksum). Native Rust probes pass for
-both device and Apple Silicon simulator with raw USB excluded. **Runtime acceptance
-has not passed: the automatically selected iOS 18.5 simulator aborts loading
-`libswiftWebKit`, matching [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831).
-CI now explicitly selects iOS 26.0; this runtime correction is awaiting its run.** Native console/crash-report collection is now part of CI.
-No signed installation or physical iPhone behavior is validated.
+The unsigned engineering IPA passes package inspection (33 Mach-O binaries,
+iPhone arm64 platform, minimum OS, metadata and checksum). Native Rust probes
+pass for device and Apple Silicon simulator with raw USB excluded.
 
-The engineering artifact is in
-[build 7](https://github.com/lokal-music/lokal-mobile/actions/runs/40147725974).
-It is a diagnostic build, not a qualified release. See
-[Windows installation and acceptance](IOS_SIDELOADING.md) for distribution limits.
+**The complete iOS workflow passes on build 11.** Lokal renders its actual
+welcome screen; native startup, Rust scanning, QuickJS execution, system WAV
+play/pause/seek, Rust/Core Audio DSP playback, and FFmpeg-to-WavPack playback all
+pass without native mocks on iOS 26.0.
+[Build 11](https://github.com/lokal-music/lokal-mobile/actions/runs/40193874578)
+contains the unsigned release IPA and screenshots. The IPA SHA-256 is
+`7af6d3d7bc97e31bd666b37bbe338eb23703ae11c86154fe7c60774ad0831ca2`.
+
+The next validation expansion exercises onboarding into the full app shell on
+iOS 26.0 and 18.6, exports measured position advances/native screenshots, and
+requires matching crash symbols during packaging. Those additional checks are
+pending their hosted run. No signed installation or physical iPhone behavior is
+validated.
+
+The earlier iOS 18.5 startup abort matches
+[WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
+selects iOS 26.0. The old launcher-subprocess and launchctl-label checks were not
+reliable evidence of app liveness; direct VM readiness now supplies that gate.
+Native console, process sampling, screenshots and crash reports remain available.
+
+The IPA is an engineering build, not a qualified release. See
+[Windows installation and acceptance](IOS_SIDELOADING.md).
+
+```mermaid
+flowchart LR
+  Source["Flutter + Rust source"] --> Mac["Hosted Xcode 26.0.1"]
+  Mac --> Device["arm64 release/AOT · build passes"]
+  Mac --> Sim["iOS 26 · real welcome screen renders"]
+  Device --> IPA["Unsigned engineering IPA · inspection passes"]
+  Sim --> Smoke["Scanner / QuickJS / audio · simulator passes"]
+  IPA --> Windows["Windows re-sign/install · untested"]
+  Windows --> Phone["Physical iPhone acceptance · pending"]
+```
 
 ### Implementation already in place
 
@@ -37,7 +62,8 @@ It is a diagnostic build, not a qualified release. See
   The native picker UI and exports still need iPhone acceptance.
 - Integration smoke test exercises real startup, scanner, QuickJS, system WAV
   playback, Rust DSP and WavPack fallback. No native mocks substitute for these
-  operations; the current native launch failure blocks execution.
+  operations; these assertions passed on iOS 26.0. Broader fixture and device
+  coverage remain acceptance work.
 
 Chromecast sender integration, WidgetKit, Discord feasibility and resumable
 background transfers remain open work. Live add-on stream handles currently
@@ -406,6 +432,9 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
 
 ## Current validation ledger
 
+- Host Rust tests with the default native-audio/USB features: **303 passed**.
+  No USB hardware test is inferred from that result.
+
 - Full simulator and release iPhone builds passed on hosted macOS/Xcode 26.0.1.
   Engineering IPA inspection passed; its SHA-256 is published with the artifact.
 - Both native Rust target probes passed with no `rusb`/`libusb1-sys` dependency.
@@ -423,10 +452,13 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
   a crossfade timeout. All 26 other failing test cases reproduced on the untouched
   audit baseline; the crossfade hang reproduced separately there too. The full
   suite remains red; this comparison does not turn baseline failures into passes.
-- Native console identified the startup abort: iOS 18.5 simulator cannot load
-  `libswiftWebKit`, matching WebKit bug 293831. The launcher subprocess can linger
-  after this dyld failure, so the probe now also checks the actual app service.
-  CI selects iOS 26.0 explicitly. The smoke test has not passed yet.
+- Native console identified the original abort: iOS 18.5 simulator cannot load
+  `libswiftWebKit`, matching WebKit bug 293831. iOS 26.0 now runs the control app
+  and actual Lokal welcome screen, with direct Dart VM readiness confirmed.
+  The Android-only Cast/Bluetooth event subscriptions are now platform-gated.
+  Build 11 passes real scanning, QuickJS, AVPlayer progress/pause/seek, Rust DSP
+  playback and actual WavPack conversion/playback. This is simulator execution
+  evidence, not an audible-fidelity or physical-accessory measurement.
 - The smoke harness uses the supported Flutter drive existing-app adapter and
   probes the real loopback Dart VM directly, with native console capture and
   bounded timeouts. Its HTTP handshake was checked against a real local Dart VM;

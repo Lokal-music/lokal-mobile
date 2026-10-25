@@ -23,9 +23,15 @@ is required to perform these installation and acceptance steps.
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
 The engineering IPA is saved after binary inspection, before runtime tests;
-read the run's result to see which tests passed or failed. It is not a qualified
-public release, and neither screenshots nor a successful simulator run establish
-physical-iPhone validation.
+read the associated run's result for its acceptance status. Build 11 passes the
+native simulator smoke test on iOS 26.0. Physical iPhone installation, background
+playback and accessory acceptance remain separate; this is not a qualified
+public release.
+
+Builds with a `Symbols` directory include Dart AOT symbols and matching native
+dSYMs, identified by binary UUID in the package metadata. Keep these with the
+source/build record for crash symbolication. Do not add the symbol directory to
+the IPA itself.
 
 ## Sign and install
 
