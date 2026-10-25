@@ -96,10 +96,8 @@ void main() {
                 children: [
                   SearchFilterChips(
                     enabled: const {SearchCategory.albums},
-                    isAllEnabled: false,
                     scope: SearchScope.online,
                     onToggle: (_) {},
-                    onToggleAll: () {},
                     onScopeChanged: (_) {},
                   ),
                   const Expanded(
