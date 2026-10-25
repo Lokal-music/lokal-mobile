@@ -9,10 +9,10 @@
         <TextView android:id="@+id/flow_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="FLOW / RADIO" android:textColor="#BFD7FF" android:textSize="11sp"
             android:fontFamily="@font/product_sans_bold"/>
-        <TextView android:id="@+id/flow_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+        <TextView android:id="@+id/flow_title" android:text="Music for your mood" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="6dp" android:textColor="#FFFFFF" android:textSize="16sp"
             android:fontFamily="@font/product_sans_bold" android:singleLine="true" android:ellipsize="end" />
-        <TextView android:id="@+id/flow_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        <TextView android:id="@+id/flow_status" android:text="Flow, fresh mixes and song radio" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="4dp" android:textColor="#D0FFFFFF" android:textSize="11sp"
             android:maxLines="2" android:ellipsize="end" />
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
