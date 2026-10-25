@@ -741,6 +741,8 @@ Future<List<_PlaybackSource>> _morneyeSources(
           final progress = MorneyeProgressText(found.title, addon.displayName);
           final qobuz = addon.name.toLowerCase().contains('qobuz');
           final tidal = addon.name.toLowerCase().contains('tidal');
+          final deezer = addon.name.toLowerCase().startsWith('deezer');
+          final byteProgressSource = qobuz || tidal || deezer;
           double? actualTransferPercent;
           var segmentedProgress = false;
           var finished = false;
@@ -807,12 +809,12 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   // Even an explicit Qobuz Save (live == null) needs the
                   // host's measured byte progress. The guest's initial 5%
                   // only means its download ticket is being resolved.
-                  onTransfer: live == null && !qobuz && !tidal ? null : (transfer) {
+                  onTransfer: live == null && !byteProgressSource ? null : (transfer) {
                     live?.observe(transfer);
                     // Qobuz's extension emits 5% during URL/ticket
                     // resolution. Only host-observed bytes are transfer
                     // progress; they must supersede guest progress numbers.
-                    if ((qobuz || tidal) && !finished && !segmentedProgress &&
+                    if (byteProgressSource && !finished && !segmentedProgress &&
                         transfer.total > 0 &&
                         transfer.written > 0) {
                       actualTransferPercent =
@@ -827,7 +829,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   },
                   onProgress: ({percent, message}) {
                     if (finished) return;
-                    if (qobuz || tidal) {
+                    if (byteProgressSource) {
                       if (message == 'Downloading audio segments…') {
                         segmentedProgress = true;
                         // Host-observed completed segments, not a guess.
@@ -843,7 +845,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
                         final text = progress.update(
                           message: qobuz
                               ? 'Resolving Qobuz stream…'
-                              : 'Resolving Tidal stream…',
+                              : tidal
+                                  ? 'Resolving Tidal stream…'
+                                  : 'Resolving Deezer stream…',
                         );
                         if (text != null) onStatus?.call(text);
                       }

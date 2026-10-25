@@ -240,6 +240,18 @@ bool providerIdentityIsAmazon(String addonName, Map track) {
       .hasMatch((track['id'] ?? '').toString().toUpperCase());
 }
 
+/// An installed Deezer source's own Search row contains the canonical
+/// numeric Deezer track ID. Repeating enrichTrack() issues another API call
+/// before the actual signed download ticket can even be requested.
+bool providerIdentityIsDeezer(String addonName, Map track) {
+  if (!addonName.toLowerCase().startsWith('deezer') ||
+      track['provider_id']?.toString().toLowerCase() != 'deezer') {
+    return false;
+  }
+  final id = track['id']?.toString() ?? '';
+  return RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(id);
+}
+
 String morneyeAlbumArtworkUrl(String original) {
   final uri = Uri.tryParse(original);
   if (uri == null || uri.scheme != 'https') return original;
@@ -1664,7 +1676,12 @@ class MorneyePackages {
       final amazonNativeTrack = forPlayback &&
           providerIdentityIsAmazon(addon.name, track) &&
           nativeSearchResult;
+      final deezerNativeTrack = forPlayback &&
+          nativeSearchResult && providerIdentityIsDeezer(addon.name, track);
       final skipEnrichment =
+          // Only the remembered native Deezer Search row avoids enrichTrack;
+          // cross-provider matches, saving and noncanonical IDs still verify.
+          deezerNativeTrack ||
           // A native Amazon Search result already has its canonical ASIN.
           // enrichTrack() performs unnecessary network requests before
           // checkAvailability can hand back the same ASIN. Keep enrichment
