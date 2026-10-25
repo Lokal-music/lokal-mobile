@@ -1540,12 +1540,12 @@ class PlayerService {
   void _scheduleAutoplayPreview() {
     final generation = ++_autoplayPreviewGeneration;
     _autoplayPreviewTimer?.cancel();
-    if (!_canPreviewAutoplay) {
-      if (autoplayQueueNotifier.value.isNotEmpty) {
-        autoplayQueueNotifier.value = const [];
-      }
-      return;
+    // Invalidate the previous source's candidates immediately. A rapid skip
+    // must never play a preview computed for an earlier playlist position.
+    if (autoplayQueueNotifier.value.isNotEmpty) {
+      autoplayQueueNotifier.value = const [];
     }
+    if (!_canPreviewAutoplay) return;
     // Avoid reading the whole library during rapid queue mutations/seek taps.
     _autoplayPreviewTimer = Timer(const Duration(milliseconds: 180), () {
       unawaited(_prepareAutoplayPreview(generation));
