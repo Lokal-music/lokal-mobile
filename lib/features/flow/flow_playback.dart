@@ -92,7 +92,7 @@ class _HostFlowPlayback implements FlowPlayback {
   @override
   Future<void> append(Song song) async {
     _ownedIds.add(song.id);
-    await ref.read(playerProvider.notifier).addToQueue(song);
+    await _service.appendToPlaylistTail(song);
   }
 
   @override
