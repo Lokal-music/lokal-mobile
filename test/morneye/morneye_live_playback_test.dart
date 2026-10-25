@@ -120,14 +120,28 @@ void main() {
 
   test('Amazon/Tidal direct fast-start M4A can stream, DASH or DRM cannot', () async {
     final ftyp = mp4Box('ftyp', [0x4d, 0x34, 0x41, 0x20, 0, 0, 0, 0]);
-    final moov = mp4Box('moov', [
-      ...List<int>.filled(8, 0),
-      ...'mp4a'.codeUnits,
-      ...List<int>.filled(16, 0),
+    final stsd = mp4Box('stsd', [
+      0, 0, 0, 0, // version / flags
+      0, 0, 0, 1, // sample entry count
+      ...mp4Box('mp4a', List<int>.filled(28, 0)),
     ]);
+    final stbl = mp4Box('stbl', stsd);
+    final minf = mp4Box('minf', stbl);
+    final hdlr = mp4Box('hdlr', [
+      ...List<int>.filled(8, 0), ...'soun'.codeUnits,
+      ...List<int>.filled(8, 0),
+    ]);
+    final mdia = mp4Box('mdia', [...hdlr, ...minf]);
+    final trak = mp4Box('trak', mdia);
+    final moov = mp4Box('moov', trak);
     final media = [...ftyp, ...moov, ...List<int>.filled(65536 - ftyp.length - moov.length, 0)];
     expect(MorneyeLiveSession.playableMime(media, 'direct.m4a'), 'audio/mp4');
     expect(MorneyeLiveSession.playableMime(media, 'direct.flac'), isNull);
+    final fakeMoov = mp4Box('moov', [
+      ...List<int>.filled(8, 0), ...'mp4a'.codeUnits,
+    ]);
+    expect(MorneyeLiveSession.playableMime([...ftyp, ...fakeMoov], 'fake.m4a'),
+        isNull, reason: 'Codec text without an audio trak/stsd is not playable');
 
     final file = File('${directory.path}/audio.m4a.part');
     await file.writeAsBytes(media);
@@ -143,8 +157,7 @@ void main() {
         reason: 'A container alone does not prove the audio bit depth');
 
     final encrypted = mp4Box('moov', [
-      ...List<int>.filled(8, 0), ...'mp4a'.codeUnits,
-      ...'sinf'.codeUnits, ...List<int>.filled(8, 0),
+      ...trak, ...mp4Box('sinf', List<int>.filled(8, 0)),
     ]);
     final drm = [...ftyp, ...encrypted, ...List<int>.filled(65536, 0)];
     expect(MorneyeLiveSession.playableMime(drm, 'amazon.m4a'), isNull);
