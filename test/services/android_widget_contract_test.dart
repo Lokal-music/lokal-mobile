@@ -205,7 +205,7 @@ void main() {
     expect(actions, contains('stableOnlinePlaylistSong'));
     final sync = File('lib/services/widget_sync_service.dart').readAsStringSync();
     expect(sync, contains('WidgetRecommendationService.instance.refreshFor'));
-    expect(sync, contains('widgetSafeArtwork'));
+    expect(sync, contains('WidgetRecommendationService.resolveTrackArtwork(song)'));
   });
 
   test('failed rich updates still show real track metadata and transport', () {
