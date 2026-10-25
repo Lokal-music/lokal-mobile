@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/song.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/playlist_provider.dart';
+import '../../services/online_radio_recommendations.dart';
 import 'domain/flow_models.dart';
 import 'flow_library.dart';
 import 'flow_playback.dart';
@@ -80,24 +81,40 @@ class FlowController extends AsyncNotifier<FlowData> {
   void _observe(PlayerState player) {
     final song = player.currentSong;
     if (state.value == null || !player.isPlaying || song == null) return;
-    if (_lastStartedId != song.id &&
-        !song.isExternal &&
-        !song.isNetworkSource) {
+    if (_lastStartedId != song.id) {
       _lastStartedId = song.id;
       _background(
         _serialize(() async {
           final data = state.requireValue;
           final session = data.session;
+          final library = await ref.read(flowLibraryProvider.future);
+          final playback = ref.read(flowPlaybackProvider);
+          // A pending YouTube/Last.fm recommendation is replaced with a real
+          // Song ID after stream resolution. Keep its Flow position, feedback
+          // signals and saved-session mapping pointing at the actual song.
+          final oldId = playback.ownsSession(session.seed)
+              ? session.trackIds.where((id) {
+                  final pending = library.byId[id];
+                  return pending != null &&
+                      pending.isPending &&
+                      radioRecordingKey(pending.artist, pending.title) ==
+                          radioRecordingKey(song.artist, song.title);
+                }).firstOrNull
+              : null;
+          if (oldId != null) library.rememberOnline([song]);
           await _commit(
             data.copyWith(
               recentIds: [song.id, ...data.recentIds],
               session: FlowSession(
-                trackIds: session.trackIds,
+                trackIds: [
+                  for (final id in session.trackIds)
+                    if (id == oldId) song.id else id,
+                ],
                 seed: session.seed,
                 builtAtMs: session.builtAtMs,
                 currentId:
                     ref.read(flowPlaybackProvider).ownsSession(session.seed) &&
-                        session.trackIds.contains(song.id)
+                        (session.trackIds.contains(song.id) || oldId != null)
                     ? song.id
                     : session.currentId,
               ),
@@ -110,8 +127,7 @@ class FlowController extends AsyncNotifier<FlowData> {
     final session = state.requireValue.session;
     final growthKey = '${session.seed}:${song.id}:${session.trackIds.length}';
     if (!_growthScheduled &&
-        player.upNext.isEmpty &&
-        session.trackIds.contains(song.id) &&
+        player.upNext.length <= 3 &&
         _lastGrowthAttempt != growthKey &&
         playback.ownsSession(session.seed)) {
       _growthScheduled = true;
@@ -162,12 +178,19 @@ class FlowController extends AsyncNotifier<FlowData> {
     final library = await ref.read(flowLibraryProvider.future);
     var data = state.requireValue;
     if (shuffle) data = _newSession(library, data);
-    final songs = library.mix(data, DateTime.now());
-    if (songs.isEmpty) {
-      throw StateError('No eligible local tracks in this Flow.');
+    final available = library.mix(data, DateTime.now());
+    if (available.isEmpty) {
+      throw StateError('No playable tracks in this Flow.');
     }
     final target = songId ?? data.session.currentId;
-    final first = songs.where((s) => s.id == target).firstOrNull ?? songs.first;
+    final first = available.where((s) => s.id == target).firstOrNull ??
+        available.first;
+    // Playback begins immediately with a small local anchor. The online
+    // radio lookup then fills the queue while the first song is playing.
+    // This avoids blocking Play on network/auth and prevents a 24-track
+    // downloaded queue from hiding online discoveries for an hour.
+    final songs = [first, ...available.where((song) => song.id != first.id)]
+        .take(3).toList();
     data = data.copyWith(
       session: FlowSession(
         trackIds: songs.map((s) => s.id),
@@ -178,10 +201,11 @@ class FlowController extends AsyncNotifier<FlowData> {
     );
     await _commit(data);
     await ref.read(flowPlaybackProvider).play(songs, first, data.session.seed);
+    _background(grow());
   });
 
-  /// Host addToQueue inserts immediately after the current track. Grow only
-  /// at the last track to append safely without replacing playback or seeking.
+  /// Grow when at most three tracks remain; appending to the context tail
+  /// preserves user-selected songs and gives network streams time to preload.
   Future<void> grow({bool onlyWhenLast = false}) => _serialize(() async {
     final playback = ref.read(flowPlaybackProvider);
     var data = state.requireValue;
@@ -189,16 +213,39 @@ class FlowController extends AsyncNotifier<FlowData> {
     if (onlyWhenLast &&
         (!active ||
             !playback.state.isPlaying ||
-            playback.state.upNext.isNotEmpty)) {
+            playback.state.upNext.length > 3)) {
       return;
     }
-    if (active && playback.state.upNext.isNotEmpty) return;
+    if (active && playback.state.upNext.length > 3) return;
     final library = await ref.read(flowLibraryProvider.future);
     if (data.session.trackIds.isEmpty ||
         (!active && !data.session.isFresh(DateTime.now()))) {
       data = _newSession(library, data);
     }
-    final extra = library.topUp(data);
+    final remaining = FlowRules.maxSessionTracks - data.session.trackIds.length;
+    if (remaining <= 0) return;
+    final seed = playback.state.currentSong ??
+        library.mix(data, DateTime.now()).firstOrNull;
+    final existing = [
+      for (final id in data.session.trackIds)
+        if (library.byId[id] case final track?) track,
+    ];
+    List<Song> online = const [];
+    if (seed != null) {
+      online = await const OnlineRadioRecommendations().recommend(
+        seed,
+        count: remaining.clamp(0, FlowRules.topUpTracks),
+        existing: existing,
+      );
+    }
+    if (!ref.mounted ||
+        (active && !playback.ownsSession(data.session.seed))) return;
+    library.rememberOnline(online);
+    final local = library.topUp(data).take(
+      (remaining.clamp(0, FlowRules.topUpTracks) - online.length)
+          .clamp(0, FlowRules.topUpTracks),
+    );
+    final extra = [...online, ...local];
     if (extra.isEmpty) return;
     // Persist the plan before touching the player. If a platform append fails,
     // a retry cannot accidentally enqueue the successfully appended prefix twice.
