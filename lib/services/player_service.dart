@@ -5468,7 +5468,12 @@ class PlayerService {
         // Route changes are already pushed into the session manager via the
         // device listener initialized in initAudio(). Re-querying the platform
         // here adds latency to the first tap on stable speaker routes.
-        final desiredEngine = _sessionManager.selectedMode;
+        // A codec fallback changes the selected engine. Re-evaluate iPhone
+        // processing preferences so the next ordinary track can return to
+        // AVPlayer instead of inheriting the previous track's Rust fallback.
+        final desiredEngine = Platform.isIOS
+            ? await _sessionManager.resolvePreferredMode()
+            : _sessionManager.selectedMode;
         final activeEngine = await _ensureEngineReady(
           desiredEngine,
           song: song,
@@ -5847,13 +5852,18 @@ class PlayerService {
     onlinePlaybackError.value = null;
     // Use the cached route selection maintained by the session manager's device
     // listener rather than doing another blocking device probe on resume.
-    final desiredEngine = _sessionManager.selectedMode;
+    final desiredEngine = Platform.isIOS
+        ? await _sessionManager.resolvePreferredMode()
+        : _sessionManager.selectedMode;
     final activeEngine = await _ensureEngineReady(
       desiredEngine,
       song: song,
       reason: 'resume requested',
     );
     _debugLog('[Engine] Resume route resolved to ${activeEngine.logLabel}');
+    if (Platform.isIOS && _usingRustBackend) {
+      await _refreshReplayGainForSong(song, pushSpawnDefault: true);
+    }
 
     final latestState = _playbackManager.latestState;
     final canResumeDirectly =

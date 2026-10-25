@@ -15,9 +15,11 @@ startup, Rust scanning, QuickJS execution, system WAV play/pause/seek, Rust/Core
 Audio DSP playback, and FFmpeg-to-WavPack playback pass without native mocks.
 [Build 12](https://github.com/lokal-music/lokal-mobile/actions/runs/40200733269)
 contains the unsigned release IPA, matching native/Dart crash symbols, screenshots
-and machine-readable measured playback reports. The previous build 11 also passes
-on iOS 26.0; its IPA SHA-256 is
-`7af6d3d7bc97e31bd666b37bbe338eb23703ae11c86154fe7c60774ad0831ca2`.
+and machine-readable measured playback reports. Its IPA SHA-256 is
+`f165305d6f086cd763657fd22eaf67fa7c77cae350e224406a8d6b29a8fd4a1e`.
+Package metadata records 25 matching native dSYM bundles (including Rust), plus
+Dart AOT symbols. The other prebuilt framework symbols depend on upstream
+availability. The previous build 11 also passes on iOS 26.0.
 
 Build 12 reports system WAV / Rust DSP / WavPack position advances of
 464 / 554 / 533 ms on iOS 26.0 and 415 / 555 / 544 ms on iOS 18.6. Each check
@@ -184,7 +186,8 @@ The iPhone routing rules now include independent pitch and positive ReplayGain.
 The locked system player does not implement independent pitch; AVPlayer volume
 cannot provide gain above unity. Use native SoundTouch for pitch and Rust gain
 for positive normalization. Negative ReplayGain can stay on the system player.
-Live changes preserve the current track/position; resetting processing returns
+A codec fallback is re-evaluated for the next explicitly selected/resumed track,
+so ordinary flat playback can return to AVPlayer. Live changes preserve the current track/position; resetting processing returns
 to system playback when the format permits it. Native verification of these new
 pitch/normalization transitions and the expanded codec corpus is pending.
 
