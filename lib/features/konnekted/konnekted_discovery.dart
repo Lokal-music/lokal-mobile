@@ -900,11 +900,34 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       if (lengthMatches) {
                         session.promote(path);
                       } else {
-                        // Never change the source length already advertised
-                        // to Media3. Fail the old reader; the next playback
-                        // attempt resolves the verified complete cached Song.
+                        // Media3 already knows the original length, so the
+                        // growing reader cannot safely change its response
+                        // size. Stop using it, then hand the verified complete
+                        // cache to the same logical queue entry. Keep both the
+                        // position and the current playback/pause preference.
                         session.fail(StateError('Live media size changed during transfer'));
-                        onStatus?.call('Stream metadata changed; complete audio cached for retry');
+                        final player = PlayerService();
+                        final liveSongId =
+                            'discovery:${found.key.hashCode}:morneye-live';
+                        if (player.currentSongNotifier.value?.id == liveSongId) {
+                          final position = player.positionNotifier.value;
+                          final wasPlaying = player.isPlayingNotifier.value;
+                          final replacement = cached.copyWith(
+                            id: liveSongId,
+                            sourceDisplayName: addon.displayName,
+                            fileSizeBytes: actualLength,
+                          );
+                          // Same song id => play() replaces its audio source
+                          // in the existing playlist, without dropping Up Next.
+                          await player.play(replacement);
+                          if (player.currentSongNotifier.value?.id == liveSongId) {
+                            if (position > Duration.zero) {
+                              await player.seek(position);
+                            }
+                            if (!wasPlaying) await player.pause();
+                          }
+                        }
+                        onStatus?.call('Stream metadata changed; switched to complete audio');
                       }
                     } catch (error) {
                       session.fail(error);
