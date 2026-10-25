@@ -29,6 +29,7 @@ import 'package:flick/services/audio_engine_manager.dart';
 import 'package:flick/services/audio_session_manager.dart';
 import 'package:flick/services/song_engine_routing.dart';
 import 'package:flick/services/equalizer_service.dart';
+import 'package:flick/services/eq_engine_hint.dart';
 import 'package:flick/services/android_audio_processing_service.dart';
 import 'package:flick/services/last_played_service.dart';
 import 'package:flick/services/favorites_service.dart';
@@ -1282,7 +1283,8 @@ class PlayerService {
     // while crossfade was off used a ConcatenatingAudioSource (hard cut). On the
     // on-transition, reload the current track as a single source at the same
     // position so the engine can intercept the tail and crossfade.
-    if (currentEngineType == AudioEngineType.normalAndroid &&
+    if ((currentEngineType == AudioEngineType.normalAndroid ||
+            currentEngineType == AudioEngineType.iosSystem) &&
         !wasEnabled &&
         enabled &&
         currentSongNotifier.value != null &&
@@ -1362,9 +1364,36 @@ class PlayerService {
   /// engine command is routed through [_applyRustPlaybackProcessingPolicy],
   /// which suppresses it in bit-perfect mode and under 432 Hz tuning.
   Future<void> applyCrossfeedSettings() async {
+    if (Platform.isIOS) {
+      EqEngineHint.iosCrossfeedActive =
+          await _appPreferencesService.getCrossfeedLevel() > 0;
+      await syncIosProcessingRoute();
+    }
     if (_usingRustBackend) {
       await _applyRustPlaybackProcessingPolicy(currentEngineType);
     }
+  }
+
+  Future<void> syncIosProcessingRoute() async {
+    if (!Platform.isIOS) return;
+    await _sessionManager.syncRouteSelection(
+      reason: 'iOS processing preference changed',
+    );
+    if (!isPlayingNotifier.value || !_playbackManager.hasAttachedEngine) return;
+    await _enqueuePlaybackRequest(() async {
+      final song = currentSongNotifier.value;
+      if (song == null || !isPlayingNotifier.value) return;
+      final desired = await _sessionManager.resolvePreferredMode();
+      final prepared = await _prepareRequestedEngineForSong(
+        desired,
+        song: song,
+        reason: 'iOS processing',
+      );
+      if (prepared == currentEngineType) return;
+      final position = positionNotifier.value;
+      await _ensureEngineReady(prepared, song: song, reason: 'iOS processing');
+      await _playbackManager.playTrack(song, initialPosition: position);
+    });
   }
 
   Future<void> _loadFloatingPlayerPreference() async {
@@ -1880,6 +1909,7 @@ class PlayerService {
   bool get isBitPerfectProcessingLocked =>
       bitPerfectProcessingLockedNotifier.value;
   bool get isCurrentTrackDoP =>
+      Platform.isAndroid &&
       (Uac2PreferencesService.dsdOutputModeSync == DsdOutputMode.forceDop ||
           Uac2PreferencesService.dsdOutputModeSync == DsdOutputMode.native ||
           Uac2PreferencesService.dsdOutputModeSync == DsdOutputMode.auto) &&
@@ -1967,6 +1997,7 @@ class PlayerService {
       await _ensureAndroidPlayer();
     }
     await reapplyEqualizer();
+    if (Platform.isIOS) await applyCrossfeedSettings();
   }
 
   Future<void> setHiFiModeEnabled(bool enabled) async {
@@ -2269,7 +2300,10 @@ class PlayerService {
     await _configureSystemAudioSession();
     // Android supports request headers natively. Avoid the Dart loopback
     // proxy: a sleeping/unreachable desktop can leave its sockets pending.
-    final player = just_audio.AudioPlayer(useProxyForRequestHeaders: false);
+    final player = just_audio.AudioPlayer(
+      useProxyForRequestHeaders: false,
+      handleInterruptions: !Platform.isIOS,
+    );
     _justAudioPlayer = player;
     int? lastEqSessionId;
     player.androidAudioSessionIdStream.listen((sessionId) {
@@ -2308,6 +2342,12 @@ class PlayerService {
       engineType: Platform.isIOS
           ? AudioEngineType.iosSystem
           : AudioEngineType.normalAndroid,
+      secondaryPlayerProvider: Platform.isIOS
+          ? () async => just_audio.AudioPlayer(
+              useProxyForRequestHeaders: false,
+              handleInterruptions: false,
+            )
+          : null,
       playerProvider: _ensureAndroidPlayer,
       sourcesBuilder: _buildAudioSources,
       sourceBuilder: _buildAudioSourceForSong,
@@ -2747,6 +2787,7 @@ class PlayerService {
         ?.whereType<Map>()
         .toList();
     final iosOutput = iosOutputs?.isNotEmpty == true ? iosOutputs!.first : null;
+    final iosSampleRate = (iosRoute?['sampleRate'] as num?)?.round();
     final song = activeSong ?? currentSongNotifier.value;
     final trackFormat = _deriveUac2FormatFromSong(song);
     final deviceInfo = Platform.isAndroid
@@ -2878,7 +2919,7 @@ class PlayerService {
                   ? directUsbConfiguredSampleRate
                   : engineConfiguredSampleRate ?? trackFormat?.sampleRate);
     final reportedOutputSampleRate = Platform.isIOS
-        ? (iosRoute?['sampleRate'] as num?)?.round()
+        ? (iosSampleRate != null && iosSampleRate > 0 ? iosSampleRate : null)
         : !usesRustDiagnostics
         ? null
         : directUsbActive
@@ -4957,6 +4998,12 @@ class PlayerService {
     AudioEngineType desiredEngine, {
     required String reason,
   }) async {
+    if (Platform.isIOS) {
+      return desiredEngine == AudioEngineType.iosRust ||
+              desiredEngine == AudioEngineType.rustOboe
+          ? AudioEngineType.iosRust
+          : AudioEngineType.iosSystem;
+    }
     if (desiredEngine != AudioEngineType.usbDacExperimental ||
         !Platform.isAndroid) {
       return desiredEngine;
@@ -5206,7 +5253,16 @@ class PlayerService {
     Song song, {
     required Duration position,
   }) {
-    if (_usingRustBackend || !song.requiresRustDecoder) return;
+    final needsRust =
+        song.requiresRustDecoder ||
+        (Platform.isIOS &&
+            const {
+              'ogg',
+              'oga',
+              'ogx',
+              'opus',
+            }.contains(_playbackFileType(song)));
+    if (_usingRustBackend || !needsRust) return;
     if (song.filePath == null || _castingService.isActive) return;
     if (!_rustDecoderRerouteAttempts.add(song.id)) return;
     _debugLog(

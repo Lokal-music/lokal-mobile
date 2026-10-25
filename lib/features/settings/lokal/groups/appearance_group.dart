@@ -2,6 +2,7 @@ import 'package:flick/features/appearance/lokal_performance_selector.dart';
 import 'package:flick/features/settings/widgets/spotify_account_settings_tile.dart';
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flick/services/motion_art/moving_cover_settings.dart';
 
@@ -21,7 +22,8 @@ void _push(BuildContext context, Widget page) => unawaited(
   Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page)),
 );
 
-/// Home's quick appearance page intentionally contains only these two controls.
+/// Theme/accent controls, plus explicit iPhone icon selection. iOS icon changes
+/// are user initiated because the system presents its own confirmation alert.
 List<LokalSettingsSection> themeAccentSettings(
   BuildContext context,
   WidgetRef ref,
@@ -47,9 +49,11 @@ List<LokalSettingsSection> themeAccentSettings(
         ),
         LokalSettingRow(
           label: lokalText('Accent'),
-          description: lokalText(
-            'The app icon follows your accent after you leave Lokal with playback idle. Some launchers restart the app when updating its icon.',
-          ),
+          description: Platform.isIOS
+              ? 'Colors inside Lokal. Choose the Home Screen icon separately below.'
+              : lokalText(
+                  'The app icon follows your accent after you leave Lokal with playback idle. Some launchers restart the app when updating its icon.',
+                ),
           stacked: true,
           trailing: LokalAccentRow(
             padding: EdgeInsets.zero,
@@ -60,6 +64,15 @@ List<LokalSettingsSection> themeAccentSettings(
             },
           ),
         ),
+        if (Platform.isIOS)
+          LokalSettingLink(
+            label: 'App icon',
+            description: 'Choose a Lokal icon for your iPhone Home Screen.',
+            onTap: () => unawaited(
+              const MethodChannel('lokal/ios')
+                  .invokeMethod<bool>('showIconPicker'),
+            ),
+          ),
       ],
     ),
   ];
@@ -99,7 +112,9 @@ List<LokalSettingsSection> appearanceSettings(
       children: [
         LokalSettingRow.toggle(
           label: lokalText('Unboxed player controls'),
-          description: lokalText('Remove button backgrounds while keeping the same icons and layout.'),
+          description: lokalText(
+            'Remove button backgrounds while keeping the same icons and layout.',
+          ),
           value: appearance.unboxedPlayerControls,
           onChanged: look.setUnboxedPlayerControls,
         ),
@@ -255,7 +270,9 @@ List<LokalSettingsSection> appearanceSettings(
       children: [
         LokalSettingCustom(
           label: lokalText('Spotify cookie'),
-          description: lokalText('Connect Spotify for Discovery and Canvas artwork.'),
+          description: lokalText(
+            'Connect Spotify for Discovery and Canvas artwork.',
+          ),
           child: const SpotifyAccountSettingsTile(showLikesSync: false),
         ),
       ],

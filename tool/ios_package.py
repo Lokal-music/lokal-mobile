@@ -50,6 +50,8 @@ def inspect_bundle(app: Path) -> dict:
         "binaries_inspected": len(binaries),
         "signing": "Unsigned build; must be signed locally before installation",
         "validation": "Binary/package inspection only; device acceptance is separate",
+        "runtime_tests": "Consult the associated workflow run; these execute after packaging",
+        "release_status": "Engineering build; not a qualified public release",
     }
 
 
@@ -77,6 +79,12 @@ def main() -> None:
         metadata["sha256"] = hashlib.file_digest(binary, "sha256").hexdigest()
     output.with_suffix(".ipa.sha256").write_text(f"{metadata['sha256']}  {output.name}\n")
     output.with_suffix(".ipa.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    (output.parent / 'ENGINEERING-BUILD.txt').write_text(
+        'Unsigned engineering build. Sign locally before installing.\n'
+        'Binary/package inspection does not establish simulator or physical-device acceptance.\n'
+        'Consult the associated Actions run for runtime test results.\n'
+        'This artifact is not a qualified public release.\n'
+    )
     for source in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
         shutil.copyfile(root / source, output.parent / source)
     print(json.dumps(metadata, indent=2))

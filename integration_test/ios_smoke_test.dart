@@ -8,6 +8,8 @@ import 'package:flick/main.dart' as app;
 import 'package:flick/models/audio_engine_type.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/player_service.dart';
+import 'package:flick/services/equalizer_service.dart';
+import 'package:flick/providers/equalizer_provider.dart';
 import 'package:flick/features/morneye/morneye_bootstrap.dart';
 import 'package:flick/src/rust/api/morneye_api.dart';
 import 'package:flick/src/rust/api/scanner.dart' as scanner;
@@ -16,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 
 Uint8List _tone() {
   const rate = 44100, frames = rate * 8;
@@ -57,7 +61,7 @@ void main() {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lyrics_auto_fetch', false);
-    await app.main();
+    await app.bootstrapForIntegrationTest();
     for (
       var i = 0;
       i < 30 && find.byType(FlickPlayerApp).evaluate().isEmpty;
@@ -137,6 +141,56 @@ void main() {
       player.positionNotifier.value.inMilliseconds,
       greaterThanOrEqualTo(1500),
     );
+
+    // Ordinary graphic EQ must select a real iOS DSP backend, not a silent
+    // Android AudioEffect call. Exercise the native Core Audio renderer too.
+    await applyEqualizer(
+      EqualizerState.initial().copyWith(
+        graphicGainsDb: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      ),
+    );
+    await player.syncIosProcessingRoute();
+    await player.play(song, playlist: [song]);
+    for (
+      var i = 0;
+      i < 24 && player.positionNotifier.value.inMilliseconds < 300;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    expect(player.currentEngineType, AudioEngineType.iosRust);
+    expect(player.positionNotifier.value.inMilliseconds, greaterThan(250));
+    await player.pause();
+    await applyEqualizer(EqualizerState.initial());
+    await player.syncIosProcessingRoute();
+
+    // Validate the FFmpeg iOS binaries and an actual Rust-only container.
+    final wavpack = File('${directory.path}/Generated tone.wv');
+    final conversion = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i',
+      audio.path,
+      '-c:a',
+      'wavpack',
+      wavpack.path,
+    ]);
+    expect(ReturnCode.isSuccess(await conversion.getReturnCode()), true);
+    final wvSong = song.copyWith(
+      id: 'ios-smoke-wavpack',
+      filePath: wavpack.path,
+      fileType: 'WV',
+    );
+    await player.play(wvSong, playlist: [wvSong]);
+    for (
+      var i = 0;
+      i < 24 && player.positionNotifier.value.inMilliseconds < 300;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    expect(player.currentEngineType, AudioEngineType.iosRust);
+    expect(player.positionNotifier.value.inMilliseconds, greaterThan(250));
+    await player.pause();
     player.dispose();
     await directory.delete(recursive: true);
   }, timeout: const Timeout(Duration(minutes: 3)));

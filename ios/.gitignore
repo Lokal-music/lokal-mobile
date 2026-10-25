@@ -27,6 +27,9 @@ Flutter/flutter_export_environment.sh
 ServiceDefinitions.json
 Runner/GeneratedPluginRegistrant.*
 
+# Deterministic alternate icons: python3 tool/gen_ios_icons.py before building.
+Runner/Assets.xcassets/Lokal*.appiconset/
+
 # Exceptions to above rules.
 !default.mode1v3
 !default.mode2v3

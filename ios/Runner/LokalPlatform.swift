@@ -24,6 +24,18 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
     player = FlutterMethodChannel(name: "com.mossapps.flick/player", binaryMessenger: messenger)
     integration = FlutterMethodChannel(name: "com.mossapps.flick/integration", binaryMessenger: messenger)
     super.init()
+    // A killed import must not consume storage forever. Only our private UUID
+    // staging folders are eligible; committed music and database files stay put.
+    fileQueue.async {
+      if let support = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true),
+         let entries = try? FileManager.default.contentsOfDirectory(at: support, includingPropertiesForKeys: nil) {
+        for entry in entries where entry.lastPathComponent.hasPrefix("Import-") {
+          if UUID(uuidString: String(entry.lastPathComponent.dropFirst(7))) != nil {
+            try? FileManager.default.removeItem(at: entry)
+          }
+        }
+      }
+    }
     spotify = LokalSpotifySession(messenger: messenger, presenter: { [weak self] in self?.presenter })
     player.setMethodCallHandler { [weak self] call, result in
       guard let self = self else { return }
@@ -93,6 +105,23 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
           picker.heightAnchor.constraint(equalToConstant: 64),
         ])
         sheet.sheetPresentationController?.detents = [.medium()]
+        controller.present(sheet, animated: true)
+        result(true)
+      case "showIconPicker":
+        guard UIApplication.shared.supportsAlternateIcons, let controller = self?.presenter else { result(false); return }
+        let sheet = UIAlertController(title: "App icon", message: nil, preferredStyle: .actionSheet)
+        let accents = ["lime", "purple", "pink", "orange", "blue", "red", "teal", "white", "yellow", "cyan", "magenta", "gray", "chartreuse", "midnight", "rosegold", "neon"]
+        sheet.addAction(UIAlertAction(title: "Default", style: .default) { _ in
+          UIApplication.shared.setAlternateIconName(nil)
+        })
+        for accent in accents {
+          sheet.addAction(UIAlertAction(title: accent.capitalized, style: .default) { _ in
+            UIApplication.shared.setAlternateIconName("Lokal" + accent.capitalized)
+          })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = controller.view
+        sheet.popoverPresentationController?.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.midY, width: 1, height: 1)
         controller.present(sheet, animated: true)
         result(true)
       default: result(FlutterMethodNotImplemented)
@@ -231,7 +260,14 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
     guard !files.isEmpty else { return }
     copyDocuments(files) { imported in
       guard case .success(let destination) = imported,
-            let first = files.first else { return }
+            let first = files.first else {
+        if let controller = self.presenter {
+          let alert = UIAlertController(title: "Couldn’t import music", message: "Check available storage and file access, then try again. The original files were kept.", preferredStyle: .alert)
+          alert.addAction(UIAlertAction(title: "OK", style: .default))
+          controller.present(alert, animated: true)
+        }
+        return
+      }
       let local = destination.appendingPathComponent(first.lastPathComponent)
       let payload: [String: Any] = ["uri": local.path, "displayName": first.lastPathComponent]
       if self.dartReady { self.integration.invokeMethod("externalPlaybackIntent", arguments: payload) }
@@ -265,6 +301,16 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
           if let error = coordinationError { throw error }
           if let error = copyError { throw error }
         }
+        #if !targetEnvironment(simulator)
+        // Permit legitimate screen-off playback after the listener unlocks the
+        // phone once, while retaining data protection across device restarts.
+        let entries = FileManager.default.enumerator(at: staging, includingPropertiesForKeys: [.isRegularFileKey])
+        while let entry = entries?.nextObject() as? URL {
+          if (try entry.resourceValues(forKeys: [.isRegularFileKey])).isRegularFile == true {
+            try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: entry.path)
+          }
+        }
+        #endif
         let destination = root.appendingPathComponent("Import-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.moveItem(at: staging, to: destination)
         DispatchQueue.main.async { completion(.success(destination)) }

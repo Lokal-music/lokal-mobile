@@ -284,7 +284,9 @@ class AudioSessionManager {
 
   Future<AudioEngineType> _resolvePreferredMode({bool refresh = false}) async {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return EqEngineHint.parametricPeqActive
+      return (EqEngineHint.parametricPeqActive ||
+              EqEngineHint.iosDspActive ||
+              EqEngineHint.iosCrossfeedActive)
           ? AudioEngineType.iosRust
           : AudioEngineType.iosSystem;
     }

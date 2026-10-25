@@ -46,6 +46,11 @@ jobs:
           rustup target add --toolchain 1.98.0 aarch64-apple-ios aarch64-apple-ios-sim
           flutter pub get --enforce-lockfile
           python3 tool/ios_readiness.py --require-scaffold
+      - name: Generate native alternate icons
+        run: |
+          python3 -m venv "$RUNNER_TEMP/lokal-ios-assets"
+          "$RUNNER_TEMP/lokal-ios-assets/bin/pip" install -r tool/requirements-release-art.txt
+          "$RUNNER_TEMP/lokal-ios-assets/bin/python" tool/gen_ios_icons.py
       - name: Check application and integration-test compilation
         run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib integration_test
       - name: Check the native build helper before Xcode
@@ -61,6 +66,19 @@ jobs:
           fi
       - name: Build the release iPhone app without signing credentials
         run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}'
+      - name: Inspect and package the engineering IPA
+        run: |
+          python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa
+          git archive --format=tar.gz HEAD -o build/ios/ipa/Lokal-source.tar.gz
+      - name: Preserve the unsigned engineering build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Lokal-iPhone-engineering-unsigned-${{ github.run_number }}
+          path: |
+            build/ios/ipa/*
+            build/ios/iphoneos/*.dSYM
+          if-no-files-found: error
+          retention-days: 14
       - name: Boot an iPhone simulator
         run: python3 tool/ios_simulator.py
       - name: Capture the actual first launch
@@ -70,24 +88,25 @@ jobs:
           sleep 5
           xcrun simctl io "$IOS_SIMULATOR_UDID" screenshot "$RUNNER_TEMP/lokal-iphone.png"
       - name: Exercise actual startup, FFI and playback
-        run: flutter test integration_test/ios_smoke_test.dart --no-pub -d "$IOS_SIMULATOR_UDID" --timeout 5m
-      - name: Package and inspect unsigned IPA
-        run: python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa
+        timeout-minutes: 12
+        run: |
+          if ! flutter test integration_test/ios_smoke_test.dart --no-pub -d "$IOS_SIMULATOR_UDID" --timeout 5m --verbose > "$RUNNER_TEMP/ios-smoke.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke.log"
+            exit 1
+          fi
       - name: Preserve dependency locks
         run: git diff --exit-code -- pubspec.lock rust/Cargo.lock
-      - name: Preserve failed build diagnostics
-        if: failure()
+      - name: Collect simulator diagnostics
+        if: failure() && env.IOS_SIMULATOR_UDID != ''
+        run: xcrun simctl spawn "$IOS_SIMULATOR_UDID" log show --last 5m --style compact --predicate 'process == "Runner"' > "$RUNNER_TEMP/ios-simulator-console.log" || true
+      - name: Preserve build and runtime diagnostics
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: iPhone-build-diagnostics-${{ github.run_number }}
-          path: ${{ runner.temp }}/ios-simulator-build.log
-          if-no-files-found: ignore
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: Lokal-iPhone-unsigned-${{ github.run_number }}
           path: |
-            build/ios/ipa/*
-            build/ios/iphoneos/*.dSYM
+            ${{ runner.temp }}/ios-simulator-build.log
+            ${{ runner.temp }}/ios-smoke.log
+            ${{ runner.temp }}/ios-simulator-console.log
             ${{ runner.temp }}/lokal-iphone.png
-          if-no-files-found: error
-          retention-days: 14
+          if-no-files-found: ignore
