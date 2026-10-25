@@ -104,9 +104,9 @@ class AppleMusicSearchSong {
       title: title,
       artist: artist,
       album: row['collectionName']?.toString() ?? '',
-      artworkUrl: image.startsWith('https://')
-          ? image.replaceFirst(RegExp(r'/\d+x\d+bb\.'), '/1200x1200bb.')
-          : '',
+      // Preserve Apple's valid original URL so a missing large variant
+      // can fall back without leaving a blank search result.
+      artworkUrl: image.startsWith('https://') ? image : '',
       duration: Duration(milliseconds: (row['trackTimeMillis'] as num?)?.toInt() ?? 0),
     );
   }
