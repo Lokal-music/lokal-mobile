@@ -12,6 +12,7 @@ import 'package:flick/services/online_playlist_reference.dart';
 import 'package:flick/features/konnekted/library/lokal_music_detail_page.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
+import 'artist_search_portrait.dart';
 
 final globalCatalogueSearchServiceProvider = Provider<GlobalCatalogueSearchService>(
   (ref) => const GlobalCatalogueSearchService(),
@@ -146,7 +147,7 @@ class _GlobalCatalogueSearchSectionState
                 children: [
                   Text(
                     (data.catalogue == 'spotify' ? 'Spotify' : 'Apple Music') +
-                        ' catalogue · audio follows your source priority',
+                        ' catalogue · plays through your configured sources',
                     style: TextStyle(color: t.muted, fontSize: 11),
                   ),
                   if (data.notice != null) ...[
@@ -212,6 +213,7 @@ class _GlobalCatalogueSearchSectionState
                     for (final artist in artists.take(_expanded ? 12 : 4))
                       ListTile(
                         dense: true, contentPadding: EdgeInsets.zero,
+                        leading: ArtistSearchPortrait(name: artist.name, artworkUrl: artist.artworkUrl),
                         title: Text(artist.name),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _open(LokalMusicDetailPage.artist(
