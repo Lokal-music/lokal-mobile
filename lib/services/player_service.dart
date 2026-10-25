@@ -2388,6 +2388,12 @@ class PlayerService {
       configurePlayer: _configureAndroidPlayer,
       disposeEngine: _disposeAndroidEngine,
       retireStalledPlayer: _retireStalledAndroidPlayer,
+      invalidatePlayerCache: (player) {
+        if (identical(_justAudioPlayer, player)) {
+          _justAudioPlayer = null;
+          _audioSourceSequence = null;
+        }
+      },
       shouldSuppressTrackSync: () =>
           _suppressSequenceStateUpdates || _isRebuildingPlaylist,
       shouldIgnoreTrack: (track) => track.filePath == null,
