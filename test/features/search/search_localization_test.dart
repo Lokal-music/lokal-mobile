@@ -41,13 +41,11 @@ void main() {
   );
   test('all shipped non-English locales have the new fixed search phrases', () {
     const phrases = [
-      'All sources',
       'Library',
       'Online',
       'Artist',
       'Search online catalogues and playback sources',
       'This category searches your library',
-      'Choose one result type, or All',
       'Try another keyword or choose All result types',
       'Online albums',
       'Online artists',
@@ -119,7 +117,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Toutes les sources'), findsOneWidget);
+      expect(find.text('Toutes les sources'), findsNothing);
       expect(find.text('En ligne'), findsOneWidget);
       expect(find.text('Albums en ligne'), findsOneWidget);
       await tester.tap(find.text('Recherche impossible. Réessayer'));
