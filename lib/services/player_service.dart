@@ -6857,6 +6857,36 @@ class PlayerService {
     unawaited(_queueNextTrackForGapless());
   }
 
+  /// Flow's generated recommendations extend the context *after* every
+  /// existing upcoming track. Unlike addToQueue, they must never jump ahead
+  /// of manually queued songs or reorder the already displayed session.
+  Future<void> appendToPlaylistTail(Song song) async {
+    if (_playlist.isEmpty) return;
+    final at = _playlist.length;
+    _playlist.add(song);
+    _playlistQueueEntryIds.add(null);
+    if (!_usingRustBackend && _audioSourceSequence != null) {
+      if (hasUnresolvedAudioSources(_playlist)) {
+        final native = _audioSourceSequence!;
+        final cursor = _justAudioPlayer?.currentIndex ?? _currentIndex;
+        if (cursor >= 0 && cursor + 1 < native.children.length) {
+          native.removeRange(cursor + 1, native.children.length);
+        }
+        _audioSourceSequence = null;
+        unawaited(_justAudioPlayer?.setLoopMode(just_audio.LoopMode.off)
+            ?? Future<void>.value());
+      } else {
+        try {
+          await _insertIntoAudioSequence(at, song);
+        } catch (error) {
+          _debugLog('Flow queue tail append deferred: $error');
+        }
+      }
+    }
+    _notifyUpNextChanged();
+    _debounceQueueChanged();
+  }
+
   Future<int> addToQueue(Song song) async {
     final entry = _QueueEntry(id: _nextQueueEntryId++, song: song);
     _queuedEntries.add(entry);
