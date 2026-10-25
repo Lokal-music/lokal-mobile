@@ -151,7 +151,6 @@ class WidgetSyncService {
       _cachedArt = '';
       if (song != null) {
         unawaited(_refreshArtwork(song, song.albumArt));
-        WidgetRecommendationService.instance.refreshFor(song, state.upNext);
       }
     }
     final structuralChange =
@@ -202,6 +201,9 @@ class WidgetSyncService {
     try {
       await _ensureInit();
       final Song? song = state.currentSong;
+      if (song != null) {
+        WidgetRecommendationService.instance.refreshFor(song, state.upNext);
+      }
       final structuralChange =
           _savedData[keySongId] != (song?.id ?? '') ||
           _savedData[keyIsPlaying] != state.isPlaying ||
