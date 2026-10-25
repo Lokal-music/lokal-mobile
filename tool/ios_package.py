@@ -73,7 +73,8 @@ def main() -> None:
         payload.mkdir()
         shutil.copytree(app, payload / app.name, symlinks=True)
         command("ditto", "-c", "-k", "--keepParent", str(payload), str(output))
-    metadata["sha256"] = hashlib.file_digest(output.open("rb"), "sha256").hexdigest()
+    with output.open("rb") as binary:
+        metadata["sha256"] = hashlib.file_digest(binary, "sha256").hexdigest()
     output.with_suffix(".ipa.sha256").write_text(f"{metadata['sha256']}  {output.name}\n")
     output.with_suffix(".ipa.json").write_text(json.dumps(metadata, indent=2) + "\n")
     for source in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
