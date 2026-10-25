@@ -4,9 +4,8 @@ import 'package:flick/features/search/widgets/search_filter_chips.dart';
 import 'package:flick/features/search/widgets/online_catalogue_search_section.dart';
 import 'package:flick/features/search/models/search_category.dart';
 import 'package:flick/features/search/providers/search_filter_provider.dart';
-import 'package:flick/providers/apple_music_provider.dart';
-import 'package:flick/services/apple_music/apple_music_metadata_service.dart';
-import 'package:flick/services/apple_music/apple_music_models.dart';
+import 'package:flick/features/search/widgets/global_catalogue_search_section.dart';
+import 'package:flick/services/global_catalogue_search.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flutter/material.dart';
@@ -14,22 +13,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class _Api implements AppleMusicMetadataService {
+class _Api extends GlobalCatalogueSearchService {
   final refreshes = <bool>[];
+
   @override
-  Future<List<AppleMusicAlbumMatch>> searchAlbums(
-    String term, {
-    int limit = 25,
-    String? storefront,
-    bool refresh = false,
+  Future<GlobalCatalogueMatches> search(
+    String query, {String? selected, bool refresh = false,
+    bool songsOnly = false,
   }) async {
     refreshes.add(refresh);
     if (!refresh) throw StateError('offline');
-    return [];
+    return const GlobalCatalogueMatches(catalogue: 'apple');
   }
-
-  @override
-  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
 void main() {
@@ -46,7 +41,6 @@ void main() {
       'Artist',
       'Search online catalogues and playback sources',
       'This category searches your library',
-      'Try another keyword or choose All result types',
       'Online albums',
       'Online artists',
       'Apple Music catalogue · plays through your configured sources',
@@ -76,7 +70,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final api = _Api();
       final c = ProviderContainer(
-        overrides: [appleMusicMetadataServiceProvider.overrideWithValue(api)],
+        overrides: [globalCatalogueSearchServiceProvider.overrideWithValue(api)],
       );
       addTearDown(c.dispose);
       await tester.pumpWidget(
