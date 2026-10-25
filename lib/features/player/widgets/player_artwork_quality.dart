@@ -69,10 +69,9 @@ class PlayerArtworkQuality {
       if (updated != uri.path) upgraded = uri.replace(path: updated).toString();
     }
 
-    // Amazon Music returns the *same* cover asset in tiny transformed
-    // variants (e.g. ._SL75_.jpg or ._AC_SX160_SY160_.jpg). Request a
-    // higher-quality rendition of that asset, keeping the original as a
-    // fallback when Amazon's CDN does not serve it.
+    // Amazon's transform suffix denotes a smaller variant of the *same*
+    // image. Prefer its original-resolution object, retaining the supplied
+    // URL as a fallback when the master is unavailable.
     if (upgraded == null &&
         (host == 'm.media-amazon.com' ||
          host == 'images-na.ssl-images-amazon.com' ||
@@ -80,58 +79,53 @@ class PlayerArtworkQuality {
          host == 'images-fe.ssl-images-amazon.com' ||
          host == 'images.amazon.com' ||
          host == 'ecx.images-amazon.com')) {
-      final path = uri.path;
-      final transform = RegExp(
-        r'\._(?:AC_)?[^/]*?(?:SL|SX|SY|SS|UX|UY)\d+[^/]*?_\.(jpe?g|png)
-    // original remains an explicit fallback.
-    if (upgraded == null &&
-        (host == 'i.ytimg.com' || host == 'img.youtube.com')) {
       final updated = uri.path.replaceFirst(
-        RegExp(r'/(?:default|mqdefault|hqdefault|sddefault)\.jpg$'),
-        '/maxresdefault.jpg',
-      );
-      if (updated != uri.path) upgraded = uri.replace(path: updated).toString();
-    }
-    return upgraded == null ? [original] : [upgraded, original];
-  }
-}
-,
-        caseSensitive: false,
-      ).firstMatch(path);
-      if (transform != null) {
-        // Amazon's unsized object is the original upload, not a 1200px
-        // upscale of the thumbnail. Retain the thumbnail as a safe fallback.
-        final updated = path.replaceRange(
-          transform.start, transform.end, '.${transform[1]}',
-        );
-        if (updated != path) upgraded = uri.replace(path: updated).toString();
-      }
-    }
-
-    // Amazon frequently returns the exact same album image with a small
-    // _AC_UY218_ / _SX160_ rendition suffix. The unsized asset is the
-    // original master. Request it in Full Player and keep the original as
-    // a fallback if the CDN does not expose that particular rendition.
-    if (upgraded == null &&
-        (host == 'm.media-amazon.com' ||
-         host == 'images-na.ssl-images-amazon.com' ||
-         host == 'images-eu.ssl-images-amazon.com')) {
-      final clean = uri.path.replaceFirst(
         RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
         '.',
       );
-      if (clean != uri.path) upgraded = uri.replace(path: clean).toString();
+      if (updated != uri.path) upgraded = uri.replace(path: updated).toString();
     }
 
-    // YouTube artwork's max-res rendition is not always uploaded, so the
-    // original remains an explicit fallback.
+    // Google-hosted YouTube Music album covers often arrive as a 60/120px
+    // image with explicit =w120-h120-l90-rj or =s120 sizing. Retain all
+    // existing crop/quality modifiers while requesting the same image at
+    // 1200px. Fallback to the supplied URL if the larger image is unavailable.
+    final googleImage = host == 'googleusercontent.com' ||
+        host.endsWith('.googleusercontent.com') ||
+        host == 'ggpht.com' || host.endsWith('.ggpht.com');
+    if (upgraded == null && googleImage) {
+      final size = RegExp(r'=w(\d+)-h(\d+)').firstMatch(original);
+      if (size != null &&
+          (int.parse(size[1]!) < 1200 || int.parse(size[2]!) < 1200)) {
+        upgraded = original.replaceFirst(
+          RegExp(r'=w\d+-h\d+'), '=w1200-h1200',
+        );
+      } else {
+        final square = RegExp(r'=s(\d+)(?=-|$)').firstMatch(original);
+        if (square != null && int.parse(square[1]!) < 1200) {
+          upgraded = original.replaceFirst(
+            RegExp(r'=s\d+(?=-|$)'), '=s1200',
+          );
+        }
+      }
+    }
+
+    // The max-res YouTube video still may not exist. Try SD before reverting
+    // all the way to the often blurry 120/480px thumbnail in search.
     if (upgraded == null &&
         (host == 'i.ytimg.com' || host == 'img.youtube.com')) {
-      final updated = uri.path.replaceFirst(
-        RegExp(r'/(?:default|mqdefault|hqdefault|sddefault)\.jpg$'),
-        '/maxresdefault.jpg',
-      );
-      if (updated != uri.path) upgraded = uri.replace(path: updated).toString();
+      final match = RegExp(
+        r'/(?:default|mqdefault|hqdefault|sddefault|hq720)\.jpg$'
+      ).firstMatch(uri.path);
+      if (match != null) {
+        final maxres = uri.replace(
+          path: uri.path.replaceFirst(match[0]!, '/maxresdefault.jpg'),
+        ).toString();
+        final sd = uri.replace(
+          path: uri.path.replaceFirst(match[0]!, '/sddefault.jpg'),
+        ).toString();
+        return {maxres, sd, original}.toList(growable: false);
+      }
     }
     return upgraded == null ? [original] : [upgraded, original];
   }
