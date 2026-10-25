@@ -35,6 +35,9 @@ typedef AndroidEngineDisposer = Future<void> Function();
 typedef AndroidStalledPlayerRetirer = Future<void> Function(
   just_audio.AudioPlayer player,
 );
+typedef AndroidPlayerCacheInvalidator = void Function(
+  just_audio.AudioPlayer player,
+);
 typedef AndroidTrackSyncBlocker = bool Function();
 typedef AndroidTrackIgnorePredicate = bool Function(Song track);
 typedef AndroidFastStartPredicate = bool Function();
@@ -139,6 +142,7 @@ class AndroidAudioEngine implements AudioEngine {
     required AndroidPlayerConfigurator configurePlayer,
     required AndroidEngineDisposer disposeEngine,
     AndroidStalledPlayerRetirer? retireStalledPlayer,
+    AndroidPlayerCacheInvalidator? invalidatePlayerCache,
     AndroidPlayerProvider? secondaryPlayerProvider,
     required AndroidTrackSyncBlocker shouldSuppressTrackSync,
     required AndroidTrackIgnorePredicate shouldIgnoreTrack,
@@ -154,6 +158,7 @@ class AndroidAudioEngine implements AudioEngine {
        _configurePlayer = configurePlayer,
        _disposeEngine = disposeEngine,
        _retireStalledPlayer = retireStalledPlayer,
+       _invalidatePlayerCache = invalidatePlayerCache,
        _secondaryPlayerProvider = secondaryPlayerProvider,
        _shouldSuppressTrackSync = shouldSuppressTrackSync,
        _shouldIgnoreTrack = shouldIgnoreTrack,
@@ -171,6 +176,7 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidPlayerConfigurator _configurePlayer;
   final AndroidEngineDisposer _disposeEngine;
   final AndroidStalledPlayerRetirer? _retireStalledPlayer;
+  final AndroidPlayerCacheInvalidator? _invalidatePlayerCache;
   final AndroidPlayerProvider? _secondaryPlayerProvider;
   final AndroidTrackSyncBlocker _shouldSuppressTrackSync;
   final AndroidTrackIgnorePredicate _shouldIgnoreTrack;
@@ -518,6 +524,9 @@ class AndroidAudioEngine implements AudioEngine {
     final survivor = _secondary;
     _secondary = null;
     _player = null;
+    // Invalidate PlayerService's cached instance *before* awaiting stream
+    // cancellation. New taps must not reattach to this poisoned decoder.
+    _invalidatePlayerCache?.call(player);
     _playlistSignature = const <String>[];
     _loadedSingleTrackOnly = false;
     _sourceFailed = true;
