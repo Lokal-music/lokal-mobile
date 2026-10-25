@@ -313,15 +313,18 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
         host == 'googleusercontent.com' ||
         host.endsWith('.googleusercontent.com') ||
         host == 'ggpht.com' || host.endsWith('.ggpht.com');
-    final amazonArtwork = host == 'm.media-amazon.com' ||
-        host == 'images-na.ssl-images-amazon.com' ||
-        host == 'images-eu.ssl-images-amazon.com' ||
-        host == 'images-fe.ssl-images-amazon.com' ||
-        host == 'images.amazon.com' ||
-        host == 'ecx.images-amazon.com';
-    // Use the same validated higher-resolution image candidates in every
-    // player surface, with the original URL as a fallback.
-    final urls = youtubeArtwork || amazonArtwork
+    // Only known YouTube sizing conventions are promoted here. Other media
+    // CDNs keep their original URLs; a larger rendition must never prevent a
+    // valid search/list thumbnail from appearing.
+    final amazonArtwork = const {
+      'm.media-amazon.com',
+      'images-na.ssl-images-amazon.com',
+      'images-eu.ssl-images-amazon.com',
+      'images-fe.ssl-images-amazon.com',
+      'images.amazon.com',
+      'ecx.images-amazon.com',
+    }.contains(host);
+    final urls = (youtubeArtwork || amazonArtwork)
         ? PlayerArtworkQuality.candidates(imagePath)
         : [imagePath];
 
