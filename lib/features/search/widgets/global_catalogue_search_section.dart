@@ -5,15 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/models/song.dart';
-import 'package:flick/providers/apple_music_provider.dart';
 import 'package:flick/providers/providers.dart';
-import 'package:flick/services/apple_music/apple_music_metadata_service.dart';
+import 'package:flick/services/global_catalogue_source.dart';
+import 'package:flick/services/global_catalogue_search.dart';
 import 'package:flick/services/online_playlist_reference.dart';
+import 'package:flick/features/konnekted/library/lokal_music_detail_page.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
 
-/// A catalogue-wide search independent of playback providers. The metadata
-/// gets re-resolved through Playback Source Priority, never an iTunes preview.
+/// An online catalogue supplies only metadata. The pending recorder resolves
+/// audio later using the user's unchanged Playback Source Priority settings.
 class GlobalCatalogueSearchSection extends ConsumerStatefulWidget {
   const GlobalCatalogueSearchSection({super.key, required this.query});
   final String query;
@@ -25,20 +26,24 @@ class GlobalCatalogueSearchSection extends ConsumerStatefulWidget {
 
 class _GlobalCatalogueSearchSectionState
     extends ConsumerState<GlobalCatalogueSearchSection> {
-  late Future<List<AppleMusicSearchSong>> _results;
+  static const _service = GlobalCatalogueSearchService();
+  late Future<GlobalCatalogueMatches> _results;
   bool _expanded = false;
   bool _starting = false;
 
   @override
   void initState() {
     super.initState();
+    GlobalCatalogueSource.selected.addListener(_changedSource);
     _load();
   }
 
+  void _changedSource() {
+    if (mounted) setState(() { _expanded = false; _load(); });
+  }
+
   void _load({bool refresh = false}) {
-    _results = ref.read(appleMusicMetadataServiceProvider).searchSongs(
-      widget.query, refresh: refresh, limit: 40,
-    );
+    _results = _service.search(widget.query, refresh: refresh);
   }
 
   @override
@@ -50,38 +55,51 @@ class _GlobalCatalogueSearchSectionState
     }
   }
 
-  Song _pending(AppleMusicSearchSong match) => stableOnlinePlaylistSong(Song(
-    id: 'itunes:' + match.catalogueId,
-    title: match.title,
-    artist: match.artist,
-    album: match.album,
-    albumArt: match.artworkUrl,
-    duration: match.duration,
-    fileType: 'ONLINE',
+  @override
+  void dispose() {
+    GlobalCatalogueSource.selected.removeListener(_changedSource);
+    super.dispose();
+  }
+
+  Song _pending(GlobalCatalogueSong match) => stableOnlinePlaylistSong(Song(
+    id: 'catalogue:' + match.catalogueId,
+    title: match.title, artist: match.artist,
+    album: match.album, albumArt: match.artworkUrl,
+    duration: match.duration, fileType: 'ONLINE',
     sourcePackage: Song.pendingSourcePackage,
   ));
 
   Future<void> _play(
-    AppleMusicSearchSong selected,
-    List<AppleMusicSearchSong> matches,
+    GlobalCatalogueSong selected, List<GlobalCatalogueSong> matches,
   ) async {
     if (_starting) return;
     setState(() => _starting = true);
-    // The metadata IDs belong to Apple; the pending resolver deliberately
-    // contains no Apple audio URL and does not bypass configured sources.
-    final queue = [for (final match in matches) _pending(match)];
+    final seen = <String>{};
+    final queue = [
+      for (final match in matches)
+        if (seen.add(_pending(match).id)) _pending(match),
+    ];
     final selectedId = _pending(selected).id;
-    final song = queue.firstWhere((item) => item.id == selectedId);
+    final song = queue.where((item) => item.id == selectedId).firstOrNull;
+    if (song == null) {
+      if (mounted) setState(() => _starting = false);
+      return;
+    }
     try {
-      LokalToast.show(
-        context, 'Finding ' + selected.title + ' through your playback sources…',
-      );
+      LokalToast.show(context,
+        'Finding ' + selected.title + ' through your playback sources…');
       await ref.read(playerProvider.notifier).play(song, playlist: queue);
     } catch (_) {
       if (mounted) LokalToast.show(context, 'Could not start this song.');
     } finally {
       if (mounted) setState(() => _starting = false);
     }
+  }
+
+  Future<void> _open(Widget page) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => page),
+    );
   }
 
   @override
@@ -95,12 +113,8 @@ class _GlobalCatalogueSearchSectionState
           Text('Global', style: TextStyle(
             color: t.text, fontSize: 17, fontWeight: FontWeight.w600,
           )),
-          Text(
-            lokalText('Apple Music catalogue · plays through your source priority'),
-            style: TextStyle(color: t.muted, fontSize: 11),
-          ),
-          const SizedBox(height: 8),
-          FutureBuilder<List<AppleMusicSearchSong>>(
+          const SizedBox(height: 6),
+          FutureBuilder<GlobalCatalogueMatches>(
             future: _results,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
@@ -116,42 +130,90 @@ class _GlobalCatalogueSearchSectionState
                   label: Text(lokalText('Could not search. Retry')),
                 );
               }
-              final songs = snapshot.data ?? const <AppleMusicSearchSong>[];
-              if (songs.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No global songs found.', style: TextStyle(color: t.muted)),
-                );
-              }
+              final data = snapshot.data ??
+                  const GlobalCatalogueMatches(catalogue: 'apple');
+              final songs = data.songs;
+              final albums = data.albums;
+              final artists = data.artists;
               final shown = _expanded ? songs : songs.take(8).toList();
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final song in shown)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      enabled: !_starting,
-                      leading: SizedBox.square(
-                        dimension: 48,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: CachedImageWidget(imagePath: song.artworkUrl),
+                  Text(
+                    (data.catalogue == 'spotify' ? 'Spotify' : 'Apple Music') +
+                        ' catalogue · audio follows your source priority',
+                    style: TextStyle(color: t.muted, fontSize: 11),
+                  ),
+                  if (data.notice != null) ...[
+                    const SizedBox(height: 4),
+                    Text(data.notice!, style: TextStyle(color: t.muted, fontSize: 11)),
+                  ],
+                  const SizedBox(height: 8),
+                  if (songs.isEmpty && albums.isEmpty && artists.isEmpty)
+                    Text('No global results found.', style: TextStyle(color: t.muted)),
+                  if (songs.isNotEmpty) ...[
+                    Text('Songs', style: TextStyle(color: t.muted, fontSize: 12)),
+                    for (final song in shown)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero, dense: true,
+                        enabled: !_starting,
+                        leading: SizedBox.square(
+                          dimension: 48,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedImageWidget(imagePath: song.artworkUrl),
+                          ),
                         ),
+                        title: Text(song.title, maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                        subtitle: Text(song.artist +
+                            (song.album.isEmpty ? '' : ' · ' + song.album),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: const Icon(Icons.play_arrow_rounded),
+                        onTap: () => unawaited(_play(song, songs)),
                       ),
-                      title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(
-                        song.artist + (song.album.isEmpty ? '' : ' · ' + song.album),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    if (songs.length > 8)
+                      TextButton(
+                        onPressed: () => setState(() => _expanded = !_expanded),
+                        child: Text(_expanded ? 'Show fewer' :
+                          'Show all ' + songs.length.toString() + ' songs'),
                       ),
-                      trailing: const Icon(Icons.play_arrow_rounded),
-                      onTap: () => unawaited(_play(song, songs)),
-                    ),
-                  if (songs.length > 8)
-                    TextButton(
-                      onPressed: () => setState(() => _expanded = !_expanded),
-                      child: Text(_expanded ? 'Show fewer' : 'Show all ' + songs.length.toString() + ' global songs'),
-                    ),
+                  ],
+                  if (albums.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('Albums', style: TextStyle(color: t.muted, fontSize: 12)),
+                    for (final album in albums.take(_expanded ? 12 : 4))
+                      ListTile(
+                        dense: true, contentPadding: EdgeInsets.zero,
+                        leading: SizedBox.square(
+                          dimension: 48,
+                          child: ClipRRect(borderRadius: BorderRadius.circular(8),
+                            child: CachedImageWidget(imagePath: album.artworkUrl)),
+                        ),
+                        title: Text(album.name, maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                        subtitle: Text(album.artist, maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                        onTap: () => _open(LokalMusicDetailPage.album(
+                          title: album.name, artist: album.artist,
+                          localSongs: const [], initialOnline: true,
+                        )),
+                      ),
+                  ],
+                  if (artists.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('Artists', style: TextStyle(color: t.muted, fontSize: 12)),
+                    for (final artist in artists.take(_expanded ? 12 : 4))
+                      ListTile(
+                        dense: true, contentPadding: EdgeInsets.zero,
+                        title: Text(artist.name),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _open(LokalMusicDetailPage.artist(
+                          name: artist.name, localSongs: const [],
+                          initialOnline: true,
+                        )),
+                      ),
+                  ],
                 ],
               );
             },
