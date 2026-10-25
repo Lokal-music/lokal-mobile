@@ -813,8 +813,16 @@ class AndroidAudioEngine implements AudioEngine {
   @override
   Future<void> stop() async {
     await _cancelCrossfade();
-    final player = await _ensurePlayer();
-    await player.stop();
+    // A stuck Media3 stop() must not indefinitely block the resolver when
+    // switching from a failed Discovery source to its next placeholder.
+    final player = _player;
+    if (player == null) return;
+    try {
+      await player.stop().timeout(const Duration(seconds: 3));
+    } on TimeoutException {
+      await _retireTimedOutPlayer(player);
+      throw TimeoutException('Android playback stop stalled; player reset.');
+    }
     _emit(
       _state.copyWith(
         isPlaying: player.playing,
