@@ -101,6 +101,14 @@ class Song {
   /// Package name of the app that handed this song to Flick.
   final String? sourcePackage;
 
+  /// Human-readable playback provider or extension name (e.g. a Morneye
+  /// source or a configured HTTP add-on). Never a signed URL or handle.
+  final String? sourceDisplayName;
+
+  /// Actual audio file/representation length in bytes when measured or
+  /// explicitly reported by the selected stream; never an estimated bitrate.
+  final int? fileSizeBytes;
+
   /// Where this song came from: null = local file, otherwise one of
   /// 'subsonic' | 'webdav' | 'jellyfin'.
   final String? sourceType;
@@ -151,6 +159,8 @@ class Song {
     this.dateAdded,
     this.isExternal = false,
     this.sourcePackage,
+    this.sourceDisplayName,
+    this.fileSizeBytes,
     this.sourceType,
     this.atmosAvailable = false,
     this.atmosEncoded = false,
@@ -271,6 +281,8 @@ class Song {
     DateTime? dateAdded,
     bool? isExternal,
     String? sourcePackage,
+    String? sourceDisplayName,
+    int? fileSizeBytes,
     String? sourceType,
     bool? atmosAvailable,
     bool? atmosEncoded,
@@ -310,6 +322,8 @@ class Song {
       dateAdded: dateAdded ?? this.dateAdded,
       isExternal: isExternal ?? this.isExternal,
       sourcePackage: sourcePackage ?? this.sourcePackage,
+      sourceDisplayName: sourceDisplayName ?? this.sourceDisplayName,
+      fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
       sourceType: sourceType ?? this.sourceType,
       atmosAvailable: atmosAvailable ?? this.atmosAvailable,
       atmosEncoded: atmosEncoded ?? this.atmosEncoded,
