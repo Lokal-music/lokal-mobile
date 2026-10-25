@@ -1,5 +1,6 @@
 import '../providers/recent_search_tracks.dart';
 import '../widgets/online_catalogue_search_section.dart';
+import '../widgets/lyrics_search_section.dart';
 import '../widgets/artist_search_portrait.dart';
 import 'package:flick/features/library_jobs/artist_metadata.dart';
 import '../widgets/global_catalogue_search_section.dart';
@@ -109,7 +110,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final repoQuery = _debouncedQuery;
     final hasInput = _controller.text.trim().isNotEmpty;
     final hasQuery = repoQuery.isNotEmpty;
-    final resultsAsync = hasQuery && scope != SearchScope.online
+    final resultsAsync = hasQuery && scope != SearchScope.online &&
+        enabled.singleOrNull != SearchCategory.lyrics
         ? ref.watch(globalSearchResultsProvider(repoQuery))
         : null;
 
@@ -176,6 +178,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Expanded(
               child: !hasInput
                   ? _buildEmptyState(context)
+                  : scope == SearchScope.library &&
+                          enabled.singleOrNull == SearchCategory.lyrics && hasQuery
+                  ? LyricsSearchSection(
+                      key: ValueKey('library-lyrics:$repoQuery'),
+                      query: repoQuery, online: false,
+                      onPlayLocal: _playSong,
+                    )
                   : scope == SearchScope.online && hasQuery
                   ? CustomScrollView(
                       slivers: [
@@ -622,6 +631,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (ref.read(searchScopeProvider) == SearchScope.library) return null;
     final category = ref.read(searchFilterProvider).singleOrNull;
     if (!supportsOnlineCategory(category)) return null;
+    if (category == SearchCategory.lyrics) {
+      return SliverToBoxAdapter(
+        child: LyricsSearchSection(
+          key: ValueKey('online-lyrics:$query'),
+          query: query, online: true,
+          onPlayLocal: _playSong,
+        ),
+      );
+    }
     if (category == SearchCategory.artists ||
         category == SearchCategory.albums) {
       return SliverToBoxAdapter(

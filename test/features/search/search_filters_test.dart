@@ -41,18 +41,27 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(c.read(searchFilterProvider), {SearchCategory.songs});
   });
-  test('online/local-only categories have consistent scope', () {
+  test('retired categories migrate to Songs; all four filters work in both scopes', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);
     final f = c.read(searchFilterProvider.notifier);
     final scope = c.read(searchScopeProvider.notifier);
+    expect(visibleSearchCategories, [
+      SearchCategory.songs, SearchCategory.artists,
+      SearchCategory.albums, SearchCategory.lyrics,
+    ]);
     scope.select(SearchScope.online);
+    for (final category in visibleSearchCategories) {
+      f.select(category);
+      expect(c.read(searchFilterProvider), {category});
+      expect(c.read(searchScopeProvider), SearchScope.online);
+    }
     f.select(SearchCategory.folders);
-    expect(c.read(searchScopeProvider), SearchScope.library);
-    scope.select(SearchScope.online);
     expect(c.read(searchFilterProvider), {SearchCategory.songs});
-    f.select(SearchCategory.albums);
     expect(c.read(searchScopeProvider), SearchScope.online);
+    scope.select(SearchScope.library);
+    f.select(SearchCategory.albumArtists);
+    expect(c.read(searchFilterProvider), {SearchCategory.songs});
   });
   testWidgets(
     'category and scope controls respond directly on a narrow phone',
@@ -106,7 +115,20 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.read(searchScopeProvider), SearchScope.online);
       expect(find.text('All'), findsNothing);
+      expect(find.text('Lyrics'), findsOneWidget);
+      expect(find.text('Folders'), findsNothing);
+      expect(find.text('Year'), findsNothing);
+      expect(find.text('Album Artists'), findsNothing);
+      expect(find.text('Playlists'), findsNothing);
       expect(c.read(searchFilterProvider), {SearchCategory.albums});
+      await tester.tap(find.text('Lyrics'));
+      await tester.pumpAndSettle();
+      expect(c.read(searchFilterProvider), {SearchCategory.lyrics});
+      await tester.tap(find.text('Library'));
+      await tester.pumpAndSettle();
+      expect(c.read(searchScopeProvider), SearchScope.library);
+      expect(c.read(searchFilterProvider), {SearchCategory.lyrics});
+      expect(find.widgetWithText(ChoiceChip, 'Lyrics'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

@@ -104,6 +104,11 @@ class LyricsService {
   static int _desktopRevision = 0;
   int _seenDesktopRevision = 0;
 
+  /// Notifies search results when local lyric sources are saved, replaced, or
+  /// detached. Also includes lyrics delivered by the desktop sync channel.
+  static final ValueNotifier<int> contentRevision = ValueNotifier<int>(0);
+  int _seenContentRevision = contentRevision.value;
+
   /// The song's own lyrics (a manual pick, its tags, a file beside it). With
   /// [fetchOnline], a song that carries none is looked up on LRCLIB, as
   /// desktop's "Fetch lyrics automatically" does; nothing is written to disk.
@@ -116,9 +121,11 @@ class LyricsService {
     bool Function()? stillCurrent,
   }) async {
     if (refreshOnline) OnlineLyricsService.clearLookupCache();
-    if (_seenDesktopRevision != _desktopRevision) {
+    if (_seenDesktopRevision != _desktopRevision ||
+        _seenContentRevision != contentRevision.value) {
       _cache.clear();
       _seenDesktopRevision = _desktopRevision;
+      _seenContentRevision = contentRevision.value;
     }
     if (source != 'auto' && source != 'local')
       return fetchOnlineLyrics(
@@ -383,6 +390,7 @@ class LyricsService {
     await part.writeAsString(encoded, flush: true);
     await part.rename(file.path);
     _desktopRevision++;
+    contentRevision.value++;
   }
 
   static Future<LyricsData?> _desktopLyrics(Song song) async {
@@ -1250,6 +1258,9 @@ class LyricsService {
       await prefs.setString(_manualLyricsOverridesKey, jsonEncode(map));
     }
     _cache.remove(filePath);
+    // This runs for imported, saved, replaced and cleared manual/sidecar
+    // lyrics. Invalidate search and all LyricsService instance caches.
+    contentRevision.value++;
   }
 
   Future<String> _writeManagedLyricsCopy({

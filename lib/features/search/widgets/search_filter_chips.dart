@@ -64,9 +64,7 @@ class SearchFilterChips extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              for (final category in SearchCategory.values)
-                if (scope != SearchScope.online ||
-                    supportsOnlineCategory(category))
+              for (final category in visibleSearchCategories)
                   _chip(
                     context,
                     category.label,
