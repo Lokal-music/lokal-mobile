@@ -12,6 +12,16 @@ import 'flow_library.dart';
 import 'flow_playback.dart';
 import 'flow_store.dart';
 
+/// Injectable online recommendation boundary. Production fetches BitChord-style
+/// radio; tests can verify queue behavior without live provider requests.
+typedef FlowRadioLookup = Future<List<Song>> Function(
+    Song seed, Iterable<Song> existing, int count);
+
+final flowRadioProvider = Provider<FlowRadioLookup>((ref) =>
+    (seed, existing, count) => const OnlineRadioRecommendations().recommend(
+          seed, existing: existing, count: count,
+        ));
+
 final flowStoreProvider = FutureProvider<FlowStore>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   return FlowStore(
@@ -201,7 +211,8 @@ class FlowController extends AsyncNotifier<FlowData> {
     );
     await _commit(data);
     await ref.read(flowPlaybackProvider).play(songs, first, data.session.seed);
-    _background(grow());
+    // The player observation schedules the first background radio top-up.
+    // A test adapter without player events may request growth explicitly.
   });
 
   /// Grow when at most three tracks remain; appending to the context tail
@@ -232,10 +243,8 @@ class FlowController extends AsyncNotifier<FlowData> {
     ];
     List<Song> online = const [];
     if (seed != null) {
-      online = await const OnlineRadioRecommendations().recommend(
-        seed,
-        count: remaining.clamp(0, FlowRules.topUpTracks),
-        existing: existing,
+      online = await ref.read(flowRadioProvider)(
+        seed, existing, remaining.clamp(0, FlowRules.topUpTracks),
       );
     }
     if (!ref.mounted ||
