@@ -1,5 +1,6 @@
 import 'package:flick/models/playlist.dart';
 import 'package:flick/models/song.dart';
+import 'package:flick/services/online_playlist_reference.dart';
 
 /// One transaction reorders the actual local playlist, unlike browser sorts
 /// which only change the visible view. Network playlist mirrors are read-only.
@@ -26,7 +27,12 @@ List<String> lokalOrderedPlaylistIds(
       (
         id: playlist.songIds[i],
         song: byId[playlist.songIds[i]] ??
-            playlist.songSnapshots[playlist.songIds[i]]?.toSong(playlist.songIds[i]),
+            (playlist.songSnapshots[playlist.songIds[i]] == null
+              ? null
+              : playlist.songIds[i].startsWith(onlinePlaylistPrefix)
+                ? restoreOnlinePlaylistSong(playlist.songIds[i],
+                    playlist.songSnapshots[playlist.songIds[i]]!)
+                : playlist.songSnapshots[playlist.songIds[i]]!.toSong(playlist.songIds[i])),
         position: i,
       ),
   ];
