@@ -18,6 +18,16 @@ abstract final class LokalPlayerMotion {
     ratio: 1,
   );
 
+  // The opening sheet used the same slow critical-damping tail as dismissal.
+  // On a high-refresh display it appeared to stall just before reaching the
+  // top. Keep dismissal's familiar resistance but settle opening sooner,
+  // without an underdamped bounce or a separate final snap.
+  static final openingSpring = SpringDescription.withDampingRatio(
+    mass: 1,
+    stiffness: 390,
+    ratio: 1,
+  );
+
   /// A release past this share of the way carries on to that end.
   static const double carryFraction = .25;
 
@@ -37,7 +47,13 @@ abstract final class LokalPlayerMotion {
   }
 
   static SpringSimulation simulation(double from, double to, double velocity) =>
-      SpringSimulation(spring, from, to, velocity, snapToEnd: true);
+      SpringSimulation(
+        to > from ? openingSpring : spring,
+        from,
+        to,
+        velocity,
+        snapToEnd: true,
+      );
 
   /// How far the sheet travels for the whole movement: from [startTop]
   /// (the mini player's top) to the top of the screen.
