@@ -362,17 +362,22 @@ class MorneyeTrack {
 
     final album = track['album'];
     for (final value in [
-      track['cover_url'], track['coverUrl'], track['cover_art'],
-      track['coverArt'], track['artwork_url'], track['artworkUrl'],
-      track['album_art'], track['albumArt'], track['images'],
-      track['image'], track['thumbnail'],
+      // Providers frequently expose a tiny convenience thumbnail alongside
+      // a separate album images array with much larger artwork.
+      track['images'], track['image'],
       if (album is Map) ...[
-        album['cover_url'], album['cover_art'], album['images'],
-        album['image'],
+        album['images'], album['image'], album['cover_art'],
+        album['cover_url'],
       ],
+      track['artwork_url'], track['artworkUrl'],
+      track['album_art'], track['albumArt'],
+      track['cover_art'], track['coverArt'],
+      track['cover_url'], track['coverUrl'], track['thumbnail'],
     ]) {
       final found = getUrl(value);
-      if (found != null) return morneyeAlbumArtworkUrl(found);
+      // Keep the original URL available: PlayerArtworkQuality.candidates
+      // promotes Amazon sizes and safely retries the original on a 404.
+      if (found != null) return found;
     }
     return null;
   }
