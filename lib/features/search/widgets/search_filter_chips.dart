@@ -14,8 +14,6 @@ class SearchFilterChips extends StatelessWidget {
     super.key,
     required this.enabled,
     required this.onToggle,
-    required this.onToggleAll,
-    required this.isAllEnabled,
     required this.scope,
     required this.onScopeChanged,
     this.counts,
@@ -23,8 +21,6 @@ class SearchFilterChips extends StatelessWidget {
   });
   final Set<SearchCategory> enabled;
   final ValueChanged<SearchCategory> onToggle;
-  final VoidCallback onToggleAll;
-  final bool isAllEnabled;
   final SearchScope scope;
   final ValueChanged<SearchScope> onScopeChanged;
   final Map<SearchCategory, int>? counts;
