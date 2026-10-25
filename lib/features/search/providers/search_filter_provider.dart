@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/search_category.dart';
 
-enum SearchScope { all, library, online }
+enum SearchScope { library, online }
 
 bool supportsOnlineCategory(SearchCategory? category) =>
     category == null ||
@@ -15,7 +15,7 @@ bool supportsOnlineCategory(SearchCategory? category) =>
 
 class SearchScopeNotifier extends Notifier<SearchScope> {
   @override
-  SearchScope build() => SearchScope.all;
+  SearchScope build() => SearchScope.library;
   void select(SearchScope scope) {
     if (scope == SearchScope.online &&
         !supportsOnlineCategory(ref.read(searchFilterProvider).singleOrNull)) {
