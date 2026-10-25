@@ -4,6 +4,8 @@ import 'package:flick/features/search/models/search_category.dart';
 import 'package:flick/features/search/providers/search_filter_provider.dart';
 import 'package:flick/features/search/screens/search_screen.dart';
 import 'package:flick/features/search/widgets/global_catalogue_search_section.dart';
+import 'package:flick/features/search/widgets/online_catalogue_search_section.dart';
+import 'package:flick/features/search/widgets/artist_search_portrait.dart';
 import 'package:flick/services/global_catalogue_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,7 +42,9 @@ class _Catalogue extends GlobalCatalogueSearchService {
       albums: const [
         GlobalCatalogueAlbum(name: 'Unrelated album', artist: 'Other'),
       ],
-      artists: const [GlobalCatalogueArtist(name: 'Unrelated artist')],
+      artists: const [GlobalCatalogueArtist(
+        name: 'Unrelated artist', artworkUrl: 'https://example.test/portrait.jpg',
+      )],
     );
   }
 }
@@ -80,6 +84,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Wanted song'), findsOneWidget);
         expect(find.text('Online songs'), findsOneWidget);
+        expect(find.text('$catalogue'), findsNothing);
+        expect(find.text('${catalogue == 'spotify' ? 'Spotify' : 'Apple Music'} catalogue · plays through your configured sources'), findsOneWidget);
         expect(find.text('Global'), findsNothing);
         expect(find.text('Songs'), findsNothing); // No redundant subheading
         final headingPadding = tester.widget<Padding>(
@@ -161,4 +167,28 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+testWidgets('Online artists and albums use selected catalogue subtitles and artist portrait widgets', (tester) async {
+  final c = ProviderContainer(overrides: [
+    globalCatalogueSearchServiceProvider.overrideWithValue(_Catalogue('spotify')),
+  ]);
+  addTearDown(c.dispose);
+  await tester.pumpWidget(_app(c, const SingleChildScrollView(
+    child: OnlineCatalogueSearchSection(query: 'Wanted', category: SearchCategory.artists),
+  )));
+  await tester.pumpAndSettle();
+  expect(find.text('Online artists'), findsOneWidget);
+  expect(find.text('Spotify catalogue · plays through your configured sources'), findsOneWidget);
+  expect(find.byType(ArtistSearchPortrait), findsOneWidget);
+
+  await tester.pumpWidget(_app(c, const SingleChildScrollView(
+    child: OnlineCatalogueSearchSection(query: 'Wanted', category: SearchCategory.albums),
+  )));
+  await tester.pumpAndSettle();
+  expect(find.text('Online albums'), findsOneWidget);
+  expect(find.text('Spotify catalogue · plays through your configured sources'), findsOneWidget);
+  expect(find.text('Unrelated album'), findsOneWidget);
+});
+
 }
+
+
