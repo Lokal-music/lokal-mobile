@@ -118,9 +118,59 @@ class WidgetRecommendationService {
         final end = (start + 3).clamp(0, rows.length);
         await Future.wait([
           for (var i = start; i < end; i++)
-            widgetSafeArtwork(sources[i]).then((path) {
+            () async {
+              // Radio metadata may not include artwork. Prefer album artwork;
+              // use the video's public image only as a last resort.
+              var path = await widgetSafeArtwork(sources[i]);
+              if (path.isEmpty) {
+                final remoteId = rows[i]['remoteId'] as String? ?? '';
+                if (RegExp(r'^yt:[A-Za-z0-9_-]{11}
+        ]);
+        await _publish(rows, generation);
+      }
+    } catch (_) {
+      // Metadata browsing and recommendation playback remain available.
+    }
+  }
+
+  /// Enforce local, bounded artwork paths. Remote URLs and signed tokens are
+  /// never written to HomeWidgetPreferences. Cache Manager handles network
+  /// IO asynchronously and reuses its usual response cache.
+  static Future<String> widgetSafeArtwork(String? raw) async {
+    if (raw == null || raw.trim().isEmpty) return '';
+    try {
+      if (!raw.startsWith('https://') && !raw.startsWith('http://')) {
+        final path = raw.startsWith('file://') ? raw.substring(7) : raw;
+        return File(path).existsSync() ? path : '';
+      }
+      final uri = Uri.tryParse(raw);
+      if (uri == null || uri.scheme != 'https') return '';
+      final file = await DefaultCacheManager().getSingleFile(raw)
+          .timeout(const Duration(seconds: 5));
+      return file.existsSync() ? file.path : '';
+    } catch (_) { return ''; }
+  }
+
+  static Future<List<Map<String, dynamic>>> restore() async {
+    try {
+      await HomeWidget.setAppGroupId('group.com.mossapps.flick.widgets');
+      final raw = await HomeWidget.getWidgetData<String>(key);
+      final decoded = jsonDecode(raw ?? '[]');
+      if (decoded is! List) return const [];
+      return decoded.whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .take(7).toList();
+    } catch (_) { return const []; }
+  }
+}
+).hasMatch(remoteId)) {
+                  final videoId = remoteId.substring(3);
+                  path = await widgetSafeArtwork(
+                    'https://i.ytimg.com/vi/$videoId/hqdefault.jpg');
+                }
+              }
               if (generation == _generation) rows[i]['artwork'] = path;
-            }),
+            }(),
         ]);
         await _publish(rows, generation);
       }
