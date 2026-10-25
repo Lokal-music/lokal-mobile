@@ -867,7 +867,9 @@ class PlayerService {
     if (changed.isEmpty && !queueChanged) return;
     if (queueChanged) _notifyQueueChanged();
     _notifyUpNextChanged();
-    if (!_usingRustBackend && _audioSourceSequence != null) {
+    if (!_usingRustBackend && _audioSourceSequence != null &&
+        !hasUnresolvedAudioSources(_playlist) &&
+        _androidEngine?.isSingleTrackOnly != true) {
       for (final index in changed) {
         if (index == _currentIndex) continue;
         _removeFromAudioSequence(index);
@@ -6423,6 +6425,10 @@ class PlayerService {
   }
 
   Future<void> _syncPlaylistAfterShuffle({required int oldCurrentIndex}) async {
+    // Shuffling a Discovery playlist does not make its pending songs playable.
+    // Let the logical order change immediately, without rebuilding Media3
+    // with empty URLs or resetting the currently playing decoder.
+    if (hasUnresolvedAudioSources(_playlist)) return;
     final player = _justAudioPlayer;
     final seq = _audioSourceSequence;
     if (player == null || seq == null) {
@@ -6502,6 +6508,7 @@ class PlayerService {
     if (mode == LoopMode.all &&
         !_usingRustBackend &&
         _playlist.length > 1 &&
+        !hasUnresolvedAudioSources(_playlist) &&
         _androidEngine?.isSingleTrackOnly == true &&
         _androidEngine?.isCrossfadeActive == false) {
       final engine = _androidEngine!;
