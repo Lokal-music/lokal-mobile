@@ -348,12 +348,14 @@ bool shouldOptimisticallySyncSkipForLoopMode(LoopMode loopMode) {
 bool shouldHandleManualCompletion({
   required bool usingRustBackend,
   required LoopMode loopMode,
+  bool androidSingleTrackOnly = false,
 }) {
   if (usingRustBackend) {
     return true;
   }
 
   return loopMode == LoopMode.off ||
+      (loopMode == LoopMode.all && androidSingleTrackOnly) ||
       loopMode.isAdvanceMode ||
       loopMode == LoopMode.stopAfterCurrent;
 }
@@ -473,7 +475,9 @@ List<Song> selectAutoplayRecommendations({
   final seen = {...excludedIds};
   final available = <Song>[
     for (final song in library)
-      if (seen.add(song.id) && song.filePath != null && !song.isPending) song,
+      if (song.filePath?.isNotEmpty == true &&
+          !song.isPending &&
+          seen.add(song.id)) song,
   ];
   available.shuffle(random ?? math.Random());
   return List.unmodifiable(available.take(count));
@@ -506,6 +510,7 @@ class PlayerService {
   }
 
   just_audio.AudioPlayer? _justAudioPlayer;
+  AndroidAudioEngine? _androidEngine;
   // Cached crossfade curve index (0..3) for synchronous reads inside the
   // just_audio engine's config provider; refreshed from prefs on load/change.
   int _crossfadeCurveIndex = 0;
@@ -2396,6 +2401,7 @@ class PlayerService {
       onTrackAdvanced: _onAndroidTrackAdvanced,
       onTrackError: _onAndroidTrackError,
     );
+    _androidEngine = engine;
     engine.onTrackEnded = () {
       if (_usingRustBackend) return;
       unawaited(_onSongFinished());
@@ -3801,6 +3807,8 @@ class PlayerService {
     if (!shouldHandleManualCompletion(
       usingRustBackend: _usingRustBackend,
       loopMode: loopModeNotifier.value,
+      androidSingleTrackOnly: !_usingRustBackend &&
+          (_androidEngine?.isSingleTrackOnly ?? false),
     )) {
       _debugLog('_onSongFinished: skipping manual completion handling');
       return;
@@ -4801,6 +4809,7 @@ class PlayerService {
   }
 
   Future<void> _disposeAndroidEngine() async {
+    _androidEngine = null;
     final player = _justAudioPlayer;
     if (player == null) return;
 
@@ -6335,7 +6344,15 @@ class PlayerService {
         await player.setLoopMode(just_audio.LoopMode.one);
         break;
       case LoopMode.all:
-        await player.setLoopMode(just_audio.LoopMode.all);
+        // Fast-start/crossfade may only load the current song. Do not enable
+        // native all on a one-item sequence: it would repeat that same song.
+        // Manual completion advances through the logical playlist until an
+        // asynchronous in-place restore has populated the full sequence.
+        final nativeMode = _androidEngine?.isSingleTrackOnly == true &&
+                _playlist.length > 1
+            ? just_audio.LoopMode.off
+            : just_audio.LoopMode.all;
+        await player.setLoopMode(nativeMode);
         break;
     }
   }
@@ -6473,6 +6490,28 @@ class PlayerService {
     // user taps Repeat All can stall the main player, particularly for HTTP
     // and on-demand sources. Keep the current stream, index and position.
     await _updateLoopMode();
+    if (mode == LoopMode.all &&
+        !_usingRustBackend &&
+        _playlist.length > 1 &&
+        _androidEngine?.isSingleTrackOnly == true &&
+        _androidEngine?.isCrossfadeActive == false) {
+      final engine = _androidEngine!;
+      final selection = _selectionGeneration;
+      // No blocking replay, Media3 reset or full source reconstruction.
+      // Restore in the background while manual Repeat All remains functional.
+      unawaited(() async {
+        final restored = await engine.restoreFastStartPlaylist(
+          isCurrent: () => _selectionGeneration == selection &&
+              loopModeNotifier.value == LoopMode.all &&
+              identical(_androidEngine, engine),
+        );
+        if (restored && _selectionGeneration == selection &&
+            loopModeNotifier.value == LoopMode.all &&
+            identical(_androidEngine, engine)) {
+          await _updateLoopMode();
+        }
+      }());
+    }
   }
 
   // ==================== Volume ====================
@@ -7304,11 +7343,20 @@ class PlayerService {
   // here as a fallback. The remaining recommendations become normal Up Next
   // entries as soon as playback selects the first.
   Future<void> _handleQueueEnd() async {
-    if (autoplayOnQueueEndNotifier.value) {
+    final selection = _selectionGeneration;
+    final position = _currentIndex;
+    final selectedTrackId = currentSongNotifier.value?.id;
+    bool stillCurrent() =>
+        selection == _selectionGeneration &&
+        position == _currentIndex &&
+        selectedTrackId == currentSongNotifier.value?.id;
+
+    if (autoplayOnQueueEndNotifier.value && _canPreviewAutoplay) {
       try {
         var suggestions = autoplayQueueNotifier.value;
         if (suggestions.isEmpty) {
           final library = await _songRepository.getAllSongs();
+          if (!stillCurrent()) return;
           suggestions = selectAutoplayRecommendations(
             library: library,
             excludedIds: {
@@ -7317,6 +7365,12 @@ class PlayerService {
             count: _autoplayPreviewCount,
           );
         }
+        if (!stillCurrent()) return;
+        if (loopModeNotifier.value == LoopMode.all) {
+          if (!isPlayingNotifier.value) await _nextInternal();
+          return;
+        }
+        if (!_canPreviewAutoplay) return;
         if (suggestions.isNotEmpty) {
           _autoplayPreviewTimer?.cancel();
           ++_autoplayPreviewGeneration;
@@ -7328,6 +7382,13 @@ class PlayerService {
         _debugLog('_handleQueueEnd autoplay error: $e');
       }
     }
+    if (!stillCurrent()) return;
+    if (loopModeNotifier.value == LoopMode.all) {
+      if (!isPlayingNotifier.value) await _nextInternal();
+      return;
+    }
+    if (loopModeNotifier.value != LoopMode.off &&
+        !loopModeNotifier.value.isAdvanceMode) return;
     await _pauseInternal();
     await seek(Duration.zero);
   }
