@@ -15,6 +15,7 @@ internal object WidgetPrefs {
     const val KEY_TITLE = "flick_widget_title"
     const val KEY_ARTIST = "flick_widget_artist"
     const val KEY_ALBUM_ART = "flick_widget_album_art"
+    const val KEY_LAST_ALBUM_ART = "flick_widget_last_album_art"
     const val KEY_IS_PLAYING = "flick_widget_is_playing"
     const val KEY_HAS_SONG = "flick_widget_has_song"
     const val KEY_IS_SHUFFLE = "flick_widget_is_shuffle"
