@@ -23,8 +23,8 @@ is required to perform these installation and acceptance steps.
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
 The engineering IPA is saved after binary inspection, before runtime tests;
-read the associated run's result for its acceptance status. Build 11 passes the
-native simulator smoke test on iOS 26.0. Physical iPhone installation, background
+read the associated run's result for its acceptance status. Build 12 passes the
+native simulator smoke test and full app shell on iOS 26.0 and 18.6. Physical iPhone installation, background
 playback and accessory acceptance remain separate; this is not a qualified
 public release.
 

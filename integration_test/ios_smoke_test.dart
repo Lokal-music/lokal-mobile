@@ -10,6 +10,8 @@ import 'package:flick/main.dart' as app;
 import 'package:flick/models/audio_engine_type.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/player_service.dart';
+import 'package:flick/services/app_preferences_service.dart';
+import 'package:flick/services/replaygain_service.dart';
 import 'package:flick/services/equalizer_service.dart';
 import 'package:flick/providers/equalizer_provider.dart';
 import 'package:flick/features/morneye/morneye_bootstrap.dart';
@@ -91,6 +93,10 @@ void main() {
     addTearDown(() => FlutterError.onError = testErrorHandler);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lyrics_auto_fetch', false);
+    final playbackPreferences = AppPreferencesService();
+    await playbackPreferences.setReplayGainMode(ReplayGainMode.off);
+    await playbackPreferences.setReplayGainPreampDb(0);
+    await playbackPreferences.setReplayGainPreventClipping(true);
     debugPrint('iOS smoke: real application bootstrap');
     await app.bootstrapForIntegrationTest();
     for (
@@ -200,6 +206,38 @@ void main() {
     await applyEqualizer(EqualizerState.initial());
     await player.syncIosProcessingRoute();
 
+    // Independent pitch is not implemented by just_audio on iOS. Changing it
+    // during playback must reopen the track through native SoundTouch, retain
+    // its position, and return to AVPlayer when processing is reset.
+    await player.play(song, playlist: [song]);
+    expect(player.currentEngineType, AudioEngineType.iosSystem);
+    await player.setPitchSemitones(3);
+    expect(player.currentEngineType, AudioEngineType.iosRust);
+    final pitchProgress = await _expectPlaybackProgress(tester, player);
+    await player.setPitchSemitones(0);
+    expect(player.currentEngineType, AudioEngineType.iosSystem);
+    final pitchResetProgress = await _expectPlaybackProgress(tester, player);
+    await player.pause();
+
+    // Positive normalization cannot be implemented by AVPlayer's capped volume.
+    // Use Rust gain, including a live switch back when normalization is disabled.
+    final normalizedSong = song.copyWith(
+      id: 'ios-smoke-replaygain',
+      replaygainTrackGain: 3,
+      replaygainTrackPeak: 0.1,
+    );
+    await playbackPreferences.setReplayGainMode(ReplayGainMode.track);
+    await player.play(normalizedSong, playlist: [normalizedSong]);
+    expect(player.currentEngineType, AudioEngineType.iosRust);
+    expect(player.replayGainState.gainDb, 3);
+    final normalizationProgress = await _expectPlaybackProgress(tester, player);
+    await playbackPreferences.setReplayGainMode(ReplayGainMode.off);
+    await player.applyReplayGainFromSettings();
+    expect(player.currentEngineType, AudioEngineType.iosSystem);
+    expect(player.replayGainState.gainDb, 0);
+    await _expectPlaybackProgress(tester, player);
+    await player.pause();
+
     // Validate the FFmpeg iOS binaries and an actual Rust-only container.
     final wavpack = File('${directory.path}/Generated tone.wv');
     final conversion = await FFmpegKit.executeWithArguments([
@@ -219,6 +257,13 @@ void main() {
     await player.play(wvSong, playlist: [wvSong]);
     final wavpackProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
+    await player.pause();
+
+    // Generated fixtures avoid redistributing copyrighted recordings. Decode
+    // each through its intended production backend, with native metadata and
+    // progress checks. These are compatibility checks, not output fidelity tests.
+    final codecResults = <String, Object>{};
+    Song? opusFixture;
     binding.reportData = {
       ...?binding.reportData,
       'version': identity?['version'],
@@ -227,12 +272,134 @@ void main() {
       'quickjs_echo': quickJsResult,
       'system_wav_progress_ms': systemProgress,
       'rust_dsp_progress_ms': dspProgress,
+      'rust_pitch_progress_ms': pitchProgress,
+      'system_pitch_reset_progress_ms': pitchResetProgress,
+      'rust_positive_replaygain_progress_ms': normalizationProgress,
       'rust_wavpack_progress_ms': wavpackProgress,
       'ffmpeg_wavpack_conversion': 'passed',
       'onboarding_to_app_shell': 'passed',
+      'codec_corpus': codecResults,
     };
+    for (final fixture in [
+      (
+        name: 'mp3-vbr',
+        extension: 'mp3',
+        encoder: ['-c:a', 'libmp3lame', '-q:a', '4'],
+        sampleRate: 44100,
+        engine: AudioEngineType.iosSystem,
+      ),
+      (
+        name: 'aac',
+        extension: 'm4a',
+        encoder: ['-c:a', 'aac', '-b:a', '128k'],
+        sampleRate: 44100,
+        engine: AudioEngineType.iosSystem,
+      ),
+      (
+        name: 'alac',
+        extension: 'm4a',
+        encoder: ['-c:a', 'alac'],
+        sampleRate: 44100,
+        engine: AudioEngineType.iosSystem,
+      ),
+      (
+        name: 'flac-96k-stereo',
+        extension: 'flac',
+        encoder: ['-c:a', 'flac', '-ar', '96000', '-ac', '2'],
+        sampleRate: 96000,
+        engine: AudioEngineType.iosSystem,
+      ),
+      (
+        name: 'aiff',
+        extension: 'aiff',
+        encoder: ['-c:a', 'pcm_s16be'],
+        sampleRate: 44100,
+        engine: AudioEngineType.iosSystem,
+      ),
+      (
+        name: 'vorbis',
+        extension: 'ogg',
+        encoder: ['-c:a', 'libvorbis', '-q:a', '4'],
+        sampleRate: 44100,
+        engine: AudioEngineType.iosRust,
+      ),
+      (
+        name: 'opus',
+        extension: 'opus',
+        encoder: ['-c:a', 'libopus', '-ar', '48000'],
+        sampleRate: 48000,
+        engine: AudioEngineType.iosRust,
+      ),
+    ]) {
+      debugPrint('iOS codec corpus: ${fixture.name}');
+      final folder = await Directory('${directory.path}/${fixture.name}')
+          .create();
+      final file = File('${folder.path}/Été 音楽.${fixture.extension}');
+      final encoded = await FFmpegKit.executeWithArguments([
+        '-y',
+        '-i',
+        audio.path,
+        ...fixture.encoder,
+        file.path,
+      ]);
+      expect(
+        ReturnCode.isSuccess(await encoded.getReturnCode()),
+        true,
+        reason: 'Fixture generation failed: ${fixture.name}',
+      );
+      final metadata = await scanner.scanRootDir(
+        rootPath: folder.path,
+        knownFiles: {},
+        scanOptions: const scanner.ScanOptions(
+          filterNonMusicFilesAndFolders: false,
+          forceFullRescan: true,
+        ),
+      );
+      expect(metadata.newOrModified, hasLength(1), reason: fixture.name);
+      expect(
+        metadata.newOrModified.single.sampleRate,
+        fixture.sampleRate,
+        reason: fixture.name,
+      );
+      final track = song.copyWith(
+        id: 'ios-corpus-${fixture.name}',
+        filePath: file.path,
+        fileType: fixture.extension.toUpperCase(),
+        sampleRate: fixture.sampleRate,
+      );
+      if (fixture.name == 'opus') opusFixture = track;
+      await player.play(track, playlist: [track]);
+      final progress = await _expectPlaybackProgress(tester, player);
+      expect(player.currentEngineType, fixture.engine, reason: fixture.name);
+      await player.pause();
+      expect(player.isPlayingNotifier.value, false, reason: fixture.name);
+      codecResults[fixture.name] = {
+        'engine': player.currentEngineType.name,
+        'source_sample_rate': metadata.newOrModified.single.sampleRate,
+        'progress_ms': progress,
+      };
+    }
+    // A system player's internal playlist can reach an unsupported codec
+    // without calling PlayerService.play. Check the real auto-advance/error
+    // handoff, rather than only explicitly selecting a Rust-only track.
+    final successor = opusFixture!;
+    final queueStart = song.copyWith(id: 'ios-smoke-queue-start');
+    await player.play(queueStart, playlist: [queueStart, successor]);
+    expect(player.currentEngineType, AudioEngineType.iosSystem);
+    await player.seek(const Duration(seconds: 7));
+    for (
+      var i = 0;
+      i < 48 && player.currentEngineType != AudioEngineType.iosRust;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    expect(player.currentSongNotifier.value?.id, successor.id);
+    expect(player.currentEngineType, AudioEngineType.iosRust);
+    final queueProgress = await _expectPlaybackProgress(tester, player);
+    binding.reportData!['system_to_rust_queue_progress_ms'] = queueProgress;
     await player.pause();
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();
-  }, timeout: const Timeout(Duration(minutes: 3)));
+  }, timeout: const Timeout(Duration(minutes: 4)));
 }

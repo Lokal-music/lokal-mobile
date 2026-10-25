@@ -7,9 +7,9 @@ does not mean a USB DAC or every Android OEM has been tested here.
 
 The iPhone port is **implemented in part, not runtime-qualified**. Hosted builds
 produce a simulator app and unsigned release/AOT IPA; both native Rust targets
-compile. The actual Lokal welcome screen renders on iOS 26.0, and the integration
+compile. The actual Lokal app shell renders on iOS 26.0 and 18.6, and the integration
 driver attaches. Android-only event subscriptions are gated; native scanner, QuickJS, WAV
-play/pause/seek, Rust DSP and WavPack conversion/playback pass on iOS 26.0. Storage,
+play/pause/seek, Rust DSP and WavPack conversion/playback pass on iOS 26.0 and 18.6. Storage,
 media/session adapters, ordinary DSP/codec routing, Files playlist/recap exports,
 Spotify session bridge and platform settings are implemented. No physical iPhone
 installation or hardware behavior is validated.

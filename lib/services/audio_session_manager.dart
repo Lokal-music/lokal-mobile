@@ -288,7 +288,8 @@ class AudioSessionManager {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return (EqEngineHint.parametricPeqActive ||
               EqEngineHint.iosDspActive ||
-              EqEngineHint.iosCrossfeedActive)
+              EqEngineHint.iosCrossfeedActive ||
+              EqEngineHint.iosPitchActive)
           ? AudioEngineType.iosRust
           : AudioEngineType.iosSystem;
     }

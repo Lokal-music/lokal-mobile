@@ -6,4 +6,5 @@ class EqEngineHint {
   static bool parametricPeqActive = false;
   static bool iosDspActive = false;
   static bool iosCrossfeedActive = false;
+  static bool iosPitchActive = false;
 }

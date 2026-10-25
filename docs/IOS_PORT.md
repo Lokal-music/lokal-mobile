@@ -1,6 +1,6 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-Status: implementation and hosted runtime investigation, 25 October 2026.
+Status: implementation and hosted native validation, 25 October 2026.
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
@@ -9,19 +9,23 @@ The unsigned engineering IPA passes package inspection (33 Mach-O binaries,
 iPhone arm64 platform, minimum OS, metadata and checksum). Native Rust probes
 pass for device and Apple Silicon simulator with raw USB excluded.
 
-**The complete iOS workflow passes on build 11.** Lokal renders its actual
-welcome screen; native startup, Rust scanning, QuickJS execution, system WAV
-play/pause/seek, Rust/Core Audio DSP playback, and FFmpeg-to-WavPack playback all
-pass without native mocks on iOS 26.0.
-[Build 11](https://github.com/lokal-music/lokal-mobile/actions/runs/40193874578)
-contains the unsigned release IPA and screenshots. The IPA SHA-256 is
+**The complete iOS workflow passes on build 12 on iOS 26.0 and 18.6.**
+Lokal reaches its full application shell through the actual onboarding UI. Native
+startup, Rust scanning, QuickJS execution, system WAV play/pause/seek, Rust/Core
+Audio DSP playback, and FFmpeg-to-WavPack playback pass without native mocks.
+[Build 12](https://github.com/lokal-music/lokal-mobile/actions/runs/40200733269)
+contains the unsigned release IPA, matching native/Dart crash symbols, screenshots
+and machine-readable measured playback reports. The previous build 11 also passes
+on iOS 26.0; its IPA SHA-256 is
 `7af6d3d7bc97e31bd666b37bbe338eb23703ae11c86154fe7c60774ad0831ca2`.
 
-The next validation expansion exercises onboarding into the full app shell on
-iOS 26.0 and 18.6, exports measured position advances/native screenshots, and
-requires matching crash symbols during packaging. Those additional checks are
-pending their hosted run. No signed installation or physical iPhone behavior is
-validated.
+Build 12 reports system WAV / Rust DSP / WavPack position advances of
+464 / 554 / 533 ms on iOS 26.0 and 415 / 555 / 544 ms on iOS 18.6. Each check
+requires more than 300 ms beyond a settled baseline. The QuickJS echo result is
+`{"value":42}` on both runtimes. These measurements establish native execution,
+not output fidelity. No signed installation or physical iPhone behavior is
+validated. The newly added pitch, positive ReplayGain, codec-corpus and mixed-codec
+queue assertions await the next hosted run.
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
@@ -36,7 +40,7 @@ The IPA is an engineering build, not a qualified release. See
 flowchart LR
   Source["Flutter + Rust source"] --> Mac["Hosted Xcode 26.0.1"]
   Mac --> Device["arm64 release/AOT · build passes"]
-  Mac --> Sim["iOS 26 · real welcome screen renders"]
+  Mac --> Sim["iOS 26 + 18.6 · full app shell renders"]
   Device --> IPA["Unsigned engineering IPA · inspection passes"]
   Sim --> Smoke["Scanner / QuickJS / audio · simulator passes"]
   IPA --> Windows["Windows re-sign/install · untested"]
@@ -53,7 +57,8 @@ flowchart LR
 - Explicit iOS system and Rust/Core Audio modes; single audio-session owner,
   interruptions, Now Playing/remote controls, route diagnostics and AirPlay UI.
   Rust is selected for DSP or unsupported system formats without claiming direct
-  USB or bit-perfect output. These native routes still need runtime validation.
+  USB or bit-perfect output. System WAV, Rust DSP and WavPack routes pass the
+  simulator smoke test; physical routes and interruptions remain unvalidated.
 - Spotify's existing web-session protocol ported to isolated WKWebView and the
   existing Keychain-backed credential store. Live account checks remain pending.
 - Native Files export for recap CSV/TXT and M3U/M3U8 playlists; manual playlist
@@ -174,6 +179,31 @@ Android-specific: pitch, Android effects and boost must be explicitly audited.
 Use the Rust DSP path if it meets stability and power targets; otherwise record
 the limitation with the exact affected feature. Do not label mixed or
 DSP-processed output bit-perfect.
+
+The iPhone routing rules now include independent pitch and positive ReplayGain.
+The locked system player does not implement independent pitch; AVPlayer volume
+cannot provide gain above unity. Use native SoundTouch for pitch and Rust gain
+for positive normalization. Negative ReplayGain can stay on the system player.
+Live changes preserve the current track/position; resetting processing returns
+to system playback when the format permits it. Native verification of these new
+pitch/normalization transitions and the expanded codec corpus is pending.
+
+```mermaid
+flowchart TD
+  Track["Track requested or advanced"] --> Handle{"Add-on live stream handle?"}
+  Handle -->|Yes| Streaming["System streaming adapter · report DSP bypass"]
+  Handle -->|No| Codec{"DSF / DFF / WavPack / Ogg / Opus?"}
+  Codec -->|Yes| Native["Rust decoder + DSP · Core Audio"]
+  Codec -->|No| Processing{"EQ / crossfeed / independent pitch / positive ReplayGain?"}
+  Processing -->|Yes| Native
+  Processing -->|No| System["System player · AVPlayer"]
+```
+
+The codec corpus generates MP3 VBR, AAC/M4A, ALAC, 96 kHz stereo FLAC, AIFF,
+Vorbis and Opus from an in-memory tone, including Unicode filenames. It verifies
+native scanning, sample-rate metadata, intended backend and advancing position.
+An additional queue case exercises system-to-Rust auto-advance into Opus. It does
+not certify output fidelity, gapless timing, or physical headphone/DAC behavior.
 
 Activation occurs after the listener presses Play. On interruption, remember both
 the prior playing state and subsequent user actions. Resume only when permitted
@@ -434,10 +464,18 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
 
 - Host Rust tests with the default native-audio/USB features: **303 passed**.
   No USB hardware test is inferred from that result.
+- Both Android arm64 debug APKs (`full` and `play`) build with the iOS changes.
+  The Kotlin plugin guard passes across 27 Android modules. The first local
+  Android attempt inherited host Linux pkg-config paths; clearing those paths
+  for the Android cross-build resolved the environment failure. No audio code
+  change was needed.
 
 - Full simulator and release iPhone builds passed on hosted macOS/Xcode 26.0.1.
   Engineering IPA inspection passed; its SHA-256 is published with the artifact.
 - Both native Rust target probes passed with no `rusb`/`libusb1-sys` dependency.
+- Pitch/normalization/routing regression selection: **42 passed**. Scoped
+  analysis reports the same 11 informational lints and no errors/warnings.
+  The full Android debug APK also rebuilds after these processing changes.
 - A selected shared regression run passed 158 tests; the later iOS storage,
   routing and processing regression run passed 63 tests. These counts overlap.
 - Follow-up storage/routing/session tests passed 15 tests; download tests passed
@@ -456,8 +494,9 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
   `libswiftWebKit`, matching WebKit bug 293831. iOS 26.0 now runs the control app
   and actual Lokal welcome screen, with direct Dart VM readiness confirmed.
   The Android-only Cast/Bluetooth event subscriptions are now platform-gated.
-  Build 11 passes real scanning, QuickJS, AVPlayer progress/pause/seek, Rust DSP
-  playback and actual WavPack conversion/playback. This is simulator execution
+  Build 12 passes real scanning, QuickJS, AVPlayer progress/pause/seek, Rust DSP
+  playback and actual WavPack conversion/playback on both iOS 26.0 and 18.6.
+  The full app shell, matching crash symbols and measured JSON reports also pass. This is simulator execution
   evidence, not an audible-fidelity or physical-accessory measurement.
 - The smoke harness uses the supported Flutter drive existing-app adapter and
   probes the real loopback Dart VM directly, with native console capture and

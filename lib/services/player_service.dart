@@ -1395,7 +1395,11 @@ class PlayerService {
       if (prepared == currentEngineType) return;
       final position = positionNotifier.value;
       await _ensureEngineReady(prepared, song: song, reason: 'iOS processing');
+      if (_usingRustBackend) {
+        await _refreshReplayGainForSong(song, pushSpawnDefault: true);
+      }
       await _playbackManager.playTrack(song, initialPosition: position);
+      if (!_usingRustBackend) await _applyReplayGainForSystemTier(song);
     });
   }
 
@@ -5066,8 +5070,10 @@ class PlayerService {
         );
       }
       final needsRust =
-          song.requiresRustDecoder ||
-          const {'ogg', 'oga', 'ogx', 'opus'}.contains(_playbackFileType(song));
+          _requiresRustDecoderForSong(song) ||
+          // AVPlayer volume is capped at unity. Positive ReplayGain needs
+          // native DSP; Android's LoudnessEnhancer is unavailable on iPhone.
+          await _computeReplayGainDbFor(song) > 0;
       return resolveEngineForSong(
         preferred: normalizedEngine,
         requiresRustDecoder: needsRust,
@@ -5261,6 +5267,16 @@ class PlayerService {
   /// Rust engine because ExoPlayer cannot decode their container.
   final Set<String> _rustDecoderRerouteAttempts = <String>{};
 
+  bool _requiresRustDecoderForSong(Song song) =>
+      song.requiresRustDecoder ||
+      (Platform.isIOS &&
+          const {
+            'ogg',
+            'oga',
+            'ogx',
+            'opus',
+          }.contains(_playbackFileType(song)));
+
   /// Auto-advance and crossfade swaps inside a just_audio playlist never pass
   /// through [_playInternal]; restart a DSF/DFF/WavPack track the system tier
   /// cannot decode on the Rust engine.
@@ -5268,15 +5284,7 @@ class PlayerService {
     Song song, {
     required Duration position,
   }) {
-    final needsRust =
-        song.requiresRustDecoder ||
-        (Platform.isIOS &&
-            const {
-              'ogg',
-              'oga',
-              'ogx',
-              'opus',
-            }.contains(_playbackFileType(song)));
+    final needsRust = _requiresRustDecoderForSong(song);
     if (_usingRustBackend || !needsRust) return;
     if (song.filePath == null || _castingService.isActive) return;
     if (!_rustDecoderRerouteAttempts.add(song.id)) return;
@@ -5678,7 +5686,7 @@ class PlayerService {
       );
       return;
     }
-    if (!song.requiresRustDecoder) {
+    if (!_requiresRustDecoderForSong(song)) {
       onlinePlaybackError.value =
           'Could not open “${song.title}”. Retry, or check that the file or source is available.';
       return;
@@ -6726,6 +6734,15 @@ class PlayerService {
   /// LoudnessEnhancer boost for [song].
   Future<void> _applyReplayGainForSystemTier(Song? song) async {
     await _refreshReplayGainForSong(song);
+    if (Platform.isIOS &&
+        _replayGainState.gainDb > 0 &&
+        song?.id == currentSongNotifier.value?.id &&
+        !_usingRustBackend) {
+      // Native playlist auto-advance does not pass through play(). Re-resolve
+      // this track's processing requirement before applying a capped volume.
+      await syncIosProcessingRoute();
+      if (_usingRustBackend) return;
+    }
     if (_determineCurrentTier() != VolumeTier.system) return;
     final player = _justAudioPlayer;
     if (player == null) return;
@@ -6745,6 +6762,7 @@ class PlayerService {
     final song =
         currentSongNotifier.value ?? _playbackManager.latestState?.currentTrack;
     await _refreshReplayGainForSong(song);
+    if (Platform.isIOS) await syncIosProcessingRoute();
     if (_usingRustBackend && _rustAudioService.isInitialized) {
       try {
         // Live update: the running source must change with the settings too.
@@ -7058,18 +7076,24 @@ class PlayerService {
         await _rustAudioService.setPitchShiftSemitones(0.0);
       } else {
         final player = _justAudioPlayer;
-        if (player != null) {
+        if (player != null && !Platform.isIOS) {
           await player.setPitch(1.0);
         }
       }
       return;
     }
     pitchSemitonesNotifier.value = clamped;
+    if (Platform.isIOS) {
+      // just_audio's independent pitch API is Android-only. SoundTouch in
+      // the Rust backend implements this control on iPhone.
+      EqEngineHint.iosPitchActive = clamped != 0;
+      await syncIosProcessingRoute();
+    }
     if (_usingRustBackend) {
       await _rustAudioService.setPitchShiftSemitones(clamped);
     } else {
       final player = _justAudioPlayer;
-      if (player != null) {
+      if (player != null && !Platform.isIOS) {
         // ponytail: just_audio setPitch takes a frequency ratio (1.0 = no shift).
         final ratio = math.pow(2, clamped / 12).toDouble();
         await player.setPitch(ratio);
