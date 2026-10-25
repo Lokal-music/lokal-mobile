@@ -883,9 +883,11 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       // A CDN can report a misleading HEAD length for
                       // segments. Never promote a decoder that was given a
                       // different sourceLength than the actual assembled file.
-                      if (await completed.file.length() != session.total) {
-                        throw StateError('Live media size changed during transfer');
-                      }
+                      final actualLength = await completed.file.length();
+                      final lengthMatches = actualLength == session.total;
+                      // Always validate and adopt the *complete* rendition.
+                      // A misleading CDN total must not lose a playable,
+                      // correctly probed download when the early reader fails.
                       final cached = await cache().adopt(
                         found, completed.file, sourceInfo: completed.info,
                       );
@@ -893,9 +895,17 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       if (path == null) {
                         throw StateError('Completed audio has no cache path');
                       }
-                      session.promote(path);
                       _rememberMorneyePlayback(cacheKey, cached);
                       QueuePreResolver.shared.schedule();
+                      if (lengthMatches) {
+                        session.promote(path);
+                      } else {
+                        // Never change the source length already advertised
+                        // to Media3. Fail the old reader; the next playback
+                        // attempt resolves the verified complete cached Song.
+                        session.fail(StateError('Live media size changed during transfer'));
+                        onStatus?.call('Stream metadata changed; complete audio cached for retry');
+                      }
                     } catch (error) {
                       session.fail(error);
                       QueuePreResolver.shared.schedule();
