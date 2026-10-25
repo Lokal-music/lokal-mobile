@@ -30,6 +30,7 @@ class SpotifyWebApi implements SpotifyLibraryApi {
   final DateTime? likesSince;
   void close() => _http.client.close();
   static const hashes = {
+    'searchTracks': 'bc1ca2fcd0ba1013a0fc88e6cc4f190af501851e3dafd3e1ef85840297694428',
     'home': '5fb7da7a03ee2776c0670856609cb85a189a3cecc36cc160b91cde79063b9cf1',
     'fetchPlaylist':
         '21ea11a6ac75a5f3e01fd365d29c18e0a4a8b7dc09f89bbb5d73910190c6acaf',
