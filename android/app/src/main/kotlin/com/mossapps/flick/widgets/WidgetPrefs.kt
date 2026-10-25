@@ -32,6 +32,7 @@ internal object WidgetPrefs {
     const val KEY_FLOW_STATUS = "flick_widget_flow_status"
     const val KEY_RECOMMENDATIONS = "flick_widget_recommendations"
     const val KEY_RECOMMEND_ENABLED = "flick_widget_recommend_enabled"
+    const val KEY_FLOW_ENABLED = "flick_widget_flow_enabled"
     fun recommendationCursor(id: Int) = "flick_widget_recommend_cursor_$id"
 
     private val BG_OPACITY_MAP = mapOf(
