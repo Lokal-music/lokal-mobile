@@ -3,6 +3,7 @@ package com.mossapps.flick.widgets
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 import android.util.TypedValue
@@ -18,6 +19,15 @@ class CompactWidgetProvider : AppWidgetProvider() {
         WidgetUpdateDispatcher.submit(this, context, manager, ids) { id ->
             render(context.applicationContext, manager, id)
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        manager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        onUpdate(context, manager, intArrayOf(appWidgetId))
     }
 
     private fun render(context: Context, manager: AppWidgetManager, id: Int): RemoteViews {
