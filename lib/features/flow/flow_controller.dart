@@ -237,7 +237,7 @@ class FlowController extends AsyncNotifier<FlowData> {
     }
     final remaining = FlowRules.maxSessionTracks - data.session.trackIds.length;
     if (remaining <= 0) return;
-    final seed = playback.state.currentSong ??
+    final seed = (active ? playback.state.currentSong : null) ??
         library.mix(data, DateTime.now()).firstOrNull;
     final existing = [
       for (final id in data.session.trackIds)
@@ -245,9 +245,15 @@ class FlowController extends AsyncNotifier<FlowData> {
     ];
     List<Song> online = const [];
     if (seed != null) {
-      online = await ref.read(flowRadioProvider)(
-        seed, existing, remaining.clamp(0, FlowRules.topUpTracks),
-      );
+      try {
+        online = await ref.read(flowRadioProvider)(
+          seed, existing, remaining.clamp(0, FlowRules.topUpTracks),
+        ).timeout(const Duration(seconds: 8), onTimeout: () => const <Song>[]);
+      } catch (_) {
+        // Provider failures should never block Flow controls or leave no
+        // next track when the local fallback remains available.
+        online = const [];
+      }
     }
     if (!ref.mounted ||
         (active && !playback.ownsSession(data.session.seed))) return;
