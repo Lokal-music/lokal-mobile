@@ -145,7 +145,7 @@ void main() {
       },
     );
 
-    test('search rows carry their largest https cover, enlarged', () {
+    test('search rows retain largest original https cover for fallback', () {
       final row = catalogRow();
       (row['musicResponsiveListItemRenderer'] as Map)['thumbnail'] = {
         'musicThumbnailRenderer': {
@@ -167,7 +167,7 @@ void main() {
       final track = YoutubeMusicCatalog.parse(catalogResponse([row])).single;
       expect(
         track.artwork,
-        'https://lh3.googleusercontent.com/abc=w544-h544-l90-rj',
+        'https://lh3.googleusercontent.com/abc=w120-h120-l90-rj',
       );
 
       // Video thumbnails aren't resized; rows without one have no cover.
