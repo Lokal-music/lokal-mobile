@@ -252,10 +252,9 @@ class YoutubeMusicCatalog {
     }
     if (best == null) return null;
     final host = Uri.parse(best).host;
-    if (RegExp(r'(^|\.)googleusercontent\.com$').hasMatch(host)) {
-      final sized = best.replaceFirst(RegExp(r'=w\d+-h\d+'), '=w1200-h1200');
-      return sized.replaceFirst(RegExp(r'=s\d+(?=-|$)'), '=s1200');
-    }
+    // Retain the provider's original thumbnail. Shared artwork widgets and
+    // download caches request the higher-resolution variant first, but must
+    // still be able to fall back if it is missing or exceeds the size limit.
     return best;
   }
 
