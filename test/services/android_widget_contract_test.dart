@@ -15,7 +15,7 @@ void main() {
     for (final entry in layouts.entries) {
       final xml = File(entry.key).readAsStringSync();
       for (final id in entry.value) {
-        expect(xml, contains(RegExp('<TextView\\\\s+android:id="@\\\\+id/$id"')),
+        expect(xml, contains(RegExp('<TextView\\s+android:id="@\\+id/$id"')),
           reason: '${entry.key} should contain native text $id');
       }
     }
