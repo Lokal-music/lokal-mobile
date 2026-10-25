@@ -12,9 +12,10 @@ import 'morneye_host.dart';
 /// audio proxy. Never expose a guest URL, credentials, or its staging path as
 /// a persisted Song. This mirrors desktop's Morneye liveResponse() path.
 ///
-/// Eligible sources are single-file, unprocessed FLAC downloads with a known
-/// Content-Length. The caller must suppress onTransfer for post-processors,
-/// segmented files, decryption/conversion, and explicit Atmos requests.
+/// Eligible sources are single-file, unprocessed FLAC downloads or complete-
+/// header, unencrypted, fast-start M4A audio with a known Content-Length.
+/// Tidal DASH segment concatenation, DRM/decryption, post-processing and
+/// explicit Atmos are intentionally left on verified full-file playback.
 class MorneyeLiveSession {
   static const minReadyBytes = 64 * 1024;
   static const _readChunkBytes = 256 * 1024;
@@ -38,6 +39,10 @@ class MorneyeLiveSession {
   int get total => _total;
   // FLAC STREAMINFO records the actual encoding in the stream header.
   int? _sampleRate, _bitDepth;
+  String? _mediaType;
+  String? get mediaType => _mediaType;
+  String? get fileType => _mediaType == 'audio/flac' ? 'FLAC' :
+      _mediaType == 'audio/mp4' ? 'ONLINE' : null;
   int? get sampleRate => _sampleRate;
   int? get bitDepth => _bitDepth;
 
@@ -55,12 +60,47 @@ class MorneyeLiveSession {
     return (bitDepth: bits, sampleRate: rate);
   }
 
+  /// Recognize only complete, unencrypted and self-describing headers.
+  /// An arbitrary file extension or an add-on's "FLAC requested" setting
+  /// alone is insufficient evidence that playback can start.
+  @visibleForTesting
+  static String? playableMime(List<int> prefix, String fileName) {
+    if (prefix.length < 42) return null;
+    final extension = fileName.toLowerCase();
+    if (extension.endsWith('.flac')) {
+      return readFlacStreamInfo(prefix) == null ? null : 'audio/flac';
+    }
+    if (!extension.endsWith('.m4a') && !extension.endsWith('.mp4')) return null;
+    bool atom(String name) {
+      final bytes = name.codeUnits;
+      for (var i = 4; i <= prefix.length - bytes.length; i++) {
+        if (prefix[i] == bytes[0] &&
+            prefix[i + 1] == bytes[1] &&
+            prefix[i + 2] == bytes[2] &&
+            prefix[i + 3] == bytes[3]) return true;
+      }
+      return false;
+    }
+    // MP4 must start with ftyp and contain a complete, fast-start moov atom.
+    if (prefix.length < 16 ||
+        String.fromCharCodes(prefix.sublist(4, 8)) != 'ftyp' ||
+        !atom('moov')) return null;
+    // Never hand encrypted/delayed-conversion Amazon or Tidal media to the
+    // Android player before the addon has decrypted/validated it.
+    if (atom('sinf') || atom('schm') || atom('enca') || atom('encv') ||
+        atom('pssh') || atom('drms')) return null;
+    if (!atom('mp4a') && !atom('alac')) return null;
+    return 'audio/mp4';
+  }
+
   /// Only progress from the host's actual file writer can authorize a stream.
   void observe(MorneyeTransfer info) {
     if (_error != null || _invalid || _cached != null) return;
     if (info.total <= 0 ||
         info.total > 4 * 1024 * 1024 * 1024 ||
-        !info.file.toLowerCase().endsWith('.flac') ||
+        !(info.file.toLowerCase().endsWith('.flac') ||
+          info.file.toLowerCase().endsWith('.m4a') ||
+          info.file.toLowerCase().endsWith('.mp4')) ||
         info.written < 0 ||
         info.written > info.total) {
       return;
@@ -87,13 +127,18 @@ class MorneyeLiveSession {
         final source = File(_transferred ? info.file : info.part);
         final handle = source.openSync();
         try {
-          final head = handle.readSync(42);
-          if (head.length >= 4 &&
-              head[0] == 0x66 && head[1] == 0x4c &&
-              head[2] == 0x61 && head[3] == 0x43) {
-            final audio = readFlacStreamInfo(head);
-            _sampleRate = audio?.sampleRate;
-            _bitDepth = audio?.bitDepth;
+          // 64 KiB is sufficient for a FLAC STREAMINFO or a small MP4
+          // initialization atom; larger/delayed MP4 headers fall back to the
+          // full-file path rather than launching a broken decoder.
+          final head = handle.readSync(min(_written, minReadyBytes));
+          final mime = playableMime(head, info.file);
+          if (mime != null) {
+            _mediaType = mime;
+            if (mime == 'audio/flac') {
+              final audio = readFlacStreamInfo(head);
+              _sampleRate = audio?.sampleRate;
+              _bitDepth = audio?.bitDepth;
+            }
             _ready.complete();
           }
         } finally {
@@ -152,7 +197,7 @@ class MorneyeLiveSession {
       sourceLength: _total,
       contentLength: to - from,
       offset: from,
-      contentType: 'audio/flac',
+      contentType: _mediaType ?? 'application/octet-stream',
       stream: _read(from, to),
     );
   }
