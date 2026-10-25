@@ -1661,7 +1661,8 @@ class MorneyePackages {
       final hasCanonicalIdentity =
           (track['id']?.toString().isNotEmpty ?? false) &&
           (track['name']?.toString().isNotEmpty ?? false);
-      final amazonNativeTrack = providerIdentityIsAmazon(addon.name, track) &&
+      final amazonNativeTrack = forPlayback &&
+          providerIdentityIsAmazon(addon.name, track) &&
           nativeSearchResult;
       final skipEnrichment =
           // A native Amazon Search result already has its canonical ASIN.
