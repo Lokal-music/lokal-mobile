@@ -222,6 +222,11 @@ class WidgetRecommendationService {
       if (decoded is! List) return const [];
       return decoded.whereType<Map>()
           .map((row) => Map<String, dynamic>.from(row))
+          .where((row) {
+            final art = (row['artwork'] ?? '').toString();
+            return art.startsWith('content://') ||
+                (art.isNotEmpty && File(art).isFile);
+          })
           .take(7).toList();
     } catch (_) { return const []; }
   }
