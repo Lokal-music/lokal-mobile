@@ -52,14 +52,12 @@ internal object WidgetPrefs {
     fun get(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // ponytail: rebuild all three home widgets from current prefs; used when the
+    // Rebuild the three distinct widget types from current preferences; used when the
     // app process is about to die so the play/pause state can't drift stale.
     fun updateAllWidgets(context: Context) {
         val mgr = AppWidgetManager.getInstance(context)
         listOf(
             MiniPlayerWidgetProvider::class.java,
-            FlagshipWidgetProvider::class.java,
-            CompactWidgetProvider::class.java,
             FlowRadioWidgetProvider::class.java,
             CoverFlowRecommendationWidgetProvider::class.java,
         ).forEach { cls ->
