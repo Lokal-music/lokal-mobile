@@ -19,4 +19,8 @@
 
     <string name="widget_compact_name">Lokal 2×2</string>
     <string name="widget_compact_desc">Title and artist with transport controls</string>
+    <string name="widget_flow_radio_name">Lokal · Flow &amp; Radio</string>
+    <string name="widget_flow_radio_desc">Adaptive personal Flow, new mixes and song radio, with playback status</string>
+    <string name="widget_recommended_flow_name">Lokal · Cover Flow</string>
+    <string name="widget_recommended_flow_desc">Browse and play recommended songs with three cover artworks</string>
 </resources>
