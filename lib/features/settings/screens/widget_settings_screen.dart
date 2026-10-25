@@ -27,7 +27,7 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
     final tab = _tabs.first;
     return LokalSettingsScaffold(
       title: l10n.widgets,
-      subtitle: 'Three resizable home widgets: Now Playing, Flow & Radio, and Cover Flow. Now Playing settings apply at every size.',
+      subtitle: 'Now Playing, Flow & Radio, and Cover Flow adapt to every size. Album artwork is always visible; customize text and colors below.',
       children: [
         ..._sections(context, tab, prefs),
       ],
@@ -198,13 +198,6 @@ final _tabs = <_WidgetTab>[
     setOpacity: (n, v) => n.setWidgetBgOpacity(v),
     withOpacity: (p, v) => p.copyWith(widgetBgOpacity: v),
     toggles: [
-      _WidgetToggle(
-        label: () => l10n.albumArt,
-        description: () => l10n.showAlbumArtworkOnTheMini,
-        value: (p) => p.widgetShowAlbumArt,
-        set: (n, v) => n.setWidgetShowAlbumArt(v),
-        copy: (p, v) => p.copyWith(widgetShowAlbumArt: v),
-      ),
       _WidgetToggle(
         label: () => l10n.artistName,
         description: () => l10n.showArtistBelowSongTitle,
