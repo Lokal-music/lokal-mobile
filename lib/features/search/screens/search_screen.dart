@@ -343,7 +343,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            lokalText('Try another keyword or choose All result types'),
+            lokalText('Try another keyword'),
             style: TextStyle(
               fontFamily: 'GoogleSansFlex',
               fontSize: 12,
@@ -632,36 +632,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       );
     }
-    // Global is catalogue-wide and has no playback provider of its own.
-    // Keep per-source results below it for exact source searches.
+    // Global catalogue is metadata-only; playback uses source priority.
+    // Preserve per-provider searches as a secondary mobile feature.
     final global = SliverToBoxAdapter(
       child: GlobalCatalogueSearchSection(
         key: ValueKey('global:$query'),
         query: query,
-        songsOnly: category == SearchCategory.songs,
+        songsOnly: true,
       ),
     );
     final songs = OnlineSearchSection(
       key: ValueKey('songs:$query'),
       query: query,
     );
-    if (category == null) {
-      return SliverMainAxisGroup(
-        slivers: [
-          global,
-          songs,
-          for (final type in [SearchCategory.albums, SearchCategory.artists])
-            SliverToBoxAdapter(
-              child: OnlineCatalogueSearchSection(
-                key: ValueKey('catalogue:$type:$query'),
-                query: query,
-                category: type,
-                previewLimit: 4,
-              ),
-            ),
-        ],
-      );
-    }
     return SliverMainAxisGroup(slivers: [global, songs]);
   }
 
