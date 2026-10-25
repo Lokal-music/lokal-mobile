@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
-import 'package:flick/l10n/l10n.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/data/repositories/song_repository.dart';
@@ -32,7 +31,9 @@ class LyricsSearchSection extends ConsumerStatefulWidget {
 class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
   final _lyrics = LyricsService();
   final _online = OnlineLyricsService();
-  final _textCache = <String, List<String>>{};
+  // Shared between query revisions: do not re-read thousands of files on
+  // each keystroke or each scope/category switch.
+  static final _textCache = <String, List<String>>{};
   Stream<_LyricProgress>? _localResults;
   Future<List<OnlineLyricsResult>>? _onlineResults;
   bool _playing = false;
@@ -72,7 +73,7 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
     var scanned = 0;
     for (final song in songs) {
       if (!mounted) return;
-      final key = '${song.id}|${song.filePath}';
+      final key = '${song.id}|${song.filePath}|${song.fileSizeBytes ?? 0}';
       var lines = _textCache[key];
       if (lines == null) {
         try {
