@@ -3,11 +3,11 @@ import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/constants/app_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
-import 'package:flick/providers/apple_music_provider.dart';
-import 'package:flick/services/apple_music/apple_music_models.dart';
+import 'package:flick/services/global_catalogue_source.dart';
+import 'package:flick/services/global_catalogue_search.dart';
+import 'global_catalogue_search_section.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flick/features/konnekted/library/lokal_music_detail_page.dart';
-import 'package:flick/features/konnekted/library/lokal_online_catalogue.dart';
 import 'artist_search_portrait.dart';
 
 import '../models/search_category.dart';
@@ -31,22 +31,27 @@ class OnlineCatalogueSearchSection extends ConsumerStatefulWidget {
 
 class _OnlineCatalogueSearchSectionState
     extends ConsumerState<OnlineCatalogueSearchSection> {
-  late Future<List<Object>> _results;
+  late Future<GlobalCatalogueMatches> _results;
   @override
   void initState() {
     super.initState();
+    GlobalCatalogueSource.selected.addListener(_onCatalogueChanged);
     _load();
   }
 
+  void _onCatalogueChanged() {
+    if (mounted) setState(() => _load());
+  }
+
+  @override
+  void dispose() {
+    GlobalCatalogueSource.selected.removeListener(_onCatalogueChanged);
+    super.dispose();
+  }
+
   void _load({bool refresh = false}) {
-    final api = ref.read(appleMusicMetadataServiceProvider);
-    _results = widget.category == SearchCategory.albums
-        ? api
-              .searchAlbums(widget.query, refresh: refresh)
-              .then((rows) => rows.cast<Object>())
-        : api
-              .searchArtists(widget.query, refresh: refresh)
-              .then((rows) => rows.cast<Object>());
+    _results = ref.read(globalCatalogueSearchServiceProvider)
+        .search(widget.query, refresh: refresh, songsOnly: false);
   }
 
   @override
@@ -92,14 +97,7 @@ class _OnlineCatalogueSearchSectionState
               fontWeight: FontWeight.w600,
             ),
           ),
-          Text(
-            lokalText(
-              'Apple Music catalogue · plays through your configured sources',
-            ),
-            style: TextStyle(color: t.muted, fontSize: 11),
-          ),
-          const SizedBox(height: 8),
-          FutureBuilder<List<Object>>(
+          FutureBuilder<GlobalCatalogueMatches>(
             future: _results,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
@@ -117,23 +115,38 @@ class _OnlineCatalogueSearchSectionState
                   label: Text(lokalText('Could not search. Retry')),
                 );
               }
-              final rows = snapshot.data ?? const [];
+              final data = snapshot.data ??
+                  const GlobalCatalogueMatches(catalogue: 'apple');
+              final rows = widget.category == SearchCategory.albums
+                  ? data.albums : data.artists;
+              final subtitle = (data.catalogue == 'spotify'
+                  ? 'Spotify' : 'Apple Music') +
+                  ' catalogue · plays through your configured sources';
               if (rows.isEmpty) {
-                return Text(
-                  lokalText(
-                    widget.category == SearchCategory.albums
-                        ? 'No albums found online.'
-                        : 'No artists found online.',
-                  ),
-                  style: TextStyle(color: t.muted),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(subtitle, style: TextStyle(color: t.muted, fontSize: 11)),
+                    const SizedBox(height: 8),
+                    if (data.notice != null)
+                      Text(data.notice!, style: TextStyle(color: t.muted, fontSize: 11)),
+                    Text(lokalText(widget.category == SearchCategory.albums
+                        ? 'No albums found online.' : 'No artists found online.'),
+                        style: TextStyle(color: t.muted)),
+                  ],
                 );
               }
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(subtitle, style: TextStyle(color: t.muted, fontSize: 11)),
+                  if (data.notice != null)
+                    Text(data.notice!, style: TextStyle(color: t.muted, fontSize: 11)),
+                  const SizedBox(height: 8),
                   for (final row in rows.take(
                     widget.previewLimit ?? rows.length,
                   ))
-                    if (row is AppleMusicAlbumMatch)
+                    if (row is GlobalCatalogueAlbum)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: SizedBox.square(
@@ -149,7 +162,7 @@ class _OnlineCatalogueSearchSectionState
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          row.artistName,
+                          row.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -160,16 +173,15 @@ class _OnlineCatalogueSearchSectionState
                             artist: row.artistName,
                             localSongs: const [],
                             initialOnline: true,
-                            release: LokalCatalogueAlbum.fromApple(row),
                           ),
                         ),
                       )
-                    else if (row is AppleMusicArtist)
+                    else if (row is GlobalCatalogueArtist)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: ArtistSearchPortrait(name: row.name),
+                        leading: ArtistSearchPortrait(name: row.name, artworkUrl: row.artworkUrl),
                         title: Text(row.name),
-                        subtitle: Text(row.genre ?? lokalText('Artist')),
+                        subtitle: Text(lokalText('Artist')),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _open(
                           LokalMusicDetailPage.artist(
