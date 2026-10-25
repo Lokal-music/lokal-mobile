@@ -638,6 +638,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: GlobalCatalogueSearchSection(
         key: ValueKey('global:$query'),
         query: query,
+        songsOnly: category == SearchCategory.songs,
       ),
     );
     final songs = OnlineSearchSection(

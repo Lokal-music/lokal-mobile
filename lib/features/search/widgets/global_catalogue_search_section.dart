@@ -13,11 +13,16 @@ import 'package:flick/features/konnekted/library/lokal_music_detail_page.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
 
+final globalCatalogueSearchServiceProvider = Provider<GlobalCatalogueSearchService>(
+  (ref) => const GlobalCatalogueSearchService(),
+);
+
 /// An online catalogue supplies only metadata. The pending recorder resolves
 /// audio later using the user's unchanged Playback Source Priority settings.
 class GlobalCatalogueSearchSection extends ConsumerStatefulWidget {
-  const GlobalCatalogueSearchSection({super.key, required this.query});
+  const GlobalCatalogueSearchSection({super.key, required this.query, this.songsOnly = false});
   final String query;
+  final bool songsOnly;
 
   @override
   ConsumerState<GlobalCatalogueSearchSection> createState() =>
@@ -26,7 +31,6 @@ class GlobalCatalogueSearchSection extends ConsumerStatefulWidget {
 
 class _GlobalCatalogueSearchSectionState
     extends ConsumerState<GlobalCatalogueSearchSection> {
-  static const _service = GlobalCatalogueSearchService();
   late Future<GlobalCatalogueMatches> _results;
   bool _expanded = false;
   bool _starting = false;
@@ -43,13 +47,15 @@ class _GlobalCatalogueSearchSectionState
   }
 
   void _load({bool refresh = false}) {
-    _results = _service.search(widget.query, refresh: refresh);
+    _results = ref.read(globalCatalogueSearchServiceProvider).search(
+      widget.query, refresh: refresh, songsOnly: widget.songsOnly,
+    );
   }
 
   @override
   void didUpdateWidget(covariant GlobalCatalogueSearchSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.query != widget.query) {
+    if (oldWidget.query != widget.query || oldWidget.songsOnly != widget.songsOnly) {
       _expanded = false;
       _load();
     }
@@ -133,8 +139,8 @@ class _GlobalCatalogueSearchSectionState
               final data = snapshot.data ??
                   const GlobalCatalogueMatches(catalogue: 'apple');
               final songs = data.songs;
-              final albums = data.albums;
-              final artists = data.artists;
+              final albums = widget.songsOnly ? const <GlobalCatalogueAlbum>[] : data.albums;
+              final artists = widget.songsOnly ? const <GlobalCatalogueArtist>[] : data.artists;
               final shown = _expanded ? songs : songs.take(8).toList();
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
