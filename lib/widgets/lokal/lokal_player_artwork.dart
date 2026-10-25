@@ -103,6 +103,31 @@ class LokalPlayerArtwork extends StatelessWidget {
   );
 }
 
+/// Chrome (title, transport, seek bar, and buttons) that must stay above the
+/// in-flight fullscreen artwork. The artwork portal otherwise paints the
+/// travelling image *after* its entire sheet, which hides controls under a
+/// full-height Canvas video until the final frame.
+///
+/// This keeps the same render subtree and opacity animation, but lifts its
+/// paint order along with the moving artwork. Compact/collapsed layouts don't
+/// need it and retain their original behaviour.
+class LokalPlayerChrome extends StatelessWidget {
+  const LokalPlayerChrome({
+    super.key,
+    required this.child,
+    this.enabled = true,
+  });
+
+  final Widget child;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => _ChromeAnchor(
+    enabled: enabled && LokalPlayerMorph.activeOf(context),
+    child: child,
+  );
+}
+
 class _ArtworkPortal extends SingleChildRenderObjectWidget {
   const _ArtworkPortal({
     required this.progress,
@@ -134,18 +159,50 @@ class _RenderArtworkPortal extends RenderProxyBox {
   // Retain the other live anchors so removing that temporary thumbnail cannot
   // erase the poster that must morph back into the miniplayer.
   final _anchors = <_RenderArtworkAnchor>[];
+  final _chromeAnchors = <_RenderChromeAnchor>[];
   _RenderArtworkAnchor? get artwork => _anchors.isEmpty ? null : _anchors.last;
+
+  void _invalidateChromePaint() {
+    for (final anchor in _chromeAnchors) {
+      if (anchor.attached) anchor.markNeedsPaint();
+    }
+  }
+
+  bool get _hasFlyingArtwork {
+    final anchor = artwork;
+    return lifting &&
+        anchor != null &&
+        anchor.attached &&
+        anchor.hasSize &&
+        anchor.child != null &&
+        !anchor.size.isEmpty;
+  }
+
+  void registerChrome(_RenderChromeAnchor anchor) {
+    _chromeAnchors.remove(anchor);
+    _chromeAnchors.add(anchor);
+    anchor.markNeedsPaint();
+    markNeedsPaint();
+  }
+
+  void unregisterChrome(_RenderChromeAnchor anchor) {
+    _chromeAnchors.remove(anchor);
+    if (anchor.attached) anchor.markNeedsPaint();
+    markNeedsPaint();
+  }
 
   void register(_RenderArtworkAnchor anchor) {
     artwork?.markNeedsPaint();
     _anchors.remove(anchor);
     _anchors.add(anchor);
+    _invalidateChromePaint();
     markNeedsPaint();
   }
 
   void unregister(_RenderArtworkAnchor anchor) {
     _anchors.remove(anchor);
     artwork?.markNeedsPaint();
+    _invalidateChromePaint();
     markNeedsPaint();
   }
 
@@ -158,6 +215,7 @@ class _RenderArtworkPortal extends RenderProxyBox {
     // Repaint the anchor's original layer as well: a cached carousel layer
     // must not retain a second copy when a closing drag starts.
     artwork?.markNeedsPaint();
+    _invalidateChromePaint();
     markNeedsPaint();
   }
 
@@ -214,6 +272,102 @@ class _RenderArtworkPortal extends RenderProxyBox {
         (context, at) => context.paintChild(anchor.child!, at),
       ),
     );
+
+    // Paint the existing control subtree *after* the flying artwork, at
+    // precisely the same sheet-transformed coordinates. With a portrait
+    // Canvas, the overlay otherwise covers every control until progress=1,
+    // where all controls suddenly pop into view. Nothing is laid out or
+    // animated twice: the chrome anchor suppresses its ordinary paint during
+    // the flight, and this pass draws it above the video/artwork.
+    //
+    // Match the route sheet's initial fade, so chrome doesn't abruptly
+    // appear when the gesture has barely lifted off the mini-player.
+    final chromeAlpha = ((_progress / .12).clamp(0.0, 1.0) * 255).round();
+    if (chromeAlpha == 0) return;
+    for (final chrome in _chromeAnchors.toList(growable: false)) {
+      if (!chrome.attached || !chrome.hasSize || chrome.child == null) continue;
+      final chromeTransform = chrome.getTransformTo(this);
+      context.pushTransform(
+        needsCompositing,
+        offset,
+        chromeTransform,
+        (context, at) => context.pushOpacity(
+          at,
+          chromeAlpha,
+          (context, at) => context.paintChild(chrome.child!, at),
+        ),
+      );
+    }
+  }
+}
+
+class _ChromeAnchor extends SingleChildRenderObjectWidget {
+  const _ChromeAnchor({required this.enabled, required super.child});
+  final bool enabled;
+
+  @override
+  _RenderChromeAnchor createRenderObject(BuildContext context) =>
+      _RenderChromeAnchor(enabled);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderChromeAnchor object) {
+    object.enabled = enabled;
+  }
+}
+
+class _RenderChromeAnchor extends RenderProxyBox {
+  _RenderChromeAnchor(this._enabled);
+  bool _enabled;
+  _RenderArtworkPortal? _portal;
+
+  set enabled(bool value) {
+    if (value == _enabled) return;
+    _enabled = value;
+    _register();
+    markNeedsPaint();
+  }
+
+  void _register() {
+    RenderObject? ancestor = _enabled ? parent : null;
+    while (ancestor != null && ancestor is! _RenderArtworkPortal) {
+      ancestor = ancestor.parent;
+    }
+    final next = ancestor is _RenderArtworkPortal ? ancestor : null;
+    if (identical(next, _portal)) return;
+    _unregister();
+    _portal = next;
+    next?.registerChrome(this);
+  }
+
+  void _unregister() {
+    _portal?.unregisterChrome(this);
+    _portal = null;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _register();
+  }
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    _register();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    // Do not draw twice: this subtree is repainted on top of the canvas by
+    // the portal while its fullscreen artwork is being morphed.
+    if (_portal?._hasFlyingArtwork ?? false) return;
+    super.paint(context, offset);
+  }
+
+  @override
+  void detach() {
+    _unregister();
+    super.detach();
   }
 }
 

@@ -9,6 +9,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flick/core/theme/app_colors.dart';
 import 'package:flick/services/album_art_service.dart';
 import 'package:flick/services/artwork_gate.dart';
+import 'package:flick/features/player/widgets/player_artwork_quality.dart';
 import 'package:flick/widgets/common/flick_artwork_placeholder.dart';
 
 export 'package:flick/services/artwork_gate.dart';
@@ -305,44 +306,65 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
   }
 
   Widget _buildNetworkImage(String imagePath, int? decodeWidth) {
-    return Image.network(
-      imagePath,
+    final uri = Uri.tryParse(imagePath);
+    final host = uri?.host.toLowerCase() ?? '';
+    final youtubeArtwork = host == 'i.ytimg.com' ||
+        host == 'img.youtube.com' ||
+        host == 'googleusercontent.com' ||
+        host.endsWith('.googleusercontent.com') ||
+        host == 'ggpht.com' || host.endsWith('.ggpht.com');
+    // Only known YouTube sizing conventions are promoted here. Other media
+    // CDNs keep their original URLs; a larger rendition must never prevent a
+    // valid search/list thumbnail from appearing.
+    final amazonArtwork = const {
+      'm.media-amazon.com',
+      'images-na.ssl-images-amazon.com',
+      'images-eu.ssl-images-amazon.com',
+      'images-fe.ssl-images-amazon.com',
+      'images.amazon.com',
+      'ecx.images-amazon.com',
+    }.contains(host);
+    final urls = (youtubeArtwork || amazonArtwork)
+        ? PlayerArtworkQuality.candidates(imagePath)
+        : [imagePath];
+
+    Widget attempt(int index) => Image.network(
+      urls[index],
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
-      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded || frame != null) {
-          return child;
-        }
+      frameBuilder: (context, child, frame, synchronous) {
+        if (synchronous || frame != null) return child;
         return SizedBox(
           width: widget.width,
           height: widget.height,
           child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
         );
       },
-      errorBuilder: (context, error, stackTrace) {
-        return SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: widget.errorWidget ?? CachedImageWidget.defaultErrorWidget(),
-        );
-      },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
-        );
-      },
-      // Use lower resolution for thumbnails
+      errorBuilder: (context, error, trace) =>
+          index + 1 < urls.length
+              ? attempt(index + 1)
+              : SizedBox(
+                  width: widget.width,
+                  height: widget.height,
+                  child: widget.errorWidget ??
+                      CachedImageWidget.defaultErrorWidget(),
+                ),
+      loadingBuilder: (context, child, progress) =>
+          progress == null
+              ? child
+              : SizedBox(
+                  width: widget.width,
+                  height: widget.height,
+                  child: widget.placeholder ??
+                      CachedImageWidget.defaultPlaceholder(),
+                ),
       cacheWidth: decodeWidth,
       cacheHeight: widget.useThumbnail && widget.thumbnailHeight != null
           ? widget.thumbnailHeight
           : null,
     );
+    return attempt(0);
   }
 }
 

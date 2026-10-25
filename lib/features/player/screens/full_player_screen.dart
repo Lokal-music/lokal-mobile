@@ -503,8 +503,14 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 else
                   Container(color: Colors.black.withValues(alpha: 0.10)),
                 if (fullCover) _fullscreenArtwork(song),
-                IgnorePointer(
-                  ignoring: hidden,
+                // Keep the controls, title and quality metadata above the
+                // fullscreen Canvas while its artwork travels out of the
+                // mini-player. The same chrome continues its sheet motion;
+                // the Canvas clear-view toggle still fades this entire tree.
+                LokalPlayerChrome(
+                  enabled: fullCover,
+                  child: IgnorePointer(
+                    ignoring: hidden,
                   child: FadeTransition(
                     opacity: _canvasChrome,
                     child: TickerMode(
@@ -592,6 +598,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                       ),
                     ),
                   ),
+                ),
                 ),
               ],
             ),

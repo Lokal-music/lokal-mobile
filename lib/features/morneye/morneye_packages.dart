@@ -228,6 +228,33 @@ String? morneyeAlbumName(Map track) {
   return null;
 }
 
+/// Request the original resolution of the *same* Amazon image, rather
+/// than upscaling the small 120/300px variant. Unsized Amazon media images
+/// retain their content hash. Other providers are not rewritten.
+bool providerIdentityIsAmazon(String addonName, Map track) {
+  if (!addonName.toLowerCase().startsWith('amazon')) return false;
+  if (track['provider_id']?.toString().toLowerCase() != 'amazon') {
+    return false;
+  }
+  return RegExp(r'^[A-Z0-9]{10}$')
+      .hasMatch((track['id'] ?? '').toString().toUpperCase());
+}
+
+String morneyeAlbumArtworkUrl(String original) {
+  final uri = Uri.tryParse(original);
+  if (uri == null || uri.scheme != 'https') return original;
+  final host = uri.host.toLowerCase();
+  if (host != 'm.media-amazon.com' &&
+      host != 'images-na.ssl-images-amazon.com' &&
+      host != 'images-eu.ssl-images-amazon.com') {
+    return original;
+  }
+  final upgraded = uri.path.replaceFirst(
+    RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
+    '.',
+  );
+  return upgraded == uri.path ? original : uri.replace(path: upgraded).toString();
+}
 /// A song an add-on found.
 class MorneyeTrack {
   const MorneyeTrack({
@@ -308,6 +335,54 @@ class MorneyeTrack {
     return null;
   }
 
+  /// Provider search results can put covers in album artwork, a flat image
+  /// URL, or an array of image sizes. Prefer the largest exact-track image,
+  /// and promote Amazon CDN thumbnails to their unsized original asset.
+  static String? _artwork(Map track) {
+    String? getUrl(Object? value) {
+      if (value is String && Uri.tryParse(value)?.hasScheme == true) {
+        return value;
+      }
+      if (value is Map) {
+        for (final field in ['url', 'src', 'cover_url', 'coverUrl', 'original',
+            'large', 'medium', 'small']) {
+          final found = getUrl(value[field]);
+          if (found != null) return found;
+        }
+      }
+      if (value is List) {
+        // The provider generally orders its smallest variant first.
+        for (final image in value.reversed) {
+          final found = getUrl(image);
+          if (found != null) return found;
+        }
+      }
+      return null;
+    }
+
+    final album = track['album'];
+    for (final value in [
+      // Providers frequently expose a tiny convenience thumbnail alongside
+      // a separate album images array with much larger artwork.
+      track['images'], track['image'],
+      if (album is Map) ...[
+        album['images'], album['image'], album['cover_art'],
+        album['cover_url'],
+      ],
+      track['artwork_url'], track['artworkUrl'],
+      track['album_art'], track['albumArt'],
+      track['cover_art'], track['coverArt'],
+      track['cover_url'], track['coverUrl'], track['thumbnail'],
+    ]) {
+      final found = getUrl(value);
+      // An Amazon _AC_SL75_ thumbnail is unsuitable for full-player art
+      // and appears blurry even in Search. Request its unsized original
+      // from the same Amazon media hash, leaving unrelated CDN URLs intact.
+      if (found != null) return morneyeAlbumArtworkUrl(found);
+    }
+    return null;
+  }
+
   static MorneyeTrack of(Map track, String provider) {
     final rawArtists = track['artists'];
     final artists = rawArtists is List
@@ -322,7 +397,6 @@ class MorneyeTrack {
               .toList();
     final title = '${track['name'] ?? track['title'] ?? ''}';
     final ms = (track['duration_ms'] ?? track['durationMs']) as num?;
-    final images = track['images'];
     return MorneyeTrack(
       provider: provider,
       id: '${track['id']}',
@@ -333,11 +407,7 @@ class MorneyeTrack {
           ? Duration(milliseconds: ms.toInt())
           : null,
       isrc: track['isrc'] as String?,
-      thumbnail:
-          (track['cover_url'] ??
-                  track['coverUrl'] ??
-                  (images is String ? images : null))
-              as String?,
+      thumbnail: _artwork(track),
       trackNumber: (track['track_number'] ?? track['trackNumber']) is num
           ? ((track['track_number'] ?? track['trackNumber']) as num).toInt()
           : null,
@@ -1591,7 +1661,14 @@ class MorneyePackages {
       final hasCanonicalIdentity =
           (track['id']?.toString().isNotEmpty ?? false) &&
           (track['name']?.toString().isNotEmpty ?? false);
+      final amazonNativeTrack = providerIdentityIsAmazon(addon.name, track) &&
+          nativeSearchResult;
       final skipEnrichment =
+          // A native Amazon Search result already has its canonical ASIN.
+          // enrichTrack() performs unnecessary network requests before
+          // checkAvailability can hand back the same ASIN. Keep enrichment
+          // for non-native/fallback matches where an ID must be resolved.
+          amazonNativeTrack ||
           // Respect the extension manifest even if this by-ID track came
           // from getTrack rather than a remembered Search result.
           (addon.manifest['skipMetadataEnrichment'] == true &&

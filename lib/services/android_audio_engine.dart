@@ -35,6 +35,9 @@ typedef AndroidEngineDisposer = Future<void> Function();
 typedef AndroidStalledPlayerRetirer = Future<void> Function(
   just_audio.AudioPlayer player,
 );
+typedef AndroidPlayerCacheInvalidator = void Function(
+  just_audio.AudioPlayer player,
+);
 typedef AndroidTrackSyncBlocker = bool Function();
 typedef AndroidTrackIgnorePredicate = bool Function(Song track);
 typedef AndroidFastStartPredicate = bool Function();
@@ -114,6 +117,14 @@ bool shouldUseFastStartCurrentTrackOnly({
       playlistLength > AndroidAudioEngine.fastStartPlaylistThreshold;
 }
 
+/// A Discovery/Search queue can contain placeholders that do not yet have
+/// playable sources. Never submit them to just_audio's native sequence:
+/// repeat-all would otherwise cause Media3 to prepare an empty URI.
+@visibleForTesting
+bool hasUnresolvedAudioSources(List<Song> playlist) =>
+    playlist.any((song) => song.isPending ||
+        song.filePath == null || song.filePath!.isEmpty);
+
 @visibleForTesting
 bool shouldExitSingleTrackMode({
   required bool loadedSingleTrackOnly,
@@ -131,6 +142,7 @@ class AndroidAudioEngine implements AudioEngine {
     required AndroidPlayerConfigurator configurePlayer,
     required AndroidEngineDisposer disposeEngine,
     AndroidStalledPlayerRetirer? retireStalledPlayer,
+    AndroidPlayerCacheInvalidator? invalidatePlayerCache,
     AndroidPlayerProvider? secondaryPlayerProvider,
     required AndroidTrackSyncBlocker shouldSuppressTrackSync,
     required AndroidTrackIgnorePredicate shouldIgnoreTrack,
@@ -146,6 +158,7 @@ class AndroidAudioEngine implements AudioEngine {
        _configurePlayer = configurePlayer,
        _disposeEngine = disposeEngine,
        _retireStalledPlayer = retireStalledPlayer,
+       _invalidatePlayerCache = invalidatePlayerCache,
        _secondaryPlayerProvider = secondaryPlayerProvider,
        _shouldSuppressTrackSync = shouldSuppressTrackSync,
        _shouldIgnoreTrack = shouldIgnoreTrack,
@@ -163,6 +176,7 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidPlayerConfigurator _configurePlayer;
   final AndroidEngineDisposer _disposeEngine;
   final AndroidStalledPlayerRetirer? _retireStalledPlayer;
+  final AndroidPlayerCacheInvalidator? _invalidatePlayerCache;
   final AndroidPlayerProvider? _secondaryPlayerProvider;
   final AndroidTrackSyncBlocker _shouldSuppressTrackSync;
   final AndroidTrackIgnorePredicate _shouldIgnoreTrack;
@@ -430,6 +444,10 @@ class AndroidAudioEngine implements AudioEngine {
         if (failedTrack != null) {
           _onTrackError?.call(failedTrack);
         }
+        // Source errors often leave Media3's native decoder poisoned. A
+        // subsequent user tap must get a fresh player, rather than entering
+        // another load/seek on the same failed instance indefinitely.
+        unawaited(_retireTimedOutPlayer(player));
       }),
     );
   }
@@ -506,6 +524,9 @@ class AndroidAudioEngine implements AudioEngine {
     final survivor = _secondary;
     _secondary = null;
     _player = null;
+    // Invalidate PlayerService's cached instance *before* awaiting stream
+    // cancellation. New taps must not reattach to this poisoned decoder.
+    _invalidatePlayerCache?.call(player);
     _playlistSignature = const <String>[];
     _loadedSingleTrackOnly = false;
     _sourceFailed = true;
@@ -514,10 +535,13 @@ class AndroidAudioEngine implements AudioEngine {
             ? survivor
             : null;
     if (identical(player, _providerPlayer)) _providerPlayer = null;
-    for (final subscription in _subscriptions) {
+    final oldSubscriptions = List<StreamSubscription<dynamic>>.of(
+      _subscriptions,
+    );
+    _subscriptions.clear();
+    for (final subscription in oldSubscriptions) {
       await subscription.cancel();
     }
-    _subscriptions.clear();
     if (orphanedFadePlayer != null) {
       try {
         await orphanedFadePlayer.dispose().timeout(
@@ -559,8 +583,10 @@ class AndroidAudioEngine implements AudioEngine {
       } catch (_) {}
       _playlistSignature = const [];
       _loadedSingleTrackOnly = false;
+      // Error 0 ("Source error") is just as capable of wedging ExoPlayer
+      // as a timeout. The old player cannot be reused for a new selection.
+      await _retireTimedOutPlayer(player);
       if (error is TimeoutException) {
-        await _retireTimedOutPlayer(player);
         throw TimeoutException(
           'Audio source did not become ready. The audio engine was reset; retry playback.',
         );
@@ -578,14 +604,16 @@ class AndroidAudioEngine implements AudioEngine {
       await player
           .seek(position, index: index)
           .timeout(const Duration(seconds: 15));
-    } catch (_) {
+    } catch (error) {
       _sourceFailed = true;
       _playlistSignature = const [];
       _emit(_state.copyWith(isPlaying: false));
-      try {
-        await player.stop().timeout(const Duration(seconds: 3));
-      } catch (_) {}
-      rethrow;
+      // Media3 can remain wedged after a source error or a 15-second seek
+      // timeout. stop() alone leaves that native decoder attached, causing
+      // each new Discovery track to fail in the same way. Retire the player
+      // before the next selection; the provider constructs a fresh instance.
+      await _retireTimedOutPlayer(player);
+      Error.throwWithStackTrace(error, StackTrace.current);
     }
   }
 
@@ -667,12 +695,17 @@ class AndroidAudioEngine implements AudioEngine {
       return;
     }
 
-    final shouldFastStartCurrentTrackOnly = shouldUseFastStartCurrentTrackOnly(
-      allowFastStart: _shouldFastStartCurrentTrackOnly(),
-      loadedSingleTrackOnly: _loadedSingleTrackOnly,
-      sequenceIsEmpty: player.sequence.isEmpty,
-      playlistLength: playlist.length,
-    );
+    final unresolvedQueue = hasUnresolvedAudioSources(playlist);
+    // Repeat All is a logical queue setting, not permission to send pending
+    // Discovery slots as empty URIs to Android. Keep one playable source
+    // loaded and use PlayerService's manual completion until resolved.
+    final shouldFastStartCurrentTrackOnly = unresolvedQueue ||
+        shouldUseFastStartCurrentTrackOnly(
+          allowFastStart: _shouldFastStartCurrentTrackOnly(),
+          loadedSingleTrackOnly: _loadedSingleTrackOnly,
+          sequenceIsEmpty: player.sequence.isEmpty,
+          playlistLength: playlist.length,
+        );
 
     if (canReusePlaylist &&
         player.sequence.isNotEmpty &&
@@ -694,6 +727,12 @@ class AndroidAudioEngine implements AudioEngine {
       }
       _loadedSingleTrackOnly = true;
       _playlistSignature = const <String>[];
+      // _configurePlayer may have set native Repeat All before the single
+      // source was installed. Never loop a one-item Media3 sequence when
+      // the logical queue still contains different upcoming songs.
+      if (playlist.length > 1) {
+        await player.setLoopMode(just_audio.LoopMode.off);
+      }
     } else {
       devLog('[Playback] Android load(${track.id}) rebuilding playlist');
       _awaitingInitialSeek = true;
@@ -783,8 +822,16 @@ class AndroidAudioEngine implements AudioEngine {
   @override
   Future<void> stop() async {
     await _cancelCrossfade();
-    final player = await _ensurePlayer();
-    await player.stop();
+    // A stuck Media3 stop() must not indefinitely block the resolver when
+    // switching from a failed Discovery source to its next placeholder.
+    final player = _player;
+    if (player == null) return;
+    try {
+      await player.stop().timeout(const Duration(seconds: 3));
+    } on TimeoutException {
+      await _retireTimedOutPlayer(player);
+      throw TimeoutException('Android playback stop stalled; player reset.');
+    }
     _emit(
       _state.copyWith(
         isPlaying: player.playing,

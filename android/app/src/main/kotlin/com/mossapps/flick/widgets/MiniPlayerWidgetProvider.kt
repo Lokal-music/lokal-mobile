@@ -3,158 +3,116 @@ package com.mossapps.flick.widgets
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.os.Bundle
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
-import android.graphics.Color
+import android.os.Build
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import com.mossapps.flick.R
 
+/** One-row transport widget: no text bitmaps, bounded art and reliable taps. */
 class MiniPlayerWidgetProvider : AppWidgetProvider() {
-
-    companion object {
-        private const val CHROME_DP = 148f
-        private const val ART_BG_PX = 512
+    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        WidgetUpdateDispatcher.submit(this, context, manager, ids) { id ->
+            render(context.applicationContext, manager, id)
+        }
     }
 
-    override fun onUpdate(
+    override fun onAppWidgetOptionsChanged(
         context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray,
+        manager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
     ) {
+        onUpdate(context, manager, intArrayOf(appWidgetId))
+    }
+
+    private fun render(context: Context, manager: AppWidgetManager, id: Int): RemoteViews {
         val prefs = WidgetPrefs.get(context)
         val hasSong = prefs.getBoolean(WidgetPrefs.KEY_HAS_SONG, false)
-        val isPlaying = prefs.getBoolean(WidgetPrefs.KEY_IS_PLAYING, false)
-        val title = prefs.getString(WidgetPrefs.KEY_TITLE, "")?.takeIf { it.isNotEmpty() }
-            ?: context.getString(R.string.widget_nothing_playing)
-        val artist = prefs.getString(WidgetPrefs.KEY_ARTIST, "") ?: ""
-        val artPath = prefs.getString(WidgetPrefs.KEY_ALBUM_ART, "") ?: ""
-        val positionMs = readMs(prefs, WidgetPrefs.KEY_POSITION_MS)
-        val durationMs = readMs(prefs, WidgetPrefs.KEY_DURATION_MS)
-        val showArt = WidgetPrefs.getShowAlbumArt(context)
-        val showArtist = WidgetPrefs.getShowArtist(context)
-        val accentColor = WidgetPrefs.getAccentColor(context)
-        val textScale = WidgetPrefs.getMiniTextScale(context)
-
-        val dm = context.resources.displayMetrics
-
-        for (id in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.widget_mini_player)
-            views.applyBackground(context)
-
-            if (showArt) {
-                val art = if (hasSong) WidgetArtLoader.load(artPath, ART_BG_PX) else null
-                if (art != null) {
-                    views.setImageViewBitmap(R.id.widget_art_bg, art)
-                } else {
-                    views.setImageViewResource(R.id.widget_art_bg, R.drawable.widget_default_art)
-                }
-                views.setViewVisibility(R.id.widget_art_bg, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_scrim, View.VISIBLE)
-            } else {
-                views.setViewVisibility(R.id.widget_art_bg, View.GONE)
-                views.setViewVisibility(R.id.widget_scrim, View.GONE)
-            }
-            views.setOnClickPendingIntent(R.id.widget_art_bg, WidgetIntents.openApp(context, 10))
-
-            val options = appWidgetManager.getAppWidgetOptions(id)
-            val widgetWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
-            val widgetWidthPx =
-                if (widgetWidthDp > 0) (widgetWidthDp * dm.density).toInt() else dm.widthPixels
-            val textWidthPx = (widgetWidthPx - CHROME_DP * dm.density).toInt().coerceAtLeast(80)
-            val titleSp = WidgetPrefs.scaledSp(13, widgetWidthDp, 360f, textScale)
-            val artistSp = WidgetPrefs.scaledSp(11, widgetWidthDp, 360f, textScale)
-
-            if (hasSong) {
-                views.setImageViewBitmap(
-                    R.id.widget_title,
-                    WidgetTextRenderer.createTextBitmap(
-                        context, title, R.font.product_sans_bold, titleSp, Color.WHITE, textWidthPx,
-                    ),
-                )
-                views.setContentDescription(R.id.widget_title, title)
-
-                if (showArtist && artist.isNotEmpty()) {
-                    views.setImageViewBitmap(
-                        R.id.widget_artist,
-                        WidgetTextRenderer.createTextBitmap(
-                            context, artist, R.font.product_sans_regular, artistSp, accentColor, textWidthPx,
-                        ),
-                    )
-                    views.setContentDescription(R.id.widget_artist, artist)
-                    views.setViewVisibility(R.id.widget_artist, View.VISIBLE)
-                } else {
-                    views.setViewVisibility(R.id.widget_artist, View.GONE)
-                }
-
-                views.setImageViewResource(
-                    R.id.widget_play_pause,
-                    if (isPlaying) R.drawable.widget_ic_lucide_pause else R.drawable.widget_ic_lucide_play,
-                )
-
-                if (durationMs > 0) {
-                    views.setViewVisibility(R.id.widget_progress, View.VISIBLE)
-                    views.setProgressBar(
-                        R.id.widget_progress, 1000,
-                        (positionMs * 1000L / durationMs).toInt().coerceIn(0, 1000), false,
-                    )
-                    views.setColorStateList(
-                        R.id.widget_progress, "setProgressTintList",
-                        ColorStateList.valueOf(accentColor),
-                    )
-                    views.setColorStateList(
-                        R.id.widget_progress, "setProgressBackgroundTintList",
-                        ColorStateList.valueOf(0x33FFFFFF),
-                    )
-                } else {
-                    views.setViewVisibility(R.id.widget_progress, View.GONE)
-                }
-
-                views.setOnClickPendingIntent(R.id.widget_title, WidgetIntents.openApp(context, 11))
-                views.setOnClickPendingIntent(R.id.widget_artist, WidgetIntents.openApp(context, 12))
-                views.setOnClickPendingIntent(R.id.widget_play_pause, WidgetIntents.playerPlayPause(context))
-                views.setOnClickPendingIntent(R.id.widget_next, WidgetIntents.playerNext(context))
-                views.setOnClickPendingIntent(R.id.widget_prev, WidgetIntents.playerPrevious(context))
-
-                views.setViewVisibility(R.id.widget_prev, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_play_pause, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_next, View.VISIBLE)
-            } else {
-                val tapText = context.getString(R.string.widget_tap_to_open)
-                views.setImageViewBitmap(
-                    R.id.widget_title,
-                    WidgetTextRenderer.createTextBitmap(
-                        context, tapText, R.font.product_sans_bold, titleSp, Color.WHITE, textWidthPx,
-                    ),
-                )
-                views.setContentDescription(R.id.widget_title, tapText)
-                views.setViewVisibility(R.id.widget_artist, View.GONE)
-                views.setViewVisibility(R.id.widget_progress, View.GONE)
-                views.setViewVisibility(R.id.widget_prev, View.GONE)
-                views.setViewVisibility(R.id.widget_play_pause, View.GONE)
-                views.setViewVisibility(R.id.widget_next, View.GONE)
-
-                views.setOnClickPendingIntent(R.id.widget_title, WidgetIntents.openApp(context, 20))
-            }
-
-            appWidgetManager.updateAppWidget(id, views)
+        val playing = prefs.getBoolean(WidgetPrefs.KEY_IS_PLAYING, false)
+        val artist = prefs.getString(WidgetPrefs.KEY_ARTIST, "").orEmpty()
+        val title = if (hasSong) {
+            prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
+                .ifBlank { context.getString(R.string.widget_nothing_playing) }
+        } else context.getString(R.string.widget_tap_to_open)
+        val position = readMs(prefs, WidgetPrefs.KEY_POSITION_MS)
+        val duration = readMs(prefs, WidgetPrefs.KEY_DURATION_MS)
+        val accent = WidgetPrefs.getAccentColor(context)
+        val width = manager.getAppWidgetOptions(id).getInt(
+            AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0
+        )
+        val scale = WidgetPrefs.getMiniTextScale(context)
+        val views = RemoteViews(context.packageName, R.layout.widget_mini_player)
+        views.setInt(R.id.widget_root, "setBackgroundResource",
+            WidgetPrefs.getBackgroundDrawableRes(context))
+        views.setTextViewText(R.id.widget_title, title)
+        views.setTextViewTextSize(R.id.widget_title, TypedValue.COMPLEX_UNIT_SP,
+            WidgetPrefs.scaledSp(13, width, 360f, scale).toFloat())
+        views.setContentDescription(R.id.widget_title, title)
+        views.setOnClickPendingIntent(R.id.widget_title, WidgetIntents.openApp(context, 11))
+        if (hasSong && WidgetPrefs.getShowArtist(context) && artist.isNotBlank()) {
+            views.setTextViewText(R.id.widget_artist, artist)
+            views.setTextViewTextSize(R.id.widget_artist, TypedValue.COMPLEX_UNIT_SP,
+                WidgetPrefs.scaledSp(11, width, 360f, scale).toFloat())
+            views.setTextColor(R.id.widget_artist, accent)
+            views.setViewVisibility(R.id.widget_artist, View.VISIBLE)
+            views.setOnClickPendingIntent(R.id.widget_artist, WidgetIntents.openApp(context, 12))
+        } else {
+            views.setViewVisibility(R.id.widget_artist, View.GONE)
         }
+
+        if (WidgetPrefs.getShowAlbumArt(context)) {
+            val art = if (hasSong) WidgetArtLoader.load(
+                prefs.getString(WidgetPrefs.KEY_ALBUM_ART, ""), 256
+            ) else null
+            if (art == null) views.setImageViewResource(R.id.widget_art_bg,
+                R.drawable.widget_default_art)
+            else views.setImageViewBitmap(R.id.widget_art_bg, art)
+            views.setViewVisibility(R.id.widget_art_bg, View.VISIBLE)
+            views.setViewVisibility(R.id.widget_scrim, View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.widget_art_bg, View.GONE)
+            views.setViewVisibility(R.id.widget_scrim, View.GONE)
+        }
+        views.setOnClickPendingIntent(R.id.widget_art_bg, WidgetIntents.openApp(context, 10))
+
+        val visible = if (hasSong) View.VISIBLE else View.GONE
+        views.setViewVisibility(R.id.widget_prev, visible)
+        views.setViewVisibility(R.id.widget_play_pause, visible)
+        views.setViewVisibility(R.id.widget_next, visible)
+        if (hasSong) {
+            views.setImageViewResource(R.id.widget_play_pause,
+                if (playing) R.drawable.widget_ic_lucide_pause
+                else R.drawable.widget_ic_lucide_play)
+            views.setOnClickPendingIntent(R.id.widget_prev, WidgetIntents.playerPrevious(context))
+            views.setOnClickPendingIntent(R.id.widget_play_pause, WidgetIntents.playerPlayPause(context))
+            views.setOnClickPendingIntent(R.id.widget_next, WidgetIntents.playerNext(context))
+        }
+
+        if (hasSong && duration > 0) {
+            views.setViewVisibility(R.id.widget_progress, View.VISIBLE)
+            val progress = ((position.coerceAtLeast(0) * 1000.0) / duration)
+                .toInt().coerceIn(0, 1000)
+            views.setProgressBar(R.id.widget_progress, 1000, progress, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                views.setColorStateList(R.id.widget_progress, "setProgressTintList",
+                    ColorStateList.valueOf(accent))
+                views.setColorStateList(R.id.widget_progress, "setProgressBackgroundTintList",
+                    ColorStateList.valueOf(0x33FFFFFF))
+            }
+        } else {
+            views.setViewVisibility(R.id.widget_progress, View.GONE)
+        }
+        return views
     }
 
-    override fun onReceive(context: Context, intent: android.content.Intent) {
-        super.onReceive(context, intent)
-    }
-
-    private fun readMs(prefs: SharedPreferences, key: String): Long {
-        return try {
+    private fun readMs(prefs: SharedPreferences, key: String): Long =
+        try {
             prefs.getLong(key, 0L)
         } catch (_: ClassCastException) {
-            prefs.getInt(key, 0).toLong()
+            try { prefs.getInt(key, 0).toLong() } catch (_: ClassCastException) { 0L }
         }
-    }
-
-    private fun RemoteViews.applyBackground(context: Context) {
-        val bgRes = WidgetPrefs.getBackgroundDrawableRes(context)
-        setInt(R.id.widget_root, "setBackgroundResource", bgRes)
-    }
 }
