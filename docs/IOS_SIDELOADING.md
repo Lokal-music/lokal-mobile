@@ -10,7 +10,7 @@ is required to perform these installation and acceptance steps.
 1. Open the **iPhone build and sideload package** run in the
    repository's Actions tab. During development the runs are linked from
    [the iPhone pull request](https://github.com/lokal-music/lokal-mobile/pull/172).
-2. Download the `Lokal-iPhone-engineering-unsigned-<run>` artifact and extract the outer ZIP.
+2. Download the `Lokal-iPhone-engineering-unsigned-<run>-attempt<attempt>` artifact (earlier runs omit the attempt suffix) and extract the outer ZIP.
    The app is **`Lokal-unsigned.ipa`** inside it. Keep the `.ipa` extension.
 3. Check its SHA-256 against `Lokal-unsigned.ipa.sha256`, for example in
    PowerShell:

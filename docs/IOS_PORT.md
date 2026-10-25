@@ -523,6 +523,12 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
   playback and actual WavPack conversion/playback on both iOS 26.0 and 18.6.
   The full app shell, matching crash symbols and measured JSON reports also pass. This is simulator execution
   evidence, not an audible-fidelity or physical-accessory measurement.
+- Run 15 stopped at the independent minimal Flutter control app: its VM never
+  became ready, its console remained empty, and simulator termination timed out.
+  Lokal was not built or tested in that run. Saved control evidence is retained;
+  a fresh runner is required before assessing the later application changes.
+  Artifact names and provenance now include the run attempt so reruns cannot
+  collide with earlier evidence.
 - The smoke harness uses the supported Flutter drive existing-app adapter and
   probes the real loopback Dart VM directly, with native console capture and
   bounded timeouts. Its HTTP handshake was checked against a real local Dart VM;

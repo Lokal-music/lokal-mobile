@@ -14,6 +14,7 @@ Future<void> main() => integrationDriver(
     await output.create(recursive: true);
     final report = Map<String, dynamic>.from(data ?? {});
     report['workflow_run_id'] = Platform.environment['GITHUB_RUN_ID'];
+    report['workflow_run_attempt'] = Platform.environment['GITHUB_RUN_ATTEMPT'];
     report['source_commit'] = Platform.environment['GITHUB_SHA'];
     report['simulator_runtime'] = Platform.environment['IOS_SIMULATOR_RUNTIME'];
     final screenshots = report.remove('screenshots') as List<dynamic>? ?? [];

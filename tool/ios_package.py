@@ -117,6 +117,8 @@ def main() -> None:
     app, output = args.app.resolve(strict=True), args.output.resolve()
     metadata = inspect_bundle(app)
     root = Path(__file__).resolve().parents[1]
+    metadata["workflow_run_id"] = os.environ.get("GITHUB_RUN_ID")
+    metadata["workflow_run_attempt"] = os.environ.get("GITHUB_RUN_ATTEMPT")
     metadata["source_commit"] = command("git", "-C", str(root), "rev-parse", "HEAD")
     metadata["source_tree"] = command("git", "-C", str(root), "rev-parse", "HEAD^{tree}")
     metadata["xcode"] = command("xcodebuild", "-version")

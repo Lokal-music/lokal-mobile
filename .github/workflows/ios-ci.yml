@@ -93,7 +93,7 @@ jobs:
         if: always() && env.IOS_SIMULATOR_UDID != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: iPhone-simulator-control-${{ github.run_number }}
+          name: iPhone-simulator-control-${{ github.run_number }}-attempt${{ github.run_attempt }}
           path: ${{ runner.temp }}/ios-control*
           if-no-files-found: ignore
       - name: Build the complete app for iOS simulator
@@ -113,7 +113,7 @@ jobs:
       - name: Preserve the unsigned engineering build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Lokal-iPhone-engineering-unsigned-${{ github.run_number }}
+          name: Lokal-iPhone-engineering-unsigned-${{ github.run_number }}-attempt${{ github.run_attempt }}
           path: |
             build/ios/ipa/*
             build/ios/iphoneos/*.dSYM
@@ -125,7 +125,7 @@ jobs:
       - name: Preserve the first-launch evidence before testing
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: iPhone-first-launch-${{ github.run_number }}
+          name: iPhone-first-launch-${{ github.run_number }}-attempt${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/lokal-iphone.log
             ${{ runner.temp }}/lokal-iphone.json
@@ -174,7 +174,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: iPhone-build-diagnostics-${{ github.run_number }}
+          name: iPhone-build-diagnostics-${{ github.run_number }}-attempt${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/ios-simulator-build.log
             ${{ runner.temp }}/ios-smoke.log

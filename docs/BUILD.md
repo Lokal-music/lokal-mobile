@@ -2,9 +2,11 @@
 
 The iPhone port builds on hosted macOS using Xcode 26.0.1, Flutter 3.47.1 and
 Rust 1.98.0. CI inspects and saves an unsigned release/AOT IPA, checksum, source
-and notices. Lokal starts and renders its welcome screen on the iOS 26 simulator;
-real scanner, QuickJS, system WAV and Rust DSP/WavPack integration pass on iOS
-26.0. Expanded full-screen/older-runtime checks and symbol retention are pending. Physical iPhone and Windows installation are untested.
+and notices. Build 12 reaches the full app shell and passes real scanner,
+QuickJS, system WAV and Rust DSP/WavPack integration on iOS 26.0 and 18.6. Matching
+native and Dart crash symbols are preserved. Later processing/codec/credential
+and UI checks remain under hosted validation. Physical iPhone and Windows
+installation are untested.
 
 See the [architecture and validation ledger](IOS_PORT.md) and
 [Windows signing/install guide](IOS_SIDELOADING.md). An engineering artifact does
