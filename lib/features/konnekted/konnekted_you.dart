@@ -1,3 +1,4 @@
+import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/l10n/l10n.dart';
 
 import '../link/lokal_devices_card.dart';
@@ -406,6 +407,8 @@ class _YouHeader extends StatelessWidget {
           Row(
             children: [
               const Spacer(),
+              const LokalDiscordButton(),
+              const SizedBox(width: 10),
               Tooltip(
                 message: lokalText('Settings'),
                 excludeFromSemantics: true,
