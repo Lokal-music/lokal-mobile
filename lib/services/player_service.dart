@@ -558,6 +558,7 @@ class PlayerService {
   Timer? _queueDebounceTimer;
   static const Duration _queueDebounce = Duration(milliseconds: 150);
   Timer? _autoplayPreviewTimer;
+  Future<List<Song>>? _autoplayOnlinePreviewJob;
   int _autoplayPreviewGeneration = 0;
   static const int _autoplayPreviewCount = 8;
   final RecentlyPlayedRepository _recentlyPlayedRepository =
@@ -1547,6 +1548,7 @@ class PlayerService {
 
   void _scheduleAutoplayPreview() {
     final generation = ++_autoplayPreviewGeneration;
+    _autoplayOnlinePreviewJob = null;
     _autoplayPreviewTimer?.cancel();
     // Invalidate the previous source's candidates immediately. A rapid skip
     // must never play a preview computed for an earlier playlist position.
@@ -1563,11 +1565,16 @@ class PlayerService {
   Future<void> _prepareAutoplayPreview(int generation) async {
     try {
       final seed = _playlist.last;
-      final online = await const OnlineRadioRecommendations().recommend(
+      final job = const OnlineRadioRecommendations().recommend(
         seed,
         count: _autoplayPreviewCount,
         existing: _playlist,
       );
+      _autoplayOnlinePreviewJob = job;
+      final online = await job;
+      if (identical(_autoplayOnlinePreviewJob, job)) {
+        _autoplayOnlinePreviewJob = null;
+      }
       if (generation != _autoplayPreviewGeneration || !_canPreviewAutoplay) {
         return;
       }
@@ -7473,11 +7480,23 @@ class PlayerService {
       try {
         var suggestions = autoplayQueueNotifier.value;
         if (suggestions.isEmpty) {
-          suggestions = await const OnlineRadioRecommendations().recommend(
-            _playlist.last,
-            count: _autoplayPreviewCount,
-            existing: _playlist,
-          );
+          // Never hold queue completion indefinitely for a network radio
+          // response. Prefer the already-running preview, allow a brief grace
+          // period, then continue with local fallback without a silent gap.
+          final job = _autoplayOnlinePreviewJob ??
+              const OnlineRadioRecommendations().recommend(
+                _playlist.last,
+                count: _autoplayPreviewCount,
+                existing: _playlist,
+              );
+          try {
+            suggestions = await job.timeout(
+              const Duration(milliseconds: 900),
+              onTimeout: () => const <Song>[],
+            );
+          } catch (_) {
+            suggestions = const [];
+          }
           if (!stillCurrent()) return;
           if (suggestions.isEmpty) {
             final library = await _songRepository.getAllSongs();
