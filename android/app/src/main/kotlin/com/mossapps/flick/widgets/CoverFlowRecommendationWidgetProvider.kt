@@ -69,6 +69,7 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
             if (hasSelection) artist.ifBlank { "From your listening" }
             else "Play something in Lokal to build your picks")
         views.setTextViewText(R.id.rec_heading, "COVER FLOW")
+        views.setTextColor(R.id.rec_heading, WidgetPrefs.getAccentColor(context))
         views.setViewVisibility(R.id.rec_art_strip, View.VISIBLE)
         views.setViewVisibility(R.id.rec_prev,
             if (count > 1) View.VISIBLE else View.GONE)
