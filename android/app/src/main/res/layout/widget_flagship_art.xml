@@ -84,22 +84,34 @@
                 android:src="@drawable/widget_ic_lucide_repeat" />
         </LinearLayout>
 
-        <ImageView
+        <TextView
             android:id="@+id/flagship_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:contentDescription="@string/widget_nothing_playing"
-            android:scaleType="fitCenter" />
+            android:fontFamily="@font/product_sans_bold"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:gravity="center"
+            />
 
-        <ImageView
+        <TextView
             android:id="@+id/flagship_artist"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:contentDescription="@string/widget_nothing_playing"
-            android:scaleType="fitCenter"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:fontFamily="@font/product_sans_regular"
+            android:textColor="#DDFFFFFF"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:gravity="center"
+            />
     </LinearLayout>
 
 </FrameLayout>
