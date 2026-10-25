@@ -114,6 +114,14 @@ bool shouldUseFastStartCurrentTrackOnly({
       playlistLength > AndroidAudioEngine.fastStartPlaylistThreshold;
 }
 
+/// A Discovery/Search queue can contain placeholders that do not yet have
+/// playable sources. Never submit them to just_audio's native sequence:
+/// repeat-all would otherwise cause Media3 to prepare an empty URI.
+@visibleForTesting
+bool hasUnresolvedAudioSources(List<Song> playlist) =>
+    playlist.any((song) => song.isPending ||
+        song.filePath == null || song.filePath!.isEmpty);
+
 @visibleForTesting
 bool shouldExitSingleTrackMode({
   required bool loadedSingleTrackOnly,
@@ -578,14 +586,16 @@ class AndroidAudioEngine implements AudioEngine {
       await player
           .seek(position, index: index)
           .timeout(const Duration(seconds: 15));
-    } catch (_) {
+    } catch (error) {
       _sourceFailed = true;
       _playlistSignature = const [];
       _emit(_state.copyWith(isPlaying: false));
-      try {
-        await player.stop().timeout(const Duration(seconds: 3));
-      } catch (_) {}
-      rethrow;
+      // Media3 can remain wedged after a source error or a 15-second seek
+      // timeout. stop() alone leaves that native decoder attached, causing
+      // each new Discovery track to fail in the same way. Retire the player
+      // before the next selection; the provider constructs a fresh instance.
+      await _retireTimedOutPlayer(player);
+      Error.throwWithStackTrace(error, StackTrace.current);
     }
   }
 
@@ -667,12 +677,17 @@ class AndroidAudioEngine implements AudioEngine {
       return;
     }
 
-    final shouldFastStartCurrentTrackOnly = shouldUseFastStartCurrentTrackOnly(
-      allowFastStart: _shouldFastStartCurrentTrackOnly(),
-      loadedSingleTrackOnly: _loadedSingleTrackOnly,
-      sequenceIsEmpty: player.sequence.isEmpty,
-      playlistLength: playlist.length,
-    );
+    final unresolvedQueue = hasUnresolvedAudioSources(playlist);
+    // Repeat All is a logical queue setting, not permission to send pending
+    // Discovery slots as empty URIs to Android. Keep one playable source
+    // loaded and use PlayerService's manual completion until resolved.
+    final shouldFastStartCurrentTrackOnly = unresolvedQueue ||
+        shouldUseFastStartCurrentTrackOnly(
+          allowFastStart: _shouldFastStartCurrentTrackOnly(),
+          loadedSingleTrackOnly: _loadedSingleTrackOnly,
+          sequenceIsEmpty: player.sequence.isEmpty,
+          playlistLength: playlist.length,
+        );
 
     if (canReusePlaylist &&
         player.sequence.isNotEmpty &&
@@ -694,6 +709,12 @@ class AndroidAudioEngine implements AudioEngine {
       }
       _loadedSingleTrackOnly = true;
       _playlistSignature = const <String>[];
+      // _configurePlayer may have set native Repeat All before the single
+      // source was installed. Never loop a one-item Media3 sequence when
+      // the logical queue still contains different upcoming songs.
+      if (playlist.length > 1) {
+        await player.setLoopMode(just_audio.LoopMode.off);
+      }
     } else {
       devLog('[Playback] Android load(${track.id}) rebuilding playlist');
       _awaitingInitialSeek = true;
