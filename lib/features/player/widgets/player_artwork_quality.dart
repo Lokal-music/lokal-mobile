@@ -106,6 +106,21 @@ class PlayerArtworkQuality {
       }
     }
 
+    // Amazon frequently returns the exact same album image with a small
+    // _AC_UY218_ / _SX160_ rendition suffix. The unsized asset is the
+    // original master. Request it in Full Player and keep the original as
+    // a fallback if the CDN does not expose that particular rendition.
+    if (upgraded == null &&
+        (host == 'm.media-amazon.com' ||
+         host == 'images-na.ssl-images-amazon.com' ||
+         host == 'images-eu.ssl-images-amazon.com')) {
+      final clean = uri.path.replaceFirst(
+        RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
+        '.',
+      );
+      if (clean != uri.path) upgraded = uri.replace(path: clean).toString();
+    }
+
     // YouTube artwork's max-res rendition is not always uploaded, so the
     // original remains an explicit fallback.
     if (upgraded == null &&
