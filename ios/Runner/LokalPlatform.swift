@@ -19,6 +19,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
   private var pickerResult: FlutterResult?
   private var nowPlaying: [String: Any] = [:]
   private var spotify: LokalSpotifySession?
+  private let desktopDiscovery = LokalDesktopDiscovery()
   private let fileQueue = DispatchQueue(label: "app.lokal.mobile.import", qos: .userInitiated)
 
   init(messenger: FlutterBinaryMessenger) {
@@ -38,6 +39,10 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
       }
     }
     spotify = LokalSpotifySession(messenger: messenger, presenter: { [weak self] in self?.presenter })
+    register("lokal/desktop_link", messenger) { [weak self] call, result in
+      guard call.method == "discover" else { result(FlutterMethodNotImplemented); return }
+      self?.desktopDiscovery.discover(result)
+    }
     player.setMethodCallHandler { [weak self] call, result in
       guard let self = self else { return }
       switch call.method {

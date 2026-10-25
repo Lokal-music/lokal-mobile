@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import time
 from ios_runtime import capture, copy_crashes, run, start, stop, wait_for_vm
+from ios_desktop_fixture import desktop_fixture
 
 device = os.environ['IOS_SIMULATOR_UDID']
 output = Path(os.environ.get('LOKAL_IOS_RUNTIME_EVIDENCE_DIR', os.environ['RUNNER_TEMP']))
@@ -13,7 +14,7 @@ bundle = 'app.lokal.mobile'
 started = time.time()
 run('xcrun', 'simctl', 'install', device,
     'build/ios/iphonesimulator/Runner.app', check=True, timeout=120)
-with (output / 'ios-smoke-console.log').open('w') as console:
+with desktop_fixture(output), (output / 'ios-smoke-console.log').open('w') as console:
     launch, service = start(device, bundle, console)
     passed = False
     try:

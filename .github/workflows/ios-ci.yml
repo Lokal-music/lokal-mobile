@@ -143,7 +143,7 @@ jobs:
         env:
           LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-18.6
         run: |
-          if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
+          if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --dart-define=LOKAL_IOS_DISCOVERY_FIXTURE=lokal-ios-fixture-${{ github.run_id }}-${{ github.run_attempt }} --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-build.log"
             exit 1
           fi

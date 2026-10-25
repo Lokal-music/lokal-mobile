@@ -9,25 +9,35 @@ The unsigned engineering IPA passes package inspection (33 Mach-O binaries,
 iPhone arm64 platform, minimum OS, metadata and checksum). Native Rust probes
 pass for device and Apple Silicon simulator with raw USB excluded.
 
-**The complete iOS workflow passes on build 12 on iOS 26.0 and 18.6.**
-Lokal reaches its full application shell through the actual onboarding UI. Native
-startup, Rust scanning, QuickJS execution, system WAV play/pause/seek, Rust/Core
-Audio DSP playback, and FFmpeg-to-WavPack playback pass without native mocks.
-[Build 12](https://github.com/lokal-music/lokal-mobile/actions/runs/40200733269)
-contains the unsigned release IPA, matching native/Dart crash symbols, screenshots
-and machine-readable measured playback reports. Its IPA SHA-256 is
-`f165305d6f086cd763657fd22eaf67fa7c77cae350e224406a8d6b29a8fd4a1e`.
-Package metadata records 25 matching native dSYM bundles (including Rust), plus
-Dart AOT symbols. The other prebuilt framework symbols depend on upstream
-availability. The previous build 11 also passes on iOS 26.0.
+**The complete iOS workflow passes on build 17 on iOS 18.6 and 26.0.**
+Lokal reaches its actual app shell, Library, You and Settings. Native startup,
+Keychain migration, tag editing/scanning with distinct album-artist tags, QuickJS,
+system WAV play/pause/seek, Rust/Core Audio DSP, independent pitch and positive
+ReplayGain route changes, WavPack conversion/playback, and the mixed WAV-to-Opus
+queue handoff pass without native mocks.
 
-Build 12 reports system WAV / Rust DSP / WavPack position advances of
-464 / 554 / 533 ms on iOS 26.0 and 415 / 555 / 544 ms on iOS 18.6. Each check
-requires more than 300 ms beyond a settled baseline. The QuickJS echo result is
-`{"value":42}` on both runtimes. These measurements establish native execution,
-not output fidelity. No signed installation or physical iPhone behavior is
-validated. The newer pitch, positive ReplayGain, codec-corpus, mixed-codec queue, credential
-and metadata assertions await the next hosted run.
+The generated codec corpus also passes MP3 VBR, AAC/M4A, ALAC, 96 kHz stereo FLAC,
+AIFF, Vorbis and Opus through their intended production backends, using Unicode
+filenames and measured advancing playback position. Reports and native screenshots
+are preserved for both runtimes in
+[build 17](https://github.com/lokal-music/lokal-mobile/actions/runs/40220505558).
+The unsigned release IPA SHA-256 is
+`873d09b46110e497ac71f59c1d5a0808e357703ffbf4d59ce4f22a85b4bcd8c4`.
+Its matching symbols cover 25 native binaries, including Rust, plus Dart AOT.
+Other prebuilt framework symbols depend on upstream availability.
+
+The actual packaged/tested source commit is
+`ae0f8a8701ea552f981d4376c21b667721f561ee` (the PR merge checkout; the PR head is
+`fbf431c2008e7bccc902c25c35639f687e64730e`). Reports record run 40220505558,
+attempt 1, and the exact runtime. System WAV / Rust DSP / WavPack advances are
+401 / 554 / 597 ms on iOS 18.6 and 484 / 544 / 555 ms on iOS 26.0; every playback
+check requires more than 300 ms beyond a settled baseline. The queue handoff
+advances 544 / 555 ms respectively. These are native execution measurements,
+not output-fidelity or physical-accessory certification.
+
+Native desktop Bonjour discovery is the next addition; its implementation and
+controlled-service test await their hosted run. No signed installation or physical
+iPhone behavior is validated.
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
@@ -73,7 +83,8 @@ flowchart LR
   coverage remain acceptance work.
 
 Chromecast sender integration, WidgetKit, Discord feasibility and resumable
-background transfers remain open work. Live add-on stream handles currently
+background transfers remain open work. Native desktop Bonjour discovery is
+implemented after build 17 and awaits validation. Live add-on stream handles currently
 retain the system streaming adapter and explicitly report Rust DSP bypass;
 DSP support for those sources remains open rather than attempting to open an
 opaque stream handle as a native file. Shared UI and source availability do not
@@ -188,8 +199,8 @@ cannot provide gain above unity. Use native SoundTouch for pitch and Rust gain
 for positive normalization. Negative ReplayGain can stay on the system player.
 A codec fallback is re-evaluated for the next explicitly selected/resumed track,
 so ordinary flat playback can return to AVPlayer. Live changes preserve the current track/position; resetting processing returns
-to system playback when the format permits it. Native verification of these new
-pitch/normalization transitions and the expanded codec corpus is pending.
+to system playback when the format permits it. These pitch/normalization transitions and the expanded codec corpus pass on
+both iOS 18.6 and 26.0 in build 17.
 
 ```mermaid
 flowchart TD
@@ -227,8 +238,8 @@ The default-feature Rust suite still passes all 303 tests, including extended WA
 and DFF album-artist checks. A real host shared-library test passes tag write/read,
 scanner-to-Dart album-artist transport, native add-on sealing/opening and QuickJS
 echo. It loads the actual native library; it does not initialize mock bindings.
-The iOS smoke test also writes and checks a distinct album artist. Apple runtime
-validation of the regenerated bridge remains pending.
+The iOS smoke test also writes and checks a distinct album artist. The regenerated bridge also passes the Apple simulator checks on both OS versions
+in build 17.
 
 ### Playback credentials while the screen is locked
 
@@ -248,7 +259,7 @@ their backed-up master key. No new signing entitlement is required.
 The native smoke test creates a synthetic legacy Keychain item, migrates/reads it,
 updates it through the playback store and deletes it. It also navigates Library,
 You and Settings through the actual UI and captures each screen. These additional
-checks await their hosted run. The simulator cannot establish protected-data
+checks pass on both runtimes in build 17. The simulator cannot establish protected-data
 behavior after a real device reboot/lock, free-account re-signing continuity or
 live-account refresh; those remain explicit device acceptance gates.
 
@@ -278,6 +289,34 @@ permission denial and changed Wi-Fi networks. Bonjour service declarations are
 needed only if used. Audit raw multicast discovery against iOS entitlements;
 provide manual address/QR pairing if needed. Plain local HTTP requires a narrow,
 justified transport policy; do not disable ATS globally as a shortcut.
+
+### Desktop Bonjour discovery
+
+The new Swift adapter browses `_lokal._tcp` through Apple's `NetServiceBrowser`,
+resolves numeric IPv4/IPv6 addresses, accepts protocol-1 TXT records and returns
+the same id/name/host/port contract as Android. Searches are explicit, bounded to
+eight seconds and limited in concurrent resolution. Backgrounding and completion
+stop the browser/resolvers; stale delegate callbacks cannot modify a later search.
+Apple owns Local Network authorization through the actual operation; the adapter
+does not fabricate a permission grant or require raw multicast entitlements.
+Manual-address and QR pairing retain the existing shared protocol.
+
+```mermaid
+flowchart LR
+  Scan["User scans for desktops"] --> Dart["Existing Desktop Link service"]
+  Dart --> Bonjour["Swift · system Bonjour browser"]
+  Bonjour --> TXT["Resolve address + protocol-1 TXT record"]
+  TXT --> Pair["Existing pairing / authenticated HTTP + WebSocket"]
+  Manual["Manual address / QR"] --> Pair
+```
+
+The native test harness advertises a real Bonjour service and an incompatible
+protocol-2 service on the Mac, using a run/attempt-specific identifier. The app
+must discover the compatible service, reject the incompatible one, and reach the
+advertised HTTP probe endpoint. This controlled fixture does not establish actual
+Windows desktop pairing, transfer behavior, or real-device permission denial.
+These new native checks remain pending. Shared Desktop Link/remote-service
+regressions pass 40 tests, including actionable native error propagation.
 
 ## Source audit and feature disposition
 
@@ -514,6 +553,8 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
 - Full simulator and release iPhone builds passed on hosted macOS/Xcode 26.0.1.
   Engineering IPA inspection passed; its SHA-256 is published with the artifact.
 - Both native Rust target probes passed with no `rusb`/`libusb1-sys` dependency.
+- The latest metadata/audio/routing selection, including the real host bridge,
+  passes **69 tests**. This overlaps earlier selections.
 - Pitch/normalization/routing regression selection: **42 passed**. Scoped
   analysis reports the same 11 informational lints and no errors/warnings.
   The full Android debug APK also rebuilds after these processing changes.
@@ -535,9 +576,9 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
   `libswiftWebKit`, matching WebKit bug 293831. iOS 26.0 now runs the control app
   and actual Lokal welcome screen, with direct Dart VM readiness confirmed.
   The Android-only Cast/Bluetooth event subscriptions are now platform-gated.
-  Build 12 passes real scanning, QuickJS, AVPlayer progress/pause/seek, Rust DSP
-  playback and actual WavPack conversion/playback on both iOS 26.0 and 18.6.
-  The full app shell, matching crash symbols and measured JSON reports also pass. This is simulator execution
+  Build 17 passes the expanded native UI, Keychain, metadata, DSP, pitch,
+  normalization, codec corpus and queue checks on both iOS 18.6 and 26.0.
+  Matching crash symbols, native screenshots and measured JSON reports are saved. This is simulator execution
   evidence, not an audible-fidelity or physical-accessory measurement.
 - Run 15 stopped at the independent minimal Flutter control app: its VM never
   became ready, its console remained empty, and simulator termination timed out.

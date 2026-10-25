@@ -15,6 +15,7 @@ import 'package:flick/services/player_service.dart';
 import 'package:flick/services/app_preferences_service.dart';
 import 'package:flick/services/replaygain_service.dart';
 import 'package:flick/services/playback_secure_storage.dart';
+import 'package:flick/services/link/lokal_link_service.dart';
 import 'package:flick/services/equalizer_service.dart';
 import 'package:flick/providers/equalizer_provider.dart';
 import 'package:flick/features/morneye/morneye_bootstrap.dart';
@@ -425,6 +426,47 @@ void main() {
     final queueProgress = await _expectPlaybackProgress(tester, player);
     binding.reportData!['system_to_rust_queue_progress_ms'] = queueProgress;
     await player.pause();
+
+    debugPrint('iOS smoke: real Bonjour desktop discovery and HTTP probe');
+    const fixtureId = String.fromEnvironment(
+      'LOKAL_IOS_DISCOVERY_FIXTURE',
+      defaultValue: 'lokal-ios-local-fixture',
+    );
+    final link = LokalLinkService();
+    addTearDown(link.close);
+    final desktops = await link.discover();
+    final fixture = desktops
+        .where((desktop) => desktop.id == fixtureId)
+        .toList();
+    expect(
+      fixture,
+      hasLength(1),
+      reason: 'Native Bonjour did not resolve the fixture',
+    );
+    expect(
+      desktops.any((desktop) => desktop.id == '$fixtureId-unsupported'),
+      false,
+    );
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final request = await client
+          .getUrl(fixture.single.origin.resolve('/lokal-ios-discovery-probe'))
+          .timeout(const Duration(seconds: 5));
+      final response = await request.close().timeout(
+        const Duration(seconds: 5),
+      );
+      expect(response.statusCode, HttpStatus.ok);
+      final body = await utf8.decoder
+          .bind(response)
+          .join()
+          .timeout(const Duration(seconds: 5));
+      expect(jsonDecode(body), {'id': fixtureId, 'proto': 1});
+    } finally {
+      client.close(force: true);
+    }
+    binding.reportData!['bonjour_fixture_discovery_and_http'] = 'passed';
+    binding.reportData!['bonjour_unsupported_protocol_filtered'] = true;
+
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();
   }, timeout: const Timeout(Duration(minutes: 4)));
