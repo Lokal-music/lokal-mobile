@@ -104,6 +104,7 @@ void main() {
     expect(player, contains('KEY_LAST_ALBUM_ART'));
     expect(flow, contains('setViewVisibility(R.id.flow_cover, View.VISIBLE)'));
     expect(flow, contains('KEY_ALBUM_ART'));
+    expect(flow, contains('KEY_FLOW_ENABLED'));
     expect(cover, contains('R.id.rec_art_strip, View.VISIBLE'));
     expect(cover, contains('KEY_LAST_ALBUM_ART'));
     expect(cover, contains('WidgetArtLoader.load(context, item.optString("artwork"), 64)'));
@@ -132,6 +133,7 @@ void main() {
     expect(service, contains('radioRecordingKey(candidate.artist, candidate.title)'));
     expect(service, contains("rows.where((row) => (row['artwork']"));
     expect(service, contains('qualifiedAndroidName: flowProvider'));
+    expect(service, contains('flick_widget_flow_enabled'));
     final loader = File('$root/kotlin/com/mossapps/flick/widgets/WidgetArtLoader.kt')
         .readAsStringSync();
     expect(loader, contains('contentResolver.openInputStream'));
