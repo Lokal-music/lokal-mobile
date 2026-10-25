@@ -41,10 +41,8 @@ class FlagshipWidgetProvider : AppWidgetProvider() {
         val title = if (hasSong) {
             prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
                 .ifBlank { context.getString(R.string.widget_nothing_playing) }
-        } else context.getString(R.string.widget_tap_to_open)
-        val width = manager.getAppWidgetOptions(id).getInt(
-            AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0
-        )
+        } else context.getString(R.string.widget_nothing_playing)
+        val width = WidgetSize.width(manager, id)
         val scale = WidgetPrefs.getFlagshipTextScale(context)
         val views = RemoteViews(context.packageName, R.layout.widget_flagship_art)
 
@@ -78,6 +76,13 @@ class FlagshipWidgetProvider : AppWidgetProvider() {
             R.id.flagship_next, R.id.flagship_repeat,
         )) views.setViewVisibility(control, if (hasSong) View.VISIBLE else View.GONE)
 
+        // The flagship originally overflowed at small launcher cell sizes.
+        // Preserve play/pause and metadata while hiding secondary controls.
+        val constrained = width < 250 || WidgetSize.height(manager, id) < 172
+        if (constrained) {
+            views.setViewVisibility(R.id.flagship_shuffle, View.GONE)
+            views.setViewVisibility(R.id.flagship_repeat, View.GONE)
+        }
         if (hasSong) {
             views.setImageViewResource(R.id.flagship_play_pause,
                 if (playing) R.drawable.widget_ic_lucide_pause
