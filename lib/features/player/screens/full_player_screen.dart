@@ -2,6 +2,7 @@ import 'package:flick/core/theme/lokal_performance_scope.dart';
 import 'dart:io';
 import 'package:flick/features/player/widgets/full_player_visuals.dart';
 import 'package:flick/features/player/widgets/full_bleed_artwork_frame.dart';
+import 'package:flick/features/player/widgets/full_player_identity_layout.dart';
 
 import '../widgets/artist_credit_links.dart';
 import 'package:flick/widgets/common/overflow_marquee_title.dart';
@@ -925,110 +926,104 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               alignment: Alignment.topLeft,
               children: [...previous, if (current != null) current],
             ),
-            child: Column(
+            child: FullPlayerIdentityLayout(
               key: ValueKey(song.id),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Semantics(
-                  button: true,
-                  label: 'Open album for ${song.title}',
-                  child: InkWell(
-                    onTap: () => openLokalAlbumForSong(context, song),
-                    borderRadius: BorderRadius.circular(8),
-                    child: OverflowMarqueeTitle(
-                      key: ValueKey('full-title:${song.id}'),
-                      title: song.title,
-                      style: TextStyle(
-                        fontFamily: _font,
-                        fontSize: lerpDouble(titleSize, 18, p),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.55,
-                        color: FullPlayerVisuals.primaryText,
-                      ),
+              titleFontSize: lerpDouble(titleSize, 18, p)!,
+              titleToArtistGap: lerpDouble(3, 1, p)!,
+              title: Semantics(
+                button: true,
+                label: 'Open album for ${song.title}',
+                child: InkWell(
+                  onTap: () => openLokalAlbumForSong(context, song),
+                  borderRadius: BorderRadius.circular(8),
+                  child: OverflowMarqueeTitle(
+                    key: ValueKey('full-title:${song.id}'),
+                    title: song.title,
+                    style: TextStyle(
+                      fontFamily: _font,
+                      fontSize: lerpDouble(titleSize, 18, p),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.55,
+                      color: FullPlayerVisuals.primaryText,
                     ),
                   ),
                 ),
-                SizedBox(height: lerpDouble(3, 1, p)),
-                // Reference hierarchy: artist · album · year. Show only
-                // available file metadata; keep audio quality accessible.
-                Row(
-                  children: [
-                    Expanded(
-                      child: ArtistCreditLinks(
-                        credit: song.artist,
-                        onArtistTap: (name) =>
-                            openLokalArtist(context, name: name, song: song),
-                        style: TextStyle(
-                          fontFamily: _font,
-                          fontSize: lerpDouble(13, 12, p),
-                          fontWeight: FontWeight.w500,
+              ),
+              artist: ArtistCreditLinks(
+                credit: song.artist,
+                onArtistTap: (name) =>
+                    openLokalArtist(context, name: name, song: song),
+                style: TextStyle(
+                  fontFamily: _font,
+                  fontSize: lerpDouble(13, 12, p),
+                  fontWeight: FontWeight.w500,
+                  color: FullPlayerVisuals.secondaryText,
+                ),
+              ),
+              trailing: [
+                if (song.year != null && song.year! > 0) ...[
+                  const _MetadataDot(),
+                  Text(
+                    '${song.year}',
+                    style: TextStyle(
+                      fontFamily: _font,
+                      fontSize: lerpDouble(11, 10, p),
+                      color: FullPlayerVisuals.tertiaryText,
+                    ),
+                  ),
+                ],
+                if (song.atmosEncoded) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () => SongMetadataSheet.show(context, song),
+                    child: const LokalAtmosStreamPill(),
+                  ),
+                ],
+                if (LokalQualityTier.of(song) case final tier?
+                    when !song.atmosEncoded) ...[
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: () => SongMetadataSheet.show(context, song),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
                           color: FullPlayerVisuals.secondaryText,
+                        ),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        switch (tier) {
+                          LokalQualityTier.hiRes => 'HI-RES LOSSLESS',
+                          LokalQualityTier.lossless => 'LOSSLESS',
+                          LokalQualityTier.high => 'HIGH',
+                          LokalQualityTier.low => 'LOW',
+                          LokalQualityTier.unknown =>
+                              (song.sourcePackage == 'konnekted.progressive' ||
+                               song.sourcePackage == 'konnekted.morneye-live')
+                                  ? (catalogueStreamTierLabel(
+                                        quality: song.resolution,
+                                        codec: song.fileType,
+                                        bitDepth: song.bitDepth,
+                                        sampleRate: song.sampleRate,
+                                      ) ?? 'UNKNOWN')
+                                  : 'UNKNOWN',
+                        },
+                        style: const TextStyle(
+                          fontFamily: _font,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .6,
+                          color: FullPlayerVisuals.primaryText,
                         ),
                       ),
                     ),
-                    if (song.year != null && song.year! > 0) ...[
-                      const _MetadataDot(),
-                      Text(
-                        '${song.year}',
-                        style: TextStyle(
-                          fontFamily: _font,
-                          fontSize: lerpDouble(11, 10, p),
-                          color: FullPlayerVisuals.tertiaryText,
-                        ),
-                      ),
-                    ],
-                    if (song.atmosEncoded) ...[
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () => SongMetadataSheet.show(context, song),
-                        child: const LokalAtmosStreamPill(),
-                      ),
-                    ],
-                    if (LokalQualityTier.of(song) case final tier?
-                        when !song.atmosEncoded) ...[
-                      const SizedBox(width: 12),
-                      InkWell(
-                        onTap: () => SongMetadataSheet.show(context, song),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: FullPlayerVisuals.secondaryText),
-                            borderRadius: BorderRadius.circular(5),
-                          ),
-                          child: Text(
-                            switch (tier) {
-                              LokalQualityTier.hiRes => 'HI-RES LOSSLESS',
-                              LokalQualityTier.lossless => 'LOSSLESS',
-                              LokalQualityTier.high => 'HIGH',
-                              LokalQualityTier.low => 'LOW',
-                              LokalQualityTier.unknown =>
-                                  (song.sourcePackage == 'konnekted.progressive' ||
-                                   song.sourcePackage == 'konnekted.morneye-live')
-                                      // The audio resolution belongs in Song
-                                      // Metadata, not in the tier pill. If the
-                                      // HTTP add-on reports 24-bit / 44.1 kHz
-                                      // but not a codec, only say HI-RES (not
-                                      // unverified LOSSLESS).
-                                      ? (catalogueStreamTierLabel(
-                                            quality: song.resolution,
-                                            codec: song.fileType,
-                                            bitDepth: song.bitDepth,
-                                            sampleRate: song.sampleRate,
-                                          ) ?? 'UNKNOWN')
-                                      : 'UNKNOWN',
-                            },
-                            style: const TextStyle(fontFamily: _font,
-                              fontSize: 9, fontWeight: FontWeight.w700,
-                              letterSpacing: .6,
-                              color: FullPlayerVisuals.primaryText),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ],
             ),
           )),
