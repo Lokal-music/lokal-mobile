@@ -5503,6 +5503,39 @@ class PlayerService {
     }
   }
 
+  /// Rare CDN mismatch recovery: discard the existing ranged reader because
+  /// Media3 has already cached its incorrect Content-Length, then restart the
+  /// validated complete file while retaining the logical Discovery queue.
+  /// Serialized with normal user selections and ignored if the user has moved
+  /// to another song.
+  Future<void> recoverCompletedMorneyeStream(
+    String liveHandle,
+    Song completed,
+  ) => _enqueuePlaybackRequest(() async {
+    final current = currentSongNotifier.value;
+    final index = _currentIndex;
+    if (current?.filePath != liveHandle ||
+        index < 0 || index >= _playlist.length ||
+        _playlist[index].filePath != liveHandle) return;
+    if (!_usingRustBackend) {
+      try {
+        await _playbackManager.detachEngine()
+            .timeout(const Duration(seconds: 4));
+      } catch (error) {
+        _debugLog('[Morneye] Failed to reset invalid range decoder: $error');
+        return;
+      }
+      _androidEngine = null;
+      _justAudioPlayer = null;
+      _audioSourceSequence = null;
+    }
+    if (currentSongNotifier.value?.filePath != liveHandle) return;
+    _playlist[index] = completed;
+    _notifyUpNextChanged();
+    _debugLog('[Morneye] Resuming verified full-file fallback');
+    await _playSongAtCurrentIndex();
+  });
+
   Future<void> _playSongAtCurrentIndex() async {
     final song = _songAtCurrentIndex();
     if (song == null) return;
