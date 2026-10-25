@@ -68,6 +68,8 @@ Widget _app({
   YouAccounts accounts = const YouAccounts(),
   int? streak,
   List<MilestoneRecord> milestones = const [],
+  bool persistentDock = false,
+  VoidCallback? onDockTap,
 }) => ProviderScope(
   overrides: [
     youRecapsProvider.overrideWith((ref) => Stream.value(recaps)),
@@ -83,7 +85,36 @@ Widget _app({
         padding: EdgeInsets.only(top: 24, bottom: 24),
         disableAnimations: true,
       ),
-      child: Scaffold(body: KonnektedYou(onNavigate: onNavigate)),
+      child: Scaffold(
+        body: persistentDock
+            ? Stack(
+                children: [
+                  Positioned.fill(
+                    child: Navigator(
+                      onGenerateRoute: (_) => MaterialPageRoute<void>(
+                        builder: (_) => KonnektedYou(onNavigate: onNavigate),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 180,
+                    child: Material(
+                      color: Colors.blue,
+                      child: InkWell(
+                        onTap: onDockTap,
+                        child: const Center(
+                          child: Text('Persistent miniplayer'),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : KonnektedYou(onNavigate: onNavigate),
+      ),
     ),
   ),
 );
@@ -228,8 +259,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Lokal listener'), findsOneWidget);
-    expect((await SharedPreferences.getInstance())
-        .getString('lokal.you.profile.v1'), contains('Lokal listener'));
+    expect(
+      (await SharedPreferences.getInstance()).getString('lokal.you.profile.v1'),
+      contains('Lokal listener'),
+    );
 
     await tester.tap(find.byTooltip('Edit profile'));
     await tester.pumpAndSettle();
@@ -238,6 +271,68 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('You'), findsOneWidget);
   });
+
+  testWidgets(
+    'profile editor overlays the nested navigator and persistent miniplayer',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      _tall(tester);
+      var dockTaps = 0;
+      await tester.pumpWidget(
+        _app(
+          onNavigate: (_) {},
+          persistentDock: true,
+          onDockTap: () => dockTaps++,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit profile'));
+      await tester.pumpAndSettle();
+
+      final fieldContext = tester.element(find.byType(TextField));
+      expect(
+        ModalRoute.of(fieldContext)!.navigator,
+        Navigator.of(fieldContext, rootNavigator: true),
+      );
+      expect(find.text('Save profile').hitTestable(), findsOneWidget);
+      expect(find.text('Cancel').hitTestable(), findsOneWidget);
+      // This point belongs to the dock underneath the editor's bottom padding.
+      await tester.tapAt(const Offset(8, 2380));
+      await tester.pump();
+      expect(dockTaps, 0);
+      await tester.enterText(find.byType(TextField), 'Overlay listener');
+      await tester.tap(find.text('Save profile'));
+      await tester.pumpAndSettle();
+      expect(find.text('Overlay listener'), findsOneWidget);
+      await tester.tap(find.text('Persistent miniplayer'));
+      expect(dockTaps, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'root profile editor keeps actions above the keyboard and cancels cleanly',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      _tall(tester);
+      await tester.pumpWidget(_app(onNavigate: (_) {}, persistentDock: true));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit profile'));
+      await tester.pumpAndSettle();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getBottomRight(find.text('Save profile')).dy,
+        lessThanOrEqualTo(2080),
+      );
+      expect(find.text('Save profile').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('Persistent miniplayer'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test('the name is an account username, else "You"', () {
     expect(const YouAccounts().name, 'You');
