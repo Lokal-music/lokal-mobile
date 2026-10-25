@@ -18,9 +18,11 @@ bottom space for the shell mini-player.
 - Unlocks at 16 distinct favorite IDs present in the playable local library.
   Flick has no explicit artist-follow model, so artist affinity never counts
   as artist favorites or unlock progress.
-- Recommendations use real local `Song` instances from `songsProvider`, likes
-  from `favoritesProvider`, up to 500 imported recent plays, and persisted Flow
-  observations/skips. Network-source and external-handoff songs are excluded.
+- The local library supplies the initial three playable tracks and taste seeds,
+  but online radio (YouTube Music, with Last.fm similar-track fallback) now
+  supplies the majority of continuation candidates when available. Streams
+  use QueuePreResolver pending entries and inherit provider playback fallback.
+  Downloads and remote entries are not required in the local pool.
 - Mood, discovery, memory, and genre exclusions are immutable domain settings.
   The tuner (including mood-pill entry) edits drafts. Apply persists/rebuilds a
   preview once; Cancel, back, or dismissal does not commit. Apply does not start
@@ -28,9 +30,9 @@ bottom space for the shell mini-player.
 - Weighted seeded recommendations enforce discovery gates at <=15% familiar
   and >=85% unfamiliar, bans, three-skip exclusion, genre exclusion, and ID /
   metadata recording deduplication. Mood/affinity rely on file metadata.
-- The temporary session starts with up to 24 tracks, adds batches of 10 at the
-  last track, and stops growing at 200 or local candidate exhaustion. Provider
-  ownership keeps growth alive after leaving the screen. Growth yields to a
+- The temporary session starts with up to 3 tracks, adds batches of up to 10
+  when three or fewer remain, and stops growing at 200 or candidate exhaustion.
+  Provider ownership keeps growth alive after leaving the screen. Growth yields to a
   different/edited host queue. Starting Flow sets host shuffle/repeat off;
   runtime random queue-end autoplay is suppressed while Flow owns playback,
   and its prior value is restored when another queue takes over.
@@ -45,9 +47,11 @@ bottom space for the shell mini-player.
 
 ## Deliberate boundaries / validation gaps
 
-- Discovery is local, not an online recommendation service. Missing genre tags
-  cannot be classified; the tuner lists available tags. Duplicate recordings
-  use normalized artist/title/album/duration, not audio fingerprints.
+- Online radio is based on the current Flow seed; it is not a learned
+  cross-platform preference model. Signed-in YouTube Music stations can be
+  personalized, while guest radio and Last.fm are best-effort. Filters with
+  missing remote genre metadata cannot be guaranteed; no audio fingerprints.
+  Flow saves metadata-only references for online recommendations and re-resolves streams on playlist playback; expired stream URLs are never persisted.
 - Only the explicit Flow **Skip** action counts as a skip. The host does not
   expose a reliable natural-end versus notification/mini-player Next reason.
 - Current-track selection survives restarts; playback position remains the

@@ -11,6 +11,7 @@ import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_home.dart';
 import 'package:flick/models/playlist.dart';
 import 'package:flick/models/song.dart';
+import 'package:flick/services/online_playlist_reference.dart';
 import 'package:flick/providers/playlist_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -83,8 +84,16 @@ class LokalPlaylistArtwork extends ConsumerWidget {
 /// Preserve stored playlist order. The shared library index aliases hidden
 /// desktop tracks to their preferred phone copies. Online entries added before
 /// a library scan use their saved metadata instead of disappearing.
-Song? lokalPlaylistSong(Playlist playlist, String id, Map<String, Song> libraryById) =>
-    libraryById[id] ?? playlist.songSnapshots[id]?.toSong(id);
+Song? lokalPlaylistSong(Playlist playlist, String id, Map<String, Song> libraryById) {
+  final local = libraryById[id];
+  if (local != null) return local;
+  final snapshot = playlist.songSnapshots[id];
+  if (snapshot == null) return null;
+  if (id.startsWith(onlinePlaylistPrefix)) {
+    return restoreOnlinePlaylistSong(id, snapshot);
+  }
+  return snapshot.toSong(id);
+}
 
 List<Song> lokalPlaylistSongs(
   Playlist playlist,

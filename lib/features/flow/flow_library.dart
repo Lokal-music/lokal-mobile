@@ -68,22 +68,48 @@ class FlowLibrary {
   final Set<String> favoriteIds;
   final List<String> historyIds;
   final String? warning;
+  // Online candidates live only for this process. A restored Flow with stale
+  // remote placeholders safely falls back to its local tracks.
+  final Set<String> _onlineIds = {};
   late final Map<String, Song> byId;
+
+  void rememberOnline(Iterable<Song> recommendations) {
+    for (final song in recommendations) {
+      if (song.id.trim().isEmpty) continue;
+      byId[song.id] = song;
+      _onlineIds.add(song.id);
+    }
+  }
   late final List<FlowTrack> tracks;
-  int get favoriteCount => favoriteIds.intersection(byId.keys.toSet()).length;
+  // Replayed online references must not inflate the original library
+  // unlock threshold; only actual local library likes count.
+  int get favoriteCount => favoriteIds.intersection(
+    songs.map((song) => song.id).toSet(),
+  ).length;
   bool get unlocked => FlowRules.isUnlocked(favoriteCount);
 
   List<Song> mix(FlowData data, DateTime now) {
     if (!unlocked) return const [];
     const engine = FlowEngine();
-    final result = data.session.trackIds.isNotEmpty && data.session.isFresh(now)
-        ? engine.restore(library: tracks, data: data, now: now)
-        : engine.recommend(
-            library: tracks,
-            favoriteIds: favoriteIds,
-            historyIds: historyIds,
-            data: data,
-          );
+    if (data.session.trackIds.isNotEmpty && data.session.isFresh(now)) {
+      final local = engine.restore(library: tracks, data: data, now: now);
+      final allowedLocal = local.map((song) => song.id).toSet();
+      return [
+        for (final id in data.session.trackIds)
+          if (byId[id] case final song?)
+            if (allowedLocal.contains(id) ||
+                (_onlineIds.contains(id) &&
+                 !data.bannedIds.contains(id) &&
+                 (data.skipCounts[id] ?? 0) < 3))
+              song,
+      ];
+    }
+    final result = engine.recommend(
+      library: tracks,
+      favoriteIds: favoriteIds,
+      historyIds: historyIds,
+      data: data,
+    );
     return result.map((track) => byId[track.id]!).toList();
   }
 

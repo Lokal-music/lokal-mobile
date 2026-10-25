@@ -215,7 +215,7 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
               title: 'No tracks match this Flow',
               message:
                   'Try a wider discovery range, enable more genres, or remove a ban. '
-                  'Discovery explores only tracks already in your local library.',
+                  'Online recommendations require a connection; try another mood or allow more genres. Offline fallback uses your library.',
               action: 'Tune Flow',
               onAction: () => _tune(data, library),
             ),
@@ -275,8 +275,8 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
               child: Column(
                 children: [
                   const Text(
-                    'Temporary local mix · grows at the last track, up to 200 tracks. '
-                    'Save keeps a named snapshot in Playlists.',
+                    'Continuous online-first mix · refills with three tracks remaining, up to 200 tracks. '
+                    'Save keeps both downloaded and online recommendations in Playlists.',
                     textAlign: TextAlign.center,
                   ),
                   if (!ownsQueue)

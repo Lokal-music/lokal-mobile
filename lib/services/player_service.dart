@@ -1,6 +1,7 @@
 import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/morneye/morneye_live_playback.dart';
+import 'package:flick/services/online_radio_recommendations.dart';
 
 import 'link/link_journal.dart';
 
@@ -557,8 +558,9 @@ class PlayerService {
   Timer? _queueDebounceTimer;
   static const Duration _queueDebounce = Duration(milliseconds: 150);
   Timer? _autoplayPreviewTimer;
+  Future<List<Song>>? _autoplayOnlinePreviewJob;
   int _autoplayPreviewGeneration = 0;
-  static const int _autoplayPreviewCount = 4;
+  static const int _autoplayPreviewCount = 8;
   final RecentlyPlayedRepository _recentlyPlayedRepository =
       RecentlyPlayedRepository();
   late final ReplayPlayTracker _replayPlayTracker = ReplayPlayTracker(
@@ -1546,6 +1548,7 @@ class PlayerService {
 
   void _scheduleAutoplayPreview() {
     final generation = ++_autoplayPreviewGeneration;
+    _autoplayOnlinePreviewJob = null;
     _autoplayPreviewTimer?.cancel();
     // Invalidate the previous source's candidates immediately. A rapid skip
     // must never play a preview computed for an earlier playlist position.
@@ -1561,17 +1564,31 @@ class PlayerService {
 
   Future<void> _prepareAutoplayPreview(int generation) async {
     try {
-      final library = await _songRepository.getAllSongs();
+      final seed = _playlist.last;
+      final job = const OnlineRadioRecommendations().recommend(
+        seed,
+        count: _autoplayPreviewCount,
+        existing: _playlist,
+      );
+      _autoplayOnlinePreviewJob = job;
+      final online = await job;
+      if (identical(_autoplayOnlinePreviewJob, job)) {
+        _autoplayOnlinePreviewJob = null;
+      }
       if (generation != _autoplayPreviewGeneration || !_canPreviewAutoplay) {
         return;
       }
-      final excluded = <String>{
-        _playlist[_currentIndex].id,
-        ...upNext.map((song) => song.id),
-      };
+      if (online.isNotEmpty) {
+        autoplayQueueNotifier.value = online;
+        return;
+      }
+      // Offline, no public radio, or unavailable source credentials:
+      // keep ordinary local playback viable without advertising it as radio.
+      final library = await _songRepository.getAllSongs();
+      if (generation != _autoplayPreviewGeneration || !_canPreviewAutoplay) return;
       autoplayQueueNotifier.value = selectAutoplayRecommendations(
         library: library,
-        excludedIds: excluded,
+        excludedIds: {..._playlist.map((song) => song.id)},
         count: _autoplayPreviewCount,
       );
     } catch (e) {
@@ -6847,6 +6864,39 @@ class PlayerService {
     unawaited(_queueNextTrackForGapless());
   }
 
+  /// Flow's generated recommendations extend the context *after* every
+  /// existing upcoming track. Unlike addToQueue, they must never jump ahead
+  /// of manually queued songs or reorder the already displayed session.
+  Future<void> appendToPlaylistTail(Song song) async {
+    if (_playlist.isEmpty) return;
+    final at = _playlist.length;
+    _playlist.add(song);
+    _playlistQueueEntryIds.add(null);
+    if (!_usingRustBackend && _audioSourceSequence != null) {
+      if (hasUnresolvedAudioSources(_playlist)) {
+        final native = _audioSourceSequence!;
+        final cursor = _justAudioPlayer?.currentIndex ?? _currentIndex;
+        if (cursor >= 0 && cursor + 1 < native.children.length) {
+          native.removeRange(cursor + 1, native.children.length);
+        }
+        _audioSourceSequence = null;
+        unawaited(_justAudioPlayer?.setLoopMode(just_audio.LoopMode.off)
+            ?? Future<void>.value());
+      } else {
+        try {
+          await _insertIntoAudioSequence(at, song);
+        } catch (error) {
+          _debugLog('Flow queue tail append deferred: $error');
+          _audioSourceSequence = null;
+          unawaited(_justAudioPlayer?.setLoopMode(just_audio.LoopMode.off)
+              ?? Future<void>.value());
+        }
+      }
+    }
+    _notifyUpNextChanged();
+    _debounceQueueChanged();
+  }
+
   Future<int> addToQueue(Song song) async {
     final entry = _QueueEntry(id: _nextQueueEntryId++, song: song);
     _queuedEntries.add(entry);
@@ -7433,15 +7483,33 @@ class PlayerService {
       try {
         var suggestions = autoplayQueueNotifier.value;
         if (suggestions.isEmpty) {
-          final library = await _songRepository.getAllSongs();
+          // Never hold queue completion indefinitely for a network radio
+          // response. Prefer the already-running preview, allow a brief grace
+          // period, then continue with local fallback without a silent gap.
+          final job = _autoplayOnlinePreviewJob ??
+              const OnlineRadioRecommendations().recommend(
+                _playlist.last,
+                count: _autoplayPreviewCount,
+                existing: _playlist,
+              );
+          try {
+            suggestions = await job.timeout(
+              const Duration(milliseconds: 900),
+              onTimeout: () => const <Song>[],
+            );
+          } catch (_) {
+            suggestions = const [];
+          }
           if (!stillCurrent()) return;
-          suggestions = selectAutoplayRecommendations(
-            library: library,
-            excludedIds: {
-              if (currentSongNotifier.value case final current?) current.id,
-            },
-            count: _autoplayPreviewCount,
-          );
+          if (suggestions.isEmpty) {
+            final library = await _songRepository.getAllSongs();
+            if (!stillCurrent()) return;
+            suggestions = selectAutoplayRecommendations(
+              library: library,
+              excludedIds: {..._playlist.map((song) => song.id)},
+              count: _autoplayPreviewCount,
+            );
+          }
         }
         if (!stillCurrent()) return;
         if (loopModeNotifier.value == LoopMode.all) {

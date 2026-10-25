@@ -56,6 +56,62 @@ class AppleMusicAlbumData {
   bool get hasContent => (notes?.isNotEmpty ?? false) || tracks.isNotEmpty;
 }
 
+/// An independent global-catalogue match, never an audio stream or
+/// proof that any particular source can supply this recording.
+class AppleMusicSearchSong {
+  const AppleMusicSearchSong({
+    required this.catalogueId,
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.artworkUrl,
+    required this.duration,
+  });
+
+  final String catalogueId;
+  final String title;
+  final String artist;
+  final String album;
+  final String artworkUrl;
+  final Duration duration;
+
+  Map<String, dynamic> toJson() => {
+    'catalogueId': catalogueId, 'title': title, 'artist': artist,
+    'album': album, 'artworkUrl': artworkUrl,
+    'durationMs': duration.inMilliseconds,
+  };
+
+  factory AppleMusicSearchSong.fromJson(Map<String, dynamic> json) =>
+      AppleMusicSearchSong(
+        catalogueId: json['catalogueId'] as String,
+        title: json['title'] as String,
+        artist: json['artist'] as String,
+        album: json['album'] as String? ?? '',
+        artworkUrl: json['artworkUrl'] as String? ?? '',
+        duration: Duration(milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0),
+      );
+
+  static AppleMusicSearchSong? fromItunes(Map<String, dynamic> row) {
+    if (row['wrapperType'] != 'track' || row['kind'] != 'song') return null;
+    final id = row['trackId']?.toString();
+    final title = row['trackName']?.toString().trim();
+    final artist = row['artistName']?.toString().trim();
+    if (id == null || title == null || title.isEmpty ||
+        artist == null || artist.isEmpty) return null;
+    final image = row['artworkUrl100']?.toString() ?? '';
+    return AppleMusicSearchSong(
+      catalogueId: id,
+      title: title,
+      artist: artist,
+      album: row['collectionName']?.toString() ?? '',
+      // Preserve Apple's valid original URL so a missing large variant
+      // can fall back without leaving a blank search result.
+      artworkUrl: image.startsWith('https://') ? image : '',
+      duration: Duration(milliseconds: (row['trackTimeMillis'] as num?)?.toInt() ?? 0),
+    );
+  }
+}
+
 /// Native Dart client for Apple Music metadata, modelled after the
 /// navidrome/apple-music-plugin endpoints but rewritten from scratch.
 ///
@@ -494,6 +550,47 @@ class AppleMusicMetadataService {
           transientTtl: _transientTtl,
         )
         .then((tracks) => tracks ?? const <AppleMusicTrack>[]);
+  }
+
+  /// Global Search uses the public Apple/iTunes song catalogue only for
+  /// discovery. Playback always uses the independently configured source
+  /// priority via findDiscoverySong, never iTunes previews.
+  Future<List<AppleMusicSearchSong>> searchSongs(
+    String term, {
+    int limit = 40,
+    String? storefront,
+    bool refresh = false,
+  }) async {
+    final query = term.trim();
+    if (query.length < 2) return const [];
+    final sf = _primaryStorefront(storefront);
+    final count = limit.clamp(1, 80);
+    return await _cache.fetch<List<AppleMusicSearchSong>>(
+      key: _key('global-song-search', '${_normalize(query)}|$count|$sf'),
+      refresh: refresh,
+      loader: () async {
+        final rows = await _itunesSearch(
+          term: query, entity: 'song', limit: count, storefront: sf,
+        );
+        final seen = <String>{};
+        return [
+          for (final row in rows)
+            if (AppleMusicSearchSong.fromItunes(row) case final song?
+                when seen.add(song.catalogueId))
+              song,
+        ];
+      },
+      encode: (songs) => {'songs': [for (final s in songs) s.toJson()]},
+      decode: (json) => (json['songs'] as List?)
+          ?.whereType<Map>()
+          .map((item) => AppleMusicSearchSong.fromJson(
+            Map<String, dynamic>.from(item),
+          ))
+          .toList() ?? const <AppleMusicSearchSong>[],
+      ttl: _topSongsTtl,
+      negativeTtl: _negativeTtl,
+      transientTtl: _transientTtl,
+    ) ?? const [];
   }
 
   /// Search artists as distinct results, rather than treating an artist

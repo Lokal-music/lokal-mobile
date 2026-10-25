@@ -324,7 +324,9 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
       'images.amazon.com',
       'ecx.images-amazon.com',
     }.contains(host);
-    final urls = (youtubeArtwork || amazonArtwork)
+    final appleArtwork = host == 'a1.mzstatic.com' ||
+        RegExp(r'^is[1-5]-ssl\.mzstatic\.com$').hasMatch(host);
+    final urls = (youtubeArtwork || amazonArtwork || appleArtwork)
         ? PlayerArtworkQuality.candidates(imagePath)
         : [imagePath];
 

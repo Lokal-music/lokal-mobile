@@ -69,11 +69,13 @@ void main() {
   late PlaylistService playlists;
   String? stored;
   var failWrites = false;
+  final online = <Song>[];
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     stored = null;
     failWrites = false;
+    online.clear();
     playback = _PlaybackProbe();
     player = _PlayerProbe();
     playlists = PlaylistService();
@@ -106,6 +108,8 @@ void main() {
           ),
         ),
         flowPlaybackProvider.overrideWithValue(playback),
+        flowRadioProvider.overrideWithValue((seed, existing, count) async =>
+            online.take(count).toList()),
         playerProvider.overrideWith(() => player),
         playlistServiceProvider.overrideWithValue(playlists),
       ],
@@ -144,7 +148,7 @@ void main() {
     () async {
       await controller.play();
       expect(playback.playCalls, 1);
-      expect(playback.lastPlaylist.length, 24);
+      expect(playback.lastPlaylist.length, 3);
       expect(
         identical(
           playback.lastPlaylist.first,
@@ -159,18 +163,18 @@ void main() {
   );
 
   test(
-    'queue grows only at last track, without replay, duplicate IDs or bans',
+    'queue prefetches while three tracks remain without replay or duplicates',
     () async {
       await controller.play();
       final initial = [...playback.lastPlaylist];
       await controller.grow(onlyWhenLast: true);
-      expect(playback.appended, isEmpty);
+      expect(playback.appended.length, 10, reason: 'prepare before queue is empty');
       playback.state = playback.state.copyWith(
         currentSong: initial.last,
         upNext: [],
       );
       await controller.grow(onlyWhenLast: true);
-      expect(playback.appended.length, 10);
+      expect(playback.appended.length, 20);
       expect(playback.playCalls, 1);
       expect(
         playback.appended
@@ -179,11 +183,11 @@ void main() {
             .intersection(initial.map((s) => s.id).toSet()),
         isEmpty,
       );
-      expect(FlowCodec.decode(stored).session.trackIds.length, 34);
+      expect(FlowCodec.decode(stored).session.trackIds.length, 23);
       playback.seed = -1;
       playback.state = playback.state.copyWith(upNext: []);
       await controller.grow(onlyWhenLast: true);
-      expect(playback.appended.length, 10);
+      expect(playback.appended.length, 20);
     },
   );
 
@@ -237,7 +241,7 @@ void main() {
       failWrites = true;
       await expectLater(controller.grow(onlyWhenLast: true), throwsStateError);
       expect(playback.appended, isEmpty);
-      expect(FlowCodec.decode(stored).session.trackIds.length, 24);
+      expect(FlowCodec.decode(stored).session.trackIds.length, 3);
       failWrites = false;
       await controller.grow(onlyWhenLast: true);
       expect(playback.appended.length, 10);
@@ -266,6 +270,27 @@ void main() {
       expect(playback.playCalls, 1);
     },
   );
+
+  test('Flow prefers online suggestions and keeps their session identity', () async {
+    online.addAll([
+      for (var i = 0; i < 10; i++)
+        Song(
+          id: 'pending:radio-$i',
+          title: 'Online $i',
+          artist: 'New artist $i',
+          duration: const Duration(minutes: 3),
+          fileType: 'ONLINE',
+          sourcePackage: Song.pendingSourcePackage,
+        ),
+    ]);
+    await controller.play();
+    await controller.grow(onlyWhenLast: true);
+    expect(playback.appended, hasLength(10));
+    expect(playback.appended.every((song) => song.id.startsWith('pending:')), isTrue);
+    final data = container.read(flowControllerProvider).requireValue;
+    expect(data.session.trackIds, hasLength(13));
+    expect(library.mix(data, DateTime.now()).length, 13);
+  });
 
   test(
     'adapter counts only playable local favorites and keeps network tracks out',

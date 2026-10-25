@@ -1,5 +1,6 @@
 import '../providers/recent_search_tracks.dart';
 import '../widgets/online_catalogue_search_section.dart';
+import '../widgets/global_catalogue_search_section.dart';
 import '../widgets/recent_search_grid.dart';
 
 import 'dart:async';
@@ -631,6 +632,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       );
     }
+    // Global is catalogue-wide and has no playback provider of its own.
+    // Keep per-source results below it for exact source searches.
+    final global = SliverToBoxAdapter(
+      child: GlobalCatalogueSearchSection(
+        key: ValueKey('global:$query'),
+        query: query,
+      ),
+    );
     final songs = OnlineSearchSection(
       key: ValueKey('songs:$query'),
       query: query,
@@ -638,6 +647,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (category == null) {
       return SliverMainAxisGroup(
         slivers: [
+          global,
           songs,
           for (final type in [SearchCategory.albums, SearchCategory.artists])
             SliverToBoxAdapter(
@@ -651,7 +661,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ],
       );
     }
-    return songs;
+    return SliverMainAxisGroup(slivers: [global, songs]);
   }
 
   Future<void> _playSong(Song song, List<Song> playlist) async {
