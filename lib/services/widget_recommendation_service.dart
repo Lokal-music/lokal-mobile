@@ -18,6 +18,8 @@ class WidgetRecommendationService {
   static const key = 'flick_widget_recommendations';
   static const provider =
       'com.mossapps.flick.widgets.CoverFlowRecommendationWidgetProvider';
+  static const flowProvider =
+      'com.mossapps.flick.widgets.FlowRadioWidgetProvider';
 
   String? _seedId;
   int _generation = 0;
@@ -91,6 +93,8 @@ class WidgetRecommendationService {
     // fill the home screen with blank covers for catalogue metadata-only songs.
     if (sanitized.isNotEmpty) {
       await _hydrateArtwork(sanitized, artworkSources, generation);
+    } else {
+      await _publish(const [], generation);
     }
   }
 
@@ -102,6 +106,8 @@ class WidgetRecommendationService {
       await HomeWidget.saveWidgetData<String>(key, jsonEncode(rows));
       if (generation != _generation) return;
       await HomeWidget.updateWidget(qualifiedAndroidName: provider);
+      // The Flow widget uses its first recommendation artwork as its sleeve.
+      await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
     } catch (_) {
       // The music player must keep working without the launcher.
     }
