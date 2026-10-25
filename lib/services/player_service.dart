@@ -459,6 +459,26 @@ List<int> replacePendingInPlace(
   return changed;
 }
 
+/// Select the same tracks displayed as Autoplay suggestions when playback
+/// reaches the end of the explicit queue. Never suggest the playing song or
+/// duplicate a result; no I/O or playback side effects.
+@visibleForTesting
+List<Song> selectAutoplayRecommendations({
+  required List<Song> library,
+  required Set<String> excludedIds,
+  int count = 4,
+  math.Random? random,
+}) {
+  if (count <= 0) return const [];
+  final seen = {...excludedIds};
+  final available = <Song>[
+    for (final song in library)
+      if (seen.add(song.id) && song.filePath != null && !song.isPending) song,
+  ];
+  available.shuffle(random ?? math.Random());
+  return List.unmodifiable(available.take(count));
+}
+
 /// Singleton service to manage global audio playback state.
 ///
 /// Uses just_audio for playback with gapless playback support.
@@ -531,6 +551,9 @@ class PlayerService {
   );
   Timer? _queueDebounceTimer;
   static const Duration _queueDebounce = Duration(milliseconds: 150);
+  Timer? _autoplayPreviewTimer;
+  int _autoplayPreviewGeneration = 0;
+  static const int _autoplayPreviewCount = 4;
   final RecentlyPlayedRepository _recentlyPlayedRepository =
       RecentlyPlayedRepository();
   late final ReplayPlayTracker _replayPlayTracker = ReplayPlayTracker(
@@ -721,6 +744,10 @@ class PlayerService {
   bool get wrapAroundQueue => wrapAroundQueueNotifier.value;
 
   final ValueNotifier<bool> autoplayOnQueueEndNotifier = ValueNotifier(true);
+  /// Future tracks proposed by Autoplay, not yet added to the explicit
+  /// playlist or manual queue. The visible first item is what queue-end plays.
+  final ValueNotifier<List<Song>> autoplayQueueNotifier =
+      ValueNotifier<List<Song>>(const []);
 
   // Category shuffle tracking
   final Set<String> _playedCategoryIds = {};
@@ -998,6 +1025,11 @@ class PlayerService {
     _updateBitPerfectProcessingLocked();
     _uac2Service.addStatusListener(_mirrorUsbVolumeFromUac2Status);
     _notifyQueueChanged();
+    // Keep the preview in sync with user settings and source transitions.
+    currentSongNotifier.addListener(_scheduleAutoplayPreview);
+    autoplayOnQueueEndNotifier.addListener(_scheduleAutoplayPreview);
+    loopModeNotifier.addListener(_scheduleAutoplayPreview);
+    shuffleModeNotifier.addListener(_scheduleAutoplayPreview);
     unawaited(_loadGaplessPlaybackPreference());
     unawaited(_loadDuckOnInterruptionPreference());
     unawaited(_loadCrossfadePreferences());
@@ -1492,6 +1524,55 @@ class PlayerService {
 
   void _notifyUpNextChanged() {
     upNextNotifier.value = upNext;
+    _scheduleAutoplayPreview();
+  }
+
+  bool get _canPreviewAutoplay =>
+      autoplayOnQueueEndNotifier.value &&
+      loopModeNotifier.value == LoopMode.off &&
+      shuffleModeNotifier.value != ShuffleMode.random &&
+      shuffleModeNotifier.value != ShuffleMode.categories &&
+      shuffleModeNotifier.value != ShuffleMode.songsAndCategories &&
+      _currentIndex >= 0 &&
+      _currentIndex < _playlist.length &&
+      _playlist.length - _currentIndex - 1 <= 1;
+
+  void _scheduleAutoplayPreview() {
+    final generation = ++_autoplayPreviewGeneration;
+    _autoplayPreviewTimer?.cancel();
+    if (!_canPreviewAutoplay) {
+      if (autoplayQueueNotifier.value.isNotEmpty) {
+        autoplayQueueNotifier.value = const [];
+      }
+      return;
+    }
+    // Avoid reading the whole library during rapid queue mutations/seek taps.
+    _autoplayPreviewTimer = Timer(const Duration(milliseconds: 180), () {
+      unawaited(_prepareAutoplayPreview(generation));
+    });
+  }
+
+  Future<void> _prepareAutoplayPreview(int generation) async {
+    try {
+      final library = await _songRepository.getAllSongs();
+      if (generation != _autoplayPreviewGeneration || !_canPreviewAutoplay) {
+        return;
+      }
+      final excluded = <String>{
+        _playlist[_currentIndex].id,
+        ...upNext.map((song) => song.id),
+      };
+      autoplayQueueNotifier.value = selectAutoplayRecommendations(
+        library: library,
+        excludedIds: excluded,
+        count: _autoplayPreviewCount,
+      );
+    } catch (e) {
+      if (generation == _autoplayPreviewGeneration) {
+        autoplayQueueNotifier.value = const [];
+        _debugLog('[Autoplay] Could not load preview: $e');
+      }
+    }
   }
 
   void _debounceQueueChanged() {
@@ -5573,6 +5654,7 @@ class PlayerService {
         .getWrapAroundQueue();
     autoplayOnQueueEndNotifier.value = await _appPreferencesService
         .getAutoplayOnQueueEnd();
+    _scheduleAutoplayPreview();
   }
 
   Future<void> restoreLastPlayed() async {
@@ -6383,12 +6465,14 @@ class PlayerService {
   }
 
   Future<void> setLoopMode(LoopMode mode) async {
+    if (loopModeNotifier.value == mode) return;
     loopModeNotifier.value = mode;
     unawaited(_appPreferencesService.setLoopMode(mode.index));
+    // just_audio applies repeat mode directly to the existing sequence.
+    // Reconstructing every AudioSource and calling setAudioSource() when the
+    // user taps Repeat All can stall the main player, particularly for HTTP
+    // and on-demand sources. Keep the current stream, index and position.
     await _updateLoopMode();
-    if (!_usingRustBackend && mode == LoopMode.all) {
-      await _rebuildPlaylist();
-    }
   }
 
   // ==================== Volume ====================
@@ -7215,22 +7299,29 @@ class PlayerService {
     unawaited(_appPreferencesService.setAutoplayOnQueueEnd(value));
   }
 
-  // ponytail: at a genuine queue end (loop off, no advance/shuffle left),
-  // autoplay a random library track instead of stopping. Mirrors the
-  // "autoplay" behaviour of mainstream players. Falls back to pause+rewind
-  // when disabled, the library is empty, or the only song is the current one.
+  // At queue end, use the same recommendations already visible in Queue.
+  // If a skip reached the end before background preparation, resolve a batch
+  // here as a fallback. The remaining recommendations become normal Up Next
+  // entries as soon as playback selects the first.
   Future<void> _handleQueueEnd() async {
     if (autoplayOnQueueEndNotifier.value) {
       try {
-        final allSongs = await _songRepository.getAllSongs();
-        final currentId = currentSongNotifier.value?.id;
-        final candidates = allSongs.where((s) => s.id != currentId).toList();
-        if (candidates.isNotEmpty) {
-          final rng = math.Random();
-          await _playInternal(
-            candidates[rng.nextInt(candidates.length)],
-            playlist: allSongs,
+        var suggestions = autoplayQueueNotifier.value;
+        if (suggestions.isEmpty) {
+          final library = await _songRepository.getAllSongs();
+          suggestions = selectAutoplayRecommendations(
+            library: library,
+            excludedIds: {
+              if (currentSongNotifier.value case final current?) current.id,
+            },
+            count: _autoplayPreviewCount,
           );
+        }
+        if (suggestions.isNotEmpty) {
+          _autoplayPreviewTimer?.cancel();
+          ++_autoplayPreviewGeneration;
+          autoplayQueueNotifier.value = const [];
+          await _playInternal(suggestions.first, playlist: suggestions);
           return;
         }
       } catch (e) {
@@ -7239,6 +7330,18 @@ class PlayerService {
     }
     await _pauseInternal();
     await seek(Duration.zero);
+  }
+
+  /// Choose a prepared recommendation from Queue rather than recalculating a
+  /// different random song when the user taps a displayed Autoplay result.
+  Future<void> playFromAutoplayIndex(int index) {
+    if (index < 0 || index >= autoplayQueueNotifier.value.length) {
+      return Future<void>.value();
+    }
+    final suggestions = autoplayQueueNotifier.value;
+    final selected = suggestions[index];
+    _cancelPendingPlayback();
+    return play(selected, playlist: suggestions.sublist(index));
   }
 
   Future<void> _advanceForMode(LoopMode mode) async {
