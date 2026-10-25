@@ -11,12 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
-    'a category isolates immediately, is idempotent, All restores everything',
+    'a category isolates immediately, and retired All maps to Songs',
     () async {
       final c = ProviderContainer();
       addTearDown(c.dispose);
       final f = c.read(searchFilterProvider.notifier);
-      expect(c.read(searchFilterProvider), SearchCategory.values.toSet());
+      expect(c.read(searchFilterProvider), {SearchCategory.songs});
       f.toggle(SearchCategory.albums);
       expect(c.read(searchFilterProvider), {SearchCategory.albums});
       f.toggle(SearchCategory.albums);
@@ -27,8 +27,8 @@ void main() {
       }); // Hydration cannot undo a tap.
       f.toggle(SearchCategory.artists);
       expect(c.read(searchFilterProvider), {SearchCategory.artists});
-      f.toggleAll();
-      expect(c.read(searchFilterProvider), SearchCategory.values.toSet());
+      f.select(SearchCategory.songs);
+      expect(c.read(searchFilterProvider), {SearchCategory.songs});
     },
   );
   test('old exclusion mask does not restore a disabled-all dead end', () async {
@@ -39,7 +39,7 @@ void main() {
     addTearDown(c.dispose);
     c.read(searchFilterProvider);
     await Future<void>.delayed(Duration.zero);
-    expect(c.read(searchFilterProvider).length, SearchCategory.values.length);
+    expect(c.read(searchFilterProvider), {SearchCategory.songs});
   });
   test('online/local-only categories have consistent scope', () {
     final c = ProviderContainer();
@@ -50,7 +50,7 @@ void main() {
     f.select(SearchCategory.folders);
     expect(c.read(searchScopeProvider), SearchScope.library);
     scope.select(SearchScope.online);
-    expect(c.read(searchFilterProvider).length, SearchCategory.values.length);
+    expect(c.read(searchFilterProvider), {SearchCategory.songs});
     f.select(SearchCategory.albums);
     expect(c.read(searchScopeProvider), SearchScope.online);
   });
@@ -74,14 +74,11 @@ void main() {
                   final enabled = ref.watch(searchFilterProvider);
                   return SearchFilterChips(
                     enabled: enabled,
-                    isAllEnabled: enabled.length > 1,
                     scope: ref.watch(searchScopeProvider),
                     onScopeChanged: ref
                         .read(searchScopeProvider.notifier)
                         .select,
                     onToggle: ref.read(searchFilterProvider.notifier).select,
-                    onToggleAll: () =>
-                        ref.read(searchFilterProvider.notifier).select(null),
                   );
                 },
               ),
@@ -108,9 +105,8 @@ void main() {
       await tester.tap(find.text('Online'));
       await tester.pumpAndSettle();
       expect(c.read(searchScopeProvider), SearchScope.online);
-      await tester.tap(find.text('All'));
-      await tester.pumpAndSettle();
-      expect(c.read(searchFilterProvider).length, SearchCategory.values.length);
+      expect(find.text('All'), findsNothing);
+      expect(c.read(searchFilterProvider), {SearchCategory.albums});
       expect(tester.takeException(), isNull);
     },
   );

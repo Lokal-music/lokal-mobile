@@ -149,7 +149,7 @@ void main() {
     expect(find.text('Not in your library'), findsNothing);
     expect(find.text('In your library'), findsNothing);
     expect(find.text('Online song'), findsOneWidget);
-    container.read(searchScopeProvider.notifier).select(SearchScope.all);
+    container.read(searchScopeProvider.notifier).select(SearchScope.library);
     await tester.pumpAndSettle();
     expect(find.text('Not in your library'), findsOneWidget);
   });
