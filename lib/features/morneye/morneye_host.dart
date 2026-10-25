@@ -58,6 +58,30 @@ class MorneyeTransfer {
   final bool done;
 }
 
+/// Bytes must describe the actual segment payload, not audio duration.
+@pragma('vm:entry-point')
+int? morneyeSegmentBytes(Object? segment) {
+  if (segment is! Map) return null;
+  for (final key in ['byteLength', 'byte_length', 'contentLength',
+                     'content_length', 'sizeBytes', 'size_bytes']) {
+    final raw = segment[key];
+    final bytes = raw is num ? raw.toInt() : int.tryParse('${raw ?? ''}');
+    if (bytes != null && bytes > 0 && bytes <= _maxAudio) return bytes;
+  }
+  return null;
+}
+
+int? morneyeKnownSegmentTotal(List segments) {
+  var total = 0;
+  for (final segment in segments) {
+    final length = morneyeSegmentBytes(segment);
+    if (length == null) return null;
+    total += length;
+    if (total > _maxAudio) return null;
+  }
+  return total > 0 ? total : null;
+}
+
 class MorneyeCancelled implements Exception {
   const MorneyeCancelled();
   @override
@@ -578,6 +602,73 @@ class MorneyeHost {
     throw StateError('Download failed');
   }
 
+  /// Segment byte lengths are needed to expose a safe seekable stream.
+  /// Prefer verified byte lengths from the manifest; optionally probe HEAD
+  /// in parallel with downloading. Unsupported endpoints fall back to normal
+  /// full-file preparation, never to a guessed length.
+  Future<int?> _segmentTotalForLive(List segments, Map options) async {
+    if (onTransfer == null || segments.length > 48) return null;
+    final known = morneyeKnownSegmentTotal(segments);
+    if (known != null) return known;
+    Future<int?> inspect(Object? segment) async {
+      final declared = morneyeSegmentBytes(segment);
+      if (declared != null) return declared;
+      final url = segment is String
+          ? segment
+          : (segment is Map ? '${segment['url'] ?? ''}' : '');
+      if (url.isEmpty) return null;
+      final headers = <String, String>{
+        if (options['headers'] is Map)
+          for (final e in (options['headers'] as Map).entries)
+            '${e.key}': '${e.value}',
+        if (segment is Map && segment['headers'] is Map)
+          for (final e in (segment['headers'] as Map).entries)
+            '${e.key}': '${e.value}',
+      };
+      MorneyeResponse? response;
+      try {
+        response = await network.request(
+          url,
+          method: 'HEAD',
+          headers: headers,
+          directMedia: options['directMedia'] == true,
+          timeout: const Duration(seconds: 2),
+        );
+        if (response.status < 200 || response.status >= 300) return null;
+        final length = int.tryParse(response.headers['content-length'] ?? '');
+        return length != null && length > 0 && length <= _maxAudio
+            ? length
+            : null;
+      } catch (_) {
+        return null;
+      } finally {
+        await response?.close();
+      }
+    }
+
+    // Cap aggregate probe time so faster segment downloads never stall
+    // behind unavailable HEAD endpoints.
+    Future<int?> measured() async {
+      var total = 0;
+      for (var i = 0; i < segments.length; i += 8) {
+        final batch = await Future.wait(
+          segments.skip(i).take(8).map(inspect),
+        );
+        if (batch.any((size) => size == null)) return null;
+        for (final length in batch) {
+          total += length!;
+          if (total > _maxAudio) return null;
+        }
+      }
+      return total > 0 ? total : null;
+    }
+    try {
+      return await measured().timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, Object?>> segments(
     List segmentsList,
     String destination,
@@ -591,6 +682,31 @@ class MorneyeHost {
     final dir = file('$output.segments');
     await Directory(dir).create(recursive: true);
     final progress = <int, int>{};
+    // Start preflight alongside the actual download, not in front of it.
+    final liveTotal = _segmentTotalForLive(segmentsList, options);
+    int? verifiedTotal;
+    var flushedBytes = 0;
+    var completedFile = false;
+    unawaited(liveTotal.then((length) {
+      if (completedFile || length == null) return;
+      verifiedTotal = length;
+      onTransfer?.call(MorneyeTransfer(
+        part: '$output.part',
+        file: output,
+        total: length,
+        written: flushedBytes,
+      ));
+    }));
+    void reportLive() {
+      final total = verifiedTotal;
+      if (completedFile || total == null || flushedBytes > total) return;
+      onTransfer?.call(MorneyeTransfer(
+        part: '$output.part',
+        file: output,
+        total: total,
+        written: flushedBytes,
+      ));
+    }
     var completed = 0;
     var serial = Future<void>.value();
     var lastReportedCompleted = -1;
@@ -630,7 +746,8 @@ class MorneyeHost {
             .toInt()
             .clamp(1, 8);
     try {
-      final temp = file('$output.tmp');
+      // The early reader follows a stable .part file while segments append.
+      final temp = file('$output.part');
       final sink = await File(temp).open(mode: FileMode.write);
       var size = 0;
       try {
@@ -685,13 +802,24 @@ class MorneyeHost {
               }
               await sink.writeFrom(chunk);
             }
+            // Publish only contiguous bytes in original segment order. A
+            // completed future segment must never expose a gap to the decoder.
+            await sink.flush();
+            flushedBytes = size;
+            reportLive();
             await piece.delete();
           }
         }
       } finally {
         await sink.close();
       }
+      completedFile = true;
       await File(temp).rename(output);
+      if (verifiedTotal == size) {
+        onTransfer?.call(MorneyeTransfer(
+          part: temp, file: output, total: size, written: size, done: true,
+        ));
+      }
       return {
         'success': true,
         'path': destination,
@@ -699,6 +827,7 @@ class MorneyeHost {
         'segments': segmentsList.length,
       };
     } finally {
+      completedFile = true;
       final leftover = Directory(dir);
       if (leftover.existsSync()) await leftover.delete(recursive: true);
     }
