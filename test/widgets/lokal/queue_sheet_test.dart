@@ -56,6 +56,7 @@ void main() {
     WidgetTester tester, {
     bool manualOnly = false,
     bool autoplayOnly = false,
+    bool discoveryPendingOnly = false,
     LokalThemeId theme = LokalThemeId.dark,
   }) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -63,6 +64,21 @@ void main() {
     addTearDown(tester.view.reset);
     player = _Player();
     if (manualOnly) player.initial = PlayerState(queue: [song('Manual')]);
+    if (discoveryPendingOnly) {
+      player.initial = PlayerState(
+        currentSong: song('Now'),
+        upNext: [
+          Song(
+            id: 'pending:discovery-1',
+            title: 'Unresolved Discovery',
+            artist: 'Artist',
+            duration: Duration.zero,
+            fileType: 'ONLINE',
+            sourcePackage: Song.pendingSourcePackage,
+          ),
+        ],
+      );
+    }
     if (autoplayOnly) {
       player.initial = PlayerState(
         currentSong: song('Now'),
@@ -178,6 +194,14 @@ void main() {
       expect(find.byType(QueueList), findsNothing);
     },
   );
+  testWidgets('unresolved Discovery queue shows unknown duration, not 00:00', (tester) async {
+    await pump(tester, discoveryPendingOnly: true);
+    expect(find.text('Unresolved Discovery'), findsOneWidget);
+    expect(find.text('…'), findsWidgets);
+    expect(find.text('00:00'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a single shows upcoming autoplay and tapping uses its index', (
     tester,
   ) async {
