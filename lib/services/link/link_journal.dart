@@ -71,7 +71,8 @@ class LinkJournal {
         linkTrackKey(song.artist, song.title, song.duration),
     if (song.isPending && song.id.startsWith('pending:playlist:'))
       'online_ref': true,
-    if (song.isPending && song.id.startsWith('pending:playlist:') &&
+    if (song.isPending &&
+        song.id.startsWith('pending:playlist:') &&
         RegExp(r'^yt:[A-Za-z0-9_-]{11}
   Future<Song?> match(
     Map<String, dynamic> track, {
@@ -228,11 +229,10 @@ class LinkJournal {
       final oldMembers = List<String>.from(prior?['members'] as List? ?? []);
       final members = <String>[];
       for (var position = 0; position < playlist.songIds.length; position++) {
-        final id = playlist.songIds[position];
-        // Flow's online-only entries live in playlist snapshots, not in the
-        // scanned library. Include their metadata and stable recording key in
-        // the journal, without writing ephemeral stream URLs.
-        final song = songs[id] ?? playlist.songSnapshots[id]?.toSong(id);
+        // Online Flow entries have snapshots even when never scanned locally.
+        final songId = playlist.songIds[position];
+        final song = songs[songId] ??
+            playlist.songSnapshots[songId]?.toSong(songId);
         if (song == null) continue;
         final key = await trackKeyFor(song);
         members.add(key);
@@ -440,7 +440,8 @@ class LinkJournal {
 }
 ).hasMatch(song.remoteId ?? ''))
       'source_ref': song.remoteId,
-    if (song.isPending && song.id.startsWith('pending:playlist:') &&
+    if (song.isPending &&
+        song.id.startsWith('pending:playlist:') &&
         (song.albumArt ?? '').startsWith('https://'))
       'artwork_url': song.albumArt,
   };
