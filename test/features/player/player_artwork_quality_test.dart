@@ -69,11 +69,36 @@ void main() {
       const old = 'https://i.ytimg.com/vi/abc123/hqdefault.jpg';
       expect(PlayerArtworkQuality.candidates(old), [
         'https://i.ytimg.com/vi/abc123/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/abc123/sddefault.jpg',
         old,
       ]);
     });
 
-    test('does not rewrite unknown CDNs, local files or unrelated hosts', () {
+    test('upgrades YouTube Music artwork without changing crop parameters', () {
+      const google = 'https://lh3.googleusercontent.com/abc=w120-h120-l90-rj';
+      expect(PlayerArtworkQuality.candidates(google), [
+        'https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj',
+        google,
+      ]);
+      const square = 'https://lh3.googleusercontent.com/abc=s60';
+      expect(PlayerArtworkQuality.candidates(square), [
+        'https://lh3.googleusercontent.com/abc=s1200',
+        square,
+      ]);
+      const current = 'https://lh3.googleusercontent.com/abc=w1400-h1400-l90-rj';
+      expect(PlayerArtworkQuality.candidates(current), [current]);
+    });
+
+    test('YouTube video thumbnail has SD fallback if maxres is missing', () {
+      const old = 'https://i.ytimg.com/vi/xyz/hqdefault.jpg';
+      expect(PlayerArtworkQuality.candidates(old), [
+        'https://i.ytimg.com/vi/xyz/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/xyz/sddefault.jpg',
+        old,
+      ]);
+    });
+
+        test('does not rewrite unknown CDNs, local files or unrelated hosts', () {
       expect(PlayerArtworkQuality.candidates('/data/app/full-cover.jpg'), [
         '/data/app/full-cover.jpg',
       ]);
