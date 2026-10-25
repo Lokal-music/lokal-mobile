@@ -236,7 +236,11 @@ bool providerIdentityIsAmazon(String addonName, Map track) {
   if (track['provider_id']?.toString().toLowerCase() != 'amazon') {
     return false;
   }
-  return RegExp(r'^[A-Z0-9]{10}
+  return RegExp(r'^[A-Z0-9]{10}$')
+      .hasMatch((track['id'] ?? '').toString().toUpperCase());
+}
+
+String morneyeAlbumArtworkUrl(String original) {
   final uri = Uri.tryParse(original);
   if (uri == null || uri.scheme != 'https') return original;
   final host = uri.host.toLowerCase();
@@ -246,12 +250,11 @@ bool providerIdentityIsAmazon(String addonName, Map track) {
     return original;
   }
   final upgraded = uri.path.replaceFirst(
-    RegExp(r'\\._[^/.]+_\\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
+    RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
     '.',
   );
   return upgraded == uri.path ? original : uri.replace(path: upgraded).toString();
 }
-
 /// A song an add-on found.
 class MorneyeTrack {
   const MorneyeTrack({
