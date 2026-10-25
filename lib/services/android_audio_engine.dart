@@ -172,6 +172,90 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidTrackAdvancedCallback? _onTrackAdvanced;
   final AndroidTrackErrorCallback? _onTrackError;
 
+  /// Fast-start and crossfade may load only one audio source even though the
+  /// logical playlist contains more tracks. A native repeat-all on that source
+  /// would endlessly repeat one song.
+  bool get isSingleTrackOnly => _loadedSingleTrackOnly;
+  bool get isCrossfadeActive => _crossfadeConfigProvider().enabled;
+
+  /// Expand a fast-started *single source* into the full playlist in place.
+  /// Unlike setAudioSource(), insertAudioSources preserves the live decoder,
+  /// playing state and position. The caller performs this asynchronously,
+  /// keeping repeat-all in manual-advance mode until it completes.
+  Future<bool> restoreFastStartPlaylist({
+    required bool Function() isCurrent,
+  }) async {
+    final player = _player;
+    final playing = _loadedTrack;
+    if (player == null || playing == null || !_loadedSingleTrackOnly ||
+        isCrossfadeActive || !isCurrent()) return false;
+    final songs = _playlistProvider();
+    final index = songs.indexWhere(
+      (song) => androidAudioSourceIdentity(song) ==
+          androidAudioSourceIdentity(playing),
+    );
+    if (index < 0 || songs.length < 2 || player.sequence.length != 1) {
+      return false;
+    }
+
+    // Build asynchronously, outside the synchronous UI toggle. Do not mutate
+    // the audio sequence if another tap has selected a different source.
+    final before = <just_audio.AudioSource>[];
+    final after = <just_audio.AudioSource>[];
+    var restored = false;
+    try {
+      for (var i = 0; i < songs.length; i++) {
+        if (!isCurrent()) return false;
+        if (i == index) continue;
+        final source = await _sourceBuilder(songs[i]);
+        if (i < index) {
+          before.add(source);
+        } else {
+          after.add(source);
+        }
+      }
+      if (!isCurrent() || !identical(_player, player) ||
+          !_loadedSingleTrackOnly ||
+          !identical(_loadedTrack, playing) || player.sequence.length != 1 ||
+          !listEquals(
+            songs.map(androidAudioSourceIdentity).toList(),
+            _playlistProvider().map(androidAudioSourceIdentity).toList(),
+          )) return false;
+
+      _restoringFastStartPlaylist = true;
+      // Followed by preceding tracks: the existing track stays the active
+      // source, with its logical index shifted to match the full playlist.
+      if (after.isNotEmpty) await player.addAudioSources(after);
+      if (before.isNotEmpty) await player.insertAudioSources(0, before);
+      _loadedSingleTrackOnly = false;
+      _playlistSignature =
+          songs.map(androidAudioSourceIdentity).toList(growable: false);
+      restored = true;
+      devLog('[Playback] Restored repeat-all sequence in place '
+          '(${songs.length} tracks)');
+      return true;
+    } catch (error) {
+      devLog('[Playback] Repeat-all sequence restore failed: $error');
+      return false;
+    } finally {
+      if (_restoringFastStartPlaylist) {
+        _restoringFastStartPlaylist = false;
+        // A failed partial insert cannot be treated as a valid playlist.
+        // Retain manual-completion mode and force a fresh sequence on the
+        // next track instead of accidentally repeating/skipping wrong songs.
+        if (restored && identical(_player, player)) {
+          _syncPlaylistStateFromPlayer();
+          _syncTrackFromIndex(player.currentIndex);
+        } else if (identical(_player, player)) {
+          _loadedSingleTrackOnly = true;
+          _playlistSignature = const <String>[];
+        }
+      }
+    }
+  }
+
+  bool _restoringFastStartPlaylist = false;
+
   final StreamController<PlaybackState> _controller =
       StreamController<PlaybackState>.broadcast();
   final List<StreamSubscription<dynamic>> _subscriptions = [];
@@ -351,6 +435,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _syncTrackFromIndex(int? index) {
+    if (_restoringFastStartPlaylist) return;
     _syncPlaylistStateFromPlayer();
     if (_shouldSuppressTrackSync()) return;
     if (_awaitingInitialSeek) return;
@@ -371,6 +456,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _syncPlaylistStateFromPlayer() {
+    if (_restoringFastStartPlaylist) return;
     final player = _player;
     if (player == null) return;
 

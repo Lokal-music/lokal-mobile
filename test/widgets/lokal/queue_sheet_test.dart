@@ -38,6 +38,11 @@ class _Player extends PlayerNotifier {
   }
 
   @override
+  Future<void> playFromAutoplayIndex(int index) async {
+    played.add('autoplay:$index');
+  }
+
+  @override
   Future<void> playFromQueueIndex(int index) async {
     played.add('manual:$index');
   }
@@ -50,6 +55,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     bool manualOnly = false,
+    bool autoplayOnly = false,
     LokalThemeId theme = LokalThemeId.dark,
   }) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -57,6 +63,12 @@ void main() {
     addTearDown(tester.view.reset);
     player = _Player();
     if (manualOnly) player.initial = PlayerState(queue: [song('Manual')]);
+    if (autoplayOnly) {
+      player.initial = PlayerState(
+        currentSong: song('Now'),
+        autoplayUpNext: [song('Suggested'), song('Following')],
+      );
+    }
     opens = 0;
     if (Platform.environment.containsKey('LOKAL_QUEUE_PREVIEW')) {
       await tester.runAsync(() async {
@@ -166,6 +178,22 @@ void main() {
       expect(find.byType(QueueList), findsNothing);
     },
   );
+  testWidgets('a single shows upcoming autoplay and tapping uses its index', (
+    tester,
+  ) async {
+    await pump(tester, autoplayOnly: true);
+    expect(find.text('Autoplay'), findsOneWidget);
+    expect(find.text('Track Suggested'), findsOneWidget);
+    expect(find.text('Track Following'), findsOneWidget);
+    expect(find.text('Track Suggested (catalogue)'), findsNothing);
+    expect(find.text('Track Manual'), findsNothing);
+    await tester.tap(find.text('Track Suggested'));
+    await tester.pumpAndSettle();
+    expect(player.played, ['autoplay:0']);
+    expect(opens, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('manual-only queue remains accessible and opens its song', (
     tester,
   ) async {

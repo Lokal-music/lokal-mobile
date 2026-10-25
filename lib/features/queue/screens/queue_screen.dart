@@ -135,6 +135,7 @@ class _QueueListState extends ConsumerState<QueueList> {
   Widget build(BuildContext context) {
     final queue = ref.watch(queueProvider);
     final upNext = ref.watch(upNextProvider);
+    final autoplay = ref.watch(autoplayUpNextProvider);
     final currentSong = ref.watch(currentSongProvider);
     final embedded = widget.embedded;
     final hPad = embedded ? 0.0 : AppConstants.spacingLg;
@@ -145,7 +146,7 @@ class _QueueListState extends ConsumerState<QueueList> {
           _buildSelectionHeader(upNext.length + queue.length)
         else
           _Header(
-            queueCount: upNext.length + queue.length,
+            queueCount: upNext.length + queue.length + autoplay.length,
             canClear: upNext.isNotEmpty || queue.isNotEmpty,
             onClear: () async {
               await ref.read(playerProvider.notifier).clearAllUpcoming();
@@ -179,6 +180,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                             ),
                           ),
                         ),
+                      if (upNext.isNotEmpty || autoplay.isEmpty)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
@@ -197,7 +199,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                           ),
                         ),
                       ),
-                      if (upNext.isEmpty)
+                      if (upNext.isEmpty && autoplay.isEmpty)
                         const SliverToBoxAdapter(child: _EmptyUpcomingState())
                       else
                         SliverPadding(
@@ -364,6 +366,49 @@ class _QueueListState extends ConsumerState<QueueList> {
                                     );
                                   },
                                 ),
+                        ),
+                      // Autoplay is a preview, not part of the user's manual
+                      // queue. Its first item is the exact track selected at
+                      // queue end; tapping a suggestion plays from that point.
+                      if (autoplay.isNotEmpty && !_selectionMode)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              hPad,
+                              AppConstants.spacingSm,
+                              hPad,
+                              AppConstants.spacingSm,
+                            ),
+                            child: Text(
+                              'Autoplay',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: context.adaptiveTextSecondary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      if (autoplay.isNotEmpty && !_selectionMode)
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            hPad, 0, hPad, AppConstants.spacingLg,
+                          ),
+                          sliver: SliverList.builder(
+                            itemCount: autoplay.length,
+                            itemBuilder: (context, index) => _UpcomingTile(
+                              key: ValueKey('autoplay-${autoplay[index].id}-$index'),
+                              song: autoplay[index],
+                              index: index,
+                              glass: embedded,
+                              reorderable: false,
+                              onTap: () async {
+                                await ref.read(playerProvider.notifier)
+                                    .playFromAutoplayIndex(index);
+                                if (mounted) _openPlayer();
+                              },
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -680,6 +725,7 @@ class _UpcomingTile extends StatelessWidget {
   final VoidCallback? onRemove;
   final bool isSelectionMode;
   final bool isSelected;
+  final bool reorderable;
 
   const _UpcomingTile({
     super.key,
@@ -690,6 +736,7 @@ class _UpcomingTile extends StatelessWidget {
     this.onRemove,
     this.isSelectionMode = false,
     this.isSelected = false,
+    this.reorderable = true,
     this.glass = false,
   });
 
@@ -726,7 +773,7 @@ class _UpcomingTile extends StatelessWidget {
                     size: 22,
                   ),
                   const SizedBox(width: AppConstants.spacingSm),
-                ] else
+                ] else if (reorderable)
                   ReorderableDragStartListener(
                     index: index,
                     child: Padding(
@@ -738,6 +785,17 @@ class _UpcomingTile extends StatelessWidget {
                         color: context.adaptiveTextTertiary,
                         size: 18,
                       ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: AppConstants.spacingSm,
+                    ),
+                    child: Icon(
+                      LucideIcons.sparkles,
+                      color: context.adaptiveTextTertiary,
+                      size: 18,
                     ),
                   ),
                 _Artwork(song: song),
