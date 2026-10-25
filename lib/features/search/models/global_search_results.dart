@@ -46,6 +46,8 @@ class GlobalSearchResults {
         return artists.length;
       case SearchCategory.albums:
         return albums.length;
+      case SearchCategory.lyrics:
+        return 0;
       case SearchCategory.albumArtists:
         return albumArtists.length;
       case SearchCategory.folders:
