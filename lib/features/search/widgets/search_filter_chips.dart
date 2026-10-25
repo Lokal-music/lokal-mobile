@@ -8,7 +8,7 @@ import '../providers/search_filter_provider.dart';
 import 'package:flick/l10n/l10n.dart';
 
 /// Source and result type are separate single-choice controls. Selecting a
-/// category isolates it immediately; All always restores results.
+/// category isolates it immediately without an All state.
 class SearchFilterChips extends StatelessWidget {
   const SearchFilterChips({
     super.key,
@@ -68,14 +68,13 @@ class SearchFilterChips extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              _chip(context, l10n.all, isAllEnabled, onToggleAll),
               for (final category in SearchCategory.values)
                 if (scope != SearchScope.online ||
                     supportsOnlineCategory(category))
                   _chip(
                     context,
                     category.label,
-                    !isAllEnabled && enabled.contains(category),
+                    enabled.contains(category),
                     () => onToggle(category),
                     count:
                         scope == SearchScope.library && query.trim().isNotEmpty
@@ -92,7 +91,7 @@ class SearchFilterChips extends StatelessWidget {
                 ? lokalText('Search online catalogues and playback sources')
                 : !supportsOnlineCategory(enabled.singleOrNull)
                 ? lokalText('This category searches your library')
-                : lokalText('Choose one result type, or All'),
+                : lokalText('Choose a result type'),
             style: TextStyle(color: t.muted, fontSize: 11),
           ),
         ),
