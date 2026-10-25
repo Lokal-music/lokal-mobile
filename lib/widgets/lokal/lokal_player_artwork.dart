@@ -162,6 +162,12 @@ class _RenderArtworkPortal extends RenderProxyBox {
   final _chromeAnchors = <_RenderChromeAnchor>[];
   _RenderArtworkAnchor? get artwork => _anchors.isEmpty ? null : _anchors.last;
 
+  void _invalidateChromePaint() {
+    for (final anchor in _chromeAnchors) {
+      if (anchor.attached) anchor.markNeedsPaint();
+    }
+  }
+
   bool get _hasFlyingArtwork {
     final anchor = artwork;
     return lifting &&
@@ -175,11 +181,13 @@ class _RenderArtworkPortal extends RenderProxyBox {
   void registerChrome(_RenderChromeAnchor anchor) {
     _chromeAnchors.remove(anchor);
     _chromeAnchors.add(anchor);
+    anchor.markNeedsPaint();
     markNeedsPaint();
   }
 
   void unregisterChrome(_RenderChromeAnchor anchor) {
     _chromeAnchors.remove(anchor);
+    if (anchor.attached) anchor.markNeedsPaint();
     markNeedsPaint();
   }
 
@@ -187,12 +195,14 @@ class _RenderArtworkPortal extends RenderProxyBox {
     artwork?.markNeedsPaint();
     _anchors.remove(anchor);
     _anchors.add(anchor);
+    _invalidateChromePaint();
     markNeedsPaint();
   }
 
   void unregister(_RenderArtworkAnchor anchor) {
     _anchors.remove(anchor);
     artwork?.markNeedsPaint();
+    _invalidateChromePaint();
     markNeedsPaint();
   }
 
@@ -205,6 +215,7 @@ class _RenderArtworkPortal extends RenderProxyBox {
     // Repaint the anchor's original layer as well: a cached carousel layer
     // must not retain a second copy when a closing drag starts.
     artwork?.markNeedsPaint();
+    _invalidateChromePaint();
     markNeedsPaint();
   }
 
