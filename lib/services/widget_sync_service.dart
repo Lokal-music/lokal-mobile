@@ -23,7 +23,10 @@ class WidgetSyncService {
     _lastLokalAccent = color;
     try {
       await _ensureInit();
-      await HomeWidget.saveWidgetData<int>('lokal_widget_accent_argb', color);
+      // Unsigned Dart ARGB values otherwise become Long preferences on Android.
+      await HomeWidget.saveWidgetData<int>(
+        'lokal_widget_accent_argb', color.toSigned(32),
+      );
       await _updateAll();
     } catch (_) {
       _lastLokalAccent = null;

@@ -24,6 +24,7 @@ internal object WidgetPrefs {
     const val KEY_BG_OPACITY = "flick_widget_bg_opacity"
     const val KEY_SHOW_ALBUM_ART = "flick_widget_show_album_art"
     const val KEY_SHOW_ARTIST = "flick_widget_show_artist"
+    const val KEY_LOKAL_ACCENT_ARGB = "lokal_widget_accent_argb"
     const val KEY_ACCENT_COLOR = "flick_widget_accent_color"
     const val KEY_TEXT_SCALE = "flick_widget_text_scale"
     const val KEY_POSITION_MS = "flick_widget_position_ms"
@@ -70,8 +71,10 @@ internal object WidgetPrefs {
         }
     }
 
+    // Reading via getInt throws if an earlier Dart/plugin write used putLong.
+    // Read the actual value so old persisted colours recover without resetting widgets.
     fun getBgOpacityAlpha(context: Context): Int {
-        val level = get(context).getInt(KEY_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_BG_OPACITY, 3)
         return BG_OPACITY_MAP[level] ?: 0xC0
     }
 
@@ -96,7 +99,7 @@ internal object WidgetPrefs {
     }
 
     fun getAccentColor(context: Context): Int {
-        if (getAccentName(context) == "theme") return get(context).getInt("lokal_widget_accent_argb", 0xFFFFFFFF.toInt())
+        if (getAccentName(context) == "theme") return WidgetPreferenceValue.readInt(get(context), KEY_LOKAL_ACCENT_ARGB, 0xFFFFFFFF.toInt())
         return when (getAccentName(context)) {
             "amber" -> 0xFFFFB300.toInt()
             "blue" -> 0xFF64B5F6.toInt()
@@ -117,7 +120,7 @@ internal object WidgetPrefs {
     }
 
     fun getBackgroundDrawableRes(context: Context): Int {
-        val level = get(context).getInt(KEY_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_BG_OPACITY, 3)
         return when (level) {
             0 -> R.drawable.widget_bg_0
             1 -> R.drawable.widget_bg_1
@@ -143,7 +146,7 @@ internal object WidgetPrefs {
         getWidgetDouble(context, KEY_FLAGSHIP_TEXT_SCALE, 1.0f)
 
     fun getFlagshipAccentColor(context: Context): Int {
-        if (getFlagshipAccentName(context) == "theme") return get(context).getInt("lokal_widget_accent_argb", 0xFFFFFFFF.toInt())
+        if (getFlagshipAccentName(context) == "theme") return WidgetPreferenceValue.readInt(get(context), KEY_LOKAL_ACCENT_ARGB, 0xFFFFFFFF.toInt())
         return when (getFlagshipAccentName(context)) {
             "amber" -> 0xFFFFB300.toInt()
             "blue" -> 0xFF64B5F6.toInt()
@@ -162,12 +165,12 @@ internal object WidgetPrefs {
     private const val KEY_COMPACT_TEXT_SCALE = "flick_widget_compact_text_scale"
 
     fun getCompactBgOpacityAlpha(context: Context): Int {
-        val level = get(context).getInt(KEY_COMPACT_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_COMPACT_BG_OPACITY, 3)
         return BG_OPACITY_MAP[level] ?: 0xC0
     }
 
     fun getCompactBackgroundDrawableRes(context: Context): Int {
-        val level = get(context).getInt(KEY_COMPACT_BG_OPACITY, 3)
+        val level = WidgetPreferenceValue.readInt(get(context), KEY_COMPACT_BG_OPACITY, 3)
         return when (level) {
             0 -> R.drawable.widget_bg_0
             1 -> R.drawable.widget_bg_1
@@ -190,7 +193,7 @@ internal object WidgetPrefs {
         getWidgetDouble(context, KEY_COMPACT_TEXT_SCALE, 1.0f)
 
     fun getCompactAccentColor(context: Context): Int {
-        if (getCompactAccentName(context) == "theme") return get(context).getInt("lokal_widget_accent_argb", 0xFFFFFFFF.toInt())
+        if (getCompactAccentName(context) == "theme") return WidgetPreferenceValue.readInt(get(context), KEY_LOKAL_ACCENT_ARGB, 0xFFFFFFFF.toInt())
         return when (getCompactAccentName(context)) {
             "amber" -> 0xFFFFB300.toInt()
             "blue" -> 0xFF64B5F6.toInt()
