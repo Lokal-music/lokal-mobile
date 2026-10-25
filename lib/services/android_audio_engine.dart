@@ -182,11 +182,13 @@ class AndroidAudioEngine implements AudioEngine {
   /// Unlike setAudioSource(), insertAudioSources preserves the live decoder,
   /// playing state and position. The caller performs this asynchronously,
   /// keeping repeat-all in manual-advance mode until it completes.
-  Future<bool> restoreFastStartPlaylist() async {
+  Future<bool> restoreFastStartPlaylist({
+    required bool Function() isCurrent,
+  }) async {
     final player = _player;
     final playing = _loadedTrack;
     if (player == null || playing == null || !_loadedSingleTrackOnly ||
-        isCrossfadeActive) return false;
+        isCrossfadeActive || !isCurrent()) return false;
     final songs = _playlistProvider();
     final index = songs.indexWhere(
       (song) => androidAudioSourceIdentity(song) ==
@@ -202,6 +204,7 @@ class AndroidAudioEngine implements AudioEngine {
     final after = <just_audio.AudioSource>[];
     try {
       for (var i = 0; i < songs.length; i++) {
+        if (!isCurrent()) return false;
         if (i == index) continue;
         final source = await _sourceBuilder(songs[i]);
         if (i < index) {
@@ -210,7 +213,8 @@ class AndroidAudioEngine implements AudioEngine {
           after.add(source);
         }
       }
-      if (!identical(_player, player) || !_loadedSingleTrackOnly ||
+      if (!isCurrent() || !identical(_player, player) ||
+          !_loadedSingleTrackOnly ||
           !identical(_loadedTrack, playing) || player.sequence.length != 1 ||
           !listEquals(
             songs.map(androidAudioSourceIdentity).toList(),
@@ -232,9 +236,13 @@ class AndroidAudioEngine implements AudioEngine {
       devLog('[Playback] Repeat-all sequence restore failed: $error');
       return false;
     } finally {
-      _restoringFastStartPlaylist = false;
-      _syncPlaylistStateFromPlayer();
-      _syncTrackFromIndex(player.currentIndex);
+      if (_restoringFastStartPlaylist) {
+        _restoringFastStartPlaylist = false;
+        if (identical(_player, player)) {
+          _syncPlaylistStateFromPlayer();
+          _syncTrackFromIndex(player.currentIndex);
+        }
+      }
     }
   }
 
