@@ -783,9 +783,11 @@ Future<List<_PlaybackSource>> _morneyeSources(
             }
             _morneyeReadyPlayback.remove(cacheKey);
           }
-          // Mirrors desktop: only plain, unprocessed FLAC with a known
-          // byte length can be played while its download grows. Atmos,
-          // explicit Save and post-processed formats remain full-file jobs.
+          // Direct, verified FLAC (including Tidal and Amazon), or a
+          // complete-header, unencrypted fast-start M4A may start from the
+          // host's growing media file. DASH segments, encrypted Amazon
+          // containers and conversions are not exposed as live sources.
+          // Explicit Save/Atmos still require full-file validation.
           final live = !forDownload && !tryAtmos && !found.atmosDownload
               ? MorneyeLiveSession()
               : null;
@@ -862,9 +864,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
               final transfer = fetch(
                 quality: explicitTier,
               );
-              // The host only exposes a live descriptor after a 64 KiB FLAC
-              // header check and a known full length. Race that safe first
-              // buffer against ordinary completion; never delay short tracks.
+              // Race verified progressive readability against completed
+              // playback preparation; preserve early playback for direct
+              // Tidal/Amazon sources without risking the MPD/decrypt paths.
               final canStream = live != null && await Future.any<bool>([
                 live.playable.then((_) => true),
                 transfer.then((_) => false),
@@ -907,8 +909,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   album: found.album,
                   albumArt: found.artwork,
                   duration: found.duration ?? Duration.zero,
-                  fileType: 'FLAC',
-                  // The stream passed the FLAC magic/header check. Use
+                  fileType: session.fileType ?? 'ONLINE',
+                  // Verified FLAC or fast-start MP4; show bit depth/rate only
+                  // when they were measured from the actual FLAC header. Use
                   // STREAMINFO measurements; the provider's catalogue maximum
                   // can be 24-bit even when LOW/LOSSLESS was selected.
                   bitDepth: session.bitDepth,
