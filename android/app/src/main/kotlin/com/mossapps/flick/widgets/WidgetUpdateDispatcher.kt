@@ -7,6 +7,8 @@ import android.util.Log
 import android.widget.RemoteViews
 import com.mossapps.flick.R
 import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * All home widgets use one bounded, off-main-thread renderer. Widget addition
@@ -19,6 +21,7 @@ import java.util.concurrent.Executors
 internal object WidgetUpdateDispatcher {
     private const val TAG = "LokalWidgets"
     private val executor = Executors.newSingleThreadExecutor()
+    private val generations = ConcurrentHashMap<String, AtomicLong>()
 
     fun submit(
         provider: AppWidgetProvider,
@@ -30,9 +33,15 @@ internal object WidgetUpdateDispatcher {
         if (ids.isEmpty()) return
         val result = provider.goAsync()
         val appContext = context.applicationContext
+        val token = generations.getOrPut(provider.javaClass.name) { AtomicLong() }
+        val requested = token.incrementAndGet()
         executor.execute {
             try {
+                // Sliders, resize events and rapid tracks can enqueue many
+                // broadcasts; draw only the newest state for each provider.
+                if (requested != token.get()) return@execute
                 for (id in ids) {
+                    if (requested != token.get()) break
                     try {
                         manager.updateAppWidget(id, render(id))
                     } catch (e: Exception) {
