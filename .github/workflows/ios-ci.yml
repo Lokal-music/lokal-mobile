@@ -61,6 +61,28 @@ jobs:
         run: |
           dart pub get --enforce-lockfile
           dart analyze --no-fatal-warnings lib/src/builder.dart
+      - name: Boot an iPhone simulator
+        run: python3 tool/ios_simulator.py
+      - name: Verify the simulator with a minimal Flutter control app
+        id: control
+        timeout-minutes: 8
+        run: |
+          flutter create --platforms=ios --org app.lokal --project-name lokal_control "$RUNNER_TEMP/lokal-control"
+          (
+            cd "$RUNNER_TEMP/lokal-control"
+            if ! flutter build ios --simulator --debug --verbose > "$RUNNER_TEMP/ios-control-build.log" 2>&1; then
+              python3 "$GITHUB_WORKSPACE/tool/ios_build_diagnostics.py" "$RUNNER_TEMP/ios-control-build.log"
+              exit 1
+            fi
+          )
+          python3 tool/ios_launch_probe.py "$RUNNER_TEMP/lokal-control/build/ios/iphonesimulator/Runner.app" --prefix ios-control
+      - name: Preserve simulator control evidence
+        if: always() && env.IOS_SIMULATOR_UDID != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-simulator-control-${{ github.run_number }}
+          path: ${{ runner.temp }}/ios-control*
+          if-no-files-found: ignore
       - name: Build the complete app for iOS simulator
         run: |
           if ! flutter build ios --simulator --debug --no-pub --verbose > "$RUNNER_TEMP/ios-simulator-build.log" 2>&1; then
@@ -83,8 +105,6 @@ jobs:
             build/ios/iphoneos/*.dSYM
           if-no-files-found: error
           retention-days: 14
-      - name: Boot an iPhone simulator
-        run: python3 tool/ios_simulator.py
       - name: Capture the actual first launch
         id: launch
         run: python3 tool/ios_launch_probe.py
@@ -93,7 +113,8 @@ jobs:
         with:
           name: iPhone-first-launch-${{ github.run_number }}
           path: |
-            ${{ runner.temp }}/ios-launch.log
+            ${{ runner.temp }}/lokal-iphone.log
+            ${{ runner.temp }}/lokal-iphone.json
             ${{ runner.temp }}/lokal-iphone.png
       - name: Exercise actual startup, FFI and playback
         id: smoke
@@ -129,7 +150,12 @@ jobs:
             ${{ runner.temp }}/ios-smoke-console.log
             ${{ runner.temp }}/ios-smoke-iphone.png
             ${{ runner.temp }}/ios-simulator-console.log
-            ${{ runner.temp }}/ios-launch.log
+            ${{ runner.temp }}/lokal-iphone.log
+            ${{ runner.temp }}/lokal-iphone.json
+            ${{ runner.temp }}/lokal-iphone-processes.txt
+            ${{ runner.temp }}/lokal-iphone-threads-*.txt
+            ${{ runner.temp }}/ios-smoke-iphone-processes.txt
+            ${{ runner.temp }}/ios-smoke-iphone-threads-*.txt
             ${{ runner.temp }}/ios-crash-reports/
             ${{ runner.temp }}/lokal-iphone.png
           if-no-files-found: ignore
@@ -137,12 +163,14 @@ jobs:
         if: always()
         env:
           PACKAGE_RESULT: ${{ steps.package.outcome }}
+          CONTROL_RESULT: ${{ steps.control.outcome }}
           LAUNCH_RESULT: ${{ steps.launch.outcome }}
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
         run: |
           {
             printf '## iPhone engineering build\n\n'
             printf '| Gate | Result |\n| --- | --- |\n'
+            printf '| Minimal Flutter simulator control | %s |\n' "$CONTROL_RESULT"
             printf '| Device binary/package inspection | %s |\n' "$PACKAGE_RESULT"
             printf '| Native first launch | %s |\n' "$LAUNCH_RESULT"
             printf '| Real startup, scanner, QuickJS and playback | %s |\n' "$SMOKE_RESULT"
