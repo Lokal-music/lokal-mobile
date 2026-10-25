@@ -98,7 +98,8 @@ class PlayerArtworkQuality {
     if (upgraded == null &&
         (host == 'i.ytimg.com' || host == 'img.youtube.com')) {
       final match = RegExp(
-        r'/(?:default|mqdefault|hqdefault|sddefault|hq720)\.jpg      ).firstMatch(uri.path);
+        r'/(?:default|mqdefault|hqdefault|sddefault|hq720)\.jpg$'
+      ).firstMatch(uri.path);
       if (match != null) {
         final maxres = uri.replace(
           path: uri.path.replaceFirst(match[0]!, '/maxresdefault.jpg'),
