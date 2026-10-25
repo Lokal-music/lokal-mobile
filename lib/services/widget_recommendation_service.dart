@@ -65,14 +65,13 @@ class WidgetRecommendationService {
     if (generation != _generation) return;
     final seen = <String>{};
     final sanitized = <Map<String, Object?>>[];
+    final artworkSources = <String?>[];
     for (final song in rows) {
-      if (generation != _generation || sanitized.length == 7) return;
+      if (generation != _generation || sanitized.length >= 7) break;
       final title = song.title.trim();
       final artist = song.artist.trim();
       if (title.isEmpty || artist.isEmpty) continue;
       if (!seen.add(radioRecordingKey(artist, title))) continue;
-      final art = await widgetSafeArtwork(song.albumArt);
-      if (generation != _generation) return;
       final remote = song.remoteId;
       sanitized.add({
         'title': title,
@@ -82,16 +81,51 @@ class WidgetRecommendationService {
         'remoteId': remote != null &&
                 RegExp(r'^yt:[A-Za-z0-9_-]{11}$').hasMatch(remote)
             ? remote : '',
-        'artwork': art,
+        'artwork': '',
       });
+      artworkSources.add(song.albumArt);
     }
+    if (generation != _generation) return;
+    // Display titles and browse/play actions *immediately*. Slow remote art
+    // never blocks a working widget, and early cover loads update in place.
+    await _publish(sanitized, generation);
+    if (sanitized.isNotEmpty) {
+      unawaited(_hydrateArtwork(sanitized, artworkSources, generation));
+    }
+  }
+
+  Future<void> _publish(List<Map<String, Object?>> rows, int generation) async {
     if (generation != _generation) return;
     try {
       await HomeWidget.setAppGroupId('group.com.mossapps.flick.widgets');
-      await HomeWidget.saveWidgetData<String>(key, jsonEncode(sanitized));
+      if (generation != _generation) return;
+      await HomeWidget.saveWidgetData<String>(key, jsonEncode(rows));
+      if (generation != _generation) return;
       await HomeWidget.updateWidget(qualifiedAndroidName: provider);
     } catch (_) {
-      // The core player must keep working without a launcher widget host.
+      // The music player must keep working without the launcher.
+    }
+  }
+
+  Future<void> _hydrateArtwork(
+    List<Map<String, Object?>> rows, List<String?> sources, int generation,
+  ) async {
+    // Bounded art concurrency prevents a heavy burst of simultaneous JPEG
+    // decodes and avoids waiting on all covers before showing the first.
+    try {
+      for (var start = 0; start < rows.length; start += 3) {
+        if (generation != _generation) return;
+        final end = (start + 3).clamp(0, rows.length);
+        await Future.wait([
+          for (var i = start; i < end; i++)
+            widgetSafeArtwork(sources[i]).then((path) {
+              if (generation == _generation) rows[i]['artwork'] = path;
+            }),
+        ]);
+        await _publish(rows, generation);
+      }
+    } catch (_) {
+      // Metadata browsing and recommendation playback remain available.
     }
   }
 
