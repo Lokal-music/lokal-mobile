@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../models/song.dart';
+import '../player/widgets/player_artwork_quality.dart';
 import '../../services/metadata_editor_service.dart';
 import '../../src/rust/api/audio_api.dart' as native;
 import '../../src/rust/api/morneye_api.dart' as morneye;
@@ -270,6 +271,9 @@ class DiscoveryPlaybackCache {
       fileType: 'E-AC-3 JOC',
       filePath: ready.path,
       sourcePackage: 'konnekted.discovery',
+      sourceDisplayName: track.sourceName ??
+          (track.source == DiscoverySource.youtubeMusic ? 'YouTube Music' : null),
+      fileSizeBytes: await ready.length(),
       isExternal: true,
       atmosAvailable: true,
       atmosEncoded: true,
@@ -353,6 +357,9 @@ class DiscoveryPlaybackCache {
       // Signed media URLs remain in memory, never in the playback queue.
       remoteId: track.sourceUrl?.toString() ?? track.id,
       sourcePackage: 'konnekted.discovery',
+      sourceDisplayName: track.sourceName ??
+          (track.source == DiscoverySource.youtubeMusic ? 'YouTube Music' : null),
+      fileSizeBytes: await ready.length(),
       atmosAvailable: track.atmosAvailable,
       isExternal: true,
     );
@@ -373,17 +380,33 @@ class DiscoveryPlaybackCache {
     final file = File(coverPath(ready.path));
     IOSink? sink;
     try {
-      sink = file.openWrite();
-      final out = sink;
-      await http.transfer(
-        url,
-        headers: const {'Accept': 'image/*'},
-        maxBytes: _maxCoverBytes,
-        deadline: const Duration(seconds: 15),
-        onChunk: out.add,
-      );
-      await out.close();
-      sink = null;
+      // YouTube's search thumbnails are usually only 120 pixels. Download
+      // the high-resolution *same artwork* instead of permanently embedding
+      // the tiny search rendition into the cached audio file.
+      var completed = false;
+      for (final candidate in PlayerArtworkQuality.candidates(track.artwork)) {
+        final image = Uri.tryParse(candidate);
+        if (image == null || image.scheme != 'https') continue;
+        try {
+          sink = file.openWrite();
+          await http.transfer(
+            image,
+            headers: const {'Accept': 'image/*'},
+            maxBytes: _maxCoverBytes,
+            deadline: const Duration(seconds: 15),
+            onChunk: sink!.add,
+          );
+          await sink!.close();
+          sink = null;
+          completed = true;
+          break;
+        } catch (_) {
+          try { await sink?.close(); } catch (_) {}
+          sink = null;
+          if (await file.exists()) await file.delete();
+        }
+      }
+      if (!completed) return null;
       // Also embed it in the audio's tags, so the file keeps its cover if
       // it is saved to the library.
       try {
