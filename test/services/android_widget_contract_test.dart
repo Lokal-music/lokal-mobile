@@ -94,6 +94,50 @@ void main() {
     expect(art, contains('i.ytimg.com/vi/'));
   });
 
+  test('album artwork is mandatory on all three widget types and at every size', () {
+    final base = '$root/kotlin/com/mossapps/flick/widgets';
+    final player = File('$base/MiniPlayerWidgetProvider.kt').readAsStringSync();
+    final flow = File('$base/FlowRadioWidgetProvider.kt').readAsStringSync();
+    final cover = File('$base/CoverFlowRecommendationWidgetProvider.kt').readAsStringSync();
+    expect(player, contains('setViewVisibility(R.id.widget_art_bg, View.VISIBLE)'));
+    expect(player, isNot(contains('getShowAlbumArt(context)')));
+    expect(player, contains('KEY_LAST_ALBUM_ART'));
+    expect(flow, contains('setViewVisibility(R.id.flow_cover, View.VISIBLE)'));
+    expect(flow, contains('KEY_ALBUM_ART'));
+    expect(cover, contains('R.id.rec_art_strip, View.VISIBLE'));
+    expect(cover, contains('KEY_LAST_ALBUM_ART'));
+    expect(cover, contains('WidgetArtLoader.load(context, item.optString("artwork"), 64)'));
+    for (final variant in [
+      'widget_mini_player', 'widget_now_playing_portrait',
+      'widget_now_playing_expanded', 'widget_flow_radio', 'widget_flow_radio_small',
+      'widget_recommended_flow', 'widget_recommended_flow_small',
+    ]) {
+      final xml = File('$root/res/layout/$variant.xml').readAsStringSync();
+      expect(xml, contains('widget_art_placeholder'),
+          reason: '$variant must reserve a visible sleeve');
+      expect(xml, isNot(contains('android:visibility="gone" android:src="@drawable/widget_art_placeholder"')),
+          reason: '$variant should not hide its sleeve');
+    }
+    final settings = File('lib/features/settings/screens/widget_settings_screen.dart')
+        .readAsStringSync();
+    expect(settings, isNot(contains('label: () => l10n.albumArt,')));
+  });
+
+  test('artwork lookup covers cached, MediaStore, video and verified catalogue art', () {
+    final service = File('lib/services/widget_recommendation_service.dart')
+        .readAsStringSync();
+    expect(service, contains('resolveTrackArtwork(Song song)'));
+    expect(service, contains("i.ytimg.com/vi/"));
+    expect(service, contains('AppleMusicMetadataService.instance'));
+    expect(service, contains('radioRecordingKey(candidate.artist, candidate.title)'));
+    expect(service, contains("rows.where((row) => (row['artwork']"));
+    expect(service, contains('qualifiedAndroidName: flowProvider'));
+    final loader = File('$root/kotlin/com/mossapps/flick/widgets/WidgetArtLoader.kt')
+        .readAsStringSync();
+    expect(loader, contains('contentResolver.openInputStream'));
+    expect(loader, contains('Bitmap.Config.RGB_565'));
+  });
+
   test('widget art is bounded and cold-start commands are durable', () {
     final path = '$root/kotlin/com/mossapps/flick/widgets';
     final art = File('$path/WidgetArtLoader.kt').readAsStringSync();
