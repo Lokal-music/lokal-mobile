@@ -1,8 +1,12 @@
 import 'dart:async';
+
+import 'artwork_gate.dart';
+import 'background_metadata_budget.dart';
 import 'music_folder_service.dart';
 import '../data/repositories/song_repository.dart';
 import '../data/entities/song_entity.dart';
 import 'uac2_preferences_service.dart';
+
 import 'package:flick/core/utils/dev_log.dart';
 
 class BackgroundMetadataService {
@@ -11,21 +15,27 @@ class BackgroundMetadataService {
 
   bool _isRunning = false;
   Timer? _timer;
+  bool _stopped = false;
+  final Future<void> Function(Duration) _rest;
 
   BackgroundMetadataService({
     MusicFolderService? musicFolderService,
     SongRepository? songRepository,
+    Future<void> Function(Duration)? rest,
   }) : _musicFolderService = musicFolderService ?? MusicFolderService(),
-       _songRepository = songRepository ?? SongRepository();
+       _songRepository = songRepository ?? SongRepository(),
+       _rest = rest ?? Future<void>.delayed;
 
   void startPeriodicExtraction({
     Duration interval = const Duration(minutes: 5),
   }) {
+    _stopped = false;
     _timer?.cancel();
     _timer = Timer.periodic(interval, (_) => extractPendingMetadata());
   }
 
   void stop() {
+    _stopped = true;
     _timer?.cancel();
     _timer = null;
   }
@@ -36,7 +46,7 @@ class BackgroundMetadataService {
   }
 
   Future<int> extractPendingMetadata() async {
-    if (_isRunning) return 0;
+    if (_isRunning || _stopped) return 0;
     _isRunning = true;
 
     try {
@@ -50,10 +60,14 @@ class BackgroundMetadataService {
 
       if (incomplete.isEmpty) return 0;
 
-      const batchSize = 100;
+      const batchSize = 8;
       var totalUpdated = 0;
 
-      for (var i = 0; i < incomplete.length; i += batchSize) {
+      for (var i = 0; i < incomplete.length && !_stopped; i += batchSize) {
+        while (artworkExtractionPaused && !_stopped) {
+          await _rest(const Duration(milliseconds: 150));
+        }
+        if (_stopped) break;
         final batch = incomplete.sublist(
           i,
           (i + batchSize > incomplete.length)
@@ -73,14 +87,27 @@ class BackgroundMetadataService {
           }
           await _songRepository.upsertSongs(batch);
           totalUpdated += batch.length;
+          await _rest(backgroundMetadataDelay(Duration.zero));
           continue;
         }
 
         try {
           final chunkStopwatch = Stopwatch()..start();
-          final metadataList = await _musicFolderService.fetchMetadata(
-            contentUris,
-          );
+          final metadataList = <AudioFileInfo>[];
+          for (final uri in contentUris) {
+            while (artworkExtractionPaused && !_stopped) {
+              await _rest(const Duration(milliseconds: 150));
+            }
+            if (_stopped) break;
+            final probeTime = Stopwatch()..start();
+            // The native bulk API creates up to 2 * CPU cores of workers.
+            // A single URI takes its serial path; automatic backfill must
+            // never occupy that whole pool while the UI is running.
+            metadataList.addAll(await _musicFolderService.fetchMetadata([uri]));
+            await _rest(backgroundMetadataDelay(probeTime.elapsed));
+          }
+          // A stopped partial batch must not mark unvisited rows complete.
+          if (_stopped) break;
           final metaByUri = <String, AudioFileInfo>{};
           for (final m in metadataList) {
             metaByUri[m.uri] = m;
@@ -97,8 +124,8 @@ class BackgroundMetadataService {
                 song.discNumber = meta.discNumber ?? song.discNumber;
                 song.albumArtist =
                     (meta.albumArtist?.trim().isNotEmpty ?? false)
-                        ? meta.albumArtist!.trim()
-                        : song.albumArtist;
+                    ? meta.albumArtist!.trim()
+                    : song.albumArtist;
               }
             }
             song.metadataComplete = true;
@@ -114,6 +141,7 @@ class BackgroundMetadataService {
           );
         } catch (e) {
           devLog('BackgroundMetadataService batch failed: $e');
+          await _rest(backgroundMetadataDelay(Duration.zero));
         }
       }
 

@@ -721,3 +721,14 @@ Targeted Dart analysis has no issues. No native compilation/APK/CI run or Samsun
 M06 reproduction was performed; the OEM restart mechanism is a concrete code
 hazard consistent with the report, not a device-confirmed crash diagnosis.
 
+
+
+### Library metadata backfill CPU (issue #109)
+
+Automatic MediaStore/SAF metadata backfill uses single-file native requests and
+cost-based idle gaps, yields to the existing scroll/preload gate, and stops
+between probes when the service is stopped. Local header repair avoids unchanged
+Isar writes and checkpoints its existing file fingerprints during the backlog,
+so reopening does not repeat an entire unfinished library migration. Explicit
+scans/repairs retain their foreground scheduling. Regression coverage uses fake
+repositories/probes; Samsung S25 Ultra thermal/FPS confirmation remains pending.
