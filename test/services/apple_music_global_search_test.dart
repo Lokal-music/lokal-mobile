@@ -19,7 +19,7 @@ void main() {
     expect(item, isNotNull);
     expect(item!.catalogueId, '123');
     expect(item.duration, const Duration(seconds: 210));
-    expect(item.artworkUrl, contains('1200x1200bb'));
+    expect(item.artworkUrl, contains('100x100bb'));
     expect(item.toJson().toString(), isNot(contains('preview')));
     expect(item.toJson().toString(), isNot(contains('m4a')));
     expect(AppleMusicSearchSong.fromJson(item.toJson()).title, item.title);
