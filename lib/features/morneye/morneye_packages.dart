@@ -378,7 +378,7 @@ class MorneyeTrack {
       // An Amazon _AC_SL75_ thumbnail is unsuitable for full-player art
       // and appears blurry even in Search. Request its unsized original
       // from the same Amazon media hash, leaving unrelated CDN URLs intact.
-      if (found != null) return morneyeAlbumArtworkUrl(found);
+      if (found != null) return found;
     }
     return null;
   }

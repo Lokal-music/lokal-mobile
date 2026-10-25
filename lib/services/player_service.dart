@@ -3822,7 +3822,8 @@ class PlayerService {
       loopMode: loopModeNotifier.value,
       androidSingleTrackOnly: !_usingRustBackend &&
           ((_androidEngine?.isSingleTrackOnly ?? false) ||
-           hasUnresolvedAudioSources(_playlist)),
+           hasUnresolvedAudioSources(_playlist) ||
+           _audioSourceSequence == null),
     )) {
       _debugLog('_onSongFinished: skipping manual completion handling');
       return;
