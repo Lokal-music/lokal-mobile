@@ -30,12 +30,12 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal" android:gravity="center">
             <TextView android:id="@+id/rec_prev" android:layout_width="32dp" android:layout_height="29dp"
-                android:text="‹" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>
+                android:text="‹" android:background="@drawable/widget_music_action_secondary" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>
             <TextView android:id="@+id/rec_play" android:layout_width="0dp" android:layout_weight="1"
                 android:layout_height="29dp" android:text="Play" android:background="@drawable/widget_music_action_primary" android:textColor="#FFFFFF"
                 android:textSize="11sp" android:gravity="center"/>
             <TextView android:id="@+id/rec_next" android:layout_width="32dp" android:layout_height="29dp"
-                android:text="›" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>
+                android:text="›" android:background="@drawable/widget_music_action_secondary" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>
