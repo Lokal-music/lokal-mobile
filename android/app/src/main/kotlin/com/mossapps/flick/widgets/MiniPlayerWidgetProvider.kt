@@ -73,8 +73,8 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         // widths and never apply the obsolete show/hide artwork toggle.
         val artworkPath = prefs.getString(WidgetPrefs.KEY_ALBUM_ART, "").orEmpty()
         val previousPath = prefs.getString(WidgetPrefs.KEY_LAST_ALBUM_ART, "").orEmpty()
-        val art = if (hasSong) WidgetArtLoader.load(artworkPath, 288) else null
-        val lastArt = if (art == null) WidgetArtLoader.load(previousPath, 288) else null
+        val art = if (hasSong) WidgetArtLoader.load(context, artworkPath, 288) else null
+        val lastArt = if (art == null) WidgetArtLoader.load(context, previousPath, 288) else null
         views.setViewVisibility(R.id.widget_art_bg, View.VISIBLE)
         if (art != null) views.setImageViewBitmap(R.id.widget_art_bg, art)
         else if (lastArt != null) views.setImageViewBitmap(R.id.widget_art_bg, lastArt)
