@@ -40,11 +40,15 @@ class WidgetRecommendationService {
     // the Cover Flow widget. Native onEnabled/onDisabled owns this switch.
     try {
       await HomeWidget.setAppGroupId('group.com.mossapps.flick.widgets');
-      final enabled = await HomeWidget.getWidgetData<bool>(
+      final coverEnabled = await HomeWidget.getWidgetData<bool>(
         'flick_widget_recommend_enabled', defaultValue: false,
       );
-      if (enabled != true || generation != _generation) {
-        if (enabled != true) _seedId = null;
+      final flowEnabled = await HomeWidget.getWidgetData<bool>(
+        'flick_widget_flow_enabled', defaultValue: false,
+      );
+      final enabled = coverEnabled == true || flowEnabled == true;
+      if (!enabled || generation != _generation) {
+        if (!enabled) _seedId = null;
         return;
       }
     } catch (_) {
