@@ -108,6 +108,17 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
         }
         if (count <= 1) views.setViewVisibility(R.id.rec_left, View.GONE)
         if (count <= 2) views.setViewVisibility(R.id.rec_right, View.GONE)
+        // A narrow or short launcher cell is an artwork card first. Free
+        // vertical room for its sleeve instead of compressing three covers
+        // beneath a stack of repetitive labels.
+        if (WidgetSize.width(manager, id) < 190) {
+            views.setViewVisibility(R.id.rec_left, View.GONE)
+            views.setViewVisibility(R.id.rec_right, View.GONE)
+        }
+        if (WidgetSize.height(manager, id) < 145) {
+            views.setViewVisibility(R.id.rec_heading, View.GONE)
+            views.setViewVisibility(R.id.rec_artist, View.GONE)
+        }
         views.setInt(R.id.rec_root, "setBackgroundResource",
             WidgetArtworkPalette.background(selectedArt))
         views.setOnClickPendingIntent(R.id.rec_prev,
