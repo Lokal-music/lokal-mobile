@@ -71,44 +71,60 @@ class MorneyeLiveSession {
       return readFlacStreamInfo(prefix) == null ? null : 'audio/flac';
     }
     if (!extension.endsWith('.m4a') && !extension.endsWith('.mp4')) return null;
-    bool contains(String name, List<int> bytes) {
-      final tag = name.codeUnits;
-      for (var i = 0; i <= bytes.length - tag.length; i++) {
-        if (bytes[i] == tag[0] &&
-            bytes[i + 1] == tag[1] &&
-            bytes[i + 2] == tag[2] &&
-            bytes[i + 3] == tag[3]) return true;
+    // Decode complete ISO-BMFF box boundaries instead of searching arbitrary
+    // text for "mp4a": a codec string inside metadata is not a playable track.
+    int word(List<int> data, int offset) =>
+        (data[offset] << 24) | (data[offset + 1] << 16) |
+        (data[offset + 2] << 8) | data[offset + 3];
+    String tag(List<int> data, int offset) =>
+        String.fromCharCodes(data.sublist(offset, offset + 4));
+    List<int>? child(List<int> data, String name) {
+      var pos = 0;
+      while (pos + 8 <= data.length) {
+        final length = word(data, pos);
+        if (length < 8 || length > data.length - pos) return null;
+        if (tag(data, pos + 4) == name) {
+          return data.sublist(pos + 8, pos + length);
+        }
+        pos += length;
       }
-      return false;
+      return null;
     }
-    // Validate complete top-level boxes, not a coincidental "moov" text
-    // sequence inside media data. The moov box must be fully buffered before
-    // Media3 receives any byte, or Android may reject the source permanently.
-    if (prefix.length < 16) return null;
-    int word(int i) => (prefix[i] << 24) | (prefix[i + 1] << 16) |
-        (prefix[i + 2] << 8) | prefix[i + 3];
-    if (word(0) < 8 ||
-        String.fromCharCodes(prefix.sublist(4, 8)) != 'ftyp') return null;
-    var at = 0;
-    List<int>? moov;
-    while (at + 8 <= prefix.length) {
-      final length = word(at);
-      if (length < 8 || length > prefix.length - at) break;
-      final kind = String.fromCharCodes(prefix.sublist(at + 4, at + 8));
-      if (kind == 'mdat') break;
-      if (kind == 'moov') {
-        moov = prefix.sublist(at + 8, at + length);
-        break;
-      }
-      at += length;
-    }
+
+    if (prefix.length < 16 || tag(prefix, 4) != 'ftyp') return null;
+    final ftypLength = word(prefix, 0);
+    if (ftypLength < 8 || ftypLength > prefix.length) return null;
+    // No media bytes before moov: streaming must have a complete init atom.
+    final remaining = prefix.sublist(ftypLength);
+    final moov = child(remaining, 'moov');
     if (moov == null) return null;
-    // Never hand encrypted/delayed-conversion Amazon or Tidal media to the
-    // Android player before the addon has decrypted/validated it.
-    if (contains('sinf', moov) || contains('schm', moov) ||
-        contains('enca', moov) || contains('encv', moov) ||
-        contains('pssh', moov) || contains('drms', moov)) return null;
-    if (!contains('mp4a', moov) && !contains('alac', moov)) return null;
+    final firstBoxLength = remaining.length >= 8 ? word(remaining, 0) : 0;
+    if (firstBoxLength < 8 || tag(remaining, 4) != 'moov') {
+      return null; // mdat-first or delayed moov is not fast-start
+    }
+    // Verify an actual audio trak (hdlr=soun) with an MP4A/ALAC sample entry
+    // in stsd. Encrypted entry types or protection boxes are never allowed.
+    final trak = child(moov, 'trak');
+    if (trak == null) return null;
+    final mdia = child(trak, 'mdia');
+    if (mdia == null) return null;
+    final handler = child(mdia, 'hdlr');
+    if (handler == null || handler.length < 12 ||
+        tag(handler, 8) != 'soun') return null;
+    final minf = child(mdia, 'minf');
+    final stbl = minf == null ? null : child(minf, 'stbl');
+    final stsd = stbl == null ? null : child(stbl, 'stsd');
+    if (stsd == null || stsd.length < 16 || word(stsd, 4) < 1) return null;
+    final entryLength = word(stsd, 8);
+    if (entryLength < 8 || entryLength > stsd.length - 8) return null;
+    final codec = tag(stsd, 12);
+    if (codec != 'mp4a' && codec != 'alac') return null;
+    // Explicit protection boxes would require a complete decrypt pipeline.
+    const drmMarkers = ['sinf', 'schm', 'enca', 'encv', 'pssh', 'drms'];
+    for (final marker in drmMarkers) {
+      if (moov.length >= marker.length &&
+          String.fromCharCodes(moov).contains(marker)) return null;
+    }
     return 'audio/mp4';
   }
 
