@@ -1,3 +1,4 @@
+import 'package:flick/features/search/providers/search_filter_provider.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -139,6 +140,20 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('Online-only search hides library-status headings and switching back restores context', (tester) async {
+    await _pump(tester, sources: [_source('yt', 'YouTube Music', ['Online song'])]);
+    final container = ProviderScope.containerOf(tester.element(find.byType(OnlineSearchSection)));
+    expect(find.text('Not in your library'), findsOneWidget);
+    container.read(searchScopeProvider.notifier).select(SearchScope.online);
+    await tester.pumpAndSettle();
+    expect(find.text('Not in your library'), findsNothing);
+    expect(find.text('In your library'), findsNothing);
+    expect(find.text('Online song'), findsOneWidget);
+    container.read(searchScopeProvider.notifier).select(SearchScope.all);
+    await tester.pumpAndSettle();
+    expect(find.text('Not in your library'), findsOneWidget);
+  });
+
   setUp(OnlineSearchSection.resetSourceSelection);
   tearDown(LokalToast.dismiss);
   testWidgets(

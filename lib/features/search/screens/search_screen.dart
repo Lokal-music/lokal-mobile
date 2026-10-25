@@ -292,7 +292,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            l10n.searchYourLibrary,
+            ref.watch(searchScopeProvider) == SearchScope.online
+                ? l10n.searchOnline2 : l10n.searchYourLibrary,
             style: TextStyle(
               fontFamily: 'GoogleSansFlex',
               fontSize: 15,
@@ -301,7 +302,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            l10n.findSongsArtistsAlbumsFolders,
+            ref.watch(searchScopeProvider) == SearchScope.online
+                ? l10n.searchAcrossSongsArtistsAndAlbums : l10n.findSongsArtistsAlbumsFolders,
             style: TextStyle(
               fontFamily: 'GoogleSansFlex',
               fontSize: 13,

@@ -1,3 +1,4 @@
+import '../providers/search_filter_provider.dart';
 import '../providers/recent_search_tracks.dart';
 
 import 'dart:async';
@@ -487,6 +488,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (ref.watch(searchScopeProvider) != SearchScope.online) ...[
             Text(
               'Not in your library',
               style: TextStyle(
@@ -496,6 +498,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
               ),
             ),
             const SizedBox(height: 2),
+            ],
             Text(
               source == null
                   ? 'Looking for places to search…'

@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../player/widgets/player_artwork_quality.dart';
 import '../../services/tidal_atmos_metadata.dart';
 import '../../services/atmos_playback_support.dart';
 import '../../services/atmos_diagnostics.dart';
@@ -256,11 +257,7 @@ String morneyeAlbumArtworkUrl(String original) {
   final uri = Uri.tryParse(original);
   if (uri == null || uri.scheme != 'https') return original;
   final host = uri.host.toLowerCase();
-  if (host != 'm.media-amazon.com' &&
-      host != 'images-na.ssl-images-amazon.com' &&
-      host != 'images-eu.ssl-images-amazon.com') {
-    return original;
-  }
+  if (!PlayerArtworkQuality.isAmazonArtworkHost(host)) return original;
   final upgraded = uri.path.replaceFirst(
     RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
     '.',
@@ -351,28 +348,49 @@ class MorneyeTrack {
   /// URL, or an array of image sizes. Prefer the largest exact-track image,
   /// and promote Amazon CDN thumbnails to their unsized original asset.
   static String? _artwork(Map track) {
-    String? getUrl(Object? value) {
+    double sizeOf(Map value) {
+      double dimension(Object? raw) => raw is num ? raw.toDouble() :
+          double.tryParse(raw?.toString() ?? '') ?? 0;
+      final width = dimension(value['width']);
+      final height = dimension(value['height']);
+      return width > 0 && height > 0 ? width * height : width * width + height * height;
+    }
+    double urlSize(String url) {
+      final uri = Uri.tryParse(url);
+      if (uri == null || !PlayerArtworkQuality.isAmazonArtworkHost(uri.host)) return 0;
+      final sizes = RegExp(r'_(?:SX|SY|SL|UX|UY)(\d+)').allMatches(uri.path)
+          .map((m) => double.parse(m[1]!));
+      if (sizes.isEmpty) return 0;
+      final largest = sizes.reduce((a, b) => a > b ? a : b);
+      return largest * largest;
+    }
+    ({String url, double size})? getImage(Object? value) {
       if (value is String && Uri.tryParse(value)?.hasScheme == true) {
-        return value;
+        return (url: value, size: urlSize(value));
       }
       if (value is Map) {
         for (final field in ['url', 'src', 'cover_url', 'coverUrl', 'original',
             'large', 'medium', 'small']) {
-          final found = getUrl(value[field]);
-          if (found != null) return found;
+          final found = getImage(value[field]);
+          if (found != null) {
+            final explicit = sizeOf(value);
+            return (url: found.url, size: explicit > 0 ? explicit : found.size);
+          }
         }
       }
       if (value is List) {
-        // The provider generally orders its smallest variant first.
-        for (final image in value.reversed) {
-          final found = getUrl(image);
-          if (found != null) return found;
+        ({String url, double size})? best;
+        for (final image in value) {
+          final found = getImage(image);
+          if (found != null && (best == null || found.size >= best.size)) best = found;
         }
+        return best;
       }
       return null;
     }
 
     final album = track['album'];
+    ({String url, double size})? best;
     for (final value in [
       // Providers frequently expose a tiny convenience thumbnail alongside
       // a separate album images array with much larger artwork.
@@ -386,13 +404,12 @@ class MorneyeTrack {
       track['cover_art'], track['coverArt'],
       track['cover_url'], track['coverUrl'], track['thumbnail'],
     ]) {
-      final found = getUrl(value);
-      // An Amazon _AC_SL75_ thumbnail is unsuitable for full-player art
-      // and appears blurry even in Search. Request its unsized original
-      // from the same Amazon media hash, leaving unrelated CDN URLs intact.
-      if (found != null) return found;
+      final found = getImage(value);
+      if (found != null && (best == null || found.size > best.size)) best = found;
     }
-    return null;
+    // Keep the provider URL, so every renderer/downloader can try the master
+    // and still fall back to this known working variant.
+    return best?.url;
   }
 
   static MorneyeTrack of(Map track, String provider) {
