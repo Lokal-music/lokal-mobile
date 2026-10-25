@@ -375,9 +375,10 @@ class MorneyeTrack {
       track['cover_url'], track['coverUrl'], track['thumbnail'],
     ]) {
       final found = getUrl(value);
-      // Keep the original URL available: PlayerArtworkQuality.candidates
-      // promotes Amazon sizes and safely retries the original on a 404.
-      if (found != null) return found;
+      // An Amazon _AC_SL75_ thumbnail is unsuitable for full-player art
+      // and appears blurry even in Search. Request its unsized original
+      // from the same Amazon media hash, leaving unrelated CDN URLs intact.
+      if (found != null) return morneyeAlbumArtworkUrl(found);
     }
     return null;
   }
