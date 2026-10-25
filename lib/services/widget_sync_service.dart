@@ -7,6 +7,7 @@ import 'package:home_widget/home_widget.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/app_preferences_service.dart';
+import 'widget_recommendation_service.dart';
 
 import 'package:flick/core/utils/dev_log.dart';
 
@@ -37,6 +38,10 @@ class WidgetSyncService {
       'com.mossapps.flick.widgets.FlagshipWidgetProvider';
   static const String compactProvider =
       'com.mossapps.flick.widgets.CompactWidgetProvider';
+  static const String flowProvider =
+      'com.mossapps.flick.widgets.FlowRadioWidgetProvider';
+  static const String recommendationProvider =
+      'com.mossapps.flick.widgets.CoverFlowRecommendationWidgetProvider';
 
   static const String keyFlagshipAccent = 'flick_widget_flagship_accent';
   static const String keyFlagshipShowArtist =
@@ -74,6 +79,33 @@ class WidgetSyncService {
   bool? _lastPushedIsPlaying;
   bool? _lastPushedIsShuffle;
   int? _lastPushedLoopMode;
+  PlayerState? _lastKnownState;
+  String? _artSongId;
+  String? _artRaw;
+  String _cachedArt = '';
+
+  String _coverFor(Song? song) => song?.id == _artSongId &&
+          song?.albumArt == _artRaw && _cachedArt.isNotEmpty
+      ? _cachedArt : _resolveLocalArt(song?.albumArt);
+
+  Future<void> _refreshArtwork(Song song, String? path) async {
+    final art = await WidgetRecommendationService.widgetSafeArtwork(path);
+    if (art.isEmpty || _artSongId != song.id || _artRaw != path) return;
+    _cachedArt = art;
+    _savedData.remove(keyAlbumArt);
+    final latest = _lastKnownState;
+    if (latest != null && latest.currentSong?.id == song.id) schedulePush(latest);
+  }
+
+  Future<void> setFlowStatus(String status) async {
+    try {
+      await _ensureInit();
+      await HomeWidget.saveWidgetData<String>('flick_widget_flow_status', status);
+      await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
+    } catch (_) {}
+  }
+
+
 
   Future<void> _ensureInit() async {
     if (_initialized) return;
@@ -97,6 +129,8 @@ class WidgetSyncService {
     await HomeWidget.updateWidget(qualifiedAndroidName: miniPlayerProvider);
     await HomeWidget.updateWidget(qualifiedAndroidName: flagshipProvider);
     await HomeWidget.updateWidget(qualifiedAndroidName: compactProvider);
+    await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
+    await HomeWidget.updateWidget(qualifiedAndroidName: recommendationProvider);
   }
 
   PlayerState? _pendingState;
@@ -111,6 +145,17 @@ class WidgetSyncService {
 
   void schedulePush(PlayerState state) {
     _pendingState = state;
+    _lastKnownState = state;
+    final song = state.currentSong;
+    if (song?.id != _artSongId || song?.albumArt != _artRaw) {
+      _artSongId = song?.id;
+      _artRaw = song?.albumArt;
+      _cachedArt = '';
+      if (song != null) {
+        unawaited(_refreshArtwork(song, song.albumArt));
+        WidgetRecommendationService.instance.refreshFor(song, state.upNext);
+      }
+    }
     final structuralChange =
         state.currentSong?.id != _lastPushedSongId ||
         state.isPlaying != _lastPushedIsPlaying ||
@@ -164,7 +209,7 @@ class WidgetSyncService {
           _savedData[keyIsPlaying] != state.isPlaying ||
           _savedData[keyTitle] != (song?.title ?? '') ||
           _savedData[keyArtist] != (song?.artist ?? '') ||
-          _savedData[keyAlbumArt] != _resolveLocalArt(song?.albumArt) ||
+          _savedData[keyAlbumArt] != _coverFor(song) ||
           _savedData[keyIsShuffle] != state.isShuffle ||
           _savedData[keyLoopMode] != _loopModeToInt(state.loopMode) ||
           _savedData[keyQueueCount] != state.upNext.length;
@@ -176,7 +221,7 @@ class WidgetSyncService {
       await _save<String>(keySongId, song?.id ?? '');
       await _save<String>(keyTitle, song?.title ?? '');
       await _save<String>(keyArtist, song?.artist ?? '');
-      await _save<String>(keyAlbumArt, _resolveLocalArt(song?.albumArt));
+      await _save<String>(keyAlbumArt, _coverFor(song));
       await _save<int>(keyPositionMs, state.position.inMilliseconds);
       await _save<int>(keyDurationMs, state.duration.inMilliseconds);
       await _save<bool>(keyIsShuffle, state.isShuffle);
