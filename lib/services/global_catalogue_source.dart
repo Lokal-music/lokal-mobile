@@ -11,7 +11,17 @@ abstract final class GlobalCatalogueSource {
   static final ValueNotifier<String> selected = ValueNotifier(apple);
   static Future<void>? _loading;
 
-  static Future<String> load() => (_loading ??= _read()).then((_) => selected.value);
+  static Future<String> load() async {
+    try {
+      await (_loading ??= _read());
+    } catch (_) {
+      // A temporary preferences failure must not permanently poison the
+      // shared future, preventing later settings changes from being saved.
+      _loading = null;
+      rethrow;
+    }
+    return selected.value;
+  }
 
   static Future<void> _read() async {
     final prefs = await SharedPreferences.getInstance();
