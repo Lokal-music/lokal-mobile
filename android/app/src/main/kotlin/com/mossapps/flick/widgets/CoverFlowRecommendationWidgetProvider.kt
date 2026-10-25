@@ -77,10 +77,12 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
             if (count > 1) View.VISIBLE else View.GONE)
         views.setTextViewText(R.id.rec_play, if (hasSelection) "Play pick" else "Open Lokal")
 
+        var selectedArt: android.graphics.Bitmap? = null
         fun art(viewId: Int, offset: Int) {
             val artPath = if (count > 0) data.optJSONObject((position + offset).mod(count))
                 ?.optString("artwork").orEmpty() else ""
             val image = WidgetArtLoader.load(context, artPath, if (offset == 0) 240 else 168)
+            if (offset == 0) selectedArt = image
             // Avoid filling the launcher with three giant app-logo placeholders
             // while artwork is being asynchronously cached. Only real adjacent
             // covers are shown; the selected slot uses a neutral surface.
@@ -98,11 +100,16 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
             // designed "no track yet" cover. Never leave artwork space blank.
             val previous = WidgetArtLoader.load(context,
                 prefs.getString(WidgetPrefs.KEY_LAST_ALBUM_ART, ""), 240)
-            if (previous != null) views.setImageViewBitmap(R.id.rec_center, previous)
+            if (previous != null) {
+                selectedArt = previous
+                views.setImageViewBitmap(R.id.rec_center, previous)
+            }
             else views.setImageViewResource(R.id.rec_center, R.drawable.widget_art_placeholder)
         }
         if (count <= 1) views.setViewVisibility(R.id.rec_left, View.GONE)
         if (count <= 2) views.setViewVisibility(R.id.rec_right, View.GONE)
+        views.setInt(R.id.rec_root, "setBackgroundResource",
+            WidgetArtworkPalette.background(selectedArt))
         views.setOnClickPendingIntent(R.id.rec_prev,
             WidgetIntents.recommendationBrowse(context, id, -1))
         views.setOnClickPendingIntent(R.id.rec_next,
