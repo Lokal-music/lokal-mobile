@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flick/l10n/l10n.dart';
+import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
+import 'package:flick/widgets/lokal/lokal_choice_sheet.dart';
+import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/services/global_catalogue_source.dart';
 
@@ -18,7 +21,9 @@ class _GlobalCatalogueSelectorState extends State<GlobalCatalogueSelector> {
   void initState() {
     super.initState();
     GlobalCatalogueSource.selected.addListener(_refresh);
-    GlobalCatalogueSource.load().then((_) { if (mounted) setState(() {}); });
+    GlobalCatalogueSource.load().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _refresh() {
@@ -31,30 +36,58 @@ class _GlobalCatalogueSelectorState extends State<GlobalCatalogueSelector> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final t = context.lokal;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: [
-            ButtonSegment(value: GlobalCatalogueSource.apple,
-              label: Text(lokalText('Apple Music'))),
-            ButtonSegment(value: GlobalCatalogueSource.spotify,
-              label: Text(lokalText('Spotify'))),
-          ],
-          selected: {GlobalCatalogueSource.selected.value},
-          onSelectionChanged: (values) =>
-              GlobalCatalogueSource.set(values.single),
+  Future<void> _pick() async {
+    final picked = await showLokalChoiceSheet<String>(
+      context: context,
+      title: lokalText('Global search catalogue'),
+      selected: GlobalCatalogueSource.selected.value,
+      choices: [
+        LokalChoice(
+          value: GlobalCatalogueSource.apple,
+          label: lokalText('Apple Music'),
         ),
-        const SizedBox(height: 6),
-        Text(
-          lokalText('Spotify uses your existing account cookie. If unavailable, Global Search uses Apple Music. Actual playback always follows your source priority.'),
-          style: TextStyle(fontSize: 12, color: t.muted),
+        LokalChoice(
+          value: GlobalCatalogueSource.spotify,
+          label: lokalText('Spotify'),
+          description: lokalText(
+            'Spotify uses your existing account cookie. If unavailable, Global Search uses Apple Music. Actual playback always follows your source priority.',
+          ),
         ),
       ],
     );
+    if (picked != null) await GlobalCatalogueSource.set(picked);
   }
+
+  @override
+  Widget build(BuildContext context) => LokalSettingRow(
+    label: lokalText('Global search catalogue'),
+    description: lokalText(
+      'Choose the source of Global results; this does not affect playback source priority.',
+    ),
+    onTap: _pick,
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 120),
+          child: Text(
+            lokalText(
+              GlobalCatalogueSource.selected.value ==
+                      GlobalCatalogueSource.spotify
+                  ? 'Spotify'
+                  : 'Apple Music',
+            ).toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: LokalTheme.label(
+              context.lokal,
+              size: 12,
+              color: context.lokal.text,
+            ),
+          ),
+        ),
+        Icon(Icons.unfold_more_rounded, size: 18, color: context.lokal.muted),
+      ],
+    ),
+  );
 }
