@@ -51,6 +51,14 @@
             />
 
             <TextView
+                android:id="@+id/widget_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#C7FFFFFF"
+                android:textSize="10sp"
+                android:visibility="gone"
+                android:singleLine="true" />
+            <TextView
                 android:id="@+id/widget_artist"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
