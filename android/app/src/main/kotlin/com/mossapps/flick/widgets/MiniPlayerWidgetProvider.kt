@@ -99,7 +99,8 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_next, WidgetIntents.playerNext(context))
         }
 
-        val showProgress = hasSong && duration > 0L && height >= 64
+        val showProgress = hasSong && duration > 0L &&
+            (layout != R.layout.widget_now_playing_portrait || height >= 160) && height >= 64
         views.setViewVisibility(R.id.widget_progress,
             if (showProgress) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.widget_time,
