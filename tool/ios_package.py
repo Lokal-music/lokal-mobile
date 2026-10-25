@@ -77,7 +77,17 @@ def main() -> None:
     metadata = inspect_bundle(app)
     root = Path(__file__).resolve().parents[1]
     metadata["source_commit"] = command("git", "-C", str(root), "rev-parse", "HEAD")
+    metadata["source_tree"] = command("git", "-C", str(root), "rev-parse", "HEAD^{tree}")
     metadata["xcode"] = command("xcodebuild", "-version")
+    flutter = json.loads(command("flutter", "--version", "--machine"))
+    metadata["flutter"] = {
+        key: flutter[key]
+        for key in ("frameworkVersion", "frameworkRevision", "dartSdkVersion")
+    }
+    # Cargokit selects this pinned toolchain; the runner's default can differ.
+    metadata["rust"] = command("rustc", "+1.98.0", "--version")
+    metadata["cocoapods"] = command("pod", "--version")
+    metadata["iphoneos_sdk"] = command("xcrun", "--sdk", "iphoneos", "--show-sdk-version")
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         raise ValueError("Refusing to overwrite an existing IPA; clean the output first")

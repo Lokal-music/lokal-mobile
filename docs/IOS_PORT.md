@@ -256,6 +256,14 @@ Supply SHA-256, source commit, toolchain versions, license notices and matching
 source. Keep dSYMs for crash symbolication. This package inspection is separate
 from a successful local signing/install test.
 
+The locked FFmpeg plugin's `setup_ios.sh` creates its arm64 simulator variant by
+retagging the device slice with `vtool`; its x86_64 simulator slice is separately
+supplied. Therefore a simulator platform tag is not evidence of a genuine
+simulator compilation for that dependency. The real FFmpeg conversion fixture
+must pass, and a source-built simulator dependency should replace this workaround
+if it causes runtime incompatibility. Do not apply this technique to other
+native libraries as a substitute for correct target compilation.
+
 Use Sideloadly on Windows as the first documented install route; AltStore Classic
 is an alternative. Their documentation supports free Apple accounts. Free-account
 installs generally expire after seven days and must be refreshed; Apple also
@@ -400,10 +408,10 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
   checks passed for Android arm64/armv7, native linker failure and Rust pinning.
 - Application/integration analysis has no errors; existing warnings/information
   remain. This is not a clean repository-wide lint claim.
-- The broad Flutter run recorded 578 passes, two skips and 27 failures before a
-  crossfade test stalled. Selected discovery failures and the crossfade hang
-  reproduced on the untouched audit baseline. Other failures remain unclassified;
-  the full suite is not green.
+- The broad Flutter run recorded 578 passes, two skips and 27 failures including
+  a crossfade timeout. All 26 other failing test cases reproduced on the untouched
+  audit baseline; the crossfade hang reproduced separately there too. The full
+  suite remains red; this comparison does not turn baseline failures into passes.
 - Simulator startup currently exits before Dart attachment. The smoke test has
   not passed. Screenshots from a terminated app are not product UI evidence.
 - No physical iPhone, Windows re-sign/install/update, background playback,
