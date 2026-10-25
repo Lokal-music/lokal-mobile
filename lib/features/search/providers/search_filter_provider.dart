@@ -8,7 +8,6 @@ import '../models/search_category.dart';
 enum SearchScope { library, online }
 
 bool supportsOnlineCategory(SearchCategory? category) =>
-    category == null ||
     category == SearchCategory.songs ||
     category == SearchCategory.artists ||
     category == SearchCategory.albums;
@@ -19,7 +18,7 @@ class SearchScopeNotifier extends Notifier<SearchScope> {
   void select(SearchScope scope) {
     if (scope == SearchScope.online &&
         !supportsOnlineCategory(ref.read(searchFilterProvider).singleOrNull)) {
-      ref.read(searchFilterProvider.notifier).select(null);
+      ref.read(searchFilterProvider.notifier).select(SearchCategory.songs);
     }
     state = scope;
   }
@@ -29,8 +28,7 @@ final searchScopeProvider = NotifierProvider<SearchScopeNotifier, SearchScope>(
   SearchScopeNotifier.new,
 );
 
-/// One result type, or All. The old exclusion-mask preferences are deliberately
-/// not migrated: seven selected chips did not mean seven explicit choices.
+/// Exactly one result type is always selected. Old 'all' filters migrate to Songs.
 class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
   static const _key = 'search_selected_category_v2';
   bool _changed = false;
@@ -38,7 +36,7 @@ class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
   @override
   Set<SearchCategory> build() {
     Future.microtask(_load);
-    return SearchCategory.values.toSet();
+    return {SearchCategory.songs};
   }
 
   Future<void> _load() async {
@@ -60,7 +58,7 @@ class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
 
   void select(SearchCategory? category) {
     _changed = true;
-    state = category == null ? SearchCategory.values.toSet() : {category};
+    state = {category ?? SearchCategory.songs};
     if (!supportsOnlineCategory(category) &&
         ref.read(searchScopeProvider) == SearchScope.online) {
       ref.read(searchScopeProvider.notifier).select(SearchScope.library);
@@ -68,14 +66,14 @@ class SearchFilterNotifier extends Notifier<Set<SearchCategory>> {
     _saving = _saving
         .then((_) async {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_key, category?.storageKey ?? 'all');
+          await prefs.setString(_key, (category ?? SearchCategory.songs).storageKey);
         })
         .catchError((Object _) {});
   }
 
   void toggle(SearchCategory category) => select(category);
-  void toggleAll() => select(null);
-  bool get isAllEnabled => state.length == SearchCategory.values.length;
+  void toggleAll() => select(SearchCategory.songs);
+  bool get isAllEnabled => false;
 }
 
 final searchFilterProvider =
@@ -84,5 +82,5 @@ final searchFilterProvider =
     );
 final searchAllEnabledProvider = Provider<bool>(
   (ref) =>
-      ref.watch(searchFilterProvider).length == SearchCategory.values.length,
+      false,
 );
