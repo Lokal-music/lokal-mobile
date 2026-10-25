@@ -5,6 +5,7 @@ import 'package:flick/features/spotify/spotify_oauth.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/services/apple_music/apple_music_metadata_service.dart';
+import 'package:flick/services/apple_music/apple_music_models.dart';
 import 'package:flick/services/global_catalogue_source.dart';
 
 /// Playback sources and streaming URLs are NEVER part of this model.
@@ -152,7 +153,9 @@ GlobalCatalogueMatches parseSpotifyPathfinder(Map<String, dynamic> data) {
 /// cookie/session. Web API search may refuse cookie-backed tokens; retry its
 /// own Pathfinder search before falling back to Apple's public catalogue.
 class GlobalCatalogueSearchService {
-  const GlobalCatalogueSearchService();
+  const GlobalCatalogueSearchService({this.appleMusic});
+
+  final AppleMusicMetadataService? appleMusic;
 
   static final _cache = <String, ({DateTime until, GlobalCatalogueMatches value})>{};
 
@@ -160,11 +163,12 @@ class GlobalCatalogueSearchService {
     String rawQuery, {
     String? selected,
     bool refresh = false,
+    bool songsOnly = false,
   }) async {
     final query = rawQuery.trim();
     if (query.length < 2) return const GlobalCatalogueMatches(catalogue: 'apple');
     final source = selected ?? await GlobalCatalogueSource.load();
-    final key = source + ':' +
+    final key = (songsOnly ? 'songs:' : 'all:') + source + ':' +
         SecureSpotifyTokenStore.sessionRevision.value.toString() +
         ':' + query.toLowerCase();
     final hit = _cache[key];
@@ -173,7 +177,7 @@ class GlobalCatalogueSearchService {
     }
     if (source == GlobalCatalogueSource.spotify) {
       try {
-        final result = await _spotify(query);
+        final result = await _spotify(query, songsOnly: songsOnly);
         // An empty Spotify search is a valid result, not a signal to
         // silently mix in another catalogue.
         _cache[key] = (until: DateTime.now().add(const Duration(minutes: 2)), value: result);
@@ -182,23 +186,23 @@ class GlobalCatalogueSearchService {
       } catch (_) {
         // Never log bearer tokens, cookie values or returned auth bodies.
       }
-      final apple = await _apple(query, refresh: refresh);
+      final apple = await _apple(query, refresh: refresh, songsOnly: songsOnly);
       return GlobalCatalogueMatches(
         catalogue: GlobalCatalogueSource.apple,
         songs: apple.songs, albums: apple.albums, artists: apple.artists,
         notice: 'Spotify search unavailable. Showing Apple Music results.',
       );
     }
-    return _apple(query, refresh: refresh);
+    return _apple(query, refresh: refresh, songsOnly: songsOnly);
   }
 
-  Future<GlobalCatalogueMatches> _spotify(String query) async {
+  Future<GlobalCatalogueMatches> _spotify(String query, {required bool songsOnly}) async {
     final store = SecureSpotifyTokenStore();
     final oauth = SpotifyOAuthService(tokenStore: store);
     final api = SpotifyApi.withCredentials(store, oauth);
     try {
       final payload = await api.getJson(Uri.https('api.spotify.com', '/v1/search', {
-        'q': query, 'type': 'track,album,artist', 'limit': '40',
+        'q': query, 'type': songsOnly ? 'track' : 'track,album,artist', 'limit': '40',
       })).timeout(const Duration(seconds: 13));
       return parseSpotifyGlobal(payload);
     } catch (_) {
@@ -219,12 +223,14 @@ class GlobalCatalogueSearchService {
     }
   }
 
-  Future<GlobalCatalogueMatches> _apple(String query, {bool refresh = false}) async {
-    final service = AppleMusicMetadataService.instance;
+  Future<GlobalCatalogueMatches> _apple(String query, {bool refresh = false, required bool songsOnly}) async {
+    final service = appleMusic ?? AppleMusicMetadataService.instance;
     final results = await (
       service.searchSongs(query, limit: 40, refresh: refresh),
-      service.searchAlbums(query, limit: 12, refresh: refresh),
-      service.searchArtists(query, limit: 12, refresh: refresh),
+      songsOnly ? Future.value(<AppleMusicAlbumMatch>[]) :
+          service.searchAlbums(query, limit: 12, refresh: refresh),
+      songsOnly ? Future.value(<AppleMusicArtist>[]) :
+          service.searchArtists(query, limit: 12, refresh: refresh),
     ).wait;
     final (songs, albums, artists) = results;
     return GlobalCatalogueMatches(
