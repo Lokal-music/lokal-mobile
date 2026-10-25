@@ -883,9 +883,11 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       // A CDN can report a misleading HEAD length for
                       // segments. Never promote a decoder that was given a
                       // different sourceLength than the actual assembled file.
-                      if (await completed.file.length() != session.total) {
-                        throw StateError('Live media size changed during transfer');
-                      }
+                      final actualLength = await completed.file.length();
+                      final lengthMatches = actualLength == session.total;
+                      // Always validate and adopt the *complete* rendition.
+                      // A misleading CDN total must not lose a playable,
+                      // correctly probed download when the early reader fails.
                       final cached = await cache().adopt(
                         found, completed.file, sourceInfo: completed.info,
                       );
@@ -893,9 +895,40 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       if (path == null) {
                         throw StateError('Completed audio has no cache path');
                       }
-                      session.promote(path);
                       _rememberMorneyePlayback(cacheKey, cached);
                       QueuePreResolver.shared.schedule();
+                      if (lengthMatches) {
+                        session.promote(path);
+                      } else {
+                        // Media3 already knows the original length, so the
+                        // growing reader cannot safely change its response
+                        // size. Stop using it, then hand the verified complete
+                        // cache to the same logical queue entry. Keep both the
+                        // position and the current playback/pause preference.
+                        session.fail(StateError('Live media size changed during transfer'));
+                        final player = PlayerService();
+                        final liveSongId =
+                            'discovery:${found.key.hashCode}:morneye-live';
+                        if (player.currentSongNotifier.value?.id == liveSongId) {
+                          final position = player.positionNotifier.value;
+                          final wasPlaying = player.isPlayingNotifier.value;
+                          final replacement = cached.copyWith(
+                            id: liveSongId,
+                            sourceDisplayName: addon.displayName,
+                            fileSizeBytes: actualLength,
+                          );
+                          // Same song id => play() replaces its audio source
+                          // in the existing playlist, without dropping Up Next.
+                          await player.play(replacement);
+                          if (player.currentSongNotifier.value?.id == liveSongId) {
+                            if (position > Duration.zero) {
+                              await player.seek(position);
+                            }
+                            if (!wasPlaying) await player.pause();
+                          }
+                        }
+                        onStatus?.call('Stream metadata changed; switched to complete audio');
+                      }
                     } catch (error) {
                       session.fail(error);
                       QueuePreResolver.shared.schedule();
