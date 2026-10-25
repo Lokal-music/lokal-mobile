@@ -138,6 +138,31 @@ void main() {
     expect(loader, contains('Bitmap.Config.RGB_565'));
   });
 
+  test('all widgets use album-derived dark surfaces without giant backdrop bitmaps', () {
+    final path = '$root/kotlin/com/mossapps/flick/widgets';
+    final palette = File('$path/WidgetArtworkPalette.kt').readAsStringSync();
+    expect(palette, contains('Color.colorToHSV'));
+    expect(palette, contains('widget_surface_rose'));
+    expect(palette, contains('widget_surface_blue'));
+    expect(palette, contains('widget_surface_green'));
+    expect(palette, contains('widget_surface_violet'));
+    for (final type in [
+      'MiniPlayerWidgetProvider', 'FlowRadioWidgetProvider',
+      'CoverFlowRecommendationWidgetProvider',
+    ]) {
+      final provider = File('$path/$type.kt').readAsStringSync();
+      expect(provider, contains('WidgetArtworkPalette.background('));
+    }
+    final control = File('$root/res/drawable/widget_music_action_primary.xml')
+        .readAsStringSync();
+    expect(control, contains('corners'));
+    for (final tone in ['rose', 'gold', 'green', 'blue', 'violet']) {
+      final surface = File('$root/res/drawable/widget_surface_$tone.xml')
+          .readAsStringSync();
+      expect(surface, contains('24dp'));
+    }
+  });
+
   test('widget art is bounded and cold-start commands are durable', () {
     final path = '$root/kotlin/com/mossapps/flick/widgets';
     final art = File('$path/WidgetArtLoader.kt').readAsStringSync();
