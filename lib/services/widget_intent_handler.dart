@@ -190,7 +190,7 @@ class WidgetIntentHandler {
     }
     if (records.isEmpty) return;
     await _ref.read(playerProvider.notifier).play(
-      records[idx.clamp(0, records.length - 1)],
+      records[idx % records.length],
       playlist: records,
     );
     await _pushWidgetState();
