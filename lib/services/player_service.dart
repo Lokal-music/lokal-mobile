@@ -1584,7 +1584,12 @@ class PlayerService {
     _queueDebounceTimer?.cancel();
     _queueDebounceTimer = Timer(_queueDebounce, () {
       _notifyQueueChanged();
-      if (_playlist.isNotEmpty && !_usingRustBackend) {
+      // Native sequence rebuilds cannot include unresolved Discovery
+      // placeholders; they have no audio URL. Leave the playing decoder
+      // alone and let QueuePreResolver replace those entries in the logical
+      // queue until they are actually ready.
+      if (_playlist.isNotEmpty && !_usingRustBackend &&
+          !hasUnresolvedAudioSources(_playlist)) {
         unawaited(_rebuildPlaylist());
       }
     });
@@ -4016,8 +4021,11 @@ class PlayerService {
   }
 
   Future<just_audio.AudioSource> _buildAudioSourceForSong(Song song) async {
-    if (song.filePath == null) {
-      return just_audio.AudioSource.uri(Uri.parse(''));
+    if (song.isPending || song.filePath == null ||
+        song.filePath!.isEmpty) {
+      // Never turn a queued online placeholder into a bogus native audio
+      // source (Uri.parse('')). Keep resolution in QueuePreResolver.
+      throw StateError('Unresolved queue entry has no playable audio source');
     }
 
     final liveMorneye = song.sourcePackage == 'konnekted.morneye-live'
@@ -6293,7 +6301,8 @@ class PlayerService {
   /// Rebuild the current playlist with updated settings
   Future<void> _rebuildPlaylist() async {
     if (_usingRustBackend) return;
-    if (_playlist.isEmpty || _currentIndex < 0) return;
+    if (_playlist.isEmpty || _currentIndex < 0 ||
+        hasUnresolvedAudioSources(_playlist)) return;
 
     try {
       _isRebuildingPlaylist = true;
