@@ -44,10 +44,19 @@ class SearchFilterChips extends StatelessWidget {
                   ?.copyWith(fontSize: 12),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             ),
-            segments: const [
-              ButtonSegment(value: SearchScope.all, label: Text('All sources')),
-              ButtonSegment(value: SearchScope.library, label: Text('Library')),
-              ButtonSegment(value: SearchScope.online, label: Text('Online')),
+            segments: [
+              ButtonSegment(
+                value: SearchScope.all,
+                label: Text(lokalText('All sources')),
+              ),
+              ButtonSegment(
+                value: SearchScope.library,
+                label: Text(lokalText('Library')),
+              ),
+              ButtonSegment(
+                value: SearchScope.online,
+                label: Text(lokalText('Online')),
+              ),
             ],
             selected: {scope},
             onSelectionChanged: (value) {
@@ -84,10 +93,10 @@ class SearchFilterChips extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 2, 16, 0),
           child: Text(
             scope == SearchScope.online
-                ? 'Search online catalogues and playback sources'
+                ? lokalText('Search online catalogues and playback sources')
                 : !supportsOnlineCategory(enabled.singleOrNull)
-                ? 'This category searches your library'
-                : 'Choose one result type, or All',
+                ? lokalText('This category searches your library')
+                : lokalText('Choose one result type, or All'),
             style: TextStyle(color: t.muted, fontSize: 11),
           ),
         ),

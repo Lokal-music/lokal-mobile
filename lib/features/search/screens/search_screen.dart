@@ -342,7 +342,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Try another keyword or choose All result types',
+            lokalText('Try another keyword or choose All result types'),
             style: TextStyle(
               fontFamily: 'GoogleSansFlex',
               fontSize: 12,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/constants/app_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
@@ -79,7 +80,11 @@ class _OnlineCatalogueSearchSectionState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Online ${widget.category == SearchCategory.albums ? 'albums' : 'artists'}',
+            lokalText(
+              widget.category == SearchCategory.albums
+                  ? 'Online albums'
+                  : 'Online artists',
+            ),
             style: TextStyle(
               color: t.text,
               fontSize: 17,
@@ -87,7 +92,9 @@ class _OnlineCatalogueSearchSectionState
             ),
           ),
           Text(
-            'Apple Music catalogue · plays through your configured sources',
+            lokalText(
+              'Apple Music catalogue · plays through your configured sources',
+            ),
             style: TextStyle(color: t.muted, fontSize: 11),
           ),
           const SizedBox(height: 8),
@@ -106,13 +113,17 @@ class _OnlineCatalogueSearchSectionState
                 return TextButton.icon(
                   onPressed: () => setState(() => _load(refresh: true)),
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Could not search. Retry'),
+                  label: Text(lokalText('Could not search. Retry')),
                 );
               }
               final rows = snapshot.data ?? const [];
               if (rows.isEmpty) {
                 return Text(
-                  'No ${widget.category.label.toLowerCase()} found online.',
+                  lokalText(
+                    widget.category == SearchCategory.albums
+                        ? 'No albums found online.'
+                        : 'No artists found online.',
+                  ),
                   style: TextStyle(color: t.muted),
                 );
               }
@@ -160,7 +171,7 @@ class _OnlineCatalogueSearchSectionState
                           child: Icon(Icons.person_outline, color: t.muted),
                         ),
                         title: Text(row.name),
-                        subtitle: Text(row.genre ?? 'Artist'),
+                        subtitle: Text(row.genre ?? lokalText('Artist')),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _open(
                           LokalMusicDetailPage.artist(
@@ -177,7 +188,11 @@ class _OnlineCatalogueSearchSectionState
                           .read(searchFilterProvider.notifier)
                           .select(widget.category),
                       child: Text(
-                        'See all ${widget.category.label.toLowerCase()}',
+                        lokalText(
+                          widget.category == SearchCategory.albums
+                              ? 'See all albums'
+                              : 'See all artists',
+                        ),
                       ),
                     ),
                 ],

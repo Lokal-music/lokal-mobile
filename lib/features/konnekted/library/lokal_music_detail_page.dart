@@ -205,14 +205,16 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
 
   List<Song> _local(List<Song> library) {
     final artist = recommendationKey(widget.artist);
+    final wantedTitle = albumTitleKey(widget.title);
     final found = library
         .where(
           (song) => widget.isArtist
               ? (recommendationKey(song.albumArtist ?? song.artist) == artist ||
                   recommendationKey(song.artist) == artist ||
                   catalogueArtistCredit(song.artist, widget.artist))
-              : albumArtistsMatch(widget.artist, song.albumArtist ?? song.artist) &&
-                  albumTitlesMatch(widget.title, song.album ?? ''),
+              : wantedTitle.isNotEmpty &&
+                  albumTitleKey(song.album ?? '') == wantedTitle &&
+                  albumArtistsMatch(widget.artist, song.albumArtist ?? song.artist),
         )
         .toList();
     return found;

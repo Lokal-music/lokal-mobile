@@ -60,18 +60,25 @@ query failure does not suppress available online results.
 
 ## Validation
 
-89 focused tests pass across the original large-library work and the new
-filter, full-screen search, live-data revision, catalogue and artwork regressions.
-The new search controls were rendered at phone width; category/scope transitions
-and stale-response behavior have widget coverage. Focused analysis reports no
-errors or warnings; existing style infos remain. git diff --check passes.
+108 focused tests pass across large-library work, filters, full-screen search,
+live data revisions, catalogue/artwork matching, online playback/queue/download,
+and localization guards. All shipped non-English locales have the new fixed
+search phrases; a French widget test checks scope, catalogue, retry and empty
+states. Localization uses the existing Lokal presentation-phrase dictionaries.
+The no-results hint retains the single-category/All wording in every locale.
 
-The broader existing online_search_section_test.dart suite has eight failures
-also reproduced on PR #181's prior code: stale quality-label expectations,
-player/database setup assumptions, action-sheet layout/back navigation and
-pending timers. Its production playback/action code is unchanged by this work.
-Those failures are not counted among the 89 passing checks.
+Identical generic credits (Various Artists / Unknown Artist) match themselves
+without acting as wildcards. Album pages compare a precomputed title key before
+parsing artist credits. The shared soundtrack qualifier expression is reused.
 
-No Android device/APK validation is claimed. The public metadata response was
-checked, while release selection, fallback behavior and provider errors are
-covered with deterministic HTTP fixtures.
+The prior online_search_section_test.dart failures are resolved. The action
+sheet is scrollable on a short display, download confirmation names the actual
+library folder, and fixtures explicitly control source memory, native stream
+inspection, pending-song creation and toast lifetime. Measured audio details
+are still shown; uninspected YouTube results do not invent codec/bitrate badges.
+Legacy locale-switch assertions now use the current Lokal branding.
+
+Focused analysis reports no errors or warnings; style infos remain.
+git diff --check passes. No Android device/APK validation is claimed. The public
+metadata response was checked, while release selection, provider errors and
+fallback behavior use deterministic HTTP fixtures.

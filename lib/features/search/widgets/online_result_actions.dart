@@ -5,7 +5,14 @@ import 'package:flick/features/discovery/discovery_artwork.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 
 /// What can be done with a song Search found online.
-enum OnlineResultAction { play, playAtmos, playNext, addToQueue, download, downloadAtmos }
+enum OnlineResultAction {
+  play,
+  playAtmos,
+  playNext,
+  addToQueue,
+  download,
+  downloadAtmos,
+}
 
 /// A Search result's cover: the source's, else Discovery's lookup (your
 /// library, Deezer, iTunes), else a note.
@@ -56,11 +63,17 @@ Future<OnlineResultAction?> showOnlineResultActions(
     backgroundColor: t.surface,
     showDragHandle: true,
     useRootNavigator: true,
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (context) =>
-        _OnlineResultSheet(result: result, source: sourceName, saving: saving),
+    builder: (context) => SingleChildScrollView(
+      child: _OnlineResultSheet(
+        result: result,
+        source: sourceName,
+        saving: saving,
+      ),
+    ),
   );
 }
 
@@ -159,7 +172,9 @@ class _OnlineResultSheet extends StatelessWidget {
                     _ActionRow(
                       icon: Icons.surround_sound_rounded,
                       label: saving ? 'Downloading…' : 'Download Dolby Atmos',
-                      onTap: saving ? null : () => pick(OnlineResultAction.downloadAtmos),
+                      onTap: saving
+                          ? null
+                          : () => pick(OnlineResultAction.downloadAtmos),
                       last: true,
                     ),
                 ],

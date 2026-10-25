@@ -43,6 +43,15 @@ AppleMusicAlbumData album({String name = title, String? cover}) =>
       ],
     );
 void main() {
+  test('identical generic credits match without becoming wildcards', () {
+    for (final credit in ['Various Artists', 'Unknown Artist']) {
+      expect(albumArtistsMatch(credit, credit.toUpperCase()), true);
+      expect(albumArtistsMatch(credit, 'Sai Abhyankkar'), false);
+      expect(albumArtistsMatch('Sai Abhyankkar', credit), false);
+    }
+    expect(albumArtistsMatch('', ''), false);
+    expect(albumArtistsMatch('Various Artists', 'Unknown Artist'), false);
+  });
   test('a verified cover survives an unavailable track list', () async {
     final api = _Apple()
       ..data = AppleMusicAlbumData(

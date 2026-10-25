@@ -3,15 +3,12 @@ import '../../features/discovery/recommendation_match.dart';
 
 /// Only generic soundtrack wording is interchangeable. Language, live, deluxe
 /// and score qualifiers remain part of the release identity.
-String albumTitleKey(String value) => recommendationKey(
-  value.replaceAll(
-    RegExp(
-      r'\s*[\[(](?:original\s+)?(?:motion\s+picture\s+|movie\s+)?soundtrack[\])]',
-      caseSensitive: false,
-    ),
-    '',
-  ),
+final _soundtrackQualifier = RegExp(
+  r'\s*[\[(](?:original\s+)?(?:motion\s+picture\s+|movie\s+)?soundtrack[\])]',
+  caseSensitive: false,
 );
+String albumTitleKey(String value) =>
+    recommendationKey(value.replaceAll(_soundtrackQualifier, ''));
 
 bool albumTitlesMatch(String a, String b) =>
     albumTitleKey(a).isNotEmpty && albumTitleKey(a) == albumTitleKey(b);
@@ -26,6 +23,8 @@ String _artistKey(String value) {
 }
 
 bool albumArtistsMatch(String requested, String candidate) {
+  final full = recommendationKey(requested);
+  if (full.isNotEmpty && full == recommendationKey(candidate)) return true;
   final wanted = splitArtistCredits(requested).map(_artistKey).toSet()
     ..removeAll({'', 'various artists', 'unknown artist'});
   return wanted.isNotEmpty &&

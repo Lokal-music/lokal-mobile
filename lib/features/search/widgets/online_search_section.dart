@@ -75,9 +75,16 @@ class OnlineSearchSection extends ConsumerStatefulWidget {
     this.pendingSong,
     this.prepare,
     this.downloader,
+    this.qualityLookup,
   });
 
   final String query;
+
+  /// Replaces native/network stream inspection in controlled widget tests.
+  final Future<String?> Function(String videoId, Future<void> cancel)? qualityLookup;
+
+  @visibleForTesting
+  static void resetSourceSelection() => _OnlineSearchSectionState._remembered = null;
 
   /// Loads the sources; replaced in tests.
   final Future<List<OnlineSource>> Function(
@@ -148,6 +155,9 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         final lookup = gate.then((_) async {
           if (!mounted || cancelled.isCompleted) return null;
           try {
+            if (widget.qualityLookup != null) {
+              return await widget.qualityLookup!(videoId, cancelled.future);
+            }
             final audio = await YoutubeAudio(DiscoveryHttp(_client))
                 .resolve(videoId, cancel: cancelled.future)
                 .timeout(const Duration(seconds: 55));
@@ -410,7 +420,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
                   'to, so it’s in Music/${LibraryDownloader.folderName}, '
                   'now part of your library.'
             : 'Saved ${track.title} to your library '
-                  '(${saved.folderName}/${LibraryDownloader.folderName}).',
+                  '(${saved.folderName}).',
       );
     } catch (error) {
       _say('Couldn’t save ${track.title}. ${discoveryError(error)}');
