@@ -9,6 +9,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flick/core/theme/app_colors.dart';
 import 'package:flick/services/album_art_service.dart';
 import 'package:flick/services/artwork_gate.dart';
+import 'package:flick/features/player/widgets/player_artwork_quality.dart';
 import 'package:flick/widgets/common/flick_artwork_placeholder.dart';
 
 export 'package:flick/services/artwork_gate.dart';
@@ -305,44 +306,49 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
   }
 
   Widget _buildNetworkImage(String imagePath, int? decodeWidth) {
-    return Image.network(
-      imagePath,
+    final host = Uri.tryParse(imagePath)?.host.toLowerCase() ?? '';
+    final isAmazon = host == 'm.media-amazon.com' ||
+        host == 'images-na.ssl-images-amazon.com' ||
+        host == 'images-eu.ssl-images-amazon.com' ||
+        host == 'images-fe.ssl-images-amazon.com' ||
+        host == 'images.amazon.com' ||
+        host == 'ecx.images-amazon.com';
+    final variants = isAmazon
+        ? PlayerArtworkQuality.candidates(imagePath)
+        : <String>[imagePath];
+
+    Widget imageAt(int index) => Image.network(
+      variants[index],
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
-      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded || frame != null) {
-          return child;
-        }
-        return SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: widget.errorWidget ?? CachedImageWidget.defaultErrorWidget(),
-        );
-      },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
-        );
-      },
-      // Use lower resolution for thumbnails
+      frameBuilder: (context, child, frame, synchronous) =>
+          synchronous || frame != null ? child : SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
+      ),
+      errorBuilder: (context, error, stackTrace) =>
+          index + 1 < variants.length
+              ? imageAt(index + 1)
+              : SizedBox(
+                  width: widget.width,
+                  height: widget.height,
+                  child: widget.errorWidget ??
+                      CachedImageWidget.defaultErrorWidget(),
+                ),
+      loadingBuilder: (context, child, progress) =>
+          progress == null ? child : SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: widget.placeholder ?? CachedImageWidget.defaultPlaceholder(),
+      ),
       cacheWidth: decodeWidth,
       cacheHeight: widget.useThumbnail && widget.thumbnailHeight != null
           ? widget.thumbnailHeight
           : null,
     );
+    return imageAt(0);
   }
 }
 
