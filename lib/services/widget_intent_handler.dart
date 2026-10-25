@@ -49,7 +49,11 @@ class WidgetIntentHandler {
     try {
       final raw = await _channel?.invokeMethod<String>('takePendingAction');
       if (raw == null || raw.isEmpty) return false;
-      await _dispatch(Uri.tryParse(raw));
+      // Acknowledge receipt promptly. Flow discovery can take seconds; the
+      // native receiver has a three-second deadline and would otherwise
+      // needlessly open the app while the command is already running.
+      // _dispatch catches failures and publishes an actionable status.
+      unawaited(_dispatch(Uri.tryParse(raw)));
       return true;
     } on MissingPluginException {
       return false;
