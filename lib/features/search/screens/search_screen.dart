@@ -1,6 +1,7 @@
 import '../providers/recent_search_tracks.dart';
 import '../widgets/online_catalogue_search_section.dart';
 import '../widgets/artist_search_portrait.dart';
+import 'package:flick/features/library_jobs/artist_metadata.dart';
 import '../widgets/global_catalogue_search_section.dart';
 import '../widgets/recent_search_grid.dart';
 
@@ -899,7 +900,7 @@ class _SongTile extends ConsumerWidget {
   }
 }
 
-class _ArtistTile extends StatelessWidget {
+class _ArtistTile extends ConsumerWidget {
   final String name;
   final List<Song> songs;
   final IconData icon;
@@ -912,52 +913,12 @@ class _ArtistTile extends StatelessWidget {
     required this.onTap,
   });
 
-  String? _getArt(List<Song> list) {
-    for (final s in list) {
-      if (s.albumArt != null && s.albumArt!.isNotEmpty) return s.albumArt;
-    }
-    return null;
-  }
-
-  String? _getArtSource(List<Song> list) {
-    for (final s in list) {
-      final p = s.filePath;
-      if (p != null && p.isNotEmpty) return p;
-    }
-    return null;
-  }
-
-  String _initials(String value) {
-    final words = value.trim().split(RegExp(r'\s+'));
-    if (words.length >= 2 && words[0].isNotEmpty && words[1].isNotEmpty) {
-      return '${words[0][0]}${words[1][0]}'.toUpperCase();
-    }
-    if (value.trim().isNotEmpty) return value.trim()[0].toUpperCase();
-    return '?';
-  }
-
-  Widget _buildInitials(BuildContext context) {
-    return Container(
-      color: AppColors.surfaceLight,
-      child: Center(
-        child: Text(
-          _initials(name),
-          style: TextStyle(
-            fontFamily: 'GoogleSansFlex',
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: context.adaptiveTextSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final portrait = ref.watch(artistMetadataProvider.select(
+      (paths) => paths[ArtistMetadata.key(name)],
+    ));
     final albumCount = songs.map((s) => s.album ?? '').toSet().length;
-    final art = _getArt(songs);
-    final artSource = _getArtSource(songs);
     return ListTile(
       leading: Container(
         width: 48,
@@ -967,7 +928,7 @@ class _ArtistTile extends StatelessWidget {
           color: AppColors.surfaceLight,
           border: Border.all(color: AppColors.glassBorder),
         ),
-        child: ArtistSearchPortrait(name: name),
+        child: ArtistSearchPortrait(name: name, localPath: portrait),
       ),
       title: Text(
         name,
