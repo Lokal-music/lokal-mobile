@@ -225,7 +225,7 @@ class WidgetRecommendationService {
           .where((row) {
             final art = (row['artwork'] ?? '').toString();
             return art.startsWith('content://') ||
-                (art.isNotEmpty && File(art).isFile);
+                (art.isNotEmpty && File(art).existsSync());
           })
           .take(7).toList();
     } catch (_) { return const []; }
