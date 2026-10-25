@@ -99,8 +99,10 @@ class PlayerArtworkQuality {
         caseSensitive: false,
       ).firstMatch(path);
       if (transform != null) {
+        // Amazon's unsized object is the original upload, not a 1200px
+        // upscale of the thumbnail. Retain the thumbnail as a safe fallback.
         final updated = path.replaceRange(
-          transform.start, transform.end, '._SL1200_.${transform[1]}',
+          transform.start, transform.end, '.${transform[1]}',
         );
         if (updated != path) upgraded = uri.replace(path: updated).toString();
       }
