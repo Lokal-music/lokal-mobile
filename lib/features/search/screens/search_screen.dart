@@ -105,7 +105,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     final enabled = ref.watch(searchFilterProvider);
     final scope = ref.watch(searchScopeProvider);
-    final isAllEnabled = false;
     final repoQuery = _debouncedQuery;
     final hasInput = _controller.text.trim().isNotEmpty;
     final hasQuery = repoQuery.isNotEmpty;
@@ -165,11 +164,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     scope: scope,
                     onScopeChanged: (value) =>
                         ref.read(searchScopeProvider.notifier).select(value),
-                    isAllEnabled: isAllEnabled,
                     onToggle: (cat) =>
                         ref.read(searchFilterProvider.notifier).toggle(cat),
-                    onToggleAll: () =>
-                        ref.read(searchFilterProvider.notifier).toggleAll(),
                     counts: counts,
                     query: repoQuery,
                   );
