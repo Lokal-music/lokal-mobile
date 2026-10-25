@@ -30,6 +30,8 @@ jobs:
       IPHONEOS_DEPLOYMENT_TARGET: '15.0'
       DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
       IOS_SIMULATOR_RUNTIME_VERSION: '26.0'
+      LOKAL_IOS_CARGO_CACHE_ROOT: ${{ github.workspace }}/.dart_tool/lokal-ios-cargo
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,6 +63,16 @@ jobs:
         run: |
           dart pub get --enforce-lockfile
           dart analyze --no-fatal-warnings lib/src/builder.dart
+      - name: Restore the matching native build cache
+        id: rust_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .dart_tool/lokal-ios-cargo
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            ~/.cargo/registry/index
+          key: ios-cargo-${{ runner.os }}-${{ runner.arch }}-xcode26.0.1-rust1.98.0-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml', 'rust/cargokit.yaml', 'rust/**/*.rs', 'rust/vendor/**', 'rust_builder/cargokit/build_tool/lib/**', 'rust_builder/cargokit/*.sh') }}
       - name: Boot an iPhone simulator
         run: python3 tool/ios_simulator.py
       - name: Verify the simulator with a minimal Flutter control app
@@ -90,6 +102,7 @@ jobs:
             exit 1
           fi
       - name: Build the release iPhone app without signing credentials
+        id: device_build
         run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}'
       - name: Inspect and package the engineering IPA
         id: package
@@ -176,3 +189,13 @@ jobs:
             printf '| Real startup, scanner, QuickJS and playback | %s |\n' "$SMOKE_RESULT"
             printf '\nAn engineering IPA is not a qualified release. Physical iPhone and Windows installation acceptance remain separate.\n'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save successfully compiled native dependencies
+        if: always() && steps.device_build.outcome == 'success' && steps.rust_cache.outputs.cache-hit != 'true' && steps.rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .dart_tool/lokal-ios-cargo
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            ~/.cargo/registry/index
+          key: ${{ steps.rust_cache.outputs.cache-primary-key }}

@@ -1020,6 +1020,9 @@ class PlayerService {
   }
 
   void _initBluetoothReconnectHandling() {
+    // iOS route/interruption events come from audio_session. This channel
+    // belongs to Android's A2DP/HEADSET integration.
+    if (!Platform.isAndroid) return;
     _bluetoothDeviceEventSubscription = BluetoothService.instance.deviceEvents
         .listen((event) {
           final type = event['event'] as String?;

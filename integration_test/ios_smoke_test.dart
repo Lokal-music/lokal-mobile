@@ -14,6 +14,7 @@ import 'package:flick/src/rust/api/morneye_api.dart';
 import 'package:flick/src/rust/api/scanner.dart' as scanner;
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show SizedBox;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -78,6 +79,13 @@ void main() {
   testWidgets('iPhone cold launch, native scanner/add-ons and real playback', (
     tester,
   ) async {
+    final startupErrors = <String>[];
+    final testErrorHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      startupErrors.add(details.toString());
+      testErrorHandler?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = testErrorHandler);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lyrics_auto_fetch', false);
     debugPrint('iOS smoke: real application bootstrap');
@@ -90,14 +98,17 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     }
     expect(find.byType(FlickPlayerApp), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    expect(tester.takeException(), isNull, reason: startupErrors.join('\n\n'));
     final identity = await const MethodChannel('lokal/app_info')
         .invokeMapMethod<String, dynamic>('get');
     expect(identity?['version'], isNotEmpty);
 
-    final directory = await Directory(
-      '${(await getTemporaryDirectory()).path}/ios-native-smoke',
-    ).create(recursive: true);
+    final directory = await (await getTemporaryDirectory()).createTemp(
+      'ios-native-smoke-',
+    );
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
     final audio = File('${directory.path}/Generated tone.wav');
     await audio.writeAsBytes(_tone(), flush: true);
     final scan = await scanner.scanRootDir(
@@ -192,7 +203,7 @@ void main() {
     await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
     await player.pause();
+    await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();
-    await directory.delete(recursive: true);
   }, timeout: const Timeout(Duration(minutes: 3)));
 }

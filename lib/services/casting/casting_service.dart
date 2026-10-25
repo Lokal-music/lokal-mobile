@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
 import '../../models/song.dart';
 import '../player_service.dart';
 import '../remote_source_service.dart';
@@ -41,8 +43,9 @@ class CastingService {
 
   /// Remote volume 0..1 while casting; null when local. Mirrors the TV-side
   /// value so the system VolumeProvider and in-app slider stay in sync.
-  final ValueNotifier<double?> remoteVolumeNotifier =
-      ValueNotifier<double?>(null);
+  final ValueNotifier<double?> remoteVolumeNotifier = ValueNotifier<double?>(
+    null,
+  );
 
   CastDevice? _activeDevice;
   Song? _currentSong;
@@ -166,9 +169,7 @@ class CastingService {
       final pos = ps.positionNotifier.value;
       unawaited(ps.play(song));
       if (pos.inSeconds > 3) {
-        unawaited(
-          ps.seek(pos).then((_) => ps.resume()).catchError((_) {}),
-        );
+        unawaited(ps.seek(pos).then((_) => ps.resume()).catchError((_) {}));
       }
     }
     unawaited(ps.refreshNotificationState());
@@ -261,8 +262,7 @@ class CastingService {
   void _publishDlnaRoutes(List<CastDevice> dlnaDevices) {
     _invokeDlnaRoute('publishRoutes', {
       'routes': [
-        for (final d in dlnaDevices)
-          {'id': d.id, 'name': d.name},
+        for (final d in dlnaDevices) {'id': d.id, 'name': d.name},
       ],
     });
   }
@@ -280,6 +280,9 @@ class CastingService {
   // ==================== chromecast native events ====================
 
   void _listenChromecastEvents() {
+    // The existing event bridge is supplied by the Android Cast SDK. iOS
+    // system routes use AVAudioSession; a sender adapter is a separate port.
+    if (!Platform.isAndroid) return;
     if (_ccEventsSub != null) return;
     _ccEventsSub = _chromecast.events.listen(
       (e) {
@@ -327,7 +330,8 @@ class CastingService {
     final duration = (e['duration'] as num?)?.toInt();
     final playing = e['playing'] as bool?;
     if (playing != null) ps.isPlayingNotifier.value = playing;
-    if (position != null) ps.positionNotifier.value = Duration(milliseconds: position);
+    if (position != null)
+      ps.positionNotifier.value = Duration(milliseconds: position);
     if (duration != null && duration > 0) {
       ps.durationNotifier.value = Duration(milliseconds: duration);
     }
