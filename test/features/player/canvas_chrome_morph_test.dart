@@ -96,7 +96,7 @@ void main() {
       final boundary = GlobalKey();
       const source = Rect.fromLTWH(10, 700, 52, 52);
 
-      Future<Color> pixelAt(double progress, {required bool liftChrome}) async {
+      Future<Color> pixelAt(double progress, {required bool liftChrome, int x = 65, int y = 565}) async {
         final shift = (1 - progress) * 700;
         await tester.pumpWidget(MaterialApp(
           home: RepaintBoundary(
@@ -145,7 +145,6 @@ void main() {
         ))!;
         // With the sheet halfway open, the flying Canvas covers this point
         // unless the chrome has its own foreground paint pass.
-        const x = 65, y = 565;
         final index = (y * image.width + x) * 4;
         final color = Color.fromARGB(
           data.getUint8(index + 3),
@@ -165,7 +164,7 @@ void main() {
       expect(foreground.g, greaterThan(foreground.r),
           reason: 'Title and controls remain visible over the moving Canvas');
 
-      final settled = await pixelAt(1, liftChrome: true);
+      final settled = await pixelAt(1, liftChrome: true, y: 240);
       expect(settled.g, greaterThan(settled.r),
           reason: 'At rest, chrome returns to its normal render position');
       expect(tester.takeException(), isNull);
