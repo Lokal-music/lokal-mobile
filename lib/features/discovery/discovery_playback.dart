@@ -384,7 +384,10 @@ class DiscoveryPlaybackCache {
       // the high-resolution *same artwork* instead of permanently embedding
       // the tiny search rendition into the cached audio file.
       var completed = false;
+      final coverDeadline = DateTime.now().add(const Duration(seconds: 15));
       for (final candidate in PlayerArtworkQuality.candidates(track.artwork)) {
+        final remaining = coverDeadline.difference(DateTime.now());
+        if (remaining <= Duration.zero) break;
         final image = Uri.tryParse(candidate);
         if (image == null || image.scheme != 'https') continue;
         try {
@@ -393,7 +396,7 @@ class DiscoveryPlaybackCache {
             image,
             headers: const {'Accept': 'image/*'},
             maxBytes: _maxCoverBytes,
-            deadline: const Duration(seconds: 15),
+            deadline: remaining,
             onChunk: sink!.add,
           );
           await sink!.close();
