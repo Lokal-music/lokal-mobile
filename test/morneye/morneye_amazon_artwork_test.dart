@@ -20,7 +20,9 @@ void main() {
       'artists': ['Artist'],
       'cover_art': 'https://m.media-amazon.com/images/I/X123._AC_SL300_.jpg',
     }, 'a-amazon');
-    expect(cover.thumbnail, 'https://m.media-amazon.com/images/I/X123.jpg');
+    expect(cover.thumbnail, 'https://m.media-amazon.com/images/I/X123._AC_SL300_.jpg');
+    expect(PlayerArtworkQuality.candidates(cover.thumbnail).first,
+        'https://m.media-amazon.com/images/I/X123.jpg');
 
     final album = MorneyeTrack.of({
       'id': 'B012345678',
@@ -34,7 +36,9 @@ void main() {
         ],
       },
     }, 'a-amazon');
-    expect(album.thumbnail, 'https://m.media-amazon.com/images/I/Y123.jpg');
+    expect(album.thumbnail, 'https://m.media-amazon.com/images/I/Y123._AC_SL500_.jpg');
+    expect(PlayerArtworkQuality.candidates(album.thumbnail).first,
+        'https://m.media-amazon.com/images/I/Y123.jpg');
   });
 
   test('Amazon canonical search results skip a redundant metadata fetch', () {
