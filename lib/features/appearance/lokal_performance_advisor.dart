@@ -22,8 +22,8 @@ String lokalFrameBottleneck(int frames, int slowUi, int slowRaster) {
   return 'mixed';
 }
 
-/// Samples the first foreground minutes. Suggests once; never changes the look
-/// without a tap, and never measures background or already-solid surfaces.
+/// Suggests once after the first foreground minutes. Lightweight diagnostics
+/// continue for later hangs; background samples are discarded.
 class LokalPerformanceAdvisor extends ConsumerStatefulWidget {
   const LokalPerformanceAdvisor({super.key, required this.child});
   final Widget child;
@@ -86,6 +86,7 @@ class _LokalPerformanceAdvisorState
   Timer? _diagnosticTimer;
   static const _diagnostics = MethodChannel('com.mossapps.flick/diagnostics');
   int _windowFrames = 0, _windowUiMisses = 0, _windowRasterMisses = 0;
+  int _maxUiMicros = 0, _maxRasterMicros = 0;
   int _scrollFrames = 0, _scrollRasterMisses = 0;
   int _navigationFrames = 0, _navigationRasterMisses = 0;
   int? _previousCpuMs, _previousWallMs;
@@ -115,12 +116,18 @@ class _LokalPerformanceAdvisorState
     if (!_foreground || !mounted) return;
     final rate = View.of(context).display.refreshRate;
     final budget = 1000000 / (rate > 0 ? rate : 60);
-    final maySuggest = !_seen &&
+    final maySuggest = _timer != null && !_seen &&
         !ref.read(lokalAppearanceProvider).performanceMode &&
         DateTime.now().microsecondsSinceEpoch -
                 LokalPerformanceAdvisor.lastGlassPaintMicros <=
             500000;
     for (final frame in values) {
+      if (frame.buildDuration.inMicroseconds > _maxUiMicros) {
+        _maxUiMicros = frame.buildDuration.inMicroseconds;
+      }
+      if (frame.rasterDuration.inMicroseconds > _maxRasterMicros) {
+        _maxRasterMicros = frame.rasterDuration.inMicroseconds;
+      }
       final slowUi = frame.buildDuration.inMicroseconds > budget;
       final slowRaster = frame.rasterDuration.inMicroseconds > budget;
       _windowFrames++;
@@ -147,6 +154,7 @@ class _LokalPerformanceAdvisorState
       _previousCpuMs = null;
       _previousWallMs = null;
       _windowFrames = _windowUiMisses = _windowRasterMisses = 0;
+      _maxUiMicros = _maxRasterMicros = 0;
       _scrollFrames = _scrollRasterMisses = 0;
       _navigationFrames = _navigationRasterMisses = 0;
       return;
@@ -180,6 +188,8 @@ class _LokalPerformanceAdvisorState
           '[perf] ${snapshot['manufacturer']} ${snapshot['model']} '
           'sdk=${snapshot['sdk']} impellerRequested=${snapshot['impellerRequested']} '
           'frames=$frames fps=${fps.toStringAsFixed(1)} '
+          'windowMs=$elapsed maxUiMs=${(_maxUiMicros / 1000).toStringAsFixed(1)} '
+          'maxRasterMs=${(_maxRasterMicros / 1000).toStringAsFixed(1)} '
           'uiMiss=$ui rasterMiss=$raster '
           'suspect=${lokalFrameBottleneck(frames, ui, raster)} '
           'processCpuCores=${cpuCores.toStringAsFixed(2)} '
@@ -193,6 +203,7 @@ class _LokalPerformanceAdvisorState
       _previousCpuMs = cpu;
       _previousWallMs = now;
       _windowFrames = _windowUiMisses = _windowRasterMisses = 0;
+      _maxUiMicros = _maxRasterMicros = 0;
       _scrollFrames = _scrollRasterMisses = 0;
       _navigationFrames = _navigationRasterMisses = 0;
     } catch (_) {
@@ -201,9 +212,9 @@ class _LokalPerformanceAdvisorState
   }
 
   Future<void> _finish() async {
-    _diagnosticTimer?.cancel();
-    unawaited(_logPerformance());
-    SchedulerBinding.instance.removeTimingsCallback(_timings);
+    // Only the suggestion window ends here. The reported occasional hangs
+    // can happen after two minutes, so keep the foreground counters alive.
+    _timer = null;
     if (!mounted ||
         _seen ||
         _frames < 120 ||
@@ -255,6 +266,7 @@ class _LokalPerformanceAdvisorState
     if (!_foreground) {
       _previousCpuMs = _previousWallMs = null;
       _windowFrames = _windowUiMisses = _windowRasterMisses = 0;
+      _maxUiMicros = _maxRasterMicros = 0;
       _scrollFrames = _scrollRasterMisses = 0;
       _navigationFrames = _navigationRasterMisses = 0;
     }

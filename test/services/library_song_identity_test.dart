@@ -22,6 +22,31 @@ Song song(
 );
 
 void main() {
+  test(
+    '5500 phone songs retain order, identity and lookups without desktop rows',
+    () {
+      final library = [
+        for (var i = 0; i < 5500; i++)
+          song('$i', 'Song $i (2011 Remaster)', '/music/$i.flac'),
+      ];
+      final remote = song(
+        'remote',
+        'Remote',
+        'webdav://1/song',
+        source: 'webdav',
+      );
+      final ghost = song('ghost', 'Ghost', 'ghost://1/song', source: 'lokal');
+      final index = preferredLibrarySongIndex([...library, remote, ghost]);
+      expect(index.visible, [...library, remote]);
+      expect(index.byId.length, 5501);
+      for (final original in library) {
+        expect(identical(index.byId[original.id], original), true);
+      }
+      expect(index.byId['ghost'], isNull);
+    },
+  );
+
+
   test('history ghosts stay hidden, desktop-only songs stay available', () {
     final local = song('1', 'Local', '/music/local.flac');
     final duplicate = song('2', 'Local', 'lokal://1/2', source: 'lokal');

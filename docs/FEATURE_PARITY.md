@@ -732,6 +732,9 @@ Isar writes and checkpoints its existing file fingerprints during the backlog,
 so reopening does not repeat an entire unfinished library migration. Explicit
 scans/repairs retain their foreground scheduling. Regression coverage uses fake
 repositories/probes; Samsung S25 Ultra thermal/FPS confirmation remains pending.
+The large-library follow-up skips redundant complete-row probes and automatic SAF
+staging, yields artist-credit warmup, and bypasses desktop recording matching for
+phone-only libraries. See `docs/LARGE_LIBRARY_HANGS.md` for evidence and limits.
 
 
 ### Player cover return and miniplayer queue sheet

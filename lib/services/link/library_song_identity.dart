@@ -6,10 +6,7 @@ import 'package:flick/models/song.dart';
 /// desktop song may be hidden in the library in favour of an equivalent local
 /// recording, but that must never make a saved playlist entry disappear.
 class PreferredLibrarySongIndex {
-  const PreferredLibrarySongIndex({
-    required this.visible,
-    required this.byId,
-  });
+  const PreferredLibrarySongIndex({required this.visible, required this.byId});
 
   final List<Song> visible;
 
@@ -22,6 +19,22 @@ class PreferredLibrarySongIndex {
 /// artist, normalized title, duration within two seconds, and compatible
 /// known album tags. Do not conflate different edits/masters.
 PreferredLibrarySongIndex preferredLibrarySongIndex(List<Song> songs) {
+  // Most phone libraries have no desktop stream rows to reconcile. Avoid
+  // normalizing every title/artist on every artwork or metadata update.
+  if (!songs.any(
+    (song) =>
+        song.sourceType == 'lokal' &&
+        !(song.filePath?.startsWith('ghost://') ?? false),
+  )) {
+    final visible = [
+      for (final song in songs)
+        if (!(song.filePath?.startsWith('ghost://') ?? false)) song,
+    ];
+    return PreferredLibrarySongIndex(
+      visible: visible,
+      byId: {for (final song in visible) song.id: song},
+    );
+  }
   String? recordingKey(Song song) {
     if (song.duration <= Duration.zero) return null;
     final artist = recommendationKey(leadArtist(song.artist));
