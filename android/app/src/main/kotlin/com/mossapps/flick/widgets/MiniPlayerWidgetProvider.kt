@@ -69,17 +69,16 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_artist, WidgetIntents.openApp(context, 12))
         }
 
-        // A missing cover must not create three huge identical Lokal logos.
-        // Keep the artwork slot neutral until the async cache has a real image.
-        val showArt = WidgetPrefs.getShowAlbumArt(context) && (!horizontal || width >= 190)
-        views.setViewVisibility(R.id.widget_art_bg, if (showArt) View.VISIBLE else View.GONE)
-        if (showArt) {
-            val art = if (hasSong) WidgetArtLoader.load(
-                prefs.getString(WidgetPrefs.KEY_ALBUM_ART, ""), 288
-            ) else null
-            if (art != null) views.setImageViewBitmap(R.id.widget_art_bg, art)
-            else views.setImageViewResource(R.id.widget_art_bg, R.drawable.widget_art_placeholder)
-        }
+        // Artwork is mandatory at EVERY size. Never hide it for small widget
+        // widths and never apply the obsolete show/hide artwork toggle.
+        val artworkPath = prefs.getString(WidgetPrefs.KEY_ALBUM_ART, "").orEmpty()
+        val previousPath = prefs.getString(WidgetPrefs.KEY_LAST_ALBUM_ART, "").orEmpty()
+        val art = if (hasSong) WidgetArtLoader.load(artworkPath, 288) else null
+        val lastArt = if (art == null) WidgetArtLoader.load(previousPath, 288) else null
+        views.setViewVisibility(R.id.widget_art_bg, View.VISIBLE)
+        if (art != null) views.setImageViewBitmap(R.id.widget_art_bg, art)
+        else if (lastArt != null) views.setImageViewBitmap(R.id.widget_art_bg, lastArt)
+        else views.setImageViewResource(R.id.widget_art_bg, R.drawable.widget_art_placeholder)
         views.setOnClickPendingIntent(R.id.widget_art_bg, WidgetIntents.openApp(context, 10))
         views.setViewVisibility(R.id.widget_scrim, View.GONE)
 
