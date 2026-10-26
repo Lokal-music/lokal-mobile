@@ -17,6 +17,9 @@ import '../widgets/player_panel_stage.dart';
 import '../widgets/motion_art_widget.dart';
 
 import 'package:flick/services/motion_art/moving_cover_settings.dart';
+import 'package:flick/services/motion_art/moving_cover_availability.dart';
+import 'package:flick/services/motion_art/animated_artwork_service.dart';
+import 'package:flick/features/spotify/spotify_storage.dart';
 
 import '../widgets/player_transport_controls.dart';
 import '../widgets/artwork_gradient_backdrop.dart';
@@ -2116,24 +2119,48 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               width: (constraints.maxWidth - 8) / 4,
             ),
           ),
-          if (_player.currentSongNotifier.value case final song?)
-            chip(
-              Icons.motion_photos_on_rounded,
-              lokalText('Cover'),
-              () => ref
-                  .read(movingCoverSettingsProvider.notifier)
-                  .setSongEnabled(
-                    movingCoverSongKey(song),
-                    ref
-                        .read(movingCoverSettingsProvider)
-                        .disabledSongs
-                        .contains(movingCoverSongKey(song)),
-                  ),
-              active: !ref
-                  .watch(movingCoverSettingsProvider)
-                  .disabledSongs
-                  .contains(movingCoverSongKey(song)),
-              width: (constraints.maxWidth - 8) / 4,
+          if (!_videoActive)
+            if (_player.currentSongNotifier.value case final song?)
+            // Probe all configured motion sources, including Spotify Canvas.
+            // A saved per-song "off" setting must not hide this control:
+            // it still needs to offer a way to turn the clip back on.
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                movingCoverRevision,
+                SecureSpotifyTokenStore.sessionRevision,
+                AnimatedArtworkService.instance.revision,
+              ]),
+              builder: (context, _) => Consumer(
+                builder: (context, coverRef, _) {
+                  final available = coverRef.watch(
+                    movingCoverAvailabilityProvider((
+                      title: song.title,
+                      artist: song.artist,
+                      album: song.album,
+                      duration: song.duration,
+                      sourceRevision: movingCoverRevision.value,
+                      spotifySessionRevision:
+                          SecureSpotifyTokenStore.sessionRevision.value,
+                      artworkRevision:
+                          AnimatedArtworkService.instance.revision.value,
+                    )),
+                  );
+                  if (available.value != true) return const SizedBox.shrink();
+                  final disabled = coverRef
+                      .watch(movingCoverSettingsProvider)
+                      .disabledSongs
+                      .contains(movingCoverSongKey(song));
+                  return chip(
+                    Icons.motion_photos_on_rounded,
+                    lokalText('Cover'),
+                    () => coverRef
+                        .read(movingCoverSettingsProvider.notifier)
+                        .setSongEnabled(movingCoverSongKey(song), disabled),
+                    active: !disabled,
+                    width: (constraints.maxWidth - 8) / 4,
+                  );
+                },
+              ),
             ),
           ValueListenableBuilder<double>(
             valueListenable: _player.playbackSpeedNotifier,
