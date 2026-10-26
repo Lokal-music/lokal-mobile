@@ -223,6 +223,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _player.currentSongNotifier.addListener(_onSongChanged);
     _player.favoriteNotificationToggleNotifier.addListener(_refreshFavorite);
     _refreshFavorite();
+    // The Space footer action must reflect *actual* line/word-timed
+    // lyrics. Warm cached/local lyrics before the Lyrics panel opens.
+    unawaited(_loadLyrics());
   }
 
   @override
@@ -247,7 +250,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _restoreCanvasControls();
     _draggingSeek = false;
     _refreshFavorite();
-    if (_showLyrics || _immersiveLyrics) _loadLyrics();
+    // Availability changes when the playing track changes, even with the
+    // standard player visible.
+    unawaited(_loadLyrics());
   }
 
   Future<void> _refreshFavorite() async {
@@ -1808,13 +1813,17 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             active: _showLyrics,
             width: (constraints.maxWidth - 8) / 4,
           ),
-          chip(
-            LucideIcons.maximize,
-            'Immersive',
-            _toggleImmersiveLyrics,
-            active: _immersiveLyrics,
-            width: (constraints.maxWidth - 8) / 4,
-          ),
+          if (_lyricsForSongId == _player.currentSongNotifier.value?.id &&
+              _lyrics != null &&
+              _lyrics!.isSynchronized &&
+              _lyrics!.lines.isNotEmpty)
+            chip(
+              LucideIcons.expand,
+              'Space',
+              _toggleImmersiveLyrics,
+              active: _immersiveLyrics,
+              width: (constraints.maxWidth - 8) / 4,
+            ),
           ValueListenableBuilder<Duration?>(
             valueListenable: _player.sleepTimerRemainingNotifier,
             builder: (_, remaining, __) => chip(
