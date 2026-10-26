@@ -22,8 +22,8 @@ is required to perform these installation and acceptance steps.
 `Lokal-unsigned.ipa.json` identifies the source commit, version/build and Apple
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
-Build 32 is the current package through #217 with the full iOS 18.6 suite passing;
-its iOS 26 simulator fails to boot before app execution. Source/checksums and
+Build 34 is the current complete package checkpoint through #217, passing both
+iOS 18.6 and 26.0 suites on separate hosted Macs. Source/checksums and
 limits are recorded in [the evidence ledger](IOS_PORT.md).
 The engineering IPA is saved after binary inspection, before runtime tests;
 read the associated run's result for its acceptance status. Build 27 passes the

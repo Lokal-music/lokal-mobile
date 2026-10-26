@@ -1,3 +1,5 @@
+import 'package:flick/services/ios_local_audio_requests.dart';
+import 'package:flick/services/ios_local_audio_players.dart';
 import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/morneye/morneye_live_playback.dart';
@@ -2412,16 +2414,16 @@ class PlayerService {
     }
   }
 
-  Future<just_audio.AudioPlayer> _ensureAndroidPlayer() async {
+  Future<just_audio.AudioPlayer> _ensureAndroidPlayer() => IosLocalAudioRequests.run(() async {
     final existing = _justAudioPlayer;
     if (existing != null) {
       return existing;
     }
 
-    await _configureSystemAudioSession();
+    await IosLocalAudioRequests.wait(_configureSystemAudioSession());
     // Android supports request headers natively. Avoid the Dart loopback
     // proxy: a sleeping/unreachable desktop can leave its sockets pending.
-    final player = just_audio.AudioPlayer(
+    final player = IosLocalAudioPlayers.create(
       useProxyForRequestHeaders: false,
       handleInterruptions: !Platform.isIOS,
     );
@@ -2433,41 +2435,42 @@ class PlayerService {
       lastEqSessionId = sessionId;
       unawaited(reapplyEqualizer());
     });
-    await player.setVolume(_currentVolume);
-    await player.setSpeed(playbackSpeedNotifier.value);
-    await _updateLoopMode();
+    await IosLocalAudioRequests.wait(player.setVolume(_currentVolume));
+    await IosLocalAudioRequests.wait(player.setSpeed(playbackSpeedNotifier.value));
+    await IosLocalAudioRequests.wait(_updateLoopMode());
     return player;
-  }
+  });
 
-  Future<void> _configureAndroidPlayer(just_audio.AudioPlayer player) async {
+  Future<void> _configureAndroidPlayer(just_audio.AudioPlayer player) => IosLocalAudioRequests.run(() async {
     if (_justAudioPlayer != player) {
       _justAudioPlayer = player;
     }
 
     if ((Platform.isAndroid || Platform.isIOS) && _audioSessionConfigured) {
       try {
-        final session = await AudioSession.instance;
-        await session.setActive(true);
+        final session = await IosLocalAudioRequests.wait(AudioSession.instance);
+        await IosLocalAudioRequests.wait(session.setActive(true));
       } catch (e) {
         _debugLog('[AudioFocus] Failed to activate Android audio session: $e');
       }
     }
 
-    await player.setVolume(_currentVolume);
-    await player.setSpeed(playbackSpeedNotifier.value);
-    await _updateLoopMode();
-  }
+    await IosLocalAudioRequests.wait(player.setVolume(_currentVolume));
+    await IosLocalAudioRequests.wait(player.setSpeed(playbackSpeedNotifier.value));
+    await IosLocalAudioRequests.wait(_updateLoopMode());
+  });
 
   AndroidAudioEngine _createAndroidEngine() {
     final engine = AndroidAudioEngine(
+      guardRetirement: Platform.isIOS,
       engineType: Platform.isIOS
           ? AudioEngineType.iosSystem
           : AudioEngineType.normalAndroid,
       secondaryPlayerProvider: Platform.isIOS
-          ? () async => just_audio.AudioPlayer(
+          ? () => IosLocalAudioRequests.run(() async => IosLocalAudioPlayers.create(
               useProxyForRequestHeaders: false,
               handleInterruptions: false,
-            )
+            ))
           : null,
       playerProvider: _ensureAndroidPlayer,
       sourcesBuilder: _buildAudioSources,
@@ -4955,7 +4958,7 @@ class PlayerService {
     }
     _debugLog('[Playback] Resetting Android player after stalled source');
     try {
-      await player.dispose().timeout(const Duration(seconds: 3));
+      await IosLocalAudioPlayers.dispose(player).timeout(const Duration(seconds: 3));
     } catch (error) {
       _debugLog('[Playback] Timed-out Android player cleanup: $error');
     }
@@ -4972,7 +4975,7 @@ class PlayerService {
       await player.stop();
     } catch (_) {}
 
-    await player.dispose();
+    await IosLocalAudioPlayers.dispose(player);
     await _deactivateAndroidAudioSession();
     _justAudioPlayer = null;
     _audioSourceSequence = null;
@@ -7646,7 +7649,7 @@ class PlayerService {
 
     final player = _justAudioPlayer;
     if (player != null) {
-      unawaited(player.dispose());
+      unawaited(IosLocalAudioPlayers.dispose(player));
       _justAudioPlayer = null;
     }
     _playbackStateSubscription?.cancel();

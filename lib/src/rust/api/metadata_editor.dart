@@ -60,6 +60,7 @@ class TagEditFields {
   final String? album;
   final String? albumArtist;
   final String? genre;
+  final String? lyrics;
   final int? year;
   final int? trackNumber;
   final int? discNumber;
@@ -70,6 +71,7 @@ class TagEditFields {
     this.album,
     this.albumArtist,
     this.genre,
+    this.lyrics,
     this.year,
     this.trackNumber,
     this.discNumber,
@@ -82,6 +84,7 @@ class TagEditFields {
       album.hashCode ^
       albumArtist.hashCode ^
       genre.hashCode ^
+      lyrics.hashCode ^
       year.hashCode ^
       trackNumber.hashCode ^
       discNumber.hashCode;
@@ -96,6 +99,7 @@ class TagEditFields {
           album == other.album &&
           albumArtist == other.albumArtist &&
           genre == other.genre &&
+          lyrics == other.lyrics &&
           year == other.year &&
           trackNumber == other.trackNumber &&
           discNumber == other.discNumber;

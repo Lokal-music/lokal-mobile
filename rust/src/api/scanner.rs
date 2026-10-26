@@ -972,6 +972,7 @@ mod tests {
                 artist: Some("Track Artist".into()),
                 album: None,
                 album_artist: Some("Compilation Artist".into()),
+                lyrics: None,
                 genre: None,
                 year: None,
                 track_number: None,

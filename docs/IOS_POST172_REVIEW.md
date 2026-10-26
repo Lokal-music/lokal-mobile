@@ -1,10 +1,10 @@
 # iPhone review of mobile PRs after #172
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-Latest integration includes **38 merged PRs through #217**, main
-`ba8c7f5b9e6ab4e004f106ec1c02231143fb1d5b`. Build 27 validates the source through
-#210; build 29 passes the #216 continuation on iOS 18.6, but its iOS 26 simulator fails
-before app execution. Later Library labels/raw-sample checks await the next run.
+The candidate carries **40 reviewed merged PRs through #219**, including merged
+source `c8f8f574fdd2812a5a0e7398c47fac17cb6731ed`. Build 34 passes both complete
+iOS 18.6/26.0 native suites through #217. Later reset and lyrics changes require
+their own fresh native acceptance and do not borrow build-34 qualification.
 The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
 (merge `b26d8b9e08a8acc4d60b8aa2e2b7e3c4b521fdb1`). All 20 PRs below are
 included by ancestry, including stacked #180/#181; none is copied as a divergent
@@ -519,3 +519,48 @@ Build 33 was rejected during workflow validation before any runner or app test:
 a runner-specific path was placed in job-level environment configuration. The
 path now uses the step runtime environment. Local `actionlint` supplements YAML
 and shell parsing to validate GitHub Actions expression context availability.
+
+### Build 34: current complete dual-runtime checkpoint
+
+[Build 34](https://github.com/lokal-music/lokal-mobile/actions/runs/40335805541)
+passes the **complete native suite on both iOS 18.6 and 26.0**. The fresh iOS 26
+host passes boot, minimal Flutter control and the same compiled integration app;
+its fixture identity is preserved from the build job. Source:
+`cf8bcfa4a8a2fe6b8f7224812e56af2ef9617c11`; tree:
+`2ec3f9721139a923d35cb3983dc8fa3fd9d36c23`. The preserved IPA SHA-256 is
+`fe0a5479a0e4ba364584438c408f90d6f48823747c40ada8cbd1058bd4446d21`.
+All 34 device binaries, Cast resources/privacy/notices, source and matching symbols
+are retained. The actual Turkish screenshot and native render assertions confirm
+all six shortcut labels fit. This is the complete checkpoint through #217; it
+does not cover the later reset foundation or lyrics continuation. The optional
+network-dependent live video probe was not selected in this run.
+
+### Lyrics continuation through #219
+
+The recovery candidate carries **40 reviewed merged mobile PRs after #172**,
+including the merged #218/#219 source at
+`c8f8f574fdd2812a5a0e7398c47fac17cb6731ed`. The current published port checkpoint
+above remains through #217 until this candidate's native gates pass.
+
+| PR | iPhone UI / behavior | Verification |
+| --- | --- | --- |
+| [218](https://github.com/lokal-music/lokal-mobile/pull/218) | Validate LyricsPlus timing; fall back to plain text for unusable timelines. Show actual per-song provider hits and timing quality, preserve lyrics while checking an explicit provider, and save portable lyrics plus enhanced-LRC sidecars with downloaded audio. | Preserve app-owned iPhone Music fallback and byte-identical Atmos copies. Localize picker status/guidance in all ten phrase maps while keeping provider identifiers unchanged. Native codecs are regenerated with the request-fence API retained. |
+| [219](https://github.com/lokal-music/lokal-mobile/pull/219) | Correct the native edit/read metadata model so downloaded lyrics can be written. | Keep the 11-field read result unchanged and put nullable lyrics in TagEditFields. Fix two new tests for the pinned Lofty API and add the field to the existing scanner fixture; the actual Rust suite passes. |
+
+The lyrics/download/provider/locale selection passes **26** Flutter tests, including
+Turkish at 200% on 320/393px screens with unchanged `lyricsplus` selection. All
+**315** Rust tests pass, including actual FLAC lyrics persistence and ID3 USLT
+mapping. Android ARM64 native compilation succeeds with the pinned NDK; its first
+retry exhausted local generated cache space, after which only owned intermediate
+outputs were removed and the real compilation rerun successfully. Whole app
+analysis reports no errors (existing warnings/information remain). No live-provider
+recording, iPhone download/background, or physical-device result is inferred.
+
+The recovery observer remains deferred: request fencing and system/radio output
+retirement are preparation, not enabled media-services reset recovery.
+
+The updated candidate passes the exact **217-test** contract command committed
+in the iPhone workflow, covering shared output ownership, Cast, video/Space,
+retirement, lyrics/provider/download localization and add-ons. This is host
+contract evidence; the revised bootstrap fence probe and latest source still
+require the next hosted native run.

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:flick/models/song.dart';
 import 'package:flick/services/android_audio_engine.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
 class _Player implements ja.AudioPlayer {
   final errors = StreamController<ja.PlayerException>.broadcast(sync: true);
@@ -19,6 +20,7 @@ class _Player implements ja.AudioPlayer {
 
   double currentVolume = 1.0;
   int loads = 0, seeks = 0;
+  int disposals = 0;
   bool failLoad = false;
   Completer<void>? hungSeek;
   Completer<Duration?>? hungLoad;
@@ -91,7 +93,7 @@ class _Player implements ja.AudioPlayer {
   @override
   Future<void> play() async {}
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async => disposals++;
 
   Future<void> closeFixture() async {
     await Future.wait([
@@ -120,6 +122,133 @@ Future<void> finishCleanup(WidgetTester tester, Future<void> operation) async {
 }
 
 void main() {
+  const resetSong = Song(
+    id: 'retained',
+    title: 'Retained',
+    artist: 'Artist',
+    duration: Duration(minutes: 3),
+    fileType: 'FLAC',
+    filePath: '/retained.flac',
+  );
+
+  AndroidAudioEngine guarded(
+    Future<ja.AudioPlayer> Function() create, {
+    Future<void> Function()? destroy,
+  }) => AndroidAudioEngine(
+    guardRetirement: true,
+    playerProvider: create,
+    sourcesBuilder: () async =>
+        ja.AudioSource.uri(Uri.parse('file:///retained.flac')),
+    sourceBuilder: (_) async =>
+        ja.AudioSource.uri(Uri.parse('file:///retained.flac')),
+    playlistProvider: () => [resetSong],
+    configurePlayer: (_) async {},
+    disposeEngine: destroy ?? () async {},
+    shouldSuppressTrackSync: () => false,
+    shouldIgnoreTrack: (_) => false,
+    shouldFastStartCurrentTrackOnly: () => false,
+  );
+
+  test('iPhone disposal waits for a pending native player factory', () async {
+    final factory = Completer<ja.AudioPlayer>();
+    final player = _Player();
+    final engine = guarded(() => factory.future);
+    final rejected = expectLater(
+      engine.load(resetSong),
+      throwsA(isA<LocalAudioRequestRetired>()),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final cleanup = engine.dispose();
+    expect(identical(cleanup, engine.dispose()), isTrue);
+    var cleaned = false;
+    cleanup.then((_) => cleaned = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(cleaned, isFalse);
+    factory.complete(player);
+    await cleanup;
+    await rejected;
+    expect(player.disposals, greaterThanOrEqualTo(1));
+    expect(player.loads, 0);
+    await player.closeFixture();
+  });
+
+  test(
+    'iPhone retired source load cannot continue into configure or play',
+    () async {
+      final player = _Player()..hungLoad = Completer<Duration?>();
+      final engine = guarded(() async => player, destroy: player.dispose);
+      final rejected = expectLater(
+        engine.load(resetSong),
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(player.loads, 1);
+      await engine.dispose();
+      player.hungLoad!.complete(const Duration(minutes: 3));
+      await rejected;
+      await expectLater(
+        engine.play(),
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      expect(player.disposals, 1);
+      await player.closeFixture();
+    },
+  );
+
+  test(
+    'iPhone retirement disposes both players after a crossfade swap',
+    () async {
+      final primary = _Player(), incoming = _Player();
+      final next = resetSong.copyWith(
+        id: 'next',
+        title: 'Next',
+        filePath: '/next.flac',
+      );
+      final engine = AndroidAudioEngine(
+        guardRetirement: true,
+        playerProvider: () async => primary,
+        secondaryPlayerProvider: () async => incoming,
+        sourcesBuilder: () async =>
+            ja.AudioSource.uri(Uri.parse('file:///retained.flac')),
+        sourceBuilder: (_) async =>
+            ja.AudioSource.uri(Uri.parse('file:///retained.flac')),
+        playlistProvider: () => [resetSong, next],
+        configurePlayer: (_) async {},
+        disposeEngine: primary.dispose,
+        shouldSuppressTrackSync: () => false,
+        shouldIgnoreTrack: (_) => false,
+        shouldFastStartCurrentTrackOnly: () => false,
+        crossfadeConfigProvider: () => const AndroidCrossfadeConfig(
+          enabled: true,
+          durationSecs: 3,
+          curve: AndroidCrossfadeCurve.linear,
+        ),
+        onNextSong: () => next,
+      );
+      addTearDown(() async {
+        await engine.dispose();
+        await primary.closeFixture();
+        await incoming.closeFixture();
+      });
+      Song? displayed;
+      final states = engine.playbackStateStream.listen(
+        (state) => displayed = state.currentTrack,
+      );
+      addTearDown(states.cancel);
+      await engine.load(resetSong);
+      primary.positions.add(const Duration(minutes: 2, seconds: 58));
+      for (var turn = 0; turn < 20 && displayed?.id != next.id; turn++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(incoming.loads, 1);
+      expect(displayed?.id, next.id);
+      await states.cancel();
+      await engine.dispose();
+      expect(primary.disposals, 1);
+      expect(incoming.disposals, 1);
+    },
+  );
+
   testWidgets('failed sources and stalled seeks cannot poison later playback', (
     tester,
   ) async {

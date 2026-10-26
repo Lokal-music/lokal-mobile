@@ -166,3 +166,40 @@ A broader **30-test** selection also passes lifecycle retirement, player output
 transitions, Android session fallback and Rust paused/retired wrappers (overlaps
 the 21 above). Re-running pinned bridge generation leaves all three generated
 audio/bridge files byte-for-byte identical.
+
+## System-player and radio ownership continuation
+
+The next candidate revision tracks each iOS just_audio object at construction,
+including pending factories, and shares its real disposal future across owners.
+The iPhone system wrapper rejects late loads and awaits primary, secondary and
+pending crossfade players. The ordinary Android branch retains its existing
+rendering and cleanup policy. Radio now registers retirement, clears readiness
+waiters and timers, rejects stale completions, retains the selected station
+paused, and awaits native disposal. A later explicit toggle can recreate it.
+
+The registry/system/radio-timeout/output-transition selection passes **36** host
+tests, including disposal after a real wrapper crossfade role swap. The wrapper
+ownership check uses the real event loop; simulated-clock fixture teardown was
+not a product failure. This is still preparation: the native observer remains
+uninstantiated, and PlayerService reset state, local queue cancellation, video
+reconstruction, recovery UI and full notification-path acceptance remain open.
+
+Build 35 at `f03be49ea413030d6641bdd8b0e93a144ae39155` has compiled and packaged
+the release iPhone app, including the new Swift C-ABI references; runtime checks
+are ongoing. It predates the system/radio continuation above.
+
+### Build-35 fence-test correction
+
+Build 35 compiles/packages both app variants, but its iOS 18.6 suite fails with
+LocalAudioRequestRetired after the final destructive counter probe invalidates
+active Dart work. This is not a recovery acceptance pass. The raw shared-counter
+probe now runs through a testing-only bootstrap callback immediately after FRB
+initialization, before playback owners exist. It still verifies Swift/FRB counter
+agreement and rejects an old token; the full ordinary suite then exercises an
+actual nonzero generation. Actual notification/daemon reset tests remain pending.
+
+The updated candidate passes the exact **217-test** contract command committed
+in the iPhone workflow, covering shared output ownership, Cast, video/Space,
+retirement, lyrics/provider/download localization and add-ons. This is host
+contract evidence; the revised bootstrap fence probe and latest source still
+require the next hosted native run.

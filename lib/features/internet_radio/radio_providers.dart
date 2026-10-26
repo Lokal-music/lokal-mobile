@@ -1,3 +1,8 @@
+import 'dart:io';
+
+import 'package:flick/services/ios_local_audio_requests.dart';
+import 'package:flick/services/ios_local_audio_players.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -73,7 +78,8 @@ Future<Map<String, dynamic>> _fetchRadioCatalogAtUrl(
     final response = await radioWithTimeout(
       client.send(request),
       timeout: _radioLoadTimeout,
-      timeoutMessage: 'The station list timed out. Check your connection or link.',
+      timeoutMessage:
+          'The station list timed out. Check your connection or link.',
     );
     if (const {301, 302, 303, 307, 308}.contains(response.statusCode)) {
       final location = response.headers['location'];
@@ -130,7 +136,9 @@ Future<Map<String, dynamic>> _fetchRadioCatalogAtUrl(
       );
     }
     if (received == 0) {
-      throw const RadioCatalogException('The station list returned an empty response.');
+      throw const RadioCatalogException(
+        'The station list returned an empty response.',
+      );
     }
     try {
       final decoded = jsonDecode(utf8.decode(bytes.takeBytes()));
@@ -155,13 +163,14 @@ Future<Map<String, dynamic>> _fetchRadioCatalogAtUrl(
     }
     throw const RadioCatalogException('The station list is not valid JSON.');
   }
-  throw const RadioCatalogException('The station list redirected too many times.');
+  throw const RadioCatalogException(
+    'The station list redirected too many times.',
+  );
 }
 
 class DiscoveryRadioJsonLimit {
   static const bytes = 2 * 1024 * 1024;
 }
-
 
 /// The station list's link: desktop's default until the user sets another.
 class RadioCatalogUrlNotifier extends Notifier<String> {
@@ -217,7 +226,8 @@ final radioCatalogProvider = FutureProvider<RadioCatalog?>((ref) async {
     final data = await radioWithTimeout(
       fetchRadioCatalogJson(client, Uri.parse(url)),
       timeout: _radioLoadTimeout,
-      timeoutMessage: 'The station list timed out. Check your connection or link.',
+      timeoutMessage:
+          'The station list timed out. Check your connection or link.',
     );
     final catalog = parseRadioCatalog(data);
     // Caching is best-effort. A slow local preferences write must not prevent
@@ -257,13 +267,17 @@ class RadioFavoritesNotifier extends Notifier<Set<String>> {
     if (ref.mounted && saved != null) state = saved.toSet();
   }
 
-  Future<void> toggle(String stationId) async {
+  Future<void> toggle(String stationId) => IosLocalAudioRequests.run(() async {
     final next = Set<String>.of(state);
     if (!next.remove(stationId)) next.add(stationId);
     state = next;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_favoritesKey, next.toList());
-  }
+    final prefs = await IosLocalAudioRequests.wait(
+      SharedPreferences.getInstance(),
+    );
+    await IosLocalAudioRequests.wait(
+      prefs.setStringList(_favoritesKey, next.toList()),
+    );
+  });
 }
 
 final radioFavoritesProvider =
@@ -305,6 +319,9 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
   StreamSubscription<ja.PlayerState>? _states;
   String? _notified;
   final Map<String, String> _iconFiles = {};
+  bool _resetParticipantRegistered = false;
+  final _readySubscriptions = <StreamSubscription<ja.PlayerState>>{};
+  final _pendingStarts = <Completer<void>>{};
 
   late final MediaNotificationOwner _notificationOwner = MediaNotificationOwner(
     onTogglePlayPause: () => unawaited(toggle()),
@@ -321,10 +338,14 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
       if (playing && state.station != null) unawaited(stop());
     });
     ref.onDispose(() {
+      if (_resetParticipantRegistered) {
+        IosLocalAudioRequests.lifecycle.unregister(this);
+      }
       _bufferingTimer?.cancel();
       NotificationService().release(_notificationOwner);
       unawaited(_states?.cancel());
-      unawaited(_player?.dispose());
+      final player = _player;
+      if (player != null) unawaited(IosLocalAudioPlayers.dispose(player));
     });
     return const RadioPlayback();
   }
@@ -332,8 +353,15 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
   ja.AudioPlayer _ensurePlayer() {
     final existing = _player;
     if (existing != null) return existing;
-    final player = ja.AudioPlayer();
+    if (Platform.isIOS && !_resetParticipantRegistered) {
+      IosLocalAudioRequests.lifecycle.register(this, _retireForMediaReset);
+      _resetParticipantRegistered = true;
+    }
+    final player = IosLocalAudioPlayers.create(
+      handleInterruptions: !Platform.isIOS,
+    );
     _states = player.playerStateStream.listen((s) {
+      if (!ref.mounted || !identical(_player, player)) return;
       // Once a failed request is reported, late buffering/loading events from
       // that same request must not put the spinner back on screen.
       if (state.station == null || state.error != null) {
@@ -366,6 +394,32 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
       _syncNotification();
     });
     return _player = player;
+  }
+
+  Future<void> _retireForMediaReset() {
+    _playRequest++;
+    _failingPlayRequest = null;
+    _bufferingTimer?.cancel();
+    _bufferingTimer = null;
+    final player = _player;
+    final states = _states;
+    _player = null;
+    _states = null;
+    final ready = _readySubscriptions.toList();
+    _readySubscriptions.clear();
+    for (final start in _pendingStarts.toList()) {
+      if (!start.isCompleted) start.complete();
+    }
+    _pendingStarts.clear();
+    if (ref.mounted) {
+      state = RadioPlayback(station: state.station);
+      _syncNotification();
+    }
+    return Future.wait<void>([
+      if (states != null) states.cancel(),
+      for (final subscription in ready) subscription.cancel(),
+      if (player != null) IosLocalAudioPlayers.dispose(player),
+    ]).then<void>((_) {});
   }
 
   /// Mirrors the station into the media notification when what it shows
@@ -425,9 +479,7 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
   }
 
   bool _isCurrentPlay(int request, RadioStation station) =>
-      ref.mounted &&
-      request == _playRequest &&
-      state.station?.id == station.id;
+      ref.mounted && request == _playRequest && state.station?.id == station.id;
 
   Future<void> _failPlay(int request, RadioStation station) async {
     if (!_isCurrentPlay(request, station) || _failingPlayRequest == request) {
@@ -451,7 +503,9 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
     if (_failingPlayRequest == request) _failingPlayRequest = null;
   }
 
-  Future<void> play(RadioStation station) async {
+  Future<void> play(
+    RadioStation station,
+  ) => IosLocalAudioRequests.run(() async {
     if (!ref.read(internetRadioEnabledProvider)) return;
     final request = ++_playRequest;
     _bufferingTimer?.cancel();
@@ -464,33 +518,40 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
     try {
       final player = _ensurePlayer();
       if (ref.read(isPlayingProvider)) {
-        await radioWithTimeout(
-          ref.read(playerProvider.notifier).pause(),
-          timeout: _radioStopTimeout,
-          timeoutMessage: 'The current player did not pause in time.',
+        await IosLocalAudioRequests.wait(
+          radioWithTimeout(
+            ref.read(playerProvider.notifier).pause(),
+            timeout: _radioStopTimeout,
+            timeoutMessage: 'The current player did not pause in time.',
+          ),
         );
       }
       if (!_isCurrentPlay(request, station)) return;
 
       // Share the app's audio focus/session with just_audio, but don't let
       // platform setup keep the station spinner alive forever.
-      await radioWithTimeout(
-        PlayerService().prepareAudioSessionForExternalPlayer(),
-        timeout: _radioStopTimeout,
-        timeoutMessage: 'Audio setup took too long. Try again.',
+      await IosLocalAudioRequests.wait(
+        radioWithTimeout(
+          PlayerService().prepareAudioSessionForExternalPlayer(),
+          timeout: _radioStopTimeout,
+          timeoutMessage: 'Audio setup took too long. Try again.',
+        ),
       );
       if (!_isCurrentPlay(request, station)) return;
 
-      await radioWithTimeout(
-        player.setUrl(station.url),
-        timeout: _radioLoadTimeout,
-        timeoutMessage: 'The station stream did not respond in time.',
+      await IosLocalAudioRequests.wait(
+        radioWithTimeout(
+          player.setUrl(station.url),
+          timeout: _radioLoadTimeout,
+          timeoutMessage: 'The station stream did not respond in time.',
+        ),
       );
       if (!_isCurrentPlay(request, station)) return;
 
       // setUrl can finish while a live stream still never supplies playable
       // audio. Wait for the first ready/playing state as well, with a deadline.
       final started = Completer<void>();
+      _pendingStarts.add(started);
       final readySubscription = player.playerStateStream.listen(
         (value) {
           if (!started.isCompleted &&
@@ -503,6 +564,7 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
           if (!started.isCompleted) started.completeError(error, stackTrace);
         },
       );
+      _readySubscriptions.add(readySubscription);
       unawaited(
         player.play().catchError((Object error) {
           if (!started.isCompleted) {
@@ -513,13 +575,17 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
         }),
       );
       try {
-        await radioWithTimeout(
-          started.future,
-          timeout: _radioLoadTimeout,
-          timeoutMessage: 'The station did not begin playing in time.',
+        await IosLocalAudioRequests.wait(
+          radioWithTimeout(
+            started.future,
+            timeout: _radioLoadTimeout,
+            timeoutMessage: 'The station did not begin playing in time.',
+          ),
         );
       } finally {
-        await readySubscription.cancel();
+        _readySubscriptions.remove(readySubscription);
+        _pendingStarts.remove(started);
+        await IosLocalAudioRequests.wait(readySubscription.cancel());
       }
       if (!_isCurrentPlay(request, station)) return;
       // The state stream usually delivered this already; set it explicitly so
@@ -527,24 +593,30 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
       state = RadioPlayback(station: station, playing: true);
       _syncNotification();
     } catch (_) {
-      await _failPlay(request, station);
+      await IosLocalAudioRequests.wait(_failPlay(request, station));
     }
-  }
+  });
 
-  Future<void> toggle() async {
+  Future<void> toggle() => IosLocalAudioRequests.run(() async {
     final player = _player;
     final station = state.station;
-    if (player == null || station == null) return;
+    if (station == null) return;
+    if (player == null) {
+      await IosLocalAudioRequests.wait(play(station));
+      return;
+    }
     if (player.playing) {
-      await player.pause();
+      await IosLocalAudioRequests.wait(player.pause());
     } else {
       if (ref.read(isPlayingProvider)) {
-        await ref.read(playerProvider.notifier).pause();
+        await IosLocalAudioRequests.wait(
+          ref.read(playerProvider.notifier).pause(),
+        );
       }
       // A live stream resumes at "now", not where it was paused.
-      await play(station);
+      await IosLocalAudioRequests.wait(play(station));
     }
-  }
+  });
 
   Future<void> stop() async {
     // Ignore completions from an earlier setUrl/play request.

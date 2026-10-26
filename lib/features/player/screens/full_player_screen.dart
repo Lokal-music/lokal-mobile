@@ -1838,6 +1838,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             LyricsSourceButton(
               selected: _lyricsSource,
               lyrics: data,
+              song: song,
+              lyricsService: _lyricsService,
               busy: _lyricsLoading,
               onSelected: (source) {
                 setState(() => _lyricsSource = source);

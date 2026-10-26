@@ -87,7 +87,30 @@ void main() {
     await playbackPreferences.setReplayGainPreampDb(0);
     await playbackPreferences.setReplayGainPreventClipping(true);
     debugPrint('iOS smoke: real application bootstrap');
-    await app.bootstrapForIntegrationTest();
+    var nativeFenceVerified = false;
+    await app.bootstrapForIntegrationTest(afterNativeInitialization: () async {
+      // Swift and FRB must share the same atomic counter. Advance it before
+      // playback owners exist; the ordinary suite then uses a nonzero epoch.
+      final previousEpoch = native_audio.audioLocalRequestEpoch();
+      final fence = await const MethodChannel('lokal/ios')
+          .invokeMapMethod<String, dynamic>('invalidateLocalAudioRequestsForIntegrationTest');
+      final advancedEpoch = BigInt.parse(fence!['epoch'] as String);
+      expect(BigInt.parse(fence['previous'] as String), previousEpoch);
+      expect(advancedEpoch, previousEpoch + BigInt.one);
+      expect(native_audio.audioLocalRequestEpoch(), advancedEpoch);
+      await expectLater(
+        native_audio.audioResume(requestEpoch: previousEpoch),
+        throwsA(predicate((Object error) =>
+            error.toString().contains('AUDIO_LOCAL_REQUEST_RETIRED'))),
+      );
+      await native_audio.audioShutdown();
+      nativeFenceVerified = true;
+      binding.reportData = {
+        ...?binding.reportData,
+        'native_swift_frb_request_fence': 'passed',
+        'native_request_epoch': advancedEpoch.toString(),
+      };
+    });
     for (
       var i = 0;
       i < 30 && find.byType(FlickPlayerApp).evaluate().isEmpty;
@@ -796,22 +819,7 @@ void main() {
     if (const bool.fromEnvironment('LOKAL_IOS_VIDEO_PROBE')) {
       await probeLiveIosVideo(tester, binding);
     }
-    // Final destructive fence check: Swift's direct C ABI and Dart's FRB API
-    // must share the same counter. This is not full media-reset recovery.
-    await player.pause();
-    final previousEpoch = native_audio.audioLocalRequestEpoch();
-    final fence = await const MethodChannel('lokal/ios')
-        .invokeMapMethod<String, dynamic>('invalidateLocalAudioRequestsForIntegrationTest');
-    final advancedEpoch = BigInt.parse(fence!['epoch'] as String);
-    expect(BigInt.parse(fence['previous'] as String), previousEpoch);
-    expect(advancedEpoch, previousEpoch + BigInt.one);
-    expect(native_audio.audioLocalRequestEpoch(), advancedEpoch);
-    await expectLater(
-      native_audio.audioResume(requestEpoch: previousEpoch),
-      throwsA(predicate((Object error) =>
-          error.toString().contains('AUDIO_LOCAL_REQUEST_RETIRED'))),
-    );
-    await native_audio.audioShutdown();
+    expect(nativeFenceVerified, true);
     binding.reportData!['native_swift_frb_request_fence'] = 'passed';
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();
