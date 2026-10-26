@@ -28,8 +28,7 @@ import 'morneye_playback_quality.dart';
 const morneyeRegistry =
     'https://raw.githubusercontent.com/mornyeapp/Mornye-Extension/refs/heads/main/registry.json';
 const morneyeCompatVersion = '5.1.0';
-/// The documented Mornye format is .spotiflac-ext; the registry also ships
-/// .sflx. The archive validator independently checks ZIP contents and paths.
+/// Mornye's documented .spotiflac-ext format and its legacy/newer archives.
 bool morneyeIsPackageFileName(String filename) => RegExp(
   r'\.(?:sflx|morneye-ext|spotiflac-ext)
   'signedSession': 3,
