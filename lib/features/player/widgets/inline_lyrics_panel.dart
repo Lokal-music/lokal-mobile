@@ -165,12 +165,19 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
       );
   }
 
-  Future<void> _saveLyricsFile(LyricsData lyrics) async {
-    if (_savingLyricsFile) return;
+  Future<void> _saveLyricsFile(
+    LyricsData lyrics, {
+    bool includeDisplayedSubline = false,
+  }) async {
+    if (_savingLyricsFile || _loadedSongId != widget.song.id) return;
     final song = widget.song;
     setState(() => _savingLyricsFile = true);
     try {
-      final saved = await saveCurrentLyricsFile(song: song, lyrics: lyrics);
+      final saved = await saveCurrentLyricsFile(
+        song: song,
+        lyrics: lyrics,
+        includeDisplayedSubline: includeDisplayedSubline,
+      );
       if (saved && mounted) _showMessage(l10n.saved);
     } catch (_) {
       if (mounted) _showMessage('Could not save lyrics to file.');
@@ -441,7 +448,8 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
       Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          if (_lyricsData case final lyrics? when lyrics.lines.isNotEmpty)
+          if (_lyricsData case final lyrics?
+              when hasUsableLyrics(_sublineLyrics ?? lyrics))
             IconButton(
               key: const ValueKey('save-inline-lyrics-file'),
               tooltip: 'Save lyrics to file',
@@ -454,7 +462,10 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
                   : const Icon(LucideIcons.download, size: 19),
               onPressed: _savingLyricsFile
                   ? null
-                  : () => unawaited(_saveLyricsFile(lyrics)),
+                  : () => unawaited(_saveLyricsFile(
+                      _sublineLyrics ?? lyrics,
+                      includeDisplayedSubline: _sublineLyrics != null,
+                    )),
             ),
           if (_lyricsData case final lyrics?)
             LyricsSublineButtons(
