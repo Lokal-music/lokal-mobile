@@ -245,3 +245,26 @@ targets, native probe Clang triples, Cargokit's forwarded deployment target and
 package inspection follow that decision. Standalone native-environment helper
 contracts pass; a declared iOS 15 app is rejected by the package policy. Real
 Apple iOS 16 compilation/package/runtime acceptance requires the next run.
+
+
+### Build 24 native evidence (iOS 16 floor)
+
+[Build 24](https://github.com/lokal-music/lokal-mobile/actions/runs/40273185020)
+packages the new iOS 16 release and reaches the actual iOS 18.6 test app. Exact
+merge source: `0fda1f5e314475639cde9ef26dc1ae8737c01270`.
+Its incremental report passes post-172 search/profile UX, the corrected scanner,
+QuickJS, WAV transport, repeated Queue/Lyrics panels and return to mini player,
+**timed Space lyrics**, native EQ/pitch/positive ReplayGain, WavPack conversion,
+the complete MP3/AAC/ALAC/96 kHz FLAC/AIFF/Vorbis/Opus corpus, the system-to-Rust
+queue handoff, and Bonjour protocol filtering plus HTTP. Actual Space screenshots
+show the expected current and next generated lyric at the retained song clock.
+
+The run then fails at `nowPlayingMetadataState`: Runner Debug had C preprocessor
+`DEBUG=1` but no Swift `SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG`, so the new
+DEBUG-only metadata probe was excluded. Runner Debug now explicitly inherits and
+sets Swift DEBUG; Release/Profile remain unaffected. No metadata assertion is
+removed. Remote artwork and the subsequent Turkish switch still require the next
+native run; iOS 26 was not reached. This is partial native evidence, not a fully
+green run. The same logs expose repeated Android-only HomeWidget update calls on
+iPhone; the Android publisher is now gated on iOS until a real WidgetKit snapshot
+adapter exists, matching the already-gated settings UI.

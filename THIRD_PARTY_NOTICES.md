@@ -40,6 +40,18 @@ Keep the license files distributed with `rust/vendor`, `rust_builder/cargokit`, 
 
 No affiliation with or endorsement by Google, YouTube, Spotify, Tidal, Deezer, Discord, Last.fm or ListenBrainz is implied.
 
+## Google Cast iOS SDK
+
+The iPhone build links Google's unmodified Google Cast SDK 4.8.6 static binary.
+This SDK is supplied under the [Google APIs Terms of Service](https://developers.google.com/terms/)
+and [Google Cast SDK Additional Developer Terms](https://developers.google.com/cast/docs/terms/);
+it is not relicensed as GPL or Apache software by this repository. The pinned
+specification is in `ios/CastSDK.podspec.json`. Its resource bundles and privacy
+manifest are retained, and upstream dependency notices are shipped in the app's
+`LokalCastNotices.bundle`. GTMSessionFetcher 3.5.0 retains its upstream Apache 2.0
+notices, also collected by CocoaPods. Engineering integration does not establish
+public distribution qualification.
+
 ## iPhone native dependencies
 
 The locked `ffmpeg_kit_flutter_new_audio` 2.5.7 plugin uses the FFmpegKit 8.1.2

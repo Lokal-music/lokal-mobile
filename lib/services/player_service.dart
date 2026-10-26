@@ -55,6 +55,7 @@ import 'package:flick/services/playback_cache_preferences_service.dart';
 import 'package:flick/services/remote_source_service.dart';
 import 'package:flick/services/wav_stream_audio_source.dart';
 import 'package:flick/services/casting/casting_service.dart';
+import 'package:flick/services/playback_output_transition.dart';
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/core/utils/dev_log.dart';
 
@@ -5500,6 +5501,38 @@ class PlayerService {
         });
     _playRequestQueue = operation;
     return operation;
+  }
+
+  /// Serialize a confirmed output handoff with track changes and local engine
+  /// operations. Unlike ordinary UI requests, transport errors reach the caller.
+  Future<T> runOutputTransition<T>(
+    Future<T> Function(PlaybackOutputTransition local) action,
+  ) {
+    final result = Completer<T>();
+    unawaited(_enqueuePlaybackRequest(() async {
+      final generation = _pendingPlaybackGeneration;
+      final local = PlaybackOutputTransition(
+        song: currentSongNotifier.value,
+        position: positionNotifier.value,
+        wasPlaying: isPlayingNotifier.value,
+        isCurrent: () => generation == _pendingPlaybackGeneration,
+        pauseLocal: () async {
+          // Deliberately address the attached local engine directly: publishing
+          // remote ownership first would make pause() pause the receiver instead.
+          if (_playbackManager.hasAttachedEngine) await _playbackManager.pause();
+          isPlayingNotifier.value = false;
+          _wasPlayingBeforeAudioInterruption = false;
+          _updatePriorityAnchor();
+        },
+        resumeLocal: _resumeInternal,
+      );
+      try {
+        result.complete(await action(local));
+      } catch (error, stack) {
+        result.completeError(error, stack);
+      }
+    }));
+    return result.future;
   }
 
   List<Song> _wrapAroundPlaylist(List<Song> songs, Song current) {

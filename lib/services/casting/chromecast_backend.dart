@@ -1,104 +1,98 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/services.dart';
+
 import 'cast_device.dart';
 
-// ponytail: wraps native Cast SDK via platform channels (bluetooth_service.dart pattern).
-// Returns graceful empty/no-op when native side isn't available (e.g. non-Android).
-// ignore_for_file: empty_catches
+/// Shared native sender contract. iPhone transport failures must reach ownership
+/// handoff and UI; unsupported desktop hosts retain the existing optional bridge.
 class ChromecastBackend {
+  ChromecastBackend({bool? propagateErrors})
+    : _propagateErrors = propagateErrors ?? Platform.isIOS;
+
   static const _channel = MethodChannel('com.mossapps.flick/cast');
   static const _eventChannel = EventChannel('com.mossapps.flick/cast_events');
-
+  final bool _propagateErrors;
   Stream<Map<String, dynamic>>? _events;
 
-  Future<List<CastDevice>> discover() async {
+  Future<T?> _call<T>(String method, [Map<String, dynamic>? arguments]) async {
     try {
-      final raw = await _channel.invokeMethod<List<dynamic>>('discover');
-      if (raw == null) return const [];
-      return raw
-          .whereType<Map>()
-          .map((m) => CastDevice(
+      return await _channel.invokeMethod<T>(method, arguments);
+    } on PlatformException {
+      if (_propagateErrors) rethrow;
+    } on MissingPluginException {
+      if (_propagateErrors) rethrow;
+    }
+    return null;
+  }
+
+  Future<List<CastDevice>> discover() async {
+    final raw = await _call<List<dynamic>>('discover');
+    return raw
+            ?.whereType<Map>()
+            .map(
+              (m) => CastDevice(
                 id: m['id'] as String? ?? '',
                 name: m['name'] as String? ?? 'Chromecast',
                 backend: CastBackend.chromecast,
-              ))
-          .toList();
-    } on PlatformException {
-      return const [];
-    } on MissingPluginException {
-      return const [];
-    }
+              ),
+            )
+            .where((device) => device.id.isNotEmpty)
+            .toList() ??
+        const [];
   }
 
-  Future<void> connect(CastDevice device) async {
-    try {
-      await _channel.invokeMethod<void>('connect', {'id': device.id});
-    } on PlatformException {
-    } on MissingPluginException {
-    }
-  }
+  Future<void> connect(CastDevice device) =>
+      _invoke('connect', {'id': device.id});
 
-  Future<void> load(String url, {String? title, String? artist}) async {
-    try {
-      await _channel.invokeMethod<void>('load', {'url': url, 'title': title, 'artist': artist});
-    } on PlatformException {
-    } on MissingPluginException {
-    }
-  }
+  Future<void> load(
+    String url, {
+    String? title,
+    String? artist,
+    bool? autoplay,
+    Duration? position,
+    String? contentType,
+  }) => _invoke('load', {
+    'url': url,
+    'title': title,
+    'artist': artist,
+    'autoplay': ?autoplay,
+    if (position != null) 'position': position.inMilliseconds,
+    'contentType': ?contentType,
+  });
 
   Future<void> play() => _invoke('play');
   Future<void> pause() => _invoke('pause');
   Future<void> resume() => _invoke('play');
   Future<void> stop() => _invoke('stop');
-  Future<void> seek(Duration position) => _invoke('seek', {'position': position.inMilliseconds});
-  Future<void> setVolume(double volume) => _invoke('setVolume', {'volume': volume});
-
-  Future<double?> getVolume() async {
-    try {
-      return await _channel.invokeMethod<double>('getVolume');
-    } on PlatformException {
-      return null;
-    } on MissingPluginException {
-      return null;
-    }
-  }
-
+  Future<void> seek(Duration position) =>
+      _invoke('seek', {'position': position.inMilliseconds});
+  Future<void> setVolume(double volume) =>
+      _invoke('setVolume', {'volume': volume});
+  Future<double?> getVolume() => _call<double>('getVolume');
   Future<void> disconnect() => _invoke('disconnect');
 
   Future<List<Map<String, dynamic>>> getOutputRoutes() async {
-    try {
-      final raw = await _channel.invokeMethod<List<dynamic>>('getOutputRoutes');
-      if (raw == null) return const [];
-      return raw.whereType<Map>().map((m) => (m).cast<String, dynamic>()).toList();
-    } on PlatformException {
-      return const [];
-    } on MissingPluginException {
-      return const [];
-    }
+    final raw = await _call<List<dynamic>>('getOutputRoutes');
+    return raw
+            ?.whereType<Map>()
+            .map((m) => m.cast<String, dynamic>())
+            .toList() ??
+        const [];
   }
 
-  Future<bool> selectOutputRoute(String id) async {
-    try {
-      return await _channel.invokeMethod<bool>('selectOutputRoute', {'id': id}) ?? false;
-    } on PlatformException {
-      return false;
-    } on MissingPluginException {
-      return false;
-    }
-  }
+  Future<bool> selectOutputRoute(String id) async =>
+      await _call<bool>('selectOutputRoute', {'id': id}) ?? false;
 
   Future<void> _invoke(String method, [Map<String, dynamic>? args]) async {
-    try {
-      await _channel.invokeMethod<void>(method, args);
-    } on PlatformException {
-    } on MissingPluginException {
-    }
+    await _call<void>(method, args);
   }
 
-  // Native-pushed state updates (position/playing). Optional — CastingService polls DLNA;
-  // for Chromecast we rely on this stream when available.
   Stream<Map<String, dynamic>> get events {
-    _events ??= _eventChannel.receiveBroadcastStream().map((e) => (e as Map).cast<String, dynamic>());
+    _events ??= _eventChannel.receiveBroadcastStream().map(
+      (e) => (e as Map).cast<String, dynamic>(),
+    );
     return _events!;
   }
 }

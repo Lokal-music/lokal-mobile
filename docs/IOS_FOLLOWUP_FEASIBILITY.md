@@ -50,8 +50,9 @@ explicit discovery for a custom picker. Current CocoaPods publication ends at
 
 The maintainer has now chosen one full-featured iOS 16+ app. The previous
 iOS 15 baseline is retired for new builds; older engineering artifacts retain
-their recorded minimum. Prove the current SDK device/simulator link before
-including it in the application.
+their recorded minimum. The current SDK and actual sender transport now compile/link for arm64 device
+and simulator; see [the Cast implementation and evidence](IOS_CAST_TRANSPORT.md).
+Integrated application and receiver acceptance remain pending.
 AirPlay remains the system route UI. Then adapt the existing Cast channel/state
 contract, file HTTP server, transport controls and local/remote ownership handoff.
 A simulator discovery fixture cannot substitute for an actual Cast receiver.
@@ -93,4 +94,5 @@ asynchronous WebView teardown needs an observed audio-ownership handoff before
 claiming no overlap with local playback. Timed Space lyrics use the shared song
 clock; unsynchronized lyrics must not acquire invented timestamps. The native
 harness now supplies local generated LRC lyrics and checks entering/leaving Space
-with the real player paused at a known position. That new native check is pending.
+with the real player paused at a known position. That check passes on iOS 18.6 in build 24, with an actual screenshot; iOS 26
+and physical-device qualification remain pending.

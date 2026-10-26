@@ -87,7 +87,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your paired Lokal desktop and music servers on your network.</string>
+	<string>Find Cast receivers, your paired Lokal desktop and music servers on your network.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan a pairing code to connect to Lokal desktop.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -98,6 +98,7 @@
 	<array>
 		<string>_lokal._tcp</string>
 		<string>_googlecast._tcp</string>
+		<string>_CC1AD845._googlecast._tcp</string>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>

@@ -40,6 +40,15 @@ def inspect_bundle(app: Path) -> dict:
     minimum = version(info["MinimumOSVersion"])
     if minimum != version('16.0'):
         raise ValueError('The supported iPhone application floor is iOS 16.0')
+    cast_resources = (
+        'GoogleCastCoreResources.bundle',
+        'GoogleCast.bundle/PrivacyInfo.xcprivacy',
+        'LokalCastNotices.bundle/oss_licenses.bin',
+        'LokalCastNotices.bundle/oss_licenses_index.plist',
+    )
+    for relative in cast_resources:
+        if not (app / relative).exists():
+            raise ValueError(f'Missing required Google Cast resource: {relative}')
     binaries = [executable]
     for framework in app.glob("Frameworks/*.framework"):
         metadata = plistlib.loads((framework / "Info.plist").read_bytes())
@@ -67,6 +76,7 @@ def inspect_bundle(app: Path) -> dict:
         "build": info["CFBundleVersion"],
         "minimum_ios": info["MinimumOSVersion"],
         "binaries_inspected": len(binaries),
+        "cast_resources_verified": list(cast_resources),
         "binary_uuids": uuids,
         "signing": "Unsigned build; must be signed locally before installation",
         "validation": "Binary/package inspection only; device acceptance is separate",

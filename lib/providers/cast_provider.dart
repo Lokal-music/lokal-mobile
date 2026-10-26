@@ -8,12 +8,16 @@ class CastState {
   final CastDevice? activeDevice;
   final bool isActive;
   final bool isDiscovering;
+  final bool isChangingOutput;
+  final String? errorMessage;
 
   const CastState({
     this.devices = const [],
     this.activeDevice,
     this.isActive = false,
     this.isDiscovering = false,
+    this.isChangingOutput = false,
+    this.errorMessage,
   });
 
   // ponytail: no copyWith — its `activeDevice ?? old` kept a stale device after
@@ -35,6 +39,8 @@ class CastNotifier extends Notifier<CastState> {
       activeDevice: _service.activeDeviceNotifier.value,
       isActive: _service.isActiveNotifier.value,
       isDiscovering: _service.isDiscoveringNotifier.value,
+      isChangingOutput: _service.isChangingOutputNotifier.value,
+      errorMessage: _service.errorNotifier.value,
     );
 
     void sync() {
@@ -43,6 +49,8 @@ class CastNotifier extends Notifier<CastState> {
         activeDevice: _service.activeDeviceNotifier.value,
         isActive: _service.isActiveNotifier.value,
         isDiscovering: _service.isDiscoveringNotifier.value,
+        isChangingOutput: _service.isChangingOutputNotifier.value,
+        errorMessage: _service.errorNotifier.value,
       );
     }
 
@@ -50,12 +58,16 @@ class CastNotifier extends Notifier<CastState> {
     _service.activeDeviceNotifier.addListener(sync);
     _service.isActiveNotifier.addListener(sync);
     _service.isDiscoveringNotifier.addListener(sync);
+    _service.isChangingOutputNotifier.addListener(sync);
+    _service.errorNotifier.addListener(sync);
 
     ref.onDispose(() {
       _service.devicesNotifier.removeListener(sync);
       _service.activeDeviceNotifier.removeListener(sync);
       _service.isActiveNotifier.removeListener(sync);
       _service.isDiscoveringNotifier.removeListener(sync);
+      _service.isChangingOutputNotifier.removeListener(sync);
+      _service.errorNotifier.removeListener(sync);
     });
 
     return initial;
@@ -66,7 +78,9 @@ class CastNotifier extends Notifier<CastState> {
   Future<void> disconnect() => _service.disconnect();
 }
 
-final castProvider = NotifierProvider<CastNotifier, CastState>(CastNotifier.new);
+final castProvider = NotifierProvider<CastNotifier, CastState>(
+  CastNotifier.new,
+);
 
 final castDevicesProvider = Provider<List<CastDevice>>((ref) {
   return ref.watch(castProvider.select((s) => s.devices));

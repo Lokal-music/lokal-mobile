@@ -107,6 +107,31 @@ void main() {
         .invokeMapMethod<String, dynamic>('get');
     expect(identity?['version'], isNotEmpty);
 
+    // Real registered Cast bridge, without opting into discovery or prompting
+    // for LAN access on startup. This does not establish receiver acceptance.
+    const castChannel = MethodChannel('com.mossapps.flick/cast');
+    final castBefore = await const MethodChannel('lokal/ios')
+        .invokeMapMethod<String, dynamic>('castSenderState');
+    expect(castBefore?['sdkInitialized'], false);
+    await expectLater(
+      castChannel.invokeMethod<double>('getVolume'),
+      throwsA(
+        isA<PlatformException>().having(
+          (e) => e.code,
+          'code',
+          'CAST_DISCONNECTED',
+        ),
+      ),
+    );
+    expect(
+      await castChannel.invokeListMethod<dynamic>('getOutputRoutes'),
+      isEmpty,
+    );
+    final castAfter = await const MethodChannel('lokal/ios')
+        .invokeMapMethod<String, dynamic>('castSenderState');
+    expect(castAfter?['sdkInitialized'], false);
+    expect(castAfter?['pendingRequests'], 0);
+
     for (final destination in [
       (label: 'Library', type: KonnektedLibrary, screenshot: 'ios-library'),
       (label: 'You', type: KonnektedYou, screenshot: 'ios-you'),

@@ -88,7 +88,10 @@ flowchart LR
   operations; these assertions passed on iOS 26.0. Broader fixture and device
   coverage remain acceptance work.
 
-Chromecast sender integration, WidgetKit, Discord feasibility and resumable
+The [Cast sender transport](IOS_CAST_TRANSPORT.md) now has a pinned real SDK,
+native channel adapter, confirmed commands and a guarded local/remote handoff.
+Its standalone native device/simulator linkage passes; full application and
+receiver acceptance are still pending. WidgetKit, Discord feasibility and resumable
 background transfers remain open work. Native desktop Bonjour discovery
 passes its controlled service/HTTP checks on build 18 / iOS 18.6. Live add-on stream handles currently
 retain the system streaming adapter and explicitly report Rust DSP bypass;
@@ -652,3 +655,26 @@ Compatibility decision, 26 October 2026: the maintainer chose one full-featured
 Runner/pod/native probe/compiler targets and the package gate follow that floor.
 Earlier recorded engineering IPAs retain their original metadata and are not
 retroactively described as iOS 16 builds.
+
+
+### Build 24 native evidence (iOS 16 floor)
+
+[Build 24](https://github.com/lokal-music/lokal-mobile/actions/runs/40273185020)
+packages the new iOS 16 release and reaches the actual iOS 18.6 test app. Exact
+merge source: `0fda1f5e314475639cde9ef26dc1ae8737c01270`.
+Its incremental report passes post-172 search/profile UX, the corrected scanner,
+QuickJS, WAV transport, repeated Queue/Lyrics panels and return to mini player,
+**timed Space lyrics**, native EQ/pitch/positive ReplayGain, WavPack conversion,
+the complete MP3/AAC/ALAC/96 kHz FLAC/AIFF/Vorbis/Opus corpus, the system-to-Rust
+queue handoff, and Bonjour protocol filtering plus HTTP. Actual Space screenshots
+show the expected current and next generated lyric at the retained song clock.
+
+The run then fails at `nowPlayingMetadataState`: Runner Debug had C preprocessor
+`DEBUG=1` but no Swift `SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG`, so the new
+DEBUG-only metadata probe was excluded. Runner Debug now explicitly inherits and
+sets Swift DEBUG; Release/Profile remain unaffected. No metadata assertion is
+removed. Remote artwork and the subsequent Turkish switch still require the next
+native run; iOS 26 was not reached. This is partial native evidence, not a fully
+green run. The same logs expose repeated Android-only HomeWidget update calls on
+iPhone; the Android publisher is now gated on iOS until a real WidgetKit snapshot
+adapter exists, matching the already-gated settings UI.

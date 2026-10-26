@@ -27,7 +27,7 @@ class _CastingSettingsScreenState extends ConsumerState<CastingSettingsScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(castProvider.notifier).discover();
+      _runCastAction(() => ref.read(castProvider.notifier).discover());
     });
   }
 
@@ -42,13 +42,29 @@ class _CastingSettingsScreenState extends ConsumerState<CastingSettingsScreen> {
   };
 
   Future<void> _onSelect(CastDevice device) async {
-    await ref.read(castProvider.notifier).connect(device);
-    if (mounted) {
-      LokalToast.fromSnackBar(context, 
-        SnackBar(
-          content: Text(l10n.castingTo2(device.name)),
-          duration: const Duration(seconds: 2),
-        ),
+    await _runCastAction(
+      () => ref.read(castProvider.notifier).connect(device),
+      success: l10n.castingTo2(device.name),
+    );
+  }
+
+  Future<void> _runCastAction(
+    Future<void> Function() action, {
+    String? success,
+  }) async {
+    try {
+      await action();
+      if (!mounted || success == null) return;
+      LokalToast.fromSnackBar(context, SnackBar(content: Text(success)));
+    } catch (error) {
+      if (!mounted) return;
+      final message =
+          error is PlatformException && error.code.startsWith('CAST_')
+          ? error.message ?? l10n.error3
+          : l10n.error3;
+      LokalToast.fromSnackBar(
+        context,
+        SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
       );
     }
   }
@@ -62,6 +78,17 @@ class _CastingSettingsScreenState extends ConsumerState<CastingSettingsScreen> {
       title: l10n.casting,
       subtitle: l10n.discoversDlnaUpnpAndChromecastReceivers,
       children: [
+        if (castState.errorMessage != null)
+          LokalSettingsSection(
+            title: l10n.session,
+            children: [
+              LokalSettingRow(
+                label: castState.errorMessage!,
+                icon: Icons.info_outline,
+                enabled: false,
+              ),
+            ],
+          ),
         LokalSettingsSection(
           title: l10n.availableDevices,
           children: [
@@ -70,9 +97,17 @@ class _CastingSettingsScreenState extends ConsumerState<CastingSettingsScreen> {
                   ? l10n.searching
                   : l10n.scanForDevices,
               icon: Icons.refresh_rounded,
-              enabled: !castState.isDiscovering,
-              onTap: () => ref.read(castProvider.notifier).discover(),
+              enabled: !castState.isDiscovering && !castState.isChangingOutput,
+              onTap: () => _runCastAction(
+                () => ref.read(castProvider.notifier).discover(),
+              ),
             ),
+            if (castState.isChangingOutput)
+              LokalSettingRow(
+                label: l10n.connecting,
+                icon: LucideIcons.cast,
+                enabled: false,
+              ),
             if (castState.devices.isEmpty)
               _EmptyState(visible: !castState.isDiscovering)
             else
@@ -82,7 +117,7 @@ class _CastingSettingsScreenState extends ConsumerState<CastingSettingsScreen> {
                   label: d.name,
                   description: _subtitleFor(d),
                   selected: active?.id == d.id,
-                  onTap: () => _onSelect(d),
+                  onTap: castState.isChangingOutput ? null : () => _onSelect(d),
                 ),
           ],
         ),
@@ -94,22 +129,43 @@ class _CastingSettingsScreenState extends ConsumerState<CastingSettingsScreen> {
                 label: l10n.stopCasting,
                 description: l10n.disconnectFrom(active.name),
                 icon: Icons.power_settings_new_rounded,
-                onTap: () => ref.read(castProvider.notifier).disconnect(),
+                enabled: !castState.isChangingOutput,
+                onTap: () => _runCastAction(
+                  () => ref.read(castProvider.notifier).disconnect(),
+                ),
               ),
             ],
           ),
         LokalSettingsSection(
           title: l10n.outputDevice,
-          heading: '${l10n.outputDevice} · ${Platform.isIOS ? 'iPhone' : l10n.android}',
+          heading:
+              '${l10n.outputDevice} · ${Platform.isIOS ? 'iPhone' : l10n.android}',
           children: [
             if (Platform.isIOS)
-              LokalSettingRow(label: 'AirPlay and headphones', onTap: () async {
-                await const MethodChannel('lokal/ios').invokeMethod<bool>('showRoutePicker');
-              })
-            else _OutputSection(),
+              LokalSettingRow(
+                label: 'AirPlay and headphones',
+                onTap: () async {
+                  await const MethodChannel('lokal/ios')
+                      .invokeMethod<bool>('showRoutePicker');
+                },
+              )
+            else
+              _OutputSection(),
           ],
         ),
         LokalSettingsSection(title: l10n.about, children: [_AboutBody()]),
+        if (Platform.isIOS)
+          LokalSettingsSection(
+            title: l10n.casting,
+            children: [
+              LokalSettingRow(
+                label: 'Casting files from iPhone',
+                description: 'Keep Lokal open when casting files stored on this iPhone. Network-hosted tracks play directly on the receiver.',
+                icon: LucideIcons.info,
+                enabled: false,
+              ),
+            ],
+          ),
       ],
     );
   }

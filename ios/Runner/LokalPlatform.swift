@@ -19,6 +19,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
   private var pickerResult: FlutterResult?
   private var nowPlaying: [String: Any] = [:]
   private var spotify: LokalSpotifySession?
+  private var cast: LokalCastBridge?
   private let desktopDiscovery = LokalDesktopDiscovery()
   private let fileQueue = DispatchQueue(label: "app.lokal.mobile.import", qos: .userInitiated)
 
@@ -39,6 +40,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
       }
     }
     spotify = LokalSpotifySession(messenger: messenger, presenter: { [weak self] in self?.presenter })
+    cast = LokalCastBridge(messenger: messenger)
     register("lokal/desktop_link", messenger) { [weak self] call, result in
       guard call.method == "discover" else { result(FlutterMethodNotImplemented); return }
       self?.desktopDiscovery.discover(result)
@@ -114,6 +116,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
         }
       case "libraryRoot": result(try? self?.libraryRoot().path)
       #if DEBUG
+      case "castSenderState": result(self?.cast?.diagnosticState)
       case "nowPlayingMetadataState":
         // Native acceptance probe only; no song names, paths or credentials.
         let metadata = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]

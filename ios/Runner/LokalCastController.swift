@@ -23,7 +23,15 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
   private var disconnectReply: Reply?
   private var disconnectDeadline: DispatchWorkItem?
   private var ownedDeviceID: String?
+  private var receiverMayBePlaying = false
   private var requests: [UUID: LokalCastRequest] = [:]
+
+  #if DEBUG
+  var diagnosticState: [String: Any] {
+    ["sdkInitialized": context != nil, "pendingRequests": requests.count,
+     "discoveryPending": discoveryReply != nil, "connectionPending": connectionReply != nil]
+  }
+  #endif
 
   func handle(_ method: String, arguments: [String: Any], reply: @escaping Reply) {
     dispatchPrecondition(condition: .onQueue(.main))
@@ -55,9 +63,15 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
       }
       switch method {
       case "load": load(arguments, client, reply)
-      case "play": track(client.play(), reply)
+      case "play":
+        receiverMayBePlaying = true
+        track(client.play(), reply)
       case "pause": track(client.pause(), reply)
-      case "stop": track(client.stop(), reply)
+      case "stop":
+        track(client.stop()) { [weak self] result in
+          if case .success = result { self?.receiverMayBePlaying = false }
+          reply(result)
+        }
       default:
         guard let ms = arguments["position"] as? NSNumber,
               ms.doubleValue.isFinite, ms.doubleValue >= 0 else {
@@ -132,6 +146,7 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
         reject(reply, "CAST_BUSY", "Disconnect the current Cast receiver first."); return
       }
       ownedDeviceID = id
+      receiverMayBePlaying = true // An existing session may already have audio.
       attach(session)
       reply(.success(nil))
       return
@@ -167,12 +182,14 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
     discovery?(.failure(Failure(code: "CAST_CANCELLED", message: "Cast discovery was cancelled.")))
     finishConnection(.failure(Failure(code: "CAST_CANCELLED", message: "The Cast connection was cancelled.")))
     guard let manager = context?.sessionManager, manager.currentSession != nil else {
+      if receiverMayBePlaying {
+        reject(reply, "CAST_UNCERTAIN", "Reconnect to the receiver before confirming Stop casting."); return
+      }
       detach()
       ownedDeviceID = nil
       reply(.success(nil)); return
     }
     disconnectReply = reply
-    detach()
     let deadline = DispatchWorkItem { [weak self] in
       guard let self = self else { return }
       // Keep ownership when receiver shutdown is unconfirmed. The caller must
@@ -180,7 +197,29 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
       self.finishDisconnect(.failure(Failure(code: "CAST_TIMEOUT", message: "Receiver shutdown could not be confirmed. Try disconnecting again.")))
     }
     disconnectDeadline = deadline
-    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: deadline)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 40, execute: deadline)
+    if receiverMayBePlaying {
+      guard manager.hasConnectedCastSession(), let client = client else {
+        finishDisconnect(.failure(Failure(code: "CAST_UNCERTAIN", message: "Reconnect to the receiver before confirming Stop casting."))); return
+      }
+      // Session-ended alone is not proof the receiver stopped (network loss can
+      // end the sender session while audio continues). Require STOP acknowledgement.
+      track(client.stop()) { [weak self] result in
+        guard let self = self, self.disconnectReply != nil else { return }
+        switch result {
+        case .success:
+          self.receiverMayBePlaying = false
+          self.endConfirmedSession(manager)
+        case .failure(let error): self.finishDisconnect(.failure(error))
+        }
+      }
+    } else {
+      endConfirmedSession(manager)
+    }
+  }
+
+  private func endConfirmedSession(_ manager: GCKSessionManager) {
+    detach()
     if !manager.endSessionAndStopCasting(true) {
       finishDisconnect(.failure(Failure(code: "CAST_CONNECTION", message: "Receiver shutdown could not be started.")))
     }
@@ -202,6 +241,7 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
     let load = GCKMediaLoadRequestDataBuilder()
     load.mediaInformation = media.build()
     load.autoplay = NSNumber(value: args["autoplay"] as? Bool ?? true)
+    if load.autoplay?.boolValue == true { receiverMayBePlaying = true }
     if let ms = args["position"] as? NSNumber, ms.doubleValue.isFinite, ms.doubleValue >= 0 {
       load.startTime = ms.doubleValue / 1000
     }
@@ -237,8 +277,16 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
 
   private func emitStatus() {
     guard let session = connectedSession, let client = client, let status = client.mediaStatus else { return }
-    onEvent?(["event": "status", "position": Int(client.approximateStreamPosition() * 1000),
-              "duration": Int((status.mediaInformation?.streamDuration ?? 0) * 1000),
+    switch status.playerState {
+    case .playing, .buffering, .loading: receiverMayBePlaying = true
+    default: break
+    }
+    func milliseconds(_ seconds: TimeInterval) -> Int {
+      guard seconds.isFinite, seconds >= 0 else { return 0 }
+      return Int(min(seconds, Double(Int32.max)) * 1000)
+    }
+    onEvent?(["event": "status", "position": milliseconds(client.approximateStreamPosition()),
+              "duration": milliseconds(status.mediaInformation?.streamDuration ?? 0),
               "playing": status.playerState == .playing])
     onEvent?(["event": "volume", "volume": Double(session.currentDeviceVolume)])
   }
@@ -277,10 +325,14 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
 
   func sessionManager(_ sessionManager: GCKSessionManager, didEnd session: GCKCastSession, withError error: Error?) {
     detach()
-    ownedDeviceID = nil
+    if !receiverMayBePlaying { ownedDeviceID = nil }
     finishConnection(.failure(Failure(code: "CAST_DISCONNECTED", message: "The Cast session ended before connecting.")))
-    finishDisconnect(.success(nil))
-    onEvent?(["event": "sessionEnded"])
+    if receiverMayBePlaying {
+      finishDisconnect(.failure(Failure(code: "CAST_UNCERTAIN", message: "The connection ended before receiver shutdown was confirmed.")))
+    } else {
+      finishDisconnect(.success(nil))
+    }
+    onEvent?(["event": "sessionEnded", "shutdownConfirmed": !receiverMayBePlaying])
   }
 
   func sessionManager(_ sessionManager: GCKSessionManager, didSuspend session: GCKCastSession, with reason: GCKConnectionSuspendReason) {

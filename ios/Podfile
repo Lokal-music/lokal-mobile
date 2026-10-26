@@ -23,6 +23,10 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
+  # Official 4.8.6 specification, with the verified archive SHA and matching
+  # GTMSessionFetcher pin from the device/simulator SDK proof. Includes resources,
+  # privacy manifest and upstream open-source notices in the application.
+  pod 'google-cast-sdk', :podspec => 'CastSDK.podspec.json'
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
     inherit! :search_paths

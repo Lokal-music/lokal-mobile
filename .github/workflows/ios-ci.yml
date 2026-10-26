@@ -65,6 +65,8 @@ jobs:
         run: python3 tool/ios_prepare_ffmpeg.py
       - name: Check application and integration-test compilation
         run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib integration_test
+      - name: Verify Cast ownership and source contracts
+        run: flutter test --no-pub test/services/casting/cast_handoff_test.dart test/services/casting/chromecast_backend_test.dart test/services/casting/cast_source_test.dart
       - name: Check the native build helper before Xcode
         working-directory: rust_builder/cargokit/build_tool
         run: |
