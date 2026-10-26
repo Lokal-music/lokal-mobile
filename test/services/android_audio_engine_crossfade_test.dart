@@ -157,6 +157,33 @@ void main() {
     });
   });
 
+  group('offline CUE-DETR scheduling', () {
+    const duration = Duration(minutes: 3);
+    AutoMixProfile advanced(List<double> exits) => AutoMixProfile(
+      durationSeconds: 180, leadInSeconds: 0, audibleEndSeconds: 180,
+      fadeOutStartSeconds: 177, entrances: const [], exits: const [],
+      modelExits: exits,
+    );
+
+    test('uses a reported outgoing overlap start near the outro', () {
+      expect(automixModelEnd(duration, advanced([158]), 3),
+          const Duration(seconds: 161));
+      expect(automixModelEnd(duration, advanced([140]), 3), isNull);
+    });
+
+    test('rejects implausible or mismatched report timings', () {
+      expect(automixModelEnd(duration, advanced([179]), 3), isNull);
+      expect(automixModelEnd(duration, advanced([]), 3), isNull);
+      expect(automixModelEnd(duration, advanced([158]), double.nan), isNull);
+      const invalid = AutoMixProfile(
+        durationSeconds: 195, leadInSeconds: 0, audibleEndSeconds: 195,
+        fadeOutStartSeconds: 190, entrances: [], exits: [],
+        modelExits: [158],
+      );
+      expect(automixModelEnd(duration, invalid, 3), isNull);
+    });
+  });
+
   group('shouldArmCrossfade', () {
     const dur = Duration(minutes: 3);
 
