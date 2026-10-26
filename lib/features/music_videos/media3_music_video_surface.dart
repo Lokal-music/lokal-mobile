@@ -69,7 +69,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
         'resolveVideo', {
           'videoId': videoId,
           if (session != null) ...{
-            'cookie': session.cookie,
+            'cookie': [for (final entry in session.cookies.entries) '${entry.key}=${entry.value}'].join('; '),
             'visitorData': session.visitorData,
           },
         },
