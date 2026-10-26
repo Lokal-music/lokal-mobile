@@ -450,6 +450,23 @@ void main() {
     });
   });
 
+  group('Mornye package file names', () {
+    test('accepts official .spotiflac-ext packages and registry formats', () {
+      for (final name in [
+        'extension.spotiflac-ext', 'EXTENSION.SPOTIFLAC-EXT',
+        'extension.sflx', 'extension.morneye-ext',
+      ]) {
+        expect(morneyeIsPackageFileName(name), isTrue, reason: name);
+      }
+      for (final name in [
+        'extension.zip', 'extension.json', 'extension.spotiflac-ext.zip',
+        'extension.spotiflac-ext/index.js', 'extension.spotiflac-ext.exe',
+      ]) {
+        expect(morneyeIsPackageFileName(name), isFalse, reason: name);
+      }
+    });
+  });
+
   group('manifests', () {
     test('accepts a download provider', () {
       expect(morneyeValidateManifest(manifestFor('qobuz'))['name'], 'qobuz');
