@@ -56,6 +56,7 @@ internal object YoutubeNativeResolver {
         videoId: String,
         cookie: String?,
         visitorData: String?,
+        maxVideoHeight: Int = 1080,
     ): Map<String, Any?> = withTimeout(45_000L) {
         resolveMutex.withLock {
             check(initialized) { "YouTube resolver is not initialized." }
@@ -63,7 +64,7 @@ internal object YoutubeNativeResolver {
                 InnerTubeXResolver.onSessionChanged()
             }
             val resolved = try {
-                InnerTubeXResolver.resolvePlayableVideo(videoId)
+                InnerTubeXResolver.resolvePlayableVideo(videoId, maxVideoHeight = maxVideoHeight)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -71,7 +72,7 @@ internal object YoutubeNativeResolver {
                 if (cookie.isNullOrBlank()) throw e
                 Innertube.updateSession(null, null)
                 InnerTubeXResolver.onSessionChanged()
-                InnerTubeXResolver.resolvePlayableVideo(videoId)
+                InnerTubeXResolver.resolvePlayableVideo(videoId, maxVideoHeight = maxVideoHeight)
             }
             val video = requireNotNull(resolved.videoUrl)
             mapOf(
@@ -89,6 +90,7 @@ internal object YoutubeNativeResolver {
         videoId: String,
         cookie: String?,
         visitorData: String?,
+        maxVideoHeight: Int = 1080,
     ): Map<String, Any?> = withTimeout(45_000L) {
         resolveMutex.withLock {
             check(initialized) { "YouTube resolver is not initialized." }

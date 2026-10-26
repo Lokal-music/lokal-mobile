@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import 'package:flick/features/discovery/youtube_music_store.dart';
 import 'music_video_surface.dart';
+import 'video_quality_settings.dart';
 
 /// One clock and transport interface for the native video and the regular
 /// Full Player chrome/Space subtitles. Album playback has a separate clock.
@@ -98,12 +99,14 @@ class Media3MusicVideoSurface extends StatefulWidget {
   const Media3MusicVideoSurface({
     super.key, required this.videoId, this.controller, this.onFullscreen,
     this.showControls = true,
+    this.maxVideoHeight = defaultVideoQualityHeight,
   });
   final String videoId;
   final Media3MusicVideoController? controller;
   /// Enlarge the same native player into device fullscreen when requested.
   final VoidCallback? onFullscreen;
   final bool showControls;
+  final int maxVideoHeight;
 
   @override
   State<Media3MusicVideoSurface> createState() => _Media3MusicVideoSurfaceState();
@@ -113,6 +116,9 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
     with WidgetsBindingObserver {
   static const _resolver = MethodChannel('com.mossapps.flick/youtube_stream');
   Map<String, dynamic>? _media;
+  // Incremented before each asynchronous resolve. A quality change for the
+  // same videoId must invalidate every earlier completion and watchdog.
+  int _resolveGeneration = 0;
   MethodChannel? _player;
   Timer? _poller;
   Timer? _watchdog;
@@ -141,7 +147,8 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       oldWidget.controller?.detach();
       widget.controller?.attach(_command);
     }
-    if (oldWidget.videoId != widget.videoId) {
+    if (oldWidget.videoId != widget.videoId ||
+        oldWidget.maxVideoHeight != widget.maxVideoHeight) {
       widget.controller?.reset();
       _poller?.cancel();
       _watchdog?.cancel();
@@ -157,10 +164,16 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
   }
 
   Future<void> _resolve() async {
+    final generation = ++_resolveGeneration;
     final videoId = widget.videoId;
+    final maxVideoHeight = effectiveVideoHeight(widget.maxVideoHeight);
+    bool isCurrent() => mounted && generation == _resolveGeneration &&
+        videoId == widget.videoId;
     if (!Platform.isAndroid || !validMusicVideoId(videoId)) {
-      if (mounted) setState(() { _fallback = true; _loading = false; });
-      widget.controller?.fallback();
+      if (isCurrent()) {
+        setState(() { _fallback = true; _loading = false; });
+        widget.controller?.fallback();
+      }
       return;
     }
     try {
@@ -168,17 +181,18 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       final session = await YoutubeMusicSessionStore().read().catchError(
         (Object _) => null,
       );
-      if (!mounted || videoId != widget.videoId) return;
+      if (!isCurrent()) return;
       final result = await _resolver.invokeMapMethod<String, dynamic>(
         'resolveVideo', {
           'videoId': videoId,
+          'maxVideoHeight': maxVideoHeight,
           if (session != null) ...{
             'cookie': [for (final entry in session.cookies.entries) '${entry.key}=${entry.value}'].join('; '),
             'visitorData': session.visitorData,
           },
         },
       ).timeout(const Duration(seconds: 55));
-      if (!mounted || videoId != widget.videoId) return;
+      if (!isCurrent()) return;
       final audio = Uri.tryParse(result?['audioUrl'] as String? ?? '');
       final video = Uri.tryParse(result?['videoUrl'] as String? ?? '');
       bool allowed(Uri? uri) => uri?.scheme == 'https' &&
@@ -191,20 +205,21 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       });
       _watchdog?.cancel();
       _watchdog = Timer(const Duration(seconds: 35), () {
-        if (mounted && !_ready && !_fallback && videoId == widget.videoId) {
+        if (isCurrent() && !_ready && !_fallback) {
           setState(() => _fallback = true);
           widget.controller?.fallback();
         }
       });
     } catch (_) {
-      if (mounted && videoId == widget.videoId) {
+      if (isCurrent()) {
         setState(() { _fallback = true; _loading = false; });
         widget.controller?.fallback();
       }
     }
   }
 
-  void _created(int id) {
+  void _created(int id, int generation) {
+    if (!mounted || generation != _resolveGeneration) return;
     _player = MethodChannel('lokal/media3_video/$id');
     _poller?.cancel();
     unawaited(_refresh());
@@ -268,6 +283,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
 
   @override
   void dispose() {
+    _resolveGeneration++;
     WidgetsBinding.instance.removeObserver(this);
     widget.controller?.detach();
     _poller?.cancel();
@@ -297,11 +313,14 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
         child: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
+    final viewGeneration = _resolveGeneration;
     return Stack(
       fit: StackFit.expand,
       children: [
         AndroidView(
-          key: ValueKey('native:${widget.videoId}'),
+          // Changing the height can change both media URLs for the same video.
+          // Force Media3's platform view to receive fresh creation parameters.
+          key: ValueKey('native:${widget.videoId}:$_resolveGeneration'),
           viewType: 'lokal/media3_music_video',
           creationParamsCodec: const StandardMessageCodec(),
           creationParams: {
@@ -309,7 +328,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
             'videoUrl': _media!['videoUrl'],
             'headers': _media!['headers'] ?? <String, String>{},
           },
-          onPlatformViewCreated: _created,
+          onPlatformViewCreated: (id) => _created(id, viewGeneration),
         ),
         if (!_ready || _buffering)
           const IgnorePointer(

@@ -676,8 +676,11 @@ class LyricsService {
 
   Duration _lineEndTime(LyricsData lyrics, int index) {
     final ts = lyrics.lines[index].timestamp;
-    if (index + 1 < lyrics.lines.length) {
-      final next = lyrics.lines[index + 1].timestamp;
+    // Concurrent lines may share the same timestamp. Do not give the first
+    // one an arbitrary five-second end just because its immediate successor
+    // starts at the same time; both should end against the next later line.
+    for (var i = index + 1; i < lyrics.lines.length; i++) {
+      final next = lyrics.lines[i].timestamp;
       if (next > ts) return next;
     }
     return ts + const Duration(seconds: 5);

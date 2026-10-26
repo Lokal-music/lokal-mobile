@@ -59,6 +59,28 @@ void main() {
       expect(words[2].end, const Duration(milliseconds: 14700));
     });
 
+    test('simultaneous enhanced-LRC lines end at the next later timestamp', () {
+      const lyrics = LyricsData(
+        isSynchronized: true,
+        rawContent: '',
+        lines: [
+          LyricsLine(timestamp: Duration(seconds: 1), text: 'Voice one',
+            words: [LyricsWord(start: Duration(seconds: 1),
+              end: Duration(seconds: 1), text: 'Voice one')]),
+          LyricsLine(timestamp: Duration(seconds: 1), text: 'Voice two',
+            words: [LyricsWord(start: Duration(seconds: 1),
+              end: Duration(seconds: 1), text: 'Voice two')]),
+          LyricsLine(timestamp: Duration(seconds: 3), text: 'Next'),
+        ],
+      );
+      final playback = service.playbackLines(lyrics);
+      for (final line in playback.take(2)) {
+        expect(line.words, hasLength(1));
+        expect(line.words!.single.end,
+            const Duration(milliseconds: 2700));
+      }
+    });
+
     test('plain synced lines get one whole-line window', () {
       final lyrics = synced('[00:10.00]Short big\n[00:14.00]Next');
       final words = service.resolveWords(lyrics, 0);

@@ -87,7 +87,7 @@ void main() {
         ),
       ),
     );
-    expect(find.byKey(const ValueKey('space-line:0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-line:0:0')), findsOneWidget);
     expect(find.byType(LyricMotionLine), findsOneWidget);
     final sameLineState = tester.state(find.byType(LyricMotionLine));
 
@@ -100,13 +100,13 @@ void main() {
     expect(artworkMounts, 1);
     audioClock.value = const Duration(milliseconds: 2100);
     await tester.pump();
-    expect(find.byKey(const ValueKey('space-line:2000')), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-line:2000:1')), findsOneWidget);
     expect(artworkMounts, 1);
 
     // Rewind into the first line, as with a user seeking backwards.
     audioClock.value = const Duration(milliseconds: 400);
     await tester.pump();
-    expect(find.byKey(const ValueKey('space-line:0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-line:0:0')), findsOneWidget);
     expect(artworkMounts, 1);
   });
 
@@ -189,6 +189,143 @@ void main() {
     await tester.pump(const Duration(milliseconds: 48));
     expect(tester.widget<LyricMotionLine>(
       find.byType(LyricMotionLine)).position, paused);
+  });
+
+  test('concurrent lyric lines with identical timestamps are all active', () {
+    const parallel = LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [
+        LyricsLine(
+          timestamp: Duration(milliseconds: 1000),
+          text: 'First voice',
+          words: [
+            LyricsWord(text: 'First', start: Duration(milliseconds: 1000),
+              end: Duration(milliseconds: 1800)),
+          ],
+        ),
+        LyricsLine(
+          timestamp: Duration(milliseconds: 1000),
+          text: 'Second voice',
+          words: [
+            LyricsWord(text: 'Second', start: Duration(milliseconds: 1000),
+              end: Duration(milliseconds: 1900)),
+          ],
+        ),
+        LyricsLine(
+          timestamp: Duration(seconds: 2),
+          text: 'Next',
+        ),
+      ],
+    );
+    expect(immersiveActiveLineIndices(parallel,
+        const Duration(milliseconds: 500)), isEmpty);
+    expect(immersiveActiveLineIndices(parallel,
+        const Duration(milliseconds: 1200)), [0, 1]);
+    expect(immersiveActiveLineIndices(parallel,
+        const Duration(milliseconds: 2200)), [2]);
+  });
+
+  testWidgets('Space renders two simultaneous syllable lines without key collisions',
+      (tester) async {
+    final clock = ValueNotifier<Duration>(const Duration(milliseconds: 1200));
+    addTearDown(clock.dispose);
+    const parallel = LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [
+        LyricsLine(timestamp: Duration(seconds: 1), text: 'Voice one',
+          words: [LyricsWord(text: 'Voice one',
+            start: Duration(seconds: 1), end: Duration(seconds: 3))]),
+        LyricsLine(timestamp: Duration(seconds: 1), text: 'Voice two',
+          words: [LyricsWord(text: 'Voice two',
+            start: Duration(seconds: 1), end: Duration(seconds: 3))]),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(home: Center(
+      child: SizedBox(width: 360,
+        child: ImmersiveLyricsSubtitle(lyrics: parallel, position: clock)),
+    )));
+    expect(find.byType(LyricMotionLine), findsNWidgets(2));
+    expect(find.text('Voice one'), findsNothing); // custom text painters
+    expect(find.byKey(const ValueKey('space-line:1000:0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-line:1000:1')), findsOneWidget);
+    final rendered = tester.widgetList<LyricMotionLine>(
+      find.byType(LyricMotionLine)).toList();
+    expect(rendered.map((l) => l.line.text), ['Voice one', 'Voice two']);
+    expect(rendered.every((l) => l.position ==
+      const Duration(milliseconds: 1200)), isTrue);
+    clock.value = const Duration(milliseconds: 1650);
+    await tester.pump();
+    final updated = tester.widgetList<LyricMotionLine>(
+      find.byType(LyricMotionLine)).toList();
+    expect(updated.every((l) => l.position ==
+      const Duration(milliseconds: 1650)), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Space retains a lyric painter when an earlier line expires',
+      (tester) async {
+    final clock = ValueNotifier<Duration>(
+      const Duration(milliseconds: 1200),
+    );
+    addTearDown(clock.dispose);
+    const overlapping = LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [
+        LyricsLine(
+          timestamp: Duration.zero,
+          text: 'Previous voice',
+          words: [LyricsWord(
+            text: 'Previous voice', start: Duration.zero,
+            end: Duration(milliseconds: 1400),
+          )],
+        ),
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: 'Current voice',
+          words: [LyricsWord(
+            text: 'Current voice', start: Duration(seconds: 1),
+            end: Duration(seconds: 3),
+          )],
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: Center(child: SizedBox(width: 360,
+        child: ImmersiveLyricsSubtitle(lyrics: overlapping, position: clock),
+      )),
+    ));
+    const survivingKey = ValueKey('space-line:1000:1');
+    expect(find.byType(LyricMotionLine), findsNWidgets(2));
+    final survivingState = tester.state(find.byKey(survivingKey));
+
+    clock.value = const Duration(milliseconds: 1600);
+    await tester.pump();
+    expect(find.byType(LyricMotionLine), findsOneWidget);
+    expect(find.byKey(survivingKey), findsOneWidget);
+    expect(identical(tester.state(find.byKey(survivingKey)), survivingState),
+        isTrue, reason: 'The remaining lyric should not remount on shift');
+  });
+
+  test('overlapping word end remains visible after next line starts', () {
+    const overlapping = LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [
+        LyricsLine(timestamp: Duration.zero, text: 'Held',
+          words: [LyricsWord(text: 'Held', start: Duration.zero,
+            end: Duration(milliseconds: 2600))]),
+        LyricsLine(timestamp: Duration(seconds: 2), text: 'Next',
+          words: [LyricsWord(text: 'Next', start: Duration(seconds: 2),
+            end: Duration(seconds: 3))]),
+      ],
+    );
+    expect(immersiveActiveLineIndices(overlapping,
+      const Duration(milliseconds: 2200)), [0, 1]);
+    expect(immersiveActiveLineIndices(overlapping,
+      const Duration(milliseconds: 2700)), [1]);
   });
 
   test('native video controller owns an independent clock for Space subtitles',
