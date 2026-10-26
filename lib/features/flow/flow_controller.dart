@@ -9,6 +9,7 @@ import '../../services/online_playlist_reference.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/playlist_provider.dart';
 import '../../services/online_radio_recommendations.dart';
+import '../../services/automix_analysis_cache.dart';
 import 'domain/flow_models.dart';
 import 'flow_library.dart';
 import 'flow_playback.dart';
@@ -213,6 +214,9 @@ class FlowController extends AsyncNotifier<FlowData> {
     );
     await _commit(data);
     await ref.read(flowPlaybackProvider).play(songs, first, data.session.seed);
+    // Warm only the near queue, from already-computed waveforms. Never hold
+    // initial audio start while reading persistent transition profiles.
+    unawaited(AutoMixAnalysisCache.instance.warm(songs).catchError((Object _) {}));
     // The player-state observation asynchronously tops up at four or fewer
     // upcoming songs. Never block the initial playback on online lookups;
     // injected headless adapters may explicitly request grow().
@@ -293,6 +297,7 @@ class FlowController extends AsyncNotifier<FlowData> {
         ),
       ),
     );
+    unawaited(AutoMixAnalysisCache.instance.warm(extra).catchError((Object _) {}));
     for (final song in extra) {
       if (active) {
         if (!playback.ownsSession(data.session.seed)) break;
