@@ -852,11 +852,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                             ignoring: _showLyrics,
                                             child: Opacity(
                                               opacity: 1 - l,
-                                              child: _topBar(
+                                              child: _spaceHidden(_topBar(
                                                 song,
                                                 isCasting,
                                                 diagnostics,
-                                              ),
+                                              )),
                                             ),
                                           ),
                                         ),
@@ -868,7 +868,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                           fullCover: fullCover,
                                         ),
                                       ),
-                                      _seekRow(),
+                                      _spaceHidden(_seekRow()),
                                       // The timeline sits above the transport pads,
                                       // rather than being visually glued to them.
                                       SizedBox(height: compact ? 12 : 24),
@@ -879,7 +879,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                           l,
                                         ),
                                       ),
-                                      _transport(compact, l),
+                                      _spaceHidden(_transport(compact, l)),
                                       ClipRect(
                                         child: Align(
                                           heightFactor: 1 - l,
@@ -892,14 +892,14 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                                 padding: EdgeInsets.only(
                                                   top: compact ? 13 : 17,
                                                 ),
-                                                child: _optionsStrip(),
+                                                child: _spaceHidden(_optionsStrip()),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
                                       SizedBox(height: compact ? 13 : 17),
-                                      _chipRow(),
+                                      _spaceHidden(_chipRow()),
                                     ],
                                   );
                                 },
@@ -912,6 +912,23 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   ),
                 ),
                 ),
+                if (_immersiveLyrics)
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    bottom: MediaQuery.paddingOf(context).bottom + 55,
+                    child: IgnorePointer(
+                      child: ImmersiveLyricsSubtitle(
+                        key: ValueKey('space-subtitles:${song.id}'),
+                        lyrics: _lyricsForSongId == song.id
+                            ? (_sublineLyrics ?? _lyrics) : null,
+                        position: _videoActive
+                            ? _videoController.positionNotifier
+                            : _player.positionNotifier,
+                        loading: _lyricsLoading || _lyricsForSongId != song.id,
+                      ),
+                    ),
+                  ),
               ],
             ),
           );
@@ -919,6 +936,14 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       ),
     );
   }
+
+  Widget _spaceHidden(Widget child) => Visibility(
+    visible: !_immersiveLyrics,
+    maintainState: true,
+    maintainAnimation: true,
+    maintainSize: true,
+    child: child,
+  );
 
   // ───────────────────────────── top bar ─────────────────────────────
 
@@ -1227,7 +1252,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               ),
             );
           },
-          info: (context, p) => SizedBox(
+          info: (context, p) => _spaceHidden(SizedBox(
             key: _infoAnchorKey,
             width: double.infinity,
             child: AnimatedSwitcher(
@@ -1345,7 +1370,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ],
               ],
             ),
-          )),
+          ))),
           queue: const QueueList(embedded: true),
           lyrics: _lyricsArea(song),
         );
