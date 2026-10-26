@@ -63,19 +63,24 @@ class CoverFlowRecommendationWidgetProvider : AppWidgetProvider() {
         val title = item?.optString("title").orEmpty()
         val artist = item?.optString("artist").orEmpty()
         views.setTextViewText(R.id.rec_title,
-            if (hasSelection) title.ifBlank { "Recommended track" }
-            else "Your next favourite")
+            if (hasSelection) title.ifBlank {
+                WidgetPrefs.localizedText(context, R.string.widget_cover_flow_recommended)
+            } else WidgetPrefs.localizedText(context, R.string.widget_cover_flow_next_favourite))
         views.setTextViewText(R.id.rec_artist,
-            if (hasSelection) artist.ifBlank { "From your listening" }
-            else "Play something in Lokal to build your picks")
-        views.setTextViewText(R.id.rec_heading, "COVER FLOW")
+            if (hasSelection) artist.ifBlank {
+                WidgetPrefs.localizedText(context, R.string.widget_cover_flow_from_listening)
+            } else WidgetPrefs.localizedText(context, R.string.widget_cover_flow_empty_description))
+        views.setTextViewText(R.id.rec_heading,
+            WidgetPrefs.localizedText(context, R.string.widget_cover_flow_heading))
         views.setTextColor(R.id.rec_heading, WidgetPrefs.getAccentColor(context))
         views.setViewVisibility(R.id.rec_art_strip, View.VISIBLE)
         views.setViewVisibility(R.id.rec_prev,
             if (count > 1) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.rec_next,
             if (count > 1) View.VISIBLE else View.GONE)
-        views.setTextViewText(R.id.rec_play, if (hasSelection) "Play pick" else "Open Lokal")
+        views.setTextViewText(R.id.rec_play,
+            WidgetPrefs.localizedText(context, if (hasSelection)
+                R.string.widget_cover_flow_play_pick else R.string.widget_open_app))
 
         var selectedArt: android.graphics.Bitmap? = null
         fun art(viewId: Int, offset: Int) {
