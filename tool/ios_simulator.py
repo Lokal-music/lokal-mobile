@@ -17,7 +17,11 @@ def main():
     if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', version):
         raise ValueError('The simulator runtime must be an explicit OS version')
     runtime_id = 'com.apple.CoreSimulator.SimRuntime.iOS-' + version.replace('.', '-')
-    output = Path(os.environ.get('RUNNER_TEMP', 'build/ios/runtime-evidence')) / f'ios-simulator-boot-{version}'
+    suffix = os.environ.get('IOS_SIMULATOR_SESSION_SUFFIX', '')
+    if suffix and not re.fullmatch(r'[a-zA-Z0-9-]{1,40}', suffix):
+        raise ValueError('Invalid simulator session suffix')
+    evidence_name = f'ios-simulator-boot-{version}' + (f'-{suffix}' if suffix else '')
+    output = Path(os.environ.get('RUNNER_TEMP', 'build/ios/runtime-evidence')) / evidence_name
     output.mkdir(parents=True, exist_ok=True)
     devices_json = command('xcrun', 'simctl', 'list', 'devices', 'available', '--json')
     (output / 'devices-before.json').write_text(devices_json)
@@ -35,7 +39,7 @@ def main():
         raise RuntimeError(f'No compatible iPhone for required iOS {version} / {requested_type}; inspect {output}')
     device_type = sorted(types, key=lambda t: t['name'])[0]
     # Use our own device, avoiding the hosted image's preconfigured simulators.
-    name = f'Lokal iPhone iOS {version}'
+    name = f'Lokal iPhone iOS {version}' + (f' {suffix}' if suffix else '')
     candidates = [d for d in devices.get(runtime_id, [])
                   if d.get('isAvailable') and d['name'] == name
                   and d.get('deviceTypeIdentifier') == device_type['identifier']]
@@ -46,6 +50,8 @@ def main():
                        timeout=45).strip()
         device = {'udid': udid, 'name': name, 'state': 'Shutdown'}
     udid = device['udid']
+    os.environ['IOS_SIMULATOR_UDID'] = udid
+    os.environ['IOS_SIMULATOR_RUNTIME'] = runtime_id
     (output / 'selected.json').write_text(json.dumps({
         'udid': udid, 'name': name, 'runtime': runtime_id,
         'device_type': device_type['identifier'],

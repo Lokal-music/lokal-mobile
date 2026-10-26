@@ -549,6 +549,21 @@ flutter analyze --no-pub lib/main.dart lib/services/audio_session_manager.dart l
 
 ## Current validation ledger
 
+- Build 20 passes the updated search scopes/four filters and root profile editor
+  on iOS 18.6, with screenshots and exact-source metadata. An artwork-file test
+  fixture inflated its raw scanner file count; creating artwork after the scan
+  corrects the fixture without relaxing the assertion. Later playback/panel
+  checks require the next native run.
+- Build 21 fails the minimal Flutter control VM gate before Lokal runs. One
+  bounded control-only fresh-device recovery is implemented for the next run;
+  both attempts retain evidence, and application test failures are not retried.
+- The post-#172 changed-file selections now pass 248 shared tests plus all five
+  repaired decoder-recovery cases. A real host Rust/Isar persistence check also
+  preserves song IDs and playlist references across rescans/retagging/database
+  reopen. These host results do not prove native File Provider UI or app restart.
+  See [the detailed review](IOS_POST172_REVIEW.md) for the evidence boundaries.
+
+
 - Host Rust tests with the default native-audio/USB features: **303 passed**.
   No USB hardware test is inferred from that result.
 - Both Android arm64 debug APKs (`full` and `play`) build with the iOS changes.

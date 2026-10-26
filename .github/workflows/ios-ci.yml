@@ -55,6 +55,7 @@ jobs:
           flutter pub get --enforce-lockfile
           python3 tool/ios_readiness.py --require-scaffold
           python3 -m unittest discover -s tool -p test_ios_simulator.py
+          python3 -m unittest discover -s tool -p test_ios_control_runner.py
       - name: Generate native alternate icons
         run: |
           python3 -m venv "$RUNNER_TEMP/lokal-ios-assets"
@@ -101,7 +102,7 @@ jobs:
         run: python3 tool/ios_simulator.py
       - name: Verify the simulator with a minimal Flutter control app
         id: control
-        timeout-minutes: 8
+        timeout-minutes: 16
         run: |
           flutter create --platforms=ios --org app.lokal --project-name lokal_control "$RUNNER_TEMP/lokal-control"
           (
@@ -111,7 +112,7 @@ jobs:
               exit 1
             fi
           )
-          python3 tool/ios_launch_probe.py "$RUNNER_TEMP/lokal-control/build/ios/iphonesimulator/Runner.app" --prefix ios-control
+          python3 tool/ios_control_runner.py "$RUNNER_TEMP/lokal-control/build/ios/iphonesimulator/Runner.app"
       - name: Preserve simulator control evidence
         if: always() && env.IOS_SIMULATOR_UDID != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -170,3 +170,21 @@ accepts only the exact configured redirect host/path.
    introduce software gain.
 5. Test pause/resume, headset/Bluetooth changes, USB detach, screen-off and
    notification/widget controls.
+
+
+### Real host library persistence check
+
+After building the host Rust library with the prerequisites above, explicitly
+select that library and the locked Isar host binary. For Linux x86_64 with
+`PUB_CACHE` pointing to the populated package cache:
+
+```bash
+LOKAL_NATIVE_LIBRARY="$PWD/rust/target/debug/librust_lib_flick_player.so" \
+LOKAL_ISAR_LIBRARY="$PUB_CACHE/hosted/pub.dev/isar_community_flutter_libs-3.3.2/linux/libisar.so" \
+flutter test --no-pub test/native/library_persistence_test.dart
+```
+
+The test uses real Rust and Isar, with isolated directories/preferences. It
+checks scan/retag/rescan identity and persisted playlist references after a store
+reopen. It does not exercise native Files UI, a separate app process or audio
+hardware. Without both explicit library paths it reports a skip, not acceptance.

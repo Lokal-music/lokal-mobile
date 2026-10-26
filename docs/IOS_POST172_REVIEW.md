@@ -105,10 +105,14 @@ query protection, entity isolation, no library work in Online scope and the real
 queued recommendation order remain asserted. The three corrected fixture files
 also pass static analysis without findings.
 
-The remaining failed-source fixture stalls on untouched main under an external
-45-second bound. Its unresolved-source Repeat All case passes independently; its
-asynchronous-retirement assertion also fails on both branches. This file is
-excluded from the 248-pass selection, and decoder retirement is not claimed green.
+The failed-source file initially stalled/failed on both branches. Its five cases
+now pass after repairing fixture lifecycle: explicitly owned streams/disposal,
+draining both the fake deadline clock and real cancellation event loop, and
+stopping the deliberately paused crossfade ramp before widget-test invariants.
+Expected errors, source-load counts, fresh-player recovery and crossfade player
+identity assertions are retained. All 41 changed Dart files therefore have
+passing focused runs: 248 checks across 40 files, plus five decoder-recovery
+checks. This is not a green claim for the complete historical Flutter suite.
 
 A separate post-merge iPhone regression selection passes all 41 cases, including
 the actual host Rust metadata/QuickJS bridge (with `LOKAL_NATIVE_LIBRARY` set),
@@ -149,3 +153,25 @@ Build 19 / attempt 1 package metadata identifies source
 All 33 device binaries passed CI inspection; the downloaded IPA and checksum
 were verified locally. This package has the updated UI, but its new simulator
 acceptance remains pending, and it has no physical-device qualification.
+
+
+## Subsequent recovery and data-safety checks
+
+Build 21 packages the app but fails minimal-control VM readiness before Lokal
+execution. The control coordinator now permits exactly one fresh owned simulator
+and opens Simulator.app for that device. Original and recovery evidence have
+distinct names; the new UDID is published to following steps. Only the generated
+control bundle can use this path. Installation errors propagate directly, a
+second readiness failure fails the job, and Lokal tests receive no retry or
+weakened acceptance. Nine Python coordinator contracts pass; these are not Apple
+runtime tests. The recovery itself still requires a hosted result.
+
+The new host persistence integration runs real Rust tag editing/scanning, the
+production library indexer and real Isar. It checks unchanged rescans, retagging
+with stable song IDs, playlist references and saved folders after database
+close/reopen, Unicode paths, and an unchanged source-file copy. Only filesystem
+locations/preferences are isolated. This does not establish Apple's Files picker,
+a separate app process relaunch, signing or hardware behavior. The combined real
+persistence, decoder recovery and iOS DSP/codec selection pass 17 checks; both new
+Dart test files analyze without findings. Explicit library-path environment
+variables are required, otherwise the host persistence case reports a skip.

@@ -66,6 +66,22 @@ class SimulatorCoordinatorTest(unittest.TestCase):
             self.assertTrue((evidence / 'devices-after.json').is_file())
             ready.assert_not_called()
 
+    def test_recovery_device_keeps_original_boot_evidence_and_publishes_new_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original = Path(directory) / 'ios-simulator-boot-18.6/boot.log'
+            original.parent.mkdir()
+            original.write_text('original boot evidence')
+            environment = self.environment(directory)
+            environment['IOS_SIMULATOR_SESSION_SUFFIX'] = 'control-recovery'
+            with patch.dict(os.environ, environment, clear=True), \
+                 patch.object(ios_simulator, 'command', side_effect=[DEVICES, RUNTIMES, 'recovery-udid\n']) as command, \
+                 patch.object(ios_simulator.subprocess, 'run'):
+                ios_simulator.main()
+                self.assertEqual(command.call_args.args[3], 'Lokal iPhone iOS 18.6 control-recovery')
+                self.assertEqual(os.environ['IOS_SIMULATOR_UDID'], 'recovery-udid')
+            self.assertEqual(original.read_text(), 'original boot evidence')
+            self.assertTrue((Path(directory) / 'ios-simulator-boot-18.6-control-recovery/selected.json').exists())
+
     def test_missing_required_runtime_never_falls_back_to_another_os(self):
         with tempfile.TemporaryDirectory() as directory, \
              patch.dict(os.environ, self.environment(directory), clear=True), \
