@@ -96,6 +96,7 @@ const Map<String, String> _uifr = {
   "Connect Your Music Accounts": "Connectez vos comptes musicaux",
   "Connect your Spotify session to enable personal shelves.":
       "Connectez votre session Spotify pour activer les étagères personnelles.",
+  "Connect your account to see your mixes and personalized picks.": "Connectez votre compte pour voir vos mix et des recommandations personnalisées.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Connectez votre compte pour voir vos mix, vos likes, votre historique et vos choix personnalisés.",
   "Connected": "Connecté",
   "Continue": "Continuer",
@@ -613,6 +614,7 @@ const Map<String, String> _uide = {
   "Connect Spotify for Discovery": "Verbinden Sie Spotify für Discovery",
   "Connect Your Music Accounts": "Musikkonten verbinden",
   "Connect your Spotify session to enable personal shelves.": "Verbinden Sie Ihre Spotify-Sitzung, um persönliche Regale zu aktivieren.",
+  "Connect your account to see your mixes and personalized picks.": "Verknüpfen Sie Ihr Konto, um Ihre Mixe und personalisierten Empfehlungen zu sehen.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Verknüpfen Sie Ihr Konto, um Ihre Mixe, Likes, Ihren Verlauf und Ihre personalisierten Picks anzuzeigen.",
   "Connected": "Verbunden",
   "Continue": "Weiter",
@@ -1127,6 +1129,7 @@ const Map<String, String> _uies = {
   "Connect Your Music Accounts": "Conecta tus cuentas musicales",
   "Connect your Spotify session to enable personal shelves.":
       "Conecte su sesión Spotify para habilitar estantes personales.",
+  "Connect your account to see your mixes and personalized picks.": "Conecte su cuenta para ver sus mezclas y recomendaciones personalizadas.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Conecte su cuenta para ver sus mezclas, Me gusta, historial y selecciones personalizadas.",
   "Connected": "Conectado",
   "Continue": "Continuar",
@@ -1644,6 +1647,7 @@ const Map<String, String> _uiit = {
   "Connect Your Music Accounts": "Collega i tuoi account musicali",
   "Connect your Spotify session to enable personal shelves.":
       "Connetti la tua sessione Spotify per abilitare gli scaffali personali.",
+  "Connect your account to see your mixes and personalized picks.": "Collega il tuo account per vedere i tuoi mix e i consigli personalizzati.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Collega il tuo account per vedere i tuoi mix, i Mi piace, la cronologia e le scelte personalizzate.",
   "Connected": "Connesso",
   "Continue": "Continua",
@@ -2165,6 +2169,7 @@ const Map<String, String> _uiptBR = {
   "Connect Your Music Accounts": "Liga as tuas contas de música",
   "Connect your Spotify session to enable personal shelves.":
       "Conecte sua sessão Spotify para ativar estantes pessoais.",
+  "Connect your account to see your mixes and personalized picks.": "Conecte sua conta para ver seus mixes e recomendações personalizadas.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Conecte sua conta para ver seus mixes, curtidas, histórico e escolhas personalizadas.",
   "Connected": "Ligado",
   "Continue": "Continuar",
@@ -2683,6 +2688,7 @@ const Map<String, String> _uinl = {
   "Connect Your Music Accounts": "Verbind je muziekaccounts",
   "Connect your Spotify session to enable personal shelves.":
       "Verbind uw Spotify-sessie om persoonlijke planken in te schakelen.",
+  "Connect your account to see your mixes and personalized picks.": "Verbind uw account om uw mixen en persoonlijke aanbevelingen te bekijken.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Verbind uw account om uw mixen, likes, geschiedenis en gepersonaliseerde keuzes te bekijken.",
   "Connected": "Verbonden",
   "Continue": "Doorgaan",
@@ -3209,6 +3215,7 @@ const Map<String, String> _uipl = {
   "Connect Your Music Accounts": "Połącz konta muzyczne",
   "Connect your Spotify session to enable personal shelves.":
       "Podłącz sesję Spotify, aby włączyć półki osobiste.",
+  "Connect your account to see your mixes and personalized picks.": "Połącz swoje konto, aby zobaczyć swoje miksy i spersonalizowane rekomendacje.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Połącz swoje konto, aby zobaczyć swoje składanki, polubienia, historię i spersonalizowane typy.",
   "Connected": "Połączono",
   "Continue": "Dalej",
@@ -3730,6 +3737,7 @@ const Map<String, String> _uisv = {
   "Connect Your Music Accounts": "Anslut dina musikkonton",
   "Connect your Spotify session to enable personal shelves.":
       "Anslut din Spotify-session för att aktivera personliga hyllor.",
+  "Connect your account to see your mixes and personalized picks.": "Anslut ditt konto för att se dina mixar och personliga rekommendationer.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Anslut ditt konto för att se dina mixar, gilla-markeringar, historik och personliga val.",
   "Connected": "Ansluten",
   "Continue": "Fortsätt",
@@ -4253,6 +4261,7 @@ const Map<String, String> _uizh = {
   "Connect Your Music Accounts": "连接您的音乐帐户",
   "Connect your Spotify session to enable personal shelves.":
       "连接您的 Spotify 会话以启用个人书架。",
+  "Connect your account to see your mixes and personalized picks.": "连接账号，查看你的混音和个性化推荐。",
   "Connect your account to see your mixes, Likes, history and personalized picks.":
       "连接您的帐户以查看您的混音、喜欢、历史记录和个性化精选。",
   "Connected": "已连接",
@@ -4764,6 +4773,7 @@ const Map<String, String> _uitr = {
   "Connect Spotify for Discovery": "Keşif için Spotify'a bağlan",
   "Connect Your Music Accounts": "Müzik hesaplarını bağla",
   "Connect your Spotify session to enable personal shelves.": "Kişisel koleksiyonların için Spotify oturumunu bağla.",
+  "Connect your account to see your mixes and personalized picks.": "Mixlerini ve sana özel önerileri görmek için hesabını bağla.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Karışımlarını, beğenilerini, geçmişini ve kişisel önerilerini görmek için hesabını bağla.",
   "Connected": "Bağlandı",
   "Continue": "Devam et",
