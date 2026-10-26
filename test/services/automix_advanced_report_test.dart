@@ -5,6 +5,7 @@ import 'package:flick/models/song.dart';
 import 'package:flick/services/automix_advanced_report.dart';
 import 'package:flick/services/automix_analysis_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:crypto/crypto.dart';
 
 Map<String, dynamic> sample(int size, int modified) => {
   'schema':'lokal-automix-advanced-v1',
@@ -55,6 +56,31 @@ void main() {
     invalid['analyzer'] = {'id':'unrecognized-model','revision':'x'};
     expect(AutoMixAdvancedReport.parse(invalid,
       sourceSize:1000,sourceModifiedMs:100,expectedDuration:180),isNull);
+  });
+
+
+  test('copied audio accepts the sidecar by full content hash, not old mtime', () async {
+    final dir = await Directory.systemTemp.createTemp('lokal-automix-copy-');
+    addTearDown(() async => dir.delete(recursive:true));
+    final audio = File('${dir.path}/copied.mp3');
+    await audio.writeAsString('identical bytes after copy');
+    final stat = await audio.stat();
+    final report = sample(stat.size,
+        stat.modified.millisecondsSinceEpoch - 60000);
+    (report['source'] as Map)['sha256'] =
+        sha256.convert(await audio.readAsBytes()).toString();
+    final sidecar = File('${audio.path}${AutoMixAdvancedReport.suffix}');
+    await sidecar.writeAsString(jsonEncode(report));
+    final loaded = await AutoMixAdvancedReport.read(audio.path,stat,
+        const Duration(minutes:3));
+    expect(loaded?.exits,[158]);
+
+    // A different audio file with the same byte count but altered content
+    // must not get the source report even when the stored file stamp is old.
+    await audio.writeAsString('different bytes after copy');
+    expect(await AutoMixAdvancedReport.read(
+      audio.path,await audio.stat(),const Duration(minutes:3),
+    ),isNull);
   });
 
   test('model-only sidecar works without a waveform cache', () async {
