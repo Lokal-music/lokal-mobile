@@ -455,7 +455,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("song.flac");
         write_minimal_flac(&path, &["TITLE=Song"]);
-        let expected = "[00:01.20]The first line\\n[00:03.40]The next line";
+        let expected = "[00:01.20]The first line\n[00:03.40]The next line";
         let result = write_tags(
             path.to_string_lossy().to_string(),
             TagEditFields {
