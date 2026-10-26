@@ -19,10 +19,12 @@ typedef StreamTrackLookup = Future<Song?> Function(
 bool needsStreamReResolution(Song song) {
   final source = song.sourcePackage;
   if (source == 'konnekted.morneye-live' ||
-      source == 'konnekted.progressive' ||
-      source == Song.pendingSourcePackage) {
-    return true;
+      source == 'konnekted.progressive') {
+    // Reuse an active stream while the handle is still genuinely registered;
+    // re-resolve as soon as its session expires.
+    return !QueuePreResolver.isPlayableResolvedSource(song);
   }
+  if (source == Song.pendingSourcePackage) return true;
   if (source == null || !source.startsWith('konnekted.')) return false;
   final path = song.filePath;
   // Keep actually downloaded/cache-backed files that are still present.
@@ -43,6 +45,10 @@ Song replayableStreamSong(
 }) {
   if (!needsStreamReResolution(song)) return song;
   final resolver = queueResolver ?? QueuePreResolver.shared;
+  // A freshly created Search/Discovery placeholder already has a resolver
+  // tied to the user's chosen add-on. Never overwrite that with a generic
+  // artist/title search; only repair persisted placeholders with no resolver.
+  if (song.isPending && resolver.hasResolver(song.id)) return song;
   final resolve = lookup ?? findDiscoverySong;
   final videoId = song.sourceDisplayName == 'YouTube Music' &&
           song.remoteId != null &&
