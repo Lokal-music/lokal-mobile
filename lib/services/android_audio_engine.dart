@@ -105,6 +105,26 @@ bool shouldArmCrossfade({
   return remaining.inMilliseconds <= fadeMs;
 }
 
+/// Prepare the next decoder before the overlap begins. This gives remote
+/// add-ons time to resolve and buffer without advancing the outgoing song
+/// early. The actual handoff still waits for the fade window.
+@visibleForTesting
+bool shouldPrepareCrossfade({
+  required bool enabled,
+  required Duration duration,
+  required Duration position,
+  required double fadeSecs,
+  double preparationLeadSecs = 8,
+}) {
+  if (!enabled || !fadeSecs.isFinite || fadeSecs <= 0 ||
+      !preparationLeadSecs.isFinite) return false;
+  final fadeMs = (fadeSecs * 1000).round();
+  if (duration.inMilliseconds <= fadeMs) return false;
+  final left = (duration - position).inMilliseconds;
+  return left > 0 &&
+      left <= fadeMs + (math.max(0.0, preparationLeadSecs) * 1000).round();
+}
+
 @visibleForTesting
 bool shouldUseFastStartCurrentTrackOnly({
   required bool allowFastStart,
@@ -292,6 +312,7 @@ class AndroidAudioEngine implements AudioEngine {
   just_audio.AudioPlayer? _secondary;
   Timer? _crossfadeTimer;
   bool _crossfadeArmed = false;
+  int _crossfadeEpoch = 0; // invalidates late async decoder preparations
   double _rampUserVolume = 1.0;
   Duration _rampElapsed = Duration.zero;
   Duration _rampTotal = Duration.zero;
@@ -517,6 +538,7 @@ class AndroidAudioEngine implements AudioEngine {
     // If a crossfade swapped the primary with its secondary slot, the
     // PlayerService-owned instance can still live in _secondary. Clearing
     // only _player would alias the two slots on the next _ensurePlayer().
+    ++_crossfadeEpoch;
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
@@ -862,7 +884,7 @@ class AndroidAudioEngine implements AudioEngine {
     if (_crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
     final cfg = _crossfadeConfigProvider();
     final duration = player.duration;
-    if (!shouldArmCrossfade(
+    if (!shouldPrepareCrossfade(
       enabled: cfg.enabled,
       duration: duration ?? Duration.zero,
       position: pos,
@@ -874,33 +896,74 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs) {
-    // Set synchronously so the next position tick can't re-enter.
+    // The preparation phase is independent of the fade itself: streams may
+    // require several seconds to buffer. Skips/stops/route changes invalidate
+    // this attempt and cannot start an obsolete successor after an await.
     _crossfadeArmed = true;
+    final epoch = ++_crossfadeEpoch;
+    final outgoing = _player;
+    final outgoingTrack = _loadedTrack;
+    final next = _onNextSong?.call();
+    if (outgoing == null || next == null || next.atmosEncoded ||
+        next.id == outgoingTrack?.id) {
+      _crossfadeArmed = false;
+      return;
+    }
+    final nextIdentity = androidAudioSourceIdentity(next);
+    bool valid() =>
+        _crossfadeArmed && epoch == _crossfadeEpoch &&
+        identical(_player, outgoing) &&
+        identical(_loadedTrack, outgoingTrack) &&
+        _onNextSong?.call() case final candidate?
+            ? androidAudioSourceIdentity(candidate) == nextIdentity
+            : false;
+
     unawaited(() async {
-      final outgoing = _player;
-      if (outgoing == null) {
-        _crossfadeArmed = false;
-        return;
-      }
-      final next = _onNextSong?.call();
-      if (next == null || next.atmosEncoded ||
-          next.id == _loadedTrack?.id) {
-        // Nothing to crossfade into (end of list / loop-one): let the track
-        // end naturally so onTrackEnded handles it.
-        _crossfadeArmed = false;
-        return;
-      }
       try {
         final incoming = await _ensureSecondary();
+        if (!valid()) return;
         final source = await _sourceBuilder(next);
+        if (!valid()) return;
         _rampUserVolume = outgoing.volume <= 0 ? 1.0 : outgoing.volume;
         await incoming
             .setAudioSource(source, preload: true)
             .timeout(const Duration(seconds: 30));
+        if (!valid()) return;
         await incoming.seek(Duration.zero).timeout(const Duration(seconds: 15));
+        if (!valid()) return;
         await incoming.setVolume(0);
         await incoming.setSpeed(outgoing.speed);
         await incoming.setLoopMode(just_audio.LoopMode.off);
+        if (!valid()) return;
+
+        // Do not advance the queue while the next song is only buffered.
+        // Poll the media position rather than wall time so pause/buffering
+        // cannot cause a premature transition. The guard also covers manual
+        // queue edits that do not trigger a player.load().
+        while (valid()) {
+          final remainingMs = ((outgoing.duration ?? outgoingTrack!.duration) -
+                  outgoing.position)
+              .inMilliseconds;
+          if (outgoing.processingState == just_audio.ProcessingState.completed ||
+              remainingMs <= 0) {
+            _crossfadeArmed = false; // normal end-of-track takes over
+            return;
+          }
+          if (outgoing.playing && remainingMs <= fadeMs) break;
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+        }
+        if (!valid()) return;
+
+        final remainingMs =
+            ((outgoing.duration ?? outgoingTrack!.duration) - outgoing.position)
+                .inMilliseconds;
+        if (remainingMs <= 0) {
+          _crossfadeArmed = false;
+          return;
+        }
+        // A slow remote prepare can shrink the usable overlap; never run a
+        // ramp longer than the audio left in the outgoing song.
+        final activeFadeMs = math.min(fadeMs, remainingMs);
         unawaited(
           incoming.play().catchError((Object error, StackTrace stackTrace) {
             devLog('[crossfade] incoming play() failed: $error');
@@ -910,16 +973,13 @@ class AndroidAudioEngine implements AudioEngine {
         _loadedTrack = next;
         _loadedSingleTrackOnly = true;
         _playlistSignature = const <String>[];
-        _rampTotal = Duration(milliseconds: fadeMs);
+        _rampTotal = Duration(milliseconds: activeFadeMs);
         _rampElapsed = Duration.zero;
         _rampCurve = cfg.curve;
-        // Swap roles: incoming becomes the active player, outgoing becomes the
-        // idle slot and is faded out by the ramp.
+        // Ping-pong decoders only when the incoming audio is committed.
         _player = incoming;
         _secondary = outgoing;
         _startRampTimer(outgoing, incoming);
-        // The emitted state drives PlayerService's track-change bookkeeping
-        // (index sync, notification, replay tracking, position save).
         _emit(
           _state.copyWith(
             currentTrack: next,
@@ -928,11 +988,10 @@ class AndroidAudioEngine implements AudioEngine {
             duration: incoming.duration ?? next.duration,
           ),
         );
-        // Queue-entry consumption + priority anchor are not covered by the
-        // playback-state subscription, so the service does them here.
         _onTrackAdvanced?.call(next);
       } catch (error, stackTrace) {
-        devLog('[crossfade] arm failed: $error');
+        if (epoch != _crossfadeEpoch) return;
+        devLog('[crossfade] preparation failed: $error');
         debugPrintStack(stackTrace: stackTrace);
         _crossfadeArmed = false;
         final active = _player;
@@ -982,6 +1041,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   Future<void> _cancelCrossfade() async {
+    ++_crossfadeEpoch;
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     final wasArmed = _crossfadeArmed;
@@ -1009,6 +1069,7 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> dispose() async {
+    ++_crossfadeEpoch;
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
