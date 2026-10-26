@@ -46,6 +46,7 @@ const List<Locale> kSupportedLocales = <Locale>[
   Locale('nl'),
   Locale('pl'),
   Locale('sv'),
+  Locale('tr'),
 ];
 
 /// Used when nothing else matches.
@@ -71,6 +72,7 @@ String lokalText(String message, {Map<String, Object?> args = const {}}) {
     'Nederlands',
     'Polski',
     'Svenska',
+    'Türkçe',
     '简体中文',
     'Lokal',
     'Flick',
