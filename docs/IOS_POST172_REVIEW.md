@@ -79,7 +79,8 @@ still require a signed-device test. [WidgetKit updates](https://developer.apple.
 are scheduled by the system; use timeline entries and system progress rather
 than periodic app wakeups.
 
-The base app retains its iOS 15 floor. Gate AppIntent interactive controls at iOS
+The initial base app used iOS 15. The maintainer subsequently chose a single
+iOS 16+ app for current Chromecast SDK compatibility. Gate AppIntent interactive controls at iOS
 17 and later; older widgets use deep links. WidgetKit schedules updates; do not
 promise an unrestricted live refresh loop. Test stale timelines, artwork churn,
 missing data, signed colors, cold-start command replay, offline behavior and text
@@ -231,3 +232,16 @@ Reports now record each native stage immediately so later failures do not erase
 prior measurements. The expanded Space/Turkish/HTTP Now Playing checks still
 require a new hosted result; a debug-only native probe reports numeric metadata
 and artwork dimensions without names, file paths or credentials.
+
+
+Build 23 stops at static analysis because the newly added notification assertion
+used an `instance` getter instead of the service's factory constructor. The
+harness now calls `NotificationService()`, and full application/integration
+preflight has no errors (566 warning/info findings remain). No native runtime
+result is claimed for that attempt.
+
+The maintainer chose one full-featured iOS 16+ distribution. New runner and pod
+targets, native probe Clang triples, Cargokit's forwarded deployment target and
+package inspection follow that decision. Standalone native-environment helper
+contracts pass; a declared iOS 15 app is rejected by the package policy. Real
+Apple iOS 16 compilation/package/runtime acceptance requires the next run.

@@ -48,9 +48,10 @@ requires the generic and receiver-specific Bonjour service declarations and
 explicit discovery for a custom picker. Current CocoaPods publication ends at
 4.8.6; newer integration uses SPM or a verified direct framework distribution.
 
-The base Lokal app still targets iOS 15. Do not silently raise that floor or ship
-a mandatory newer framework under a false minimum-OS declaration. First prove an
-availability-gated distribution or explicitly choose a higher-floor Cast build.
+The maintainer has now chosen one full-featured iOS 16+ app. The previous
+iOS 15 baseline is retired for new builds; older engineering artifacts retain
+their recorded minimum. Prove the current SDK device/simulator link before
+including it in the application.
 AirPlay remains the system route UI. Then adapt the existing Cast channel/state
 contract, file HTTP server, transport controls and local/remote ownership handoff.
 A simulator discovery fixture cannot substitute for an actual Cast receiver.

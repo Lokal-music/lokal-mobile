@@ -38,6 +38,8 @@ def inspect_bundle(app: Path) -> dict:
         return parts + (0,) * (3 - len(parts))
 
     minimum = version(info["MinimumOSVersion"])
+    if minimum != version('16.0'):
+        raise ValueError('The supported iPhone application floor is iOS 16.0')
     binaries = [executable]
     for framework in app.glob("Frameworks/*.framework"):
         metadata = plistlib.loads((framework / "Info.plist").read_bytes())
