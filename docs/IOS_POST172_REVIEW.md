@@ -458,3 +458,8 @@ Main `ba8c7f5b9e6ab4e004f106ec1c02231143fb1d5b`, reviewed 26 October 2026
 | PR | Applied UI/behavior | iPhone validation and limits |
 | --- | --- | --- |
 | #217 | Accept documented `.spotiflac-ext` imports alongside `.sflx`/`.morneye-ext`, with matching picker guidance and case-insensitive URL/file validation. Download workers have a host-controlled 256 MiB heap ceiling; browsing stays at 64 MiB. | The shared iPhone picker/installer benefits from the same change. Keep all archive/permission/hash validation. 42 package/panel tests and all 308 Rust tests pass, including eight real QuickJS tests. The Rust function/config field adds no bridge entrypoint. Current native evidence remains build 29 through #216; iOS compilation/execution and peak memory on the oldest supported phone still need the new source run/device acceptance. Metadata-only/lyrics-only providers are not working audio sources merely because their ZIP installs. |
+
+The changed #217 Rust library also compiles successfully for Android ARM64 with
+the real pinned NDK through Cargokit (`cargokitCargoBuildRust_lib_flick_playerDebug`).
+This complements the earlier complete #216 APK build; it does not label that
+older APK as containing #217 or establish physical extension/device acceptance.
