@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../data/entities/song_audio_cache_entity.dart';
 import '../data/repositories/song_repository.dart';
 import '../models/song.dart';
+import 'automix_advanced_report.dart';
 
 /// Lightweight cue and energy hints derived from the existing, persisted
 /// waveform cache. These are NOT beat grids, vocal detection or Demucs stems.
@@ -22,6 +23,9 @@ class AutoMixProfile {
     required this.entrances,
     required this.exits,
     this.energy,
+    this.modelEntrances = const [],
+    this.modelExits = const [],
+    this.analyzedBpm,
   });
 
   final double durationSeconds;
@@ -31,6 +35,23 @@ class AutoMixProfile {
   final List<double> entrances;
   final List<double> exits;
   final double? energy;
+  /// Explicitly model-derived, beat-aligned source cue points.
+  final List<double> modelEntrances;
+  final List<double> modelExits;
+  final double? analyzedBpm;
+
+  AutoMixProfile withAdvanced(AutoMixAdvancedReport report) => AutoMixProfile(
+    durationSeconds: durationSeconds,
+    leadInSeconds: leadInSeconds,
+    audibleEndSeconds: audibleEndSeconds,
+    fadeOutStartSeconds: fadeOutStartSeconds,
+    entrances: entrances,
+    exits: exits,
+    energy: energy,
+    modelEntrances: report.entrances,
+    modelExits: report.exits,
+    analyzedBpm: report.bpm,
+  );
 
   Map<String, dynamic> toJson() => {
     'duration': durationSeconds,
@@ -186,7 +207,7 @@ class AutoMixAnalysisCache {
   Future<AutoMixProfile?> read(Song song) async {
     final path = song.filePath;
     final songId = int.tryParse(song.id);
-    if (songId == null || path == null || path.isEmpty ||
+    if (path == null || path.isEmpty ||
         path.contains('://') || song.isNetworkSource ||
         song.startOffsetMs != null || song.endOffsetMs != null ||
         song.duration.inMilliseconds < 20000) return null;
@@ -196,55 +217,75 @@ class AutoMixAnalysisCache {
       stamp = await source.stat();
       if (stamp.type != FileSystemEntityType.file) return null;
     } catch (_) { return null; }
+    // Sidecar revision is part of the memory identity: adding a report
+    // during playback must not leave the earlier waveform-only memo live.
+    final advancedStamp = await File('$path\${AutoMixAdvancedReport.suffix}').stat();
     final identity = sha256.convert(utf8.encode(jsonEncode([
       version, path, stamp.size, stamp.modified.millisecondsSinceEpoch,
       song.duration.inMilliseconds,
+      advancedStamp.type == FileSystemEntityType.file ? advancedStamp.size : 0,
+      advancedStamp.type == FileSystemEntityType.file
+          ? advancedStamp.modified.millisecondsSinceEpoch : 0,
     ]))).toString();
     if (_memory[identity] case final cached?) return cached;
     if (_inFlight[identity] case final existing?) return existing;
-    final task = _readOrCreate(songId, stamp, identity, song.duration);
+    final task = _readOrCreate(songId, path, stamp, identity, song.duration);
     _inFlight[identity] = task;
     try { return await task; } finally { _inFlight.remove(identity); }
   }
 
   Future<AutoMixProfile?> _readOrCreate(
-    int songId, FileStat stamp, String identity, Duration duration,
+    int? songId, String path, FileStat stamp, String identity, Duration duration,
   ) async {
     try {
       final directory = await _directory();
       final file = File('${directory.path}/$identity.json');
+      AutoMixProfile? profile;
       if (await file.exists()) {
         try {
-          final profile = AutoMixProfile.fromJson(jsonDecode(await file.readAsString()));
-          if (profile != null) return _remember(identity, profile);
+          profile = AutoMixProfile.fromJson(jsonDecode(await file.readAsString()));
         } catch (_) {
-          // Half-written/corrupted old entries are regenerable, not fatal.
+          // Malformed derived profiles can be safely regenerated.
         }
-        // Delete only a malformed *derived* cache entry; never touch audio
-        // or the underlying Isar waveform scan.
-        try { await file.delete(); } catch (_) {}
+        if (profile == null) {
+          try { await file.delete(); } catch (_) {}
+        }
       }
-      final cached = await _loadWaveform(songId);
-      if (cached == null || cached.version != 1 || cached.peaks.isEmpty ||
-          cached.computedAt < stamp.modified.millisecondsSinceEpoch) return null;
-      final profile = AutoMixProfile.fromWaveform(
-        cached.peaks, duration, lufs: cached.lufs,
-      );
-      if (profile == null) return null;
-      await directory.create(recursive: true);
-      final temp = File('${file.path}.${_nonce++}.tmp');
-      try {
-        await temp.writeAsString(jsonEncode(profile.toJson()), flush: true);
-        await temp.rename(file.path);
-      } finally {
-        if (await temp.exists()) await temp.delete();
+      if (profile == null && songId != null) {
+        final cached = await _loadWaveform(songId);
+        if (cached != null && cached.version == 1 && cached.peaks.isNotEmpty &&
+            cached.computedAt >= stamp.modified.millisecondsSinceEpoch) {
+          profile = AutoMixProfile.fromWaveform(cached.peaks, duration, lufs: cached.lufs);
+          if (profile != null) {
+            await directory.create(recursive: true);
+            final temp = File('${file.path}.${_nonce++}.tmp');
+            try {
+              await temp.writeAsString(jsonEncode(profile.toJson()), flush: true);
+              await temp.rename(file.path);
+            } finally {
+              if (await temp.exists()) await temp.delete();
+            }
+            if (++_writes == 1 || _writes % 32 == 0) unawaited(_prune(directory));
+          }
+        }
       }
-      // Re-enforce the cap on the first write after each restart as well as
-      // in long sessions (otherwise 31 inserts per restart can accumulate).
-      if (++_writes == 1 || _writes % 32 == 0) unawaited(_prune(directory));
-      return _remember(identity, profile);
+      final advanced = await AutoMixAdvancedReport.read(path, stamp, duration);
+      if (advanced != null) {
+        // A separately prepared report works even before a local waveform
+        // scan; do not persist these cues in the heuristic JSON (their
+        // lifecycle follows the fingerprinted sidecar instead).
+        profile ??= AutoMixProfile(
+          durationSeconds: duration.inMilliseconds / 1000,
+          leadInSeconds: 0,
+          audibleEndSeconds: duration.inMilliseconds / 1000,
+          fadeOutStartSeconds: duration.inMilliseconds / 1000,
+          entrances: const [], exits: const [],
+        );
+        profile = profile.withAdvanced(advanced);
+      }
+      return profile == null ? null : _remember(identity, profile);
     } catch (_) {
-      // Storage can be full or metadata unavailable: use normal crossfade.
+      // Storage unavailable, corrupted or locked: preserve normal playback.
       return null;
     }
   }
