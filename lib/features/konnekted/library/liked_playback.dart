@@ -41,7 +41,7 @@ List<Song> playableLikedQueue(List<Song> liked) => [
       song
     else
       QueuePreResolver.shared.pending(
-        key: 'liked:\${song.id}',
+        key: 'liked:${song.id}',
         title: song.title,
         artist: song.artist,
         album: song.album,
