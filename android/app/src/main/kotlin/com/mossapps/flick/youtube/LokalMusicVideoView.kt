@@ -2,6 +2,8 @@ package com.mossapps.flick.youtube
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.LayoutInflater
 import com.mossapps.flick.R
@@ -13,7 +15,6 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -43,7 +44,9 @@ internal class LokalMusicVideoView(
     viewId: Int,
     params: Map<String, Any?>,
 ) : PlatformView {
-    private val player = ExoPlayer.Builder(context).build().apply {
+    // Audio is the stable transport/master clock. Video uses an independent
+    // muted player so its timeline can be nudged without changing the sound.
+    private val audioPlayer = ExoPlayer.Builder(context).build().apply {
         setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
@@ -53,6 +56,22 @@ internal class LokalMusicVideoView(
         )
         setHandleAudioBecomingNoisy(true)
     }
+    private val videoPlayer = ExoPlayer.Builder(context).build().apply {
+        volume = 0f
+        trackSelectionParameters = trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+            .build()
+    }
+    private val syncHandler = Handler(Looper.getMainLooper())
+    private var offsetMs = ((params["offsetMs"] as? Number)?.toLong() ?: 0L)
+        .coerceIn(-60000L, 60000L)
+    private val syncTask = object : Runnable {
+        override fun run() {
+            if (disposed) return
+            syncVideoToAudio()
+            syncHandler.postDelayed(this, 250L)
+        }
+    }
     private val view = (LayoutInflater.from(context).inflate(
         R.layout.lokal_music_video_player, null
     ) as PlayerView).apply {
@@ -60,7 +79,7 @@ internal class LokalMusicVideoView(
         setShutterBackgroundColor(android.graphics.Color.BLACK)
         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
         // Layout XML supplies a TextureView so Flutter chrome can overlay it.
-        this.player = this@LokalMusicVideoView.player
+        this.player = this@LokalMusicVideoView.videoPlayer
         keepScreenOn = true
     }
     private val channel = MethodChannel(messenger, "lokal/media3_video/$viewId")
@@ -68,11 +87,14 @@ internal class LokalMusicVideoView(
     private var disposed = false
 
     init {
-        player.addListener(object : Player.Listener {
+        val listener = object : Player.Listener {
             override fun onPlayerError(exception: PlaybackException) {
                 error = "Video couldn't play in Media3"
             }
-        })
+        }
+        audioPlayer.addListener(listener)
+        videoPlayer.addListener(listener)
+        syncHandler.post(syncTask)
         channel.setMethodCallHandler { call, result ->
             if (disposed) {
                 result.error("DISPOSED", "Video view closed", null)
@@ -80,11 +102,27 @@ internal class LokalMusicVideoView(
             }
             when (call.method) {
                 "snapshot" -> result.success(snapshot())
-                "play" -> { player.play(); result.success(snapshot()) }
-                "pause" -> { player.pause(); result.success(snapshot()) }
+                "play" -> {
+                    audioPlayer.play()
+                    syncVideoToAudio(force = true)
+                    result.success(snapshot())
+                }
+                "pause" -> {
+                    audioPlayer.pause()
+                    videoPlayer.pause()
+                    result.success(snapshot())
+                }
                 "seek" -> {
                     val value = (call.argument<Number>("positionMs")?.toLong() ?: 0L)
-                    player.seekTo(value.coerceAtLeast(0L)); result.success(snapshot())
+                    audioPlayer.seekTo(value.coerceAtLeast(0L))
+                    syncVideoToAudio(force = true)
+                    result.success(snapshot())
+                }
+                "setOffset" -> {
+                    offsetMs = (call.argument<Number>("offsetMs")?.toLong() ?: 0L)
+                        .coerceIn(-60000L, 60000L)
+                    syncVideoToAudio(force = true)
+                    result.success(snapshot())
                 }
                 "fill" -> {
                     val fill = call.argument<Boolean>("fill") == true
@@ -115,22 +153,51 @@ internal class LokalMusicVideoView(
             val videoSource = sourceFactory.createMediaSource(
                 MediaItem.fromUri(Uri.parse(video))
             )
-            // Audio is first (as in Prism): Media3 aligns two tracks
-            // belonging to this *same video*, with one playback clock.
-            player.setMediaSource(MergingMediaSource(true, false, audioSource, videoSource))
-            player.prepare()
-            player.playWhenReady = true
+            // The two URLs belong to one video, not Lokal's unrelated
+            // currently playing album recording. Audio stays authoritative;
+            // changing offset seeks ONLY the muted visual track.
+            audioPlayer.setMediaSource(audioSource)
+            videoPlayer.setMediaSource(videoSource)
+            audioPlayer.prepare()
+            videoPlayer.prepare()
+            audioPlayer.playWhenReady = true
+            videoPlayer.playWhenReady = true
         } catch (e: Exception) {
             error = "This video has no compatible native stream"
         }
     }
 
+    private fun syncVideoToAudio(force: Boolean = false) {
+        if (disposed) return
+        if (audioPlayer.playbackState == Player.STATE_IDLE ||
+            videoPlayer.playbackState == Player.STATE_IDLE) return
+        val target = (audioPlayer.currentPosition.coerceAtLeast(0) + offsetMs)
+            .coerceAtLeast(0)
+        // For negative offsets, keep the video at its opening frame until
+        // the song clock catches up; never rewind the audio.
+        val beforeVideoStart = audioPlayer.currentPosition + offsetMs < 0L
+        if (beforeVideoStart || !audioPlayer.isPlaying) {
+            videoPlayer.pause()
+            if (beforeVideoStart && (force || videoPlayer.currentPosition > 150L)) {
+                videoPlayer.seekTo(0L)
+            }
+            return
+        }
+        if (force ||
+            (videoPlayer.playbackState == Player.STATE_READY &&
+                kotlin.math.abs(videoPlayer.currentPosition - target) > 180L)) {
+            videoPlayer.seekTo(target)
+        }
+        if (!videoPlayer.playWhenReady) videoPlayer.play()
+    }
+
     private fun snapshot(): Map<String, Any?> = mapOf(
-        "playing" to player.isPlaying,
-        "buffering" to (player.playbackState == Player.STATE_BUFFERING),
-        "ready" to (player.playbackState == Player.STATE_READY),
-        "positionMs" to player.currentPosition.coerceAtLeast(0),
-        "durationMs" to player.duration.takeIf { it > 0 }?.coerceAtLeast(0),
+        "playing" to audioPlayer.isPlaying,
+        "buffering" to (audioPlayer.playbackState == Player.STATE_BUFFERING),
+        "ready" to (audioPlayer.playbackState == Player.STATE_READY),
+        "positionMs" to audioPlayer.currentPosition.coerceAtLeast(0),
+        "durationMs" to audioPlayer.duration.takeIf { it > 0 }?.coerceAtLeast(0),
+        "offsetMs" to offsetMs,
         "error" to error,
     )
 
@@ -141,9 +208,12 @@ internal class LokalMusicVideoView(
         disposed = true
         channel.setMethodCallHandler(null)
         view.keepScreenOn = false
+        syncHandler.removeCallbacks(syncTask)
         view.player = null
-        player.stop()
-        player.release()
+        audioPlayer.stop()
+        videoPlayer.stop()
+        audioPlayer.release()
+        videoPlayer.release()
     }
 
     companion object {
