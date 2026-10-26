@@ -6,6 +6,7 @@ import '../../data/repositories/recently_played_repository.dart';
 import '../../models/song.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/songs_provider.dart';
+import '../../services/online_radio_recommendations.dart';
 import 'domain/flow_engine.dart';
 import 'domain/flow_models.dart';
 
@@ -74,6 +75,44 @@ class FlowLibrary {
   // remote placeholders safely falls back to its local tracks.
   final Set<String> _onlineIds = {};
   late final Map<String, Song> byId;
+
+  /// Apply Flow's hard user filters to fresh online suggestions, not only to
+  /// locally ranked songs. Radio providers can return alternate catalogue IDs
+  /// for the same recording or a track previously banned in the local library.
+  List<Song> eligibleOnline(
+    FlowData data,
+    Iterable<Song> suggestions, {
+    int limit = FlowRules.topUpTracks,
+  }) {
+    if (limit <= 0) return const [];
+    final blockedIds = <String>{
+      ...data.bannedIds,
+      for (final entry in data.skipCounts.entries)
+        if (entry.value >= 3) entry.key,
+    };
+    final seenRecordings = <String>{};
+    for (final id in {...data.session.trackIds, ...blockedIds}) {
+      final known = byId[id];
+      if (known != null) {
+        seenRecordings.add(radioRecordingKey(known.artist, known.title));
+      }
+    }
+    final result = <Song>[];
+    for (final song in suggestions) {
+      if (song.id.trim().isEmpty ||
+          song.artist.trim().isEmpty ||
+          song.title.trim().isEmpty ||
+          blockedIds.contains(song.id) ||
+          flowGenres(song.genre).any(data.config.excludedGenres.contains)) {
+        continue;
+      }
+      final identity = radioRecordingKey(song.artist, song.title);
+      if (!seenRecordings.add(identity)) continue;
+      result.add(song);
+      if (result.length >= limit) break;
+    }
+    return List.unmodifiable(result);
+  }
 
   void rememberOnline(Iterable<Song> recommendations) {
     for (final song in recommendations) {
