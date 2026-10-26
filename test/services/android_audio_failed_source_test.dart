@@ -350,6 +350,66 @@ void main() {
     expect(incoming.currentPosition, const Duration(seconds: 2));
   });
 
+  testWidgets('paired offline cues begin a prepared fade at the model overlap', (tester) async {
+    final outgoing = _Player();
+    final incoming = _Player();
+    final songs = [
+      const Song(id: 'model-out', title: 'Outro', artist: 'Artist',
+          duration: Duration(minutes: 3), fileType: 'FLAC',
+          filePath: '/out.flac'),
+      const Song(id: 'model-in', title: 'Intro', artist: 'Artist',
+          duration: Duration(minutes: 3), fileType: 'FLAC',
+          filePath: '/in.flac'),
+    ];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => outgoing,
+      secondaryPlayerProvider: () async => incoming,
+      sourcesBuilder: () async => ja.AudioSource.uri(Uri.parse('file:///out.flac')),
+      sourceBuilder: (_) async => ja.AudioSource.uri(Uri.parse('file:///in.flac')),
+      playlistProvider: () => songs,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+      crossfadeConfigProvider: () => const AndroidCrossfadeConfig(
+        enabled: true, durationSecs: 3, curve: AndroidCrossfadeCurve.equalPower,
+      ),
+      automixProfileLookup: (song) async => AutoMixProfile(
+        durationSeconds: 180,
+        leadInSeconds: 0,
+        audibleEndSeconds: 180,
+        fadeOutStartSeconds: 177,
+        entrances: const [],
+        exits: const [],
+        modelExits: song.id == 'model-out' ? const [158] : const [],
+        modelEntrances: song.id == 'model-in' ? const [6] : const [],
+      ),
+      onNextSong: () => songs.last,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await outgoing.positions.close();
+      await incoming.positions.close();
+      await outgoing.errors.close();
+      await incoming.errors.close();
+    });
+    await engine.load(songs.first);
+    await engine.play();
+    await tester.pump(); // publish outgoing cached cue profile
+    outgoing.positions.add(const Duration(seconds: 150));
+    await tester.pump();
+    expect(incoming.loads, 0, reason: 'preparation starts at cue minus 8s, not earlier');
+    outgoing.positions.add(const Duration(seconds: 151));
+    for (var i = 0; i < 4; i++) await tester.pump();
+    expect(incoming.loads, 1);
+    expect(incoming.playCalls, 0);
+    outgoing.positions.add(const Duration(seconds: 158));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(incoming.playCalls, 1);
+    expect(incoming.currentPosition, const Duration(seconds: 6));
+  });
+
   testWidgets('a stalled source is discarded and the next tap uses a fresh player', (
     tester,
   ) async {
