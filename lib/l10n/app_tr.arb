@@ -6125,7 +6125,7 @@
   "@savedAndVerified": {
     "description": "lib/features/songs/screens/metadata_editor_screen.dart:187"
   },
-  "savedCollections": "{playlistCount} saved collections",
+  "savedCollections": "{playlistCount} kayıtlı koleksiyon",
   "@savedCollections": {
     "description": "lib/features/menu/screens/menu_screen.dart:1449",
     "placeholders": {
@@ -6134,27 +6134,27 @@
       }
     }
   },
-  "savedLyricsAndLinkedThemTo": "Saved lyrics and linked them to this song.",
+  "savedLyricsAndLinkedThemTo": "Şarkı sözleri kaydedildi ve bu şarkıyla ilişkilendirildi.",
   "@savedLyricsAndLinkedThemTo": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:557"
   },
-  "savedLyricsBesideTheSongAs": "Saved lyrics beside the song as an `.lrc` file.",
+  "savedLyricsBesideTheSongAs": "Şarkı sözleri şarkının yanına `.lrc` dosyası olarak kaydedildi.",
   "@savedLyricsBesideTheSongAs": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:556"
   },
-  "savedLyricsToTheChosenLocation": "Saved lyrics to the chosen location.",
+  "savedLyricsToTheChosenLocation": "Şarkı sözleri seçilen konuma kaydedildi.",
   "@savedLyricsToTheChosenLocation": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:554"
   },
-  "savedPlaylistsAndQuickJumpsInto": "Saved playlists and quick jumps into your library organization.",
+  "savedPlaylistsAndQuickJumpsInto": "Kayıtlı çalma listelerin ve kitaplığındaki koleksiyonlara hızlı erişim.",
   "@savedPlaylistsAndQuickJumpsInto": {
     "description": "lib/features/menu/screens/menu_screen.dart:975"
   },
-  "savedToGallery": "Saved to gallery",
+  "savedToGallery": "Galeriye kaydedildi",
   "@savedToGallery": {
     "description": "lib/features/player/widgets/share/share_bottom_sheet.dart:163"
   },
-  "savedToNNNshareIt": "Saved to:\n{path}\n\nShare it now?",
+  "savedToNNNshareIt": "Şuraya kaydedildi:\n{path}\n\nŞimdi paylaşılsın mı?",
   "@savedToNNNshareIt": {
     "description": "lib/features/settings/screens/logs_screen.dart:218",
     "placeholders": {
@@ -6163,7 +6163,7 @@
       }
     }
   },
-  "savedToYourGallery": "{arg1} saved to your gallery",
+  "savedToYourGallery": "{arg1} galerine kaydedildi",
   "@savedToYourGallery": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:244",
     "placeholders": {
@@ -6172,83 +6172,83 @@
       }
     }
   },
-  "savedVerificationPending": "Saved (verification pending)",
+  "savedVerificationPending": "Kaydedildi (doğrulama bekleniyor)",
   "@savedVerificationPending": {
     "description": "lib/features/songs/screens/metadata_editor_screen.dart:195"
   },
-  "saving": "Saving...",
+  "saving": "Kaydediliyor…",
   "@saving": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:791"
   },
-  "scaleTheAlbumArtCard": "Scale the album art card",
+  "scaleTheAlbumArtCard": "Albüm kapağı kartını ölçekle",
   "@scaleTheAlbumArtCard": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:240"
   },
-  "scaleTheFullViewAlbumArt": "Scale the full-view album art card",
+  "scaleTheFullViewAlbumArt": "Tam görünüm albüm kapağını ölçekle",
   "@scaleTheFullViewAlbumArt": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:165"
   },
-  "scalesWithWidgetSizeAutomatically": "Scales with widget size automatically",
+  "scalesWithWidgetSizeAutomatically": "Widget boyutuna göre otomatik ölçeklenir",
   "@scalesWithWidgetSizeAutomatically": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:236"
   },
-  "scanAgain": "Scan again",
+  "scanAgain": "Yeniden tara",
   "@scanAgain": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:285"
   },
-  "scanForDevices": "Scan for devices",
+  "scanForDevices": "Cihazları tara",
   "@scanForDevices": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:75"
   },
-  "scanProgress": "Scan progress",
+  "scanProgress": "Tarama ilerlemesi",
   "@scanProgress": {
     "description": "lib/widgets/common/floating_scan_progress.dart:489"
   },
-  "scanningForDuplicates": "Scanning for duplicates…",
+  "scanningForDuplicates": "Yinelenen kayıtlar taranıyor…",
   "@scanningForDuplicates": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:142"
   },
-  "scanningYourLibrary": "Scanning your library…",
+  "scanningYourLibrary": "Kitaplığın taranıyor…",
   "@scanningYourLibrary": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:390"
   },
-  "scroll": "Scroll",
+  "scroll": "Kaydır",
   "@scroll": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:248"
   },
-  "scrollForMore": "Scroll for more",
+  "scrollForMore": "Daha fazlası için kaydır",
   "@scrollForMore": {
     "description": "lib/features/songs/screens/songs_screen.dart:3163"
   },
-  "scrollingPausesWhenReducedMotionIs": "Scrolling pauses when reduced motion is enabled",
+  "scrollingPausesWhenReducedMotionIs": "Azaltılmış hareket etkinse kaydırma duraklar",
   "@scrollingPausesWhenReducedMotionIs": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:250"
   },
-  "search": "Search",
+  "search": "Ara",
   "@search": {
     "description": "lib/providers/tutorial_provider.dart:21"
   },
-  "searchAcrossSongsArtistsAndAlbums": "Search across songs, artists, and albums instantly.",
+  "searchAcrossSongsArtistsAndAlbums": "Şarkılar, sanatçılar ve albümler arasında anında ara.",
   "@searchAcrossSongsArtistsAndAlbums": {
     "description": "lib/providers/tutorial_provider.dart:22"
   },
-  "searchAgain": "Search Again",
+  "searchAgain": "Yeniden ara",
   "@searchAgain": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:241"
   },
-  "searchArtistTitle": "Search artist + title...",
+  "searchArtistTitle": "Sanatçı ve şarkı ara…",
   "@searchArtistTitle": {
     "description": "lib/features/player/widgets/online_lyrics_search_sheet.dart:618"
   },
-  "searchArtists": "Search artists...",
+  "searchArtists": "Sanatçı ara…",
   "@searchArtists": {
     "description": "lib/features/artists/screens/artists_screen.dart:297"
   },
-  "searchFailed": "Search failed",
+  "searchFailed": "Arama başarısız",
   "@searchFailed": {
     "description": "lib/features/songs/widgets/album_art_picker_bottom_sheet.dart:479"
   },
-  "searchFailed2": "Search failed: {e}",
+  "searchFailed2": "Arama başarısız: {e}",
   "@searchFailed2": {
     "description": "lib/features/search/screens/search_screen.dart:220",
     "placeholders": {
@@ -6257,11 +6257,11 @@
       }
     }
   },
-  "searchHeadphones": "Search headphones…",
+  "searchHeadphones": "Kulaklık ara…",
   "@searchHeadphones": {
     "description": "lib/features/settings/screens/widgets/autoeq_search_sheet.dart:233"
   },
-  "searchModelCount": "Search {count, plural, =1{{count} model} other{{count} models}}…",
+  "searchModelCount": "{count, plural, =1{{count} model aranıyor} other{{count} model aranıyor}}…",
   "@searchModelCount": {
     "description": "lib/features/settings/screens/widgets/autoeq_search_sheet.dart:233",
     "placeholders": {
@@ -6270,55 +6270,55 @@
       }
     }
   },
-  "searchOnline": "Search Online",
+  "searchOnline": "Çevrimiçi ara",
   "@searchOnline": {
     "description": "lib/features/player/widgets/inline_lyrics_panel.dart:219"
   },
-  "searchOnline2": "Search online",
+  "searchOnline2": "Çevrimiçi ara",
   "@searchOnline2": {
     "description": "lib/features/settings/screens/widgets/autoeq_search_sheet.dart:414"
   },
-  "searchOnlineCreateYourOwnSynced": "Search online, create your own synced lyrics, or import an existing file.",
+  "searchOnlineCreateYourOwnSynced": "Çevrimiçi şarkı sözü ara, senkronize sözlerini kendin oluştur veya mevcut bir dosyayı içe aktar.",
   "@searchOnlineCreateYourOwnSynced": {
     "description": "lib/features/player/widgets/inline_lyrics_panel.dart:424"
   },
-  "searchOnlineLyrics": "Search Online Lyrics",
+  "searchOnlineLyrics": "Şarkı sözlerini çevrimiçi ara",
   "@searchOnlineLyrics": {
     "description": "lib/features/player/widgets/online_lyrics_search_sheet.dart:277"
   },
-  "searchSongsArtists": "Search songs, artists...",
+  "searchSongsArtists": "Şarkı ve sanatçı ara…",
   "@searchSongsArtists": {
     "description": "lib/features/songs/screens/songs_screen.dart:206"
   },
-  "searchSongsArtistsAlbums": "Search songs, artists, albums...",
+  "searchSongsArtistsAlbums": "Şarkı, sanatçı ve albüm ara…",
   "@searchSongsArtistsAlbums": {
     "description": "lib/features/search/screens/search_screen.dart:138"
   },
-  "searchTheManual": "Search the manual...",
+  "searchTheManual": "Kılavuzda ara…",
   "@searchTheManual": {
     "description": "lib/features/manual/screens/manual_screen.dart:198"
   },
-  "searchYourLibrary": "Search your library",
+  "searchYourLibrary": "Kitaplığında ara",
   "@searchYourLibrary": {
     "description": "lib/features/search/screens/search_screen.dart:240"
   },
-  "searching": "Searching…",
+  "searching": "Aranıyor…",
   "@searching": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:75"
   },
-  "searchingOnline": "Searching online",
+  "searchingOnline": "Çevrimiçi aranıyor",
   "@searchingOnline": {
     "description": "lib/features/songs/widgets/album_art_picker_bottom_sheet.dart:469"
   },
-  "searchingTheLocalNetwork": "Searching the local network…",
+  "searchingTheLocalNetwork": "Yerel ağ taranıyor…",
   "@searchingTheLocalNetwork": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:205"
   },
-  "seeAll": "See all",
+  "seeAll": "Tümünü gör",
   "@seeAll": {
     "description": "lib/features/menu/screens/menu_screen.dart:939"
   },
-  "seeAll2": "See all {count}",
+  "seeAll2": "Tümünü gör ({count})",
   "@seeAll2": {
     "description": "lib/features/search/screens/search_screen.dart:371",
     "placeholders": {
@@ -6327,31 +6327,31 @@
       }
     }
   },
-  "select": "Select",
+  "select": "Seç",
   "@select": {
     "description": "lib/features/favorites/screens/favorites_screen.dart:182"
   },
-  "selectALineAndEdit": "1. Select a line and edit its timestamp directly, or use \"Use Current Time\".\n2. In the word timeline, drag a boundary to stretch or shrink the segment before it — edits snap to 10ms.\n3. Tap letters in the inspector to split a word into separately timed syllables (slow-then-fast pacing), then drag their boundaries.\n4. Drag the last boundary (or use Length ±) to retime the next line. Use Auto-fill to seed evenly spaced words.\n5. Use the shift controls to move all stamped lyrics together.\n6. Save to generate the final `.lrc` file.",
+  "selectALineAndEdit": "1. Bir satır seçip zaman damgasını doğrudan düzenle veya \"Şimdiki Zamanı Kullan\" seçeneğini kullan.\n2. Sözcük zaman çizelgesinde, önündeki bölümü uzatmak veya kısaltmak için sınırı sürükle. Düzenlemeler 10 ms adımlarla hizalanır.\n3. Bir sözcüğü ayrı zamanlanmış hecelere bölmek için inceleme bölümündeki harflere dokun (önce yavaş, sonra hızlı), ardından sınırları sürükle.\n4. Son sınırı sürükleyerek (veya Uzunluk ± ile) sonraki satırın zamanını ayarla. Sözcükleri eşit aralıklarla yerleştirmek için Otomatik Doldur'u kullan.\n5. Tüm zaman damgalı şarkı sözlerini birlikte kaydırmak için kaydırma denetimlerini kullan.\n6. Son `.lrc` dosyasını oluşturmak için kaydet.",
   "@selectALineAndEdit": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:694"
   },
-  "selectARelease": "Select a release",
+  "selectARelease": "Bir yayın seç",
   "@selectARelease": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:580"
   },
-  "selectAll": "Select All",
+  "selectAll": "Tümünü seç",
   "@selectAll": {
     "description": "lib/features/favorites/screens/favorites_screen.dart:263"
   },
-  "selectAll2": "Select all",
+  "selectAll2": "Tümünü seç",
   "@selectAll2": {
     "description": "lib/features/songs/screens/songs_screen.dart:1574"
   },
-  "selectDevice": "Select Device",
+  "selectDevice": "Cihaz seç",
   "@selectDevice": {
     "description": "lib/widgets/uac2/uac2_device_selector.dart:58"
   },
-  "selected": "{count} selected",
+  "selected": "{count} seçildi",
   "@selected": {
     "description": "lib/features/favorites/screens/favorites_screen.dart:252",
     "placeholders": {
@@ -6360,7 +6360,7 @@
       }
     }
   },
-  "selectedOfSong": "{selected} selected of {count, plural, =1{{count} song} other{{count} songs}}",
+  "selectedOfSong": "{count, plural, =1{{count} şarkının} other{{count} şarkının}} {selected} tanesi seçildi",
   "@selectedOfSong": {
     "description": "lib/features/queue/screens/queue_screen.dart:349",
     "placeholders": {
@@ -6372,23 +6372,23 @@
       }
     }
   },
-  "sep": "Sep",
+  "sep": "Eyl",
   "@sep": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:510"
   },
-  "separateFromNavBar": "Separate from Nav Bar",
+  "separateFromNavBar": "Gezinme çubuğundan ayrı",
   "@separateFromNavBar": {
     "description": "lib/features/settings/screens/bottom_bar_settings_screen.dart:60"
   },
-  "separateTheMiniPlayerToCustomize": "Separate the mini player to customize its width and gap. Your custom values are saved while joined.",
+  "separateTheMiniPlayerToCustomize": "Genişliğini ve boşluğunu özelleştirmek için mini oynatıcıyı ayır. Birleştirdiğinde özel değerlerin saklanır.",
   "@separateTheMiniPlayerToCustomize": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:115"
   },
-  "serialNumber": "Serial Number",
+  "serialNumber": "Seri numarası",
   "@serialNumber": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:482"
   },
-  "serverPlaylistSyncFailed": "Server playlist sync failed: {e}",
+  "serverPlaylistSyncFailed": "Sunucu çalma listesi eşitlemesi başarısız: {e}",
   "@serverPlaylistSyncFailed": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:481",
     "placeholders": {
@@ -6397,39 +6397,39 @@
       }
     }
   },
-  "serverUrl": "Server URL",
+  "serverUrl": "Sunucu URL'si",
   "@serverUrl": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:442"
   },
-  "session": "Session",
+  "session": "Oturum",
   "@session": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:107"
   },
-  "setAlbumArt": "Set Album Art",
+  "setAlbumArt": "Albüm kapağı ayarla",
   "@setAlbumArt": {
     "description": "lib/features/player/widgets/song_actions_sheet.dart:220"
   },
-  "setToNow": "Set to Now",
+  "setToNow": "Şimdiye ayarla",
   "@setToNow": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1589"
   },
-  "settings": "Settings",
+  "settings": "Ayarlar",
   "@settings": {
     "description": "lib/features/recap/screens/listening_recap_screen.dart:166"
   },
-  "shadow": "Shadow",
+  "shadow": "Gölge",
   "@shadow": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:216"
   },
-  "shadowJazz": "Shadow Jazz",
+  "shadowJazz": "Gölgeli Caz",
   "@shadowJazz": {
     "description": "lib/models/song.dart:340"
   },
-  "share": "Share",
+  "share": "Paylaş",
   "@share": {
     "description": "lib/features/player/widgets/player_action_button_row.dart:676"
   },
-  "shareFailed": "Share failed: {e}",
+  "shareFailed": "Paylaşma başarısız: {e}",
   "@shareFailed": {
     "description": "lib/features/player/widgets/share/share_bottom_sheet.dart:139",
     "placeholders": {
@@ -6438,135 +6438,135 @@
       }
     }
   },
-  "sharedSecret": "Shared Secret",
+  "sharedSecret": "Paylaşılan gizli anahtar",
   "@sharedSecret": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:500"
   },
-  "shiftMetadataTextUpOrDown": "Shift metadata text up or down",
+  "shiftMetadataTextUpOrDown": "Parça bilgisi metnini yukarı veya aşağı kaydır",
   "@shiftMetadataTextUpOrDown": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:149"
   },
-  "shiftOnlyTheAlbumArtUp": "Shift only the album art up or down",
+  "shiftOnlyTheAlbumArtUp": "Yalnızca albüm kapağını yukarı veya aşağı kaydır",
   "@shiftOnlyTheAlbumArtUp": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:289"
   },
-  "shiftOnlyTheSongDetailsUp": "Shift only the song details up or down",
+  "shiftOnlyTheSongDetailsUp": "Yalnızca şarkı ayrıntılarını yukarı veya aşağı kaydır",
   "@shiftOnlyTheSongDetailsUp": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:272"
   },
-  "showAThinPlaybackProgressLine": "Show a thin playback progress line",
+  "showAThinPlaybackProgressLine": "İnce bir oynatma ilerleme çizgisi göster",
   "@showAThinPlaybackProgressLine": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:169"
   },
-  "showAlbum": "Show album",
+  "showAlbum": "Albümü göster",
   "@showAlbum": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:261"
   },
-  "showAlbum2": "Show Album",
+  "showAlbum2": "Albümü göster",
   "@showAlbum2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:329"
   },
-  "showAlbumArtwork": "Show album artwork.",
+  "showAlbumArtwork": "Albüm kapağını göster.",
   "@showAlbumArtwork": {
     "description": "lib/models/song_tile_thumbnail_mode.dart:29"
   },
-  "showAlbumArtworkOnTheMini": "Show album artwork on the mini player",
+  "showAlbumArtworkOnTheMini": "Mini oynatıcıda albüm kapağını göster",
   "@showAlbumArtworkOnTheMini": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:201"
   },
-  "showArtist": "Show artist",
+  "showArtist": "Sanatçıyı göster",
   "@showArtist": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:256"
   },
-  "showArtist2": "Show Artist",
+  "showArtist2": "Sanatçıyı göster",
   "@showArtist2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:192"
   },
-  "showArtistBelowSongTitle": "Show artist below song title",
+  "showArtistBelowSongTitle": "Şarkı adının altında sanatçıyı göster",
   "@showArtistBelowSongTitle": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:216"
   },
-  "showFileInfo": "Show file info",
+  "showFileInfo": "Dosya bilgilerini göster",
   "@showFileInfo": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:266"
   },
-  "showFileInfo2": "Show File Info",
+  "showFileInfo2": "Dosya bilgilerini göster",
   "@showFileInfo2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:204"
   },
-  "showFrame": "Show frame",
+  "showFrame": "Çerçeveyi göster",
   "@showFrame": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:271"
   },
-  "showFrame2": "Show Frame",
+  "showFrame2": "Çerçeveyi göster",
   "@showFrame2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:354"
   },
-  "showLess": "Show less",
+  "showLess": "Daha az göster",
   "@showLess": {
     "description": "lib/features/search/screens/search_screen.dart:671"
   },
-  "showLyrics": "Show lyrics",
+  "showLyrics": "Şarkı sözlerini göster",
   "@showLyrics": {
     "description": "lib/features/player/widgets/player_action_button_row.dart:440"
   },
-  "showMore": "Show more",
+  "showMore": "Daha fazla göster",
   "@showMore": {
     "description": "lib/features/songs/screens/songs_screen.dart:3180"
   },
-  "showOtherArtistsOnAlbumPages": "Show other artists on album pages",
+  "showOtherArtistsOnAlbumPages": "Albüm sayfalarında diğer sanatçıları göster",
   "@showOtherArtistsOnAlbumPages": {
     "description": "lib/features/artists/screens/artists_screen.dart:763"
   },
-  "showPassword": "Show password",
+  "showPassword": "Şifreyi göster",
   "@showPassword": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:765"
   },
-  "showRelatedAlbumsOnAlbumPages": "Show related albums on album pages",
+  "showRelatedAlbumsOnAlbumPages": "Albüm sayfalarında ilgili albümleri göster",
   "@showRelatedAlbumsOnAlbumPages": {
     "description": "lib/features/artists/screens/artists_screen.dart:753"
   },
-  "showTheArtistBelowTheSong": "Show the artist below the song title",
+  "showTheArtistBelowTheSong": "Şarkı adının altında sanatçıyı göster",
   "@showTheArtistBelowTheSong": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:161"
   },
-  "showTheAudioVisualizerOffSaves": "Show the audio visualizer (off saves battery)",
+  "showTheAudioVisualizerOffSaves": "Ses görselleştiricisini göster (kapalıyken pil tasarrufu sağlar)",
   "@showTheAudioVisualizerOffSaves": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:29"
   },
-  "showTheGlassFrameAroundAlbum": "Show the glass frame around album art",
+  "showTheGlassFrameAroundAlbum": "Albüm kapağının etrafındaki cam çerçeveyi göster",
   "@showTheGlassFrameAroundAlbum": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:355"
   },
-  "showTheMiniPlayerAsIts": "Show the mini player as its own bar above the buttons",
+  "showTheMiniPlayerAsIts": "Mini oynatıcıyı düğmelerin üzerinde ayrı bir çubuk olarak göster",
   "@showTheMiniPlayerAsIts": {
     "description": "lib/features/settings/screens/bottom_bar_settings_screen.dart:61"
   },
-  "showTheNumberOverBlurredArt": "Show the number over blurred art.",
+  "showTheNumberOverBlurredArt": "Numarayı bulanık kapak görselinin üzerinde göster.",
   "@showTheNumberOverBlurredArt": {
     "description": "lib/models/song_tile_thumbnail_mode.dart:33"
   },
-  "showTheTrackNumber": "Show the track number.",
+  "showTheTrackNumber": "Parça numarasını göster.",
   "@showTheTrackNumber": {
     "description": "lib/models/song_tile_thumbnail_mode.dart:31"
   },
-  "showTitle": "Show title",
+  "showTitle": "Başlığı göster",
   "@showTitle": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:251"
   },
-  "showTitle2": "Show Title",
+  "showTitle2": "Başlığı göster",
   "@showTitle2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:180"
   },
-  "showVerboseAudioDiagnosticsAndEngine": "Show verbose audio diagnostics and engine/session trace logs.",
+  "showVerboseAudioDiagnosticsAndEngine": "Ayrıntılı ses tanılamasını ve motor/oturum izleme günlüklerini göster.",
   "@showVerboseAudioDiagnosticsAndEngine": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:361"
   },
-  "showVisualizer": "Show visualizer",
+  "showVisualizer": "Görselleştiriciyi göster",
   "@showVisualizer": {
     "description": "lib/features/player/widgets/player_action_button_row.dart:551"
   },
-  "showingAllAlbums": "Showing all {totalCount} albums",
+  "showingAllAlbums": "Toplam {totalCount} albümün tümü gösteriliyor",
   "@showingAllAlbums": {
     "description": "lib/features/songs/screens/songs_screen.dart:3122",
     "placeholders": {
@@ -6575,7 +6575,7 @@
       }
     }
   },
-  "showingOfAlbums": "Showing {visibleCount} of {totalCount} albums",
+  "showingOfAlbums": "{totalCount} albümden {visibleCount} tanesi gösteriliyor",
   "@showingOfAlbums": {
     "description": "lib/features/songs/screens/songs_screen.dart:3123",
     "placeholders": {
@@ -6587,23 +6587,23 @@
       }
     }
   },
-  "showingYourLastLoadedReplay": "Showing your last loaded Replay.",
+  "showingYourLastLoadedReplay": "Son yüklenen yıl özetin gösteriliyor.",
   "@showingYourLastLoadedReplay": {
     "description": "lib/features/recap/screens/listening_recap_screen.dart:386"
   },
-  "shownWhenThereIsRoomBeside": "Shown when there is room beside the controls",
+  "shownWhenThereIsRoomBeside": "Denetimlerin yanında yer olduğunda görünür",
   "@shownWhenThereIsRoomBeside": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:153"
   },
-  "showsWhatSPlayingTapTo": "Shows what's playing. Tap to open the full player.",
+  "showsWhatSPlayingTapTo": "Çalan şarkıyı gösterir. Tam oynatıcıyı açmak için dokun.",
   "@showsWhatSPlayingTapTo": {
     "description": "lib/providers/tutorial_provider.dart:39"
   },
-  "shuffle": "Shuffle",
+  "shuffle": "Karıştır",
   "@shuffle": {
     "description": "lib/widgets/common/detail_header.dart:267"
   },
-  "shuffle2": "Shuffle: {arg1}",
+  "shuffle2": "Karıştır: {arg1}",
   "@shuffle2": {
     "description": "lib/features/player/widgets/player_controls.dart:113",
     "placeholders": {
@@ -6612,187 +6612,187 @@
       }
     }
   },
-  "shuffleFavorites": "Shuffle Favorites",
+  "shuffleFavorites": "Favorileri karıştır",
   "@shuffleFavorites": {
     "description": "lib/features/menu/screens/menu_screen.dart:1325"
   },
-  "shuffleMode": "Shuffle Mode",
+  "shuffleMode": "Karıştırma modu",
   "@shuffleMode": {
     "description": "lib/features/player/widgets/shuffle_mode_sheet.dart:18"
   },
-  "shuffleSongsAndJumpBetweenCategories": "Shuffle songs and jump between categories",
+  "shuffleSongsAndJumpBetweenCategories": "Şarkıları karıştır ve kategoriler arasında geç",
   "@shuffleSongsAndJumpBetweenCategories": {
     "description": "lib/models/shuffle_mode.dart:21"
   },
-  "shuffleSongsInCurrentList": "Shuffle songs in current list",
+  "shuffleSongsInCurrentList": "Geçerli listedeki şarkıları karıştır",
   "@shuffleSongsInCurrentList": {
     "description": "lib/models/shuffle_mode.dart:20"
   },
-  "signInFailedRetry": "Sign-in Failed — Retry",
+  "signInFailedRetry": "Oturum açma başarısız — yeniden dene",
   "@signInFailedRetry": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:355"
   },
-  "signInWithTidal": "Sign in with Tidal",
+  "signInWithTidal": "Tidal ile oturum aç",
   "@signInWithTidal": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:360"
   },
-  "signInWithYourAccountHifi": "Sign in with your account · HiFi lossless",
+  "signInWithYourAccountHifi": "Hesabınla giriş yap · HiFi kayıpsız",
   "@signInWithYourAccountHifi": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:98"
   },
-  "signInWithYourOwnTidal": "Sign in with your own Tidal account. HiFi lossless (FLAC/ALAC) plays through the bit-perfect engine; HiRes/MQA and Atmos are gated by Tidal and will show an error instead of playing.",
+  "signInWithYourOwnTidal": "Kendi Tidal hesabınla oturum aç. HiFi kayıpsız (FLAC/ALAC), bit-perfect motoru üzerinden çalar. HiRes/MQA ve Atmos için Tidal kısıtlamaları geçerlidir; oynatılamazlarsa hata gösterilir.",
   "@signInWithYourOwnTidal": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:419"
   },
-  "signal": "Signal",
+  "signal": "Sinyal",
   "@signal": {
     "description": "lib/features/recap/widgets/replay_card_options.dart:10"
   },
-  "signalAccurateUnverified": "AccurateRip not verified",
+  "signalAccurateUnverified": "AccurateRip doğrulanmadı",
   "@signalAccurateUnverified": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalAccurateVerified": "AccurateRip verified in log",
+  "signalAccurateVerified": "Günlükte AccurateRip doğrulandı",
   "@signalAccurateVerified": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalAltSetting": "Alt setting",
+  "signalAltSetting": "Alternatif ayar",
   "@signalAltSetting": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalBufferCapacity": "Buffer capacity",
+  "signalBufferCapacity": "Arabellek kapasitesi",
   "@signalBufferCapacity": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalBufferFill": "Buffer fill",
+  "signalBufferFill": "Arabellek doluluğu",
   "@signalBufferFill": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalBufferOccupancy": "Buffer occupancy at open",
+  "signalBufferOccupancy": "Açılışta arabellek doluluğu",
   "@signalBufferOccupancy": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalBufferTarget": "Buffer target",
+  "signalBufferTarget": "Arabellek hedefi",
   "@signalBufferTarget": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalCopyCrc": "Copy CRC",
+  "signalCopyCrc": "Kopyalama CRC'si",
   "@signalCopyCrc": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalCrcCannotCompare": "Cannot compare",
+  "signalCrcCannotCompare": "Karşılaştırılamıyor",
   "@signalCrcCannotCompare": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalCrcComparison": "CRC comparison",
+  "signalCrcComparison": "CRC karşılaştırması",
   "@signalCrcComparison": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalCrcMatch": "Match",
+  "signalCrcMatch": "CRC eşleşiyor",
   "@signalCrcMatch": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalCrcMismatch": "Mismatch",
+  "signalCrcMismatch": "CRC eşleşmiyor",
   "@signalCrcMismatch": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalDriftFromTarget": "Drift from target",
+  "signalDriftFromTarget": "Hedeften sapma",
   "@signalDriftFromTarget": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalDsdBitRate": "DSD bit rate",
+  "signalDsdBitRate": "DSD bit hızı",
   "@signalDsdBitRate": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalFileFormat": "File format",
+  "signalFileFormat": "Dosya biçimi",
   "@signalFileFormat": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalFramesPerPacket": "Frames / packet",
+  "signalFramesPerPacket": "Paket başına kare",
   "@signalFramesPerPacket": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalMaxPacket": "Max packet",
+  "signalMaxPacket": "En büyük paket",
   "@signalMaxPacket": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalNoRipDescription": "No ripping or verification information was found for this track.",
+  "signalNoRipDescription": "Bu parça için CD kopyalama veya doğrulama bilgisi bulunamadı.",
   "@signalNoRipDescription": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalNotReported": "Not reported",
+  "signalNotReported": "Bildirilmedi",
   "@signalNotReported": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalNotVerified": "Not verified",
+  "signalNotVerified": "Doğrulanmadı",
   "@signalNotVerified": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalRecordingUnavailable": "Rip history unavailable",
+  "signalRecordingUnavailable": "Kopyalama geçmişine ulaşılamıyor",
   "@signalRecordingUnavailable": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalRipDescription": "Information from the rip log, not a stage of the current playback path.",
+  "signalRipDescription": "Kopyalama günlüğünden alınan bilgiler; geçerli oynatma yolunun bir aşaması değil.",
   "@signalRipDescription": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalRipProvenance": "Rip provenance",
+  "signalRipProvenance": "Kopyalama kaynağı",
   "@signalRipProvenance": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalRipper": "Ripper",
+  "signalRipper": "Kopyalama aracı",
   "@signalRipper": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalServiceInterval": "Service interval",
+  "signalServiceInterval": "Servis aralığı",
   "@signalServiceInterval": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalSnapshot": "Snapshot",
+  "signalSnapshot": "Anlık görüntü",
   "@signalSnapshot": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalSnapshotAtOpen": "Snapshot at open",
+  "signalSnapshotAtOpen": "Açılış anlık görüntüsü",
   "@signalSnapshotAtOpen": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalSourceDescription": "Properties of the source file, not the output sent to the device.",
+  "signalSourceDescription": "Kaynak dosyanın özellikleri; cihaza gönderilen çıkış değil.",
   "@signalSourceDescription": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalSourceDetails": "Source format details",
+  "signalSourceDetails": "Kaynak biçimi ayrıntıları",
   "@signalSourceDetails": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalSubslot": "Subslot",
+  "signalSubslot": "Alt yuva",
   "@signalSubslot": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalSyncType": "Sync type",
+  "signalSyncType": "Eşitleme türü",
   "@signalSyncType": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalTarget": "target",
+  "signalTarget": "hedef",
   "@signalTarget": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalTestCrc": "Test CRC",
+  "signalTestCrc": "Test CRC'si",
   "@signalTestCrc": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalTransportFormat": "Transport",
+  "signalTransportFormat": "Aktarım",
   "@signalTransportFormat": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalUnderruns": "Underruns",
+  "signalUnderruns": "Arabellek boşalmaları",
   "@signalUnderruns": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalUsageType": "Usage type",
+  "signalUsageType": "Kullanım türü",
   "@signalUsageType": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
-  "signalUsbDescription": "Transport values available when this sheet opened. This is not a live packet trace.",
+  "signalUsbDescription": "Bu sayfa açıldığında alınabilen aktarım değerleri. Canlı paket dökümü değil.",
   "@signalUsbDescription": {
     "description": "lib/features/player/widgets/audio_signal_report.dart"
   },
