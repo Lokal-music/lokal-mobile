@@ -265,10 +265,19 @@ class FlowController extends AsyncNotifier<FlowData> {
       limit: remaining.clamp(0, FlowRules.topUpTracks),
     );
     library.rememberOnline(online);
-    final local = library.topUp(data).take(
-      (remaining.clamp(0, FlowRules.topUpTracks) - online.length)
-          .clamp(0, FlowRules.topUpTracks),
-    );
+    final onlineRecordings = online
+        .map((song) => radioRecordingKey(song.artist, song.title))
+        .toSet();
+    final local = library.topUp(data)
+        .where(
+          (song) => !onlineRecordings.contains(
+            radioRecordingKey(song.artist, song.title),
+          ),
+        )
+        .take(
+          (remaining.clamp(0, FlowRules.topUpTracks) - online.length)
+              .clamp(0, FlowRules.topUpTracks),
+        );
     final extra = [...online, ...local];
     if (extra.isEmpty) return;
     // Persist the plan before touching the player. If a platform append fails,
