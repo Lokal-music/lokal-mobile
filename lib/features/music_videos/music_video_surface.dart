@@ -112,7 +112,11 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface> {
             if (mounted) setState(() => _loading = false);
           },
           onReceivedError: (_, request, __) {
-            if (request.isForMainFrame == true && mounted) {
+            final url = request.url;
+            final embedFailed = request.isForMainFrame == false &&
+                url?.host == 'www.youtube.com' &&
+                url?.path == '/embed/${widget.videoId}';
+            if (mounted && (request.isForMainFrame == true || embedFailed)) {
               setState(() { _failed = true; _loading = false; });
             }
           },
