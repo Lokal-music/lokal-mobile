@@ -1,8 +1,9 @@
 /// Converts LyricsPlus v2's millisecond-based lyric lines to enhanced LRC.
 ///
 /// Provider responses can contain unsorted rows, invalid times, background-only
-/// syllabus entries, or timelines from a different recording. Reject an
-/// implausible timeline instead of letting its last verse appear at song start.
+/// syllabus entries, or timelines from a different recording. When the words
+/// are usable but the timestamps are not, return unsynchronized plain text
+/// rather than pretending that the last verse starts at the opening.
 String? normalizeLyricsPlusV2(
   Object? payload, {
   required Duration duration,
@@ -48,7 +49,12 @@ String? normalizeLyricsPlusV2(
     if (text.isEmpty) continue;
     entries.add((time: time, text: text, words: words));
   }
-  if (entries.isEmpty || invalid > entries.length ~/ 4) return null;
+  if (entries.isEmpty) return null;
+  // A malformed timed answer can still contain correct words (as for plain
+  // LyricsPlus results). Render those words, never fake word-by-word timing.
+  String plain() => entries.map((entry) => entry.text)
+      .where((text) => text.isNotEmpty).join('\\n');
+  if (invalid > entries.length ~/ 4) return plain();
   entries.sort((a, b) => a.time.compareTo(b.time));
 
   // Many identical timestamps mean this is not usable synchronized lyrics:
@@ -61,14 +67,14 @@ String? normalizeLyricsPlusV2(
     final largest = occurrences.values.fold<int>(
       0, (maximum, count) => count > maximum ? count : maximum,
     );
-    if (largest > entries.length / 2) return null;
+    if (largest > entries.length / 2) return plain();
   }
 
   // A purported full-song lyric transcript whose *first* line is in the
   // final portion of a normal-length track is not usable for following it.
   // Reject it, leaving the auto selector free to use another provider.
   if (durationMs >= 60000 &&
-      entries.first.time > durationMs * 0.75) return null;
+      entries.first.time > durationMs * 0.75) return plain();
 
   String stamp(int ms) =>
       '${(ms ~/ 60000).toString().padLeft(2, '0')}:'
