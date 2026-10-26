@@ -32,7 +32,8 @@ jobs:
         run: >-
           flutter test --no-pub
           test/spotify test/morneye test/playlist_links test/flow test/discovery test/konnekted
-          test/l10n/source_guard_test.dart test/widgets/share_actions_test.dart
+          test/l10n test/features/search/search_localization_test.dart
+          test/widgets/share_actions_test.dart
           test/features/player/picked_lyrics_file_test.dart
           test/classipod test/services test/providers test/core test/data
           test/widgets/lokal test/widgets/overflow_marquee_title_test.dart
