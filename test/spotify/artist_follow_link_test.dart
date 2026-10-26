@@ -68,6 +68,15 @@ void main() {
       local, store, ArtistFavoritesFilter.nonFavorites).single.name,
       'Daftpunk',
     );
+    await store.setFollowed('Massive Attack', false);
+    expect(selectArtistFavorites(local, store, ArtistFavoritesFilter.nonFavorites)
+        .map((artist) => artist.name), contains('Massive Attack'));
+    final again = ArtistFollowStore();
+    await again.load();
+    expect(selectArtistFavorites(local, again, ArtistFavoritesFilter.nonFavorites)
+        .map((artist) => artist.name), contains('Massive Attack'));
+    await again.setFollowed('Massive Attack', true);
+    expect(again.isFollowed('Massive Attack'), true);
   });
 
   test('Spotify follows use desktop-compatible libraryV3 and paginate', () async {

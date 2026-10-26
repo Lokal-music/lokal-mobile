@@ -14,11 +14,13 @@ class ArtistFollowStore extends ChangeNotifier {
   Future<void>? _loading;
   SharedPreferences? _prefs;
   Map<String, String> _names = {};
+  Map<String, String> _known = {};
 
   static String keyOf(String? name) => recommendationKey(name);
   bool get isLoaded => _prefs != null;
   bool isFollowed(String? name) => _names.containsKey(keyOf(name));
   List<String> get followedNames => List.unmodifiable(_names.values);
+  List<String> get knownNames => List.unmodifiable(_known.values);
   int get count => _names.length;
 
   Future<void> load() {
@@ -29,10 +31,13 @@ class ArtistFollowStore extends ChangeNotifier {
   Future<void> _restore() async {
     final prefs = await _preferences();
     final names = <String, String>{};
+    final known = <String, String>{};
     for (final name in prefs.getStringList(registryKey) ?? const <String>[]) {
       final clean = name.trim();
       final key = keyOf(clean);
-      if (key.isNotEmpty && prefs.getBool('$_prefix$key') != false) {
+      if (key.isEmpty) continue;
+      known.putIfAbsent(key, () => clean);
+      if (prefs.getBool('$_prefix$key') != false) {
         names.putIfAbsent(key, () => clean);
       }
     }
@@ -41,9 +46,13 @@ class ArtistFollowStore extends ChangeNotifier {
       if (key == registryKey || !key.startsWith(_prefix) ||
           prefs.getBool(key) != true) continue;
       final artistKey = key.substring(_prefix.length);
-      if (artistKey.isNotEmpty) names.putIfAbsent(artistKey, () => artistKey);
+      if (artistKey.isNotEmpty) {
+        known.putIfAbsent(artistKey, () => artistKey);
+        names.putIfAbsent(artistKey, () => artistKey);
+      }
     }
     _names = names;
+    _known = known;
     _prefs = prefs;
     notifyListeners();
   }
@@ -54,14 +63,17 @@ class ArtistFollowStore extends ChangeNotifier {
     final key = keyOf(name);
     if (key.isEmpty) return;
     final next = Map<String, String>.of(_names);
+    final known = Map<String, String>.of(_known);
+    known.putIfAbsent(key, () => name);
     if (value) {
       next.putIfAbsent(key, () => name);
     } else {
       next.remove(key);
     }
     await _prefs!.setBool('$_prefix$key', value);
-    await _prefs!.setStringList(registryKey, next.values.toList());
+    await _prefs!.setStringList(registryKey, known.values.toList());
     _names = next;
+    _known = known;
     notifyListeners();
   }
 
@@ -70,6 +82,7 @@ class ArtistFollowStore extends ChangeNotifier {
   Future<ArtistFollowImport> importNames(Iterable<String> artists) async {
     await load();
     final next = Map<String, String>.of(_names);
+    final known = Map<String, String>.of(_known);
     final reenabled = <String>[];
     var received = 0;
     var added = 0;
@@ -80,6 +93,7 @@ class ArtistFollowStore extends ChangeNotifier {
       if (++received > 2000) {
         throw StateError('Too many Spotify artists to import safely.');
       }
+      known.putIfAbsent(key, () => name);
       if (next.containsKey(key)) continue;
       if (_prefs!.getBool('$_prefix$key') == false) reenabled.add(key);
       next[key] = name;
@@ -88,8 +102,9 @@ class ArtistFollowStore extends ChangeNotifier {
     for (final key in reenabled) {
       await _prefs!.setBool('$_prefix$key', true);
     }
-    await _prefs!.setStringList(registryKey, next.values.toList());
+    await _prefs!.setStringList(registryKey, known.values.toList());
     _names = next;
+    _known = known;
     notifyListeners();
     return ArtistFollowImport(received: received, added: added);
   }

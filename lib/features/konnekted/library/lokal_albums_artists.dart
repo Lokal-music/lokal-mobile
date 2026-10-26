@@ -204,7 +204,7 @@ List<LokalArtist> selectArtistFavorites(
     final key = recommendationKey(artist.name);
     if (key.isNotEmpty) rows.putIfAbsent(key, () => artist);
   }
-  for (final name in follows.followedNames) {
+  for (final name in follows.knownNames) {
     final key = recommendationKey(name);
     if (key.isNotEmpty) {
       rows.putIfAbsent(key, () => LokalArtist(name, const []));
