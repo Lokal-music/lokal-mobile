@@ -13,22 +13,27 @@ final favoritesServiceProvider = Provider<FavoritesService>((ref) => FavoritesSe
 class FavoritesState {
   final Set<String> favoriteIds;
   final List<Song> favoriteSongs;
+  /// ID -> timestamp/rank when the heart was added, not file import time.
+  final Map<String, int> likedRanks;
   final bool isLoading;
 
   const FavoritesState({
     this.favoriteIds = const {},
     this.favoriteSongs = const [],
+    this.likedRanks = const {},
     this.isLoading = true,
   });
 
   FavoritesState copyWith({
     Set<String>? favoriteIds,
     List<Song>? favoriteSongs,
+    Map<String, int>? likedRanks,
     bool? isLoading,
   }) {
     return FavoritesState(
       favoriteIds: favoriteIds ?? this.favoriteIds,
       favoriteSongs: favoriteSongs ?? this.favoriteSongs,
+      likedRanks: likedRanks ?? this.likedRanks,
       isLoading: isLoading ?? this.isLoading,
     );
   }
@@ -52,10 +57,12 @@ class FavoritesNotifier extends AsyncNotifier<FavoritesState> {
 
     final songs = await service.getFavorites();
     final ids = await service.getFavoriteIds();
+    final likedRanks = await service.getFavoriteRanks();
 
     return FavoritesState(
       favoriteIds: ids,
       favoriteSongs: songs,
+      likedRanks: likedRanks,
       isLoading: false,
     );
   }
