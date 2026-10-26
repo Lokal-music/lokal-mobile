@@ -67,7 +67,10 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       return;
     }
     try {
-      final session = await YoutubeMusicSessionStore().read();
+      // Secure storage failure must not disable anonymous video playback.
+      final session = await YoutubeMusicSessionStore().read().catchError(
+        (Object _) => null,
+      );
       if (!mounted || videoId != widget.videoId) return;
       final result = await _resolver.invokeMapMethod<String, dynamic>(
         'resolveVideo', {
