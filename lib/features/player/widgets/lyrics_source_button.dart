@@ -24,6 +24,14 @@ String lyricsSourceLabel(LyricsData? lyrics, String selected) =>
         ? 'Local file'
         : lyricsSources[selected] ?? selected);
 
+String? lyricsSourceHitLabel(Song song, String provider) {
+  final hit = LyricsService.sourceHitFor(song, provider);
+  if (hit == null) return null;
+  if (hit.status == 'hit') return 'Found · ${hit.timing}';
+  if (hit.status == 'checking') return 'Checking…';
+  return 'No result';
+}
+
 class LyricsSourceButton extends StatelessWidget {
   const LyricsSourceButton({
     super.key,
@@ -118,10 +126,8 @@ class LyricsSourceButton extends StatelessWidget {
                   selectedTileColor: t.accent.withValues(alpha: .1),
                   title: Text(source.value),
                   subtitle: Text(
-                    source.key != 'auto' &&
-                            LyricsService.sourceHitFor(song, source.key) case final hit?
-                        ? '${hit.status == 'hit' ? 'Found · ${hit.timing}' : hit.status == 'checking' ? 'Checking…' : 'No result'}'
-                        : source.key == 'auto'
+                    lyricsSourceHitLabel(song, source.key) ??
+                    (source.key == 'auto'
                         ? 'Use your priority order and keep the best timing'
                         : source.key == 'local'
                         ? 'Copied, sidecar or embedded lyrics'
@@ -129,7 +135,7 @@ class LyricsSourceButton extends StatelessWidget {
                         ? 'Line-synced and plain lyrics'
                         : source.key == 'lyricsovh'
                         ? 'Plain lyrics'
-                        : 'Supports syllable / word timing',
+                        : 'Supports syllable / word timing'),
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
