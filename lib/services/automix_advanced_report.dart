@@ -1,0 +1,92 @@
+import 'dart:convert';
+import 'dart:io';
+
+/// Read-only CUE-DETR report produced by the desktop/offline importer.
+/// No Python, ML model weights, or untrusted remote URLs are executed here.
+class AutoMixAdvancedReport {
+  const AutoMixAdvancedReport({
+    required this.durationSeconds,
+    required this.entrances,
+    required this.exits,
+    this.bpm,
+  });
+
+  static const suffix = '.lokal-automix.json';
+  static const maxBytes = 128 * 1024;
+  final double durationSeconds;
+  final List<double> entrances;
+  final List<double> exits;
+  final double? bpm;
+
+  static AutoMixAdvancedReport? parse(
+    Object? raw, {
+    required int sourceSize,
+    required int sourceModifiedMs,
+    required double expectedDuration,
+  }) {
+    if (raw is! Map<String, dynamic> ||
+        raw['schema'] != 'lokal-automix-advanced-v1') return null;
+    final source = raw['source'];
+    final analyzer = raw['analyzer'];
+    final cueRoot = raw['transitionCues'];
+    if (source is! Map || analyzer is! Map || cueRoot is! Map ||
+        source['size'] != sourceSize ||
+        source['mtimeMs'] is! num ||
+        ((source['mtimeMs'] as num).toDouble() - sourceModifiedMs).abs() > 2 ||
+        source['sha256'] is! String ||
+        !RegExp(r'^[a-f0-9]{64}$').hasMatch(source['sha256'] as String) ||
+        analyzer['id'] != 'disco-eth/cue-detr' ||
+        analyzer['revision'] is! String ||
+        (analyzer['revision'] as String).length > 150) return null;
+
+    double? positiveNumber(Object? input) {
+      if (input is! num || !input.toDouble().isFinite) return null;
+      return input.toDouble();
+    }
+    final duration = positiveNumber(raw['durationSeconds']);
+    if (duration == null || duration < 20 || duration > 7200 ||
+        (duration - expectedDuration).abs() > 2) return null;
+    final bpm = raw['bpm'] == null ? null : positiveNumber(raw['bpm']);
+    if (bpm != null && (bpm < 50 || bpm > 220)) return null;
+
+    List<double>? cues(Object? raw) {
+      if (raw is! List || raw.length > 24) return null;
+      final parsed = <double>[];
+      for (final item in raw) {
+        if (item is! Map) return null;
+        final time = positiveNumber(item['time']);
+        final confidence = positiveNumber(item['confidence']);
+        if (time == null || confidence == null ||
+            time < 0 || time > duration ||
+            confidence < 0.55 || confidence > 1) return null;
+        parsed.add(time);
+      }
+      return List.unmodifiable(parsed);
+    }
+    final entrances = cues(cueRoot['entrances']);
+    final exits = cues(cueRoot['exits']);
+    if (entrances == null || exits == null) return null;
+    return AutoMixAdvancedReport(
+      durationSeconds: duration, entrances: entrances, exits: exits, bpm: bpm,
+    );
+  }
+
+  static Future<AutoMixAdvancedReport?> read(
+    String audioPath,
+    FileStat audioStamp,
+    Duration expectedDuration,
+  ) async {
+    try {
+      final file = File('$audioPath$suffix');
+      final stat = await file.stat();
+      if (stat.type != FileSystemEntityType.file ||
+          stat.size <= 0 || stat.size > maxBytes) return null;
+      return parse(jsonDecode(await file.readAsString()),
+        sourceSize: audioStamp.size,
+        sourceModifiedMs: audioStamp.modified.millisecondsSinceEpoch,
+        expectedDuration: expectedDuration.inMilliseconds / 1000);
+    } catch (_) {
+      return null;
+    }
+  }
+}
