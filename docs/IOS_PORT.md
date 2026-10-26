@@ -760,3 +760,9 @@ as **inconclusive** with a screenshot and provider code, never successful video
 acceptance. Even an unavailable player must acknowledge native media suspension.
 The ordinary deterministic corpus runs regardless; this probe is not physical
 background/fullscreen/accessory acceptance.
+
+
+The subsequent CI evidence improvement preserves each runtime's report/screenshots
+immediately after its pass, as well as the combined diagnostics at the end. This
+lets the first runtime's exact result be inspected while the second boots/tests;
+it does not alter or relax either native gate.

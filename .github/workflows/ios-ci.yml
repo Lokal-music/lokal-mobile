@@ -162,6 +162,13 @@ jobs:
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke.log"
             exit 1
           fi
+      - name: Preserve iOS 18.6 runtime evidence immediately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-runtime-18.6-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-runtime-18.6/
+          if-no-files-found: ignore
       - name: Boot the current iOS simulator runtime
         timeout-minutes: 8
         env:
@@ -179,6 +186,13 @@ jobs:
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-26.log"
             exit 1
           fi
+      - name: Preserve iOS 26.0 runtime evidence immediately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-runtime-26.0-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-runtime-26/
+          if-no-files-found: ignore
       - name: Preserve dependency locks
         run: git diff --exit-code -- pubspec.lock rust/Cargo.lock
       - name: Collect simulator diagnostics
