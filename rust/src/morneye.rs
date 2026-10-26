@@ -24,6 +24,18 @@ pub type Host = Arc<dyn Fn(String, String) -> BoxFuture<'static, String> + Send 
 
 const NO_DEADLINE: u64 = u64::MAX;
 const MEMORY_LIMIT: usize = 64 * 1024 * 1024;
+const MAX_DOWNLOAD_MEMORY_LIMIT: usize = 256 * 1024 * 1024;
+
+/// Normal source browsing remains lightweight. The desktop runtime allocates
+/// 512 MiB for downloads; Android uses a bounded 256 MiB budget to avoid
+/// rejecting otherwise valid extension jobs on the default 64 MiB heap.
+fn guest_memory_limit(config_json: &str) -> usize {
+    let requested = serde_json::from_str::<serde_json::Value>(config_json)
+        .ok()
+        .and_then(|config| config.get("heapMb")?.as_u64())
+        .unwrap_or(64);
+    requested.clamp(64, 256) as usize * 1024 * 1024
+}
 const STACK_LIMIT: usize = 512 * 1024;
 const START_TIMEOUT_MS: u64 = 30_000;
 
@@ -250,9 +262,10 @@ fn run(
     ready: mpsc::Sender<Result<Vec<String>, String>>,
 ) {
     let deadline = Arc::new(AtomicU64::new(now_ms() + START_TIMEOUT_MS));
+    let memory_limit = guest_memory_limit(&config_json);
     let setup = (|| -> Result<(Runtime, Context), String> {
         let runtime = Runtime::new().map_err(|e| e.to_string())?;
-        runtime.set_memory_limit(MEMORY_LIMIT);
+        runtime.set_memory_limit(memory_limit);
         runtime.set_max_stack_size(STACK_LIMIT);
         let watch = deadline.clone();
         let stop = closed.clone();
@@ -359,6 +372,16 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guest_heap_is_bounded_by_host_config() {
+        assert_eq!(guest_memory_limit("{}"), MEMORY_LIMIT);
+        assert_eq!(guest_memory_limit(r#"{"heapMb":256}"#), MAX_DOWNLOAD_MEMORY_LIMIT);
+        assert_eq!(guest_memory_limit(r#"{"heapMb":5}"#), MEMORY_LIMIT);
+        assert_eq!(guest_memory_limit(r#"{"heapMb":999999999999}"#), MAX_DOWNLOAD_MEMORY_LIMIT);
+        assert_eq!(guest_memory_limit(r#"{"heapMb":"512"}"#), MEMORY_LIMIT);
+        assert_eq!(guest_memory_limit("invalid"), MEMORY_LIMIT);
+    }
 
     const BOOTSTRAP: &str = r#"(function(bridge, config) {
       globalThis.host = (m, a) => JSON.parse(bridge(m, JSON.stringify(a)));

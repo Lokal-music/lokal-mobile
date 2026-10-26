@@ -638,6 +638,7 @@ void main() {
         );
         expect(addon.displayName, 'QOBUZ');
         expect(addon.methods, contains('download'));
+        expect(engine.configurations.last['heapMb'], 64);
 
         final again = MorneyePackages(
           dir,
@@ -787,6 +788,7 @@ void main() {
       native.info = {'codec': 'aac', 'format': 'isomp4', 'duration_ms': 181000};
 
       final download = await packages.download(addon.key, 't1');
+      expect(engine.configurations.last['heapMb'], 256);
       expect(p.extension(download.file.path), '.m4a');
       expect(download.file.readAsStringSync(), 'audio');
       expect(download.metadata['name'], 'Song');

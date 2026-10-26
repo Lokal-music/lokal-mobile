@@ -126,6 +126,7 @@ class FakeGuest implements MorneyeGuest {
 class FakeEngine {
   final scripts = <String, Map<String, GuestMethod>>{};
   final started = <FakeGuest>[];
+  final configurations = <Map<String, Object?>>[];
 
   Future<MorneyeGuest> start(
     String code,
@@ -134,6 +135,7 @@ class FakeEngine {
   ) async {
     final script = scripts[code];
     if (script == null) throw StateError('SyntaxError: unknown script');
+    configurations.add((jsonDecode(config) as Map).cast<String, Object?>());
     final guest = FakeGuest(script, bridge);
     started.add(guest);
     return guest;

@@ -1309,6 +1309,7 @@ class MorneyePackages {
     List<String> grants = const [],
     void Function({double? percent, String? message})? onProgress,
     void Function(MorneyeTransfer)? onTransfer,
+    int heapMb = 64,
   }) {
     final network = _networkFor(addon);
     final session = addon.signedSession != null
@@ -1334,6 +1335,8 @@ class MorneyePackages {
         'signedSession': addon.manifest['signedSession'],
         'settings': settings(addon),
         'rawFfmpeg': (addon.manifest['capabilities'] as Map?)?['rawFfmpeg'],
+        // Host-only resource limit; not exposed as a user setting.
+        'heapMb': heapMb,
       },
       host,
       starter: _starter,
@@ -1663,6 +1666,9 @@ class MorneyePackages {
       grants: [staged.path],
       onProgress: onProgress,
       onTransfer: hooks ? null : onTransfer,
+      // Isolated download workers need headroom for segments/decryption.
+      // Browsing stays at 64 MiB. Native code caps this at 256 MiB.
+      heapMb: 256,
     );
     unawaited(cancel?.then((_) => runtime.close()));
     try {
