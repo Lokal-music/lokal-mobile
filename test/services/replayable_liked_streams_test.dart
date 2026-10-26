@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flick/data/repositories/song_repository.dart';
+import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/konnekted/library/replayable_stream_songs.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/favorites_service.dart';
@@ -145,6 +146,21 @@ void main() {
     expect(pending, hasLength(650));
     final first = await resolver.resolveNow(pending.first);
     expect(first?.id, 'liked-0');
+  });
+
+  test('registered progressive HTTP stream starts without another lookup', () {
+    final handle = DiscoveryProgressiveStreams.instance.register(
+      Uri.parse('https://streams.example.org/song.flac'),
+    );
+    final current = Song(
+      id: 'live-http',
+      title: 'Live HTTP', artist: 'Artist',
+      duration: const Duration(minutes: 2), fileType: 'FLAC',
+      filePath: handle, sourcePackage: 'konnekted.progressive',
+      isExternal: true,
+    );
+    expect(needsStreamReResolution(current), isFalse);
+    expect(identical(replayableStreamSong(current), current), isTrue);
   });
 
   test('keeps downloaded files, local songs and true network sources', () async {
