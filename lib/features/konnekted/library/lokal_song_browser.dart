@@ -609,8 +609,9 @@ class LokalSongListPage extends ConsumerWidget {
         audioFilter: filter == 'all' || isQuality || isFormat
             ? filter as String : 'all',
         query: raw['query'] is String
-            ? (raw['query'] as String).substring(
-                0, (raw['query'] as String).length.clamp(0, 200))
+            ? ((raw['query'] as String).length > 200
+                ? (raw['query'] as String).substring(0, 200)
+                : raw['query'] as String)
             : '',
       );
     } catch (_) {
