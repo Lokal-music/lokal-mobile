@@ -158,6 +158,11 @@ class QueuePreResolver {
     return path != null && File(path).existsSync();
   }
 
+  /// Whether an already-pending track has a live registered lookup.
+  /// Search and Discovery pending tracks must keep their exact source choice.
+  bool hasResolver(String id) =>
+      _registered.containsKey(id) || _savedSongResolvers.containsKey(id);
+
   /// Placeholder ids being looked up right now (tests, diagnostics).
   Set<String> get running => Set.unmodifiable(_running.keys);
 
