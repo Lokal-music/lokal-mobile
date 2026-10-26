@@ -85,21 +85,30 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle> {
               // Fixed line identity retains TextPainter glyph boxes while
               // per-syllable progress repaints, eliminating repeated layouts.
               RepaintBoundary(
-                child: LyricMotionLine(
-                  key: ValueKey('space-line:${current.timestamp.inMilliseconds}'),
-                  line: current,
-                  position: position,
-                  textAlign: TextAlign.center,
-                  lightweight: true,
-                  style: const TextStyle(
-                    fontFamily: _font,
-                    color: Colors.white,
-                    fontSize: 27,
-                    fontWeight: FontWeight.w800,
-                    height: 1.20,
-                    shadows: [
-                      Shadow(color: Color(0xDD000000), blurRadius: 12),
-                    ],
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0x44000000),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 7,
+                    ),
+                    child: LyricMotionLine(
+                      key: ValueKey('space-line:${current.timestamp.inMilliseconds}'),
+                      line: current,
+                      position: position,
+                      textAlign: TextAlign.center,
+                      lightweight: true,
+                      // No per-glyph blur shadows on syllable repaints.
+                      style: const TextStyle(
+                        fontFamily: _font,
+                        color: Colors.white,
+                        fontSize: 27,
+                        fontWeight: FontWeight.w800,
+                        height: 1.20,
+                      ),
+                    ),
                   ),
                 ),
               ),
