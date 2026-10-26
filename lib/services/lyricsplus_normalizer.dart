@@ -53,7 +53,7 @@ String? normalizeLyricsPlusV2(
   // A malformed timed answer can still contain correct words (as for plain
   // LyricsPlus results). Render those words, never fake word-by-word timing.
   String plain() => entries.map((entry) => entry.text)
-      .where((text) => text.isNotEmpty).join('\\n');
+      .where((text) => text.isNotEmpty).join('\n');
   if (invalid > entries.length ~/ 4) return plain();
   entries.sort((a, b) => a.time.compareTo(b.time));
 
