@@ -97,6 +97,36 @@ void main() {
     );
   });
 
+  test('does not overwrite an active Discovery source-specific resolver',
+      () async {
+    final resolver = QueuePreResolver();
+    var sourceSpecific = 0;
+    final pending = resolver.pending(
+      key: 'exact-catalogue-choice',
+      title: 'Precise match',
+      artist: 'Artist',
+      resolve: ({onStatus, cancel}) async {
+        sourceSpecific++;
+        return const Song(
+          id: 'exact-result', title: 'Precise match', artist: 'Artist',
+          duration: Duration(minutes: 2), fileType: 'FLAC',
+          filePath: '/exact-selection.flac',
+        );
+      },
+    );
+    final unchanged = replayableStreamSong(
+      pending,
+      queueResolver: resolver,
+      lookup: (track, {onStatus, cancel}) async => throw StateError(
+        'Generic lookup should never replace a live exact-source resolver',
+      ),
+    );
+    expect(identical(unchanged, pending), isTrue);
+    final ready = await resolver.resolveNow(unchanged);
+    expect(sourceSpecific, 1);
+    expect(ready?.id, 'exact-result');
+  });
+
   test('saved-song resolver registration survives queues longer than 500', () async {
     final resolver = QueuePreResolver();
     final pending = replayableStreamQueue(
