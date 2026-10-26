@@ -289,14 +289,9 @@ class LokalSectionTitle extends StatelessWidget {
 
 /// Apple Music's Play and Shuffle pills.
 class LokalPlayShufflePills extends ConsumerWidget {
-  const LokalPlayShufflePills({
-    super.key, required this.songs, this.extra, this.onPlay, this.onShuffle,
-  });
+  const LokalPlayShufflePills({super.key, required this.songs, this.extra});
 
   final List<Song> songs;
-  /// Optional source-aware callbacks for lists such as streamed Likes.
-  final VoidCallback? onPlay, onShuffle;
-
   /// A third pill after Shuffle, e.g. Start radio.
   final Widget? extra;
 
@@ -311,7 +306,7 @@ class LokalPlayShufflePills extends ConsumerWidget {
             child: LokalPill(
               icon: Icons.play_arrow_rounded,
               label: lokalText('Play'),
-              onTap: enabled ? (onPlay ?? () => lokalPlay(context, ref, songs)) : null,
+              onTap: enabled ? () => lokalPlay(context, ref, songs) : null,
             ),
           ),
           const SizedBox(width: 12),
@@ -320,7 +315,7 @@ class LokalPlayShufflePills extends ConsumerWidget {
               icon: Icons.shuffle_rounded,
               label: lokalText('Shuffle'),
               onTap: enabled
-                  ? (onShuffle ?? () => lokalPlay(context, ref, songs, shuffle: true))
+                  ? () => lokalPlay(context, ref, songs, shuffle: true)
                   : null,
             ),
           ),
