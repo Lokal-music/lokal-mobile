@@ -719,9 +719,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       child: LokalPullToDismiss(
         onDismiss: _close,
         // Pulling up drags the queue in, following the finger.
-        onPullUpUpdate: _showLyrics || _videoOverrideId != null ||
+        onPullUpUpdate: _immersiveLyrics || _showLyrics ||
+                _videoOverrideId != null ||
                 widget.videoSong != null ? null : _queue.dragBy,
-        onPullUpEnd: _showLyrics || _videoOverrideId != null ||
+        onPullUpEnd: _immersiveLyrics || _showLyrics ||
+                _videoOverrideId != null ||
                 widget.videoSong != null ? null : _releaseQueue,
         // While the queue is out, its header owns vertical drags.
         isBlocked: () => _immersiveLyrics || _videoOverrideId != null || widget.videoSong != null ||
