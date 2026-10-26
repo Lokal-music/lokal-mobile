@@ -6,7 +6,9 @@ import 'package:flick/core/theme/app_colors.dart';
 import 'package:flick/core/theme/adaptive_color_provider.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/providers.dart';
-import 'package:flick/widgets/common/flick_artwork_placeholder.dart';
+import 'package:flick/features/konnekted/konnekted_data.dart';
+import 'package:flick/features/konnekted/library/lokal_playlists.dart'
+    show LokalPlaylistArtwork, lokalPlaylistCoverSongs;
 import 'package:flick/widgets/common/glass_bottom_sheet.dart';
 import 'package:flick/l10n/l10n.dart';
 
@@ -76,6 +78,13 @@ class AddToPlaylistSheet extends ConsumerWidget {
                   style: TextStyle(color: context.adaptiveTextTertiary),
                 ),
                 data: (state) {
+                  // Resolve covers exactly as Library > Playlists does, using
+                  // preferred local song copies and stored online snapshots.
+                  // Observe this once for the list, never scan the whole
+                  // library separately for each scrolling playlist row.
+                  final libraryById =
+                      ref.watch(konnektedLibraryIndexProvider).value?.byId ??
+                      const <String, Song>{};
                   if (state.playlists.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
@@ -117,16 +126,22 @@ class AddToPlaylistSheet extends ConsumerWidget {
                                     song.filePath?.isNotEmpty != true ||
                                     song.filePath!.startsWith('http')));
                         return ListTile(
-                          leading: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceLight,
+                          // Match the actual playlist art in Library:
+                          // server-supplied artwork for Navidrome, otherwise
+                          // the same bounded four-song cover collage. Only
+                          // empty/unresolvable playlists get a placeholder.
+                          leading: SizedBox.square(
+                            dimension: 48,
+                            child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const FlickArtworkPlaceholder(
-                              size: 22,
-                              opacity: 0.9,
+                              child: LokalPlaylistArtwork(
+                                key: ValueKey(playlist.id),
+                                playlist: playlist,
+                                songs: lokalPlaylistCoverSongs(
+                                  playlist,
+                                  libraryById,
+                                ),
+                              ),
                             ),
                           ),
                           title: Text(
