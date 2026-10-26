@@ -416,21 +416,21 @@ class _ArtistRow extends ConsumerWidget {
                   ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                artist.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(artist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w500)),
+                  Text(artist.songs.isEmpty
+                      ? 'Not in library' : lokalSongCount(artist.songs.length),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: context.lokal.muted)),
+                ],
               ),
-            ),
-            Text(
-              artist.songs.isEmpty
-                  ? 'Not in library'
-                  : lokalSongCount(artist.songs.length),
-              style: TextStyle(fontSize: 12, color: context.lokal.muted),
             ),
             IconButton(
               tooltip: ArtistFollowStore.instance.isFollowed(artist.name)
@@ -452,7 +452,7 @@ class _ArtistRow extends ConsumerWidget {
                 }
               },
             ),
-            Icon(Icons.chevron_right_rounded, color: context.lokal.muted2),
+
           ],
         ),
       ),

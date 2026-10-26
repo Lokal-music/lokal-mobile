@@ -38,7 +38,8 @@ class ArtistFollowStore extends ChangeNotifier {
     }
     // Legacy flags remain authoritative (even when there is no registry).
     for (final key in prefs.getKeys()) {
-      if (!key.startsWith(_prefix) || prefs.getBool(key) != true) continue;
+      if (key == registryKey || !key.startsWith(_prefix) ||
+          prefs.getBool(key) != true) continue;
       final artistKey = key.substring(_prefix.length);
       if (artistKey.isNotEmpty) names.putIfAbsent(artistKey, () => artistKey);
     }
