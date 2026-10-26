@@ -3,6 +3,8 @@ package com.mossapps.flick.youtube
 import android.content.Context
 import android.net.Uri
 import android.view.View
+import android.view.LayoutInflater
+import com.mossapps.flick.R
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -39,12 +41,13 @@ internal class LokalMusicVideoView(
     params: Map<String, Any?>,
 ) : PlatformView {
     private val player = ExoPlayer.Builder(context).build()
-    private val view = PlayerView(context).apply {
+    private val view = (LayoutInflater.from(context).inflate(
+        R.layout.lokal_music_video_player, null
+    ) as PlayerView).apply {
         useController = false
         setShutterBackgroundColor(android.graphics.Color.BLACK)
         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-        // A TextureView composes more predictably with Flutter's overlay
-        // controls than the default SurfaceView (layout XML not required).
+        // Layout XML supplies a TextureView so Flutter chrome can overlay it.
         this.player = this@LokalMusicVideoView.player
         keepScreenOn = true
     }
