@@ -29,6 +29,9 @@ class FavoritesService {
     'resolution': song.resolution, 'sampleRate': song.sampleRate,
     'bitDepth': song.bitDepth, 'filePath': song.filePath,
     'sourcePackage': song.sourcePackage, 'sourceType': song.sourceType,
+    'sourceDisplayName': song.sourceDisplayName,
+    'atmosAvailable': song.atmosAvailable,
+    'atmosEncoded': song.atmosEncoded,
     'remoteId': song.remoteId,
   };
 
@@ -75,6 +78,9 @@ class FavoritesService {
       filePath: song['filePath'] as String?,
       sourcePackage: song['sourcePackage'] as String?,
       sourceType: song['sourceType'] as String?,
+      sourceDisplayName: song['sourceDisplayName'] as String?,
+      atmosAvailable: song['atmosAvailable'] == true,
+      atmosEncoded: song['atmosEncoded'] == true,
       remoteId: song['remoteId'] as String?,
       isExternal: true,
     );
