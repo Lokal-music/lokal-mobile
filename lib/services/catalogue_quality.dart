@@ -1,8 +1,31 @@
+/// Some HTTP add-ons advertise CD resolution as "16/44.1" rather than
+/// "16-bit / 44.1 kHz". Accept only explicit bit-depth/rate pairs; do not
+/// interpret a bitrate or a generic lossless tier as PCM resolution.
+({int bitDepth, int sampleRate})? compactAudioResolution(String? quality) {
+  final input = quality?.trim() ?? '';
+  final match = RegExp(
+    r'(?<!\d)(16|24|32)\s*(?:-?\s*bits?)?\s*[/@]\s*'
+    r'(44\.1|48|88\.2|96|176\.4|192|352\.8|384)\s*(?:k(?:hz)?)?(?!\d)',
+    caseSensitive: false,
+  ).firstMatch(input);
+  if (match == null) return null;
+  return (
+    bitDepth: int.parse(match.group(1)!),
+    sampleRate: (double.parse(match.group(2)!) * 1000).round(),
+  );
+}
+
 /// Formats metadata advertised by a provider, not the decoded audio output.
 /// Never synthesizes 44.1/48/96 kHz for a bit-depth-only response.
 String catalogueQualityLabel(String? value) {
   final text = value?.trim() ?? '';
   if (text.isEmpty) return '';
+  if (compactAudioResolution(text) case final pair?) {
+    final rate = pair.sampleRate / 1000;
+    final khz = rate == rate.roundToDouble()
+        ? rate.toStringAsFixed(0) : rate.toStringAsFixed(1);
+    return '${pair.bitDepth}-bit / $khz kHz';
+  }
   final bits = RegExp(r'(?:^|[^0-9])(16|24|32)\s*-?\s*bits?', caseSensitive: false)
       .firstMatch(text)?.group(1);
   final khz = RegExp(
@@ -191,14 +214,15 @@ String catalogueAudioDetails({
   String fallbackFileType = 'ONLINE',
 }) {
   final advertised = quality?.trim();
-  final bits = bitDepth ??
+  final compact = compactAudioResolution(advertised);
+  final bits = bitDepth ?? compact?.bitDepth ??
       int.tryParse(RegExp(r'(?<!\d)(?:16|24|32)\s*-?\s*bits?', caseSensitive: false)
               .firstMatch(advertised ?? '')?.group(0)
               ?.replaceAll(RegExp(r'[^0-9]'), '') ?? '');
   final rawRate = RegExp(r'(?<![\d.])(\d{2,3}(?:\.\d+)?)\s*k(?:hz)?',
           caseSensitive: false)
       .firstMatch(advertised ?? '')?.group(1);
-  final hz = sampleRate ??
+  final hz = sampleRate ?? compact?.sampleRate ??
       (rawRate == null ? null : ((double.tryParse(rawRate) ?? 0) * 1000).round());
   final candidate = codec?.trim().toUpperCase() ?? '';
   const known = {'FLAC', 'ALAC', 'AAC', 'MP3', 'OPUS', 'VORBIS', 'WAV', 'AIFF', 'OGG'};
