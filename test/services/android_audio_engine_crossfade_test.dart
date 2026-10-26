@@ -57,6 +57,81 @@ void main() {
     });
   });
 
+  group('shouldPrepareCrossfade', () {
+    const duration = Duration(minutes: 3);
+
+    test('starts preparation eight seconds before the configured fade', () {
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration - const Duration(seconds: 11),
+          fadeSecs: 3,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration - const Duration(milliseconds: 11001),
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldArmCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration - const Duration(seconds: 11),
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+    });
+
+    test('does not prepare invalid, completed or disabled sources', () {
+      for (final enabled in [true, false]) {
+        expect(
+          shouldPrepareCrossfade(
+            enabled: enabled,
+            duration: Duration.zero,
+            position: Duration.zero,
+            fadeSecs: 3,
+          ),
+          isFalse,
+        );
+      }
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: const Duration(seconds: 2),
+          position: Duration.zero,
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration,
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldPrepareCrossfade(
+          enabled: false,
+          duration: duration,
+          position: duration - const Duration(seconds: 3),
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('shouldArmCrossfade', () {
     const dur = Duration(minutes: 3);
 
