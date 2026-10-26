@@ -30,7 +30,7 @@ abstract final class MonochromeSource {
     } on DiscoveryException catch (error) {
       // The public API intermittently responds with Cloudflare 5xx.
       // Avoid retrying auth failures, invalid JSON or missing tracks.
-      if (!RegExp(r'HTTP 5\\d\\d|rate limiting requests').hasMatch(error.message)) {
+      if (!RegExp(r'HTTP 5\d\d|rate limiting requests').hasMatch(error.message)) {
         rethrow;
       }
       await Future<void>.delayed(const Duration(milliseconds: 350));
