@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/services/android_audio_engine.dart';
+import 'package:flick/services/automix_analysis_cache.dart';
 
 void main() {
   group('crossfadeInVolume', () {
@@ -129,6 +130,30 @@ void main() {
         ),
         isFalse,
       );
+    });
+  });
+
+  group('cached AutoMix timing', () {
+    const length = Duration(minutes: 3);
+    AutoMixProfile profile(double audibleEnd, {double duration = 180}) =>
+        AutoMixProfile(
+          durationSeconds: duration, leadInSeconds: 0,
+          audibleEndSeconds: audibleEnd, fadeOutStartSeconds: audibleEnd - 4,
+          entrances: const [], exits: const [], energy: .6,
+        );
+
+    test('moves overlap ahead of substantial terminal digital silence', () {
+      expect(
+        automixEffectiveAudibleEnd(length, profile(173)),
+        const Duration(seconds: 173),
+      );
+    });
+
+    test('rejects uncertain or implausibly long trimming', () {
+      expect(automixEffectiveAudibleEnd(length, null), length);
+      expect(automixEffectiveAudibleEnd(length, profile(179)), length);
+      expect(automixEffectiveAudibleEnd(length, profile(150)), length);
+      expect(automixEffectiveAudibleEnd(length, profile(170, duration: 190)), length);
     });
   });
 
