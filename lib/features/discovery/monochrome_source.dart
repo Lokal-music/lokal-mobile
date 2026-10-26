@@ -46,8 +46,8 @@ abstract final class MonochromeSource {
       if (entry is! Map) continue;
       final id = (entry['trackId'] ?? entry['id'])?.toString() ?? '';
       final title = discoveryText(entry['title']);
-      if (!_trackId.hasMatch(id) || title == null || !seen.add(id) ||
-          entry['playable'] == false) continue;
+      if (!_trackId.hasMatch(id) || title == null ||
+          entry['playable'] == false || !seen.add(id)) continue;
 
       final names = entry['artistNames'];
       final artists = names is List
