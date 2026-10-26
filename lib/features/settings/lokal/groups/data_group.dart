@@ -94,17 +94,18 @@ List<LokalSettingsSection> dataSettings(
   LokalSettingsSection(
     title: LokalDataSections.accounts,
     children: [
+      // Keep Spotify sign-in and likes sync together as the first Data control.
+      LokalSettingCustom(
+        label: lokalText('Spotify'),
+        description: lokalText(
+          'Connect Spotify for Discovery, Canvas artwork and liked-song syncing.',
+        ),
+        child: const SpotifyAccountSettingsTile(),
+      ),
       LokalSettingCustom(
         label: lokalText('YouTube Music'),
         description: lokalText('Sign in to load your mixes, likes and history'),
         child: YoutubeMusicSettingsTile(),
-      ),
-      LokalSettingCustom(
-        label: lokalText('Spotify'),
-        description: lokalText(
-          'Sync new Spotify liked songs into your library Favorites.',
-        ),
-        child: const SpotifyAccountSettingsTile(showCookie: false),
       ),
       LokalSettingCustom(
         label: lokalText('Discord Rich Presence'),
