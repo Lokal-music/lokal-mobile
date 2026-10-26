@@ -8,6 +8,12 @@ import 'package:flick/providers/player_provider.dart';
 
 export 'music_video_surface.dart' show musicVideoEmbedHtml;
 
+/// Video from a nested Videos tab must cover the app shell/mini-player, rather
+/// than being inserted under its persistent playback footer.
+@visibleForTesting
+NavigatorState musicVideoRouteNavigator(BuildContext context) =>
+    Navigator.of(context, rootNavigator: true);
+
 /// Music Videos and song actions route into full player, not a separate
 /// browsing page. Never play song audio beside YouTube's own video audio.
 Future<void> openMusicVideo(
@@ -27,7 +33,7 @@ Future<void> openMusicVideo(
   // Video is a full-screen player route, not a child of the current
   // Videos tab Navigator. Pushing on the root ensures the shell's persistent
   // mini-player/footer cannot remain *inside* the video player.
-  await Navigator.of(context, rootNavigator: true).push<void>(
+  await musicVideoRouteNavigator(context).push<void>(
     MaterialPageRoute(
       builder: (_) => FullPlayerScreen(
         heroTag: 'music-video:${song.id}',
