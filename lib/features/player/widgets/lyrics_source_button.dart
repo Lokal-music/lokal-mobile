@@ -142,7 +142,7 @@ class LyricsSourceButton extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (LyricsService.sourceHitFor(song, source.key)?.status == 'hit')
-                        const Icon(Icons.check_circle_rounded,
+                        Icon(Icons.check_circle_rounded,
                             color: t.accent, size: 18),
                       if (LyricsService.sourceHitFor(song, source.key)?.status == 'checking')
                         const SizedBox.square(
