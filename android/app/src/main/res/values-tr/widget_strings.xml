@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_mini_player_name">Lokal · Şu An Çalıyor</string>
+    <string name="widget_mini_player_desc">Her boyuta uyarlanan tek oynatıcı: kapak görseli, parça bilgileri ve denetimler</string>
+    <string name="widget_nothing_playing">Şu anda şarkı çalmıyor</string>
+    <string name="widget_tap_to_open">Lokal uygulamasını açmak için dokun</string>
+    <string name="widget_open_app">Lokal uygulamasını aç</string>
+    <string name="widget_play_pause">Oynat / duraklat</string>
+    <string name="widget_next">Sonraki şarkı</string>
+    <string name="widget_previous">Önceki şarkı</string>
+    <string name="widget_shuffle">Karıştırmayı aç veya kapat</string>
+    <string name="widget_repeat">Tekrarlamayı aç veya kapat</string>
+    <string name="widget_queue">Çalma sırası</string>
+    <string name="widget_flagship_name">Lokal · Şu An Çalıyor kapağı</string>
+    <string name="widget_flagship_desc">Albüm kapağı ve denetimleriyle tam oynatıcı</string>
+    <string name="widget_compact_name">Lokal · Kare oynatıcı</string>
+    <string name="widget_compact_desc">Şarkı adı, sanatçı ve oynatma denetimleri</string>
+    <string name="widget_flow_radio_name">Lokal · Flow ve Radyo</string>
+    <string name="widget_flow_radio_desc">Çalma durumuyla birlikte kişisel Flow, yeni karışımlar ve şarkı radyosu</string>
+    <string name="widget_recommended_flow_name">Lokal · Cover Flow</string>
+    <string name="widget_recommended_flow_desc">Üç kapak görseliyle önerilen şarkılara göz at ve çal</string>
+    <string name="widget_flow_heading">FLOW VE RADYO</string>
+    <string name="widget_flow_heading_small">FLOW</string>
+    <string name="widget_flow_title">Senin Flow\'un</string>
+    <string name="widget_flow_status">Senin için seçilen müzikler</string>
+    <string name="widget_flow_status_small">Senin için seçildi</string>
+    <string name="widget_flow_status_empty">Senin için hazırlanan bir karışımı çal</string>
+    <string name="widget_action_play">Oynat</string>
+    <string name="widget_action_mix">Karışım</string>
+    <string name="widget_action_radio">Radyo</string>
+    <string name="widget_cover_flow_heading">COVER FLOW</string>
+    <string name="widget_cover_flow_next_favourite">Yeni favorin</string>
+    <string name="widget_cover_flow_description">Lokal ile yeni müzikler keşfet</string>
+    <string name="widget_cover_flow_recommended">Önerilen şarkı</string>
+    <string name="widget_cover_flow_from_listening">Dinlemelerine göre seçildi</string>
+    <string name="widget_cover_flow_empty_description">Önerilerini oluşturmak için Lokal\'de müzik dinle</string>
+    <string name="widget_cover_flow_play_pick">Seçileni çal</string>
+</resources>
