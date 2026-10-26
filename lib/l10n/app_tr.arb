@@ -996,19 +996,19 @@
   "@bitPerfectCapsule": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:366"
   },
-  "bitPerfectDapInternal": "Bit-perfect (DAP Internal)",
+  "bitPerfectDapInternal": "Bit-perfect (DAP dahili)",
   "@bitPerfectDapInternal": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:459"
   },
-  "bitPerfectDapInternalDisabledSoftware": "Bit-perfect (DAP Internal) disabled — software effects active.",
+  "bitPerfectDapInternalDisabledSoftware": "Bit-perfect (DAP dahili) kapalı — yazılım efektleri etkin.",
   "@bitPerfectDapInternalDisabledSoftware": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:474"
   },
-  "bitPerfectDapInternalEnabledAll": "Bit-perfect (DAP Internal) enabled — all DSP bypassed.",
+  "bitPerfectDapInternalEnabledAll": "Bit-perfect (DAP dahili) açık — tüm DSP işlemleri atlanıyor.",
   "@bitPerfectDapInternalEnabledAll": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:473"
   },
-  "bitPerfectEnabledParametricEqIs": "Bit-perfect enabled — parametric EQ is bypassed on the direct USB path. Restart the app to apply playback changes.",
+  "bitPerfectEnabledParametricEqIs": "Bit-perfect açık — doğrudan USB yolunda parametrik EQ devre dışı. Oynatma değişikliklerini uygulamak için uygulamayı yeniden başlat.",
   "@bitPerfectEnabledParametricEqIs": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:437"
   },
@@ -1016,11 +1016,11 @@
   "@bitPerfectUsbDac": {
     "description": "lib/features/menu/screens/menu_screen.dart:512"
   },
-  "bitPerfectUsbDacCouldNot": "Bit-perfect (USB DAC) could not be enabled. Check the USB diagnostics for the failure reason.",
+  "bitPerfectUsbDacCouldNot": "Bit-perfect (USB DAC) etkinleştirilemedi. Nedeni için USB tanılamasını kontrol et.",
   "@bitPerfectUsbDacCouldNot": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:426"
   },
-  "bitPerfectUsbDacCouldNot2": "Bit-perfect (USB DAC) could not be enabled for {arg1}. Check the USB diagnostics.",
+  "bitPerfectUsbDacCouldNot2": "{arg1} için bit-perfect (USB DAC) etkinleştirilemedi. USB tanılamasını kontrol et.",
   "@bitPerfectUsbDacCouldNot2": {
     "description": "lib/widgets/uac2/usb_bit_perfect_prompt.dart:274",
     "placeholders": {
@@ -1029,7 +1029,7 @@
       }
     }
   },
-  "bitPerfectUsbDacEnabledFor": "Bit-perfect (USB DAC) enabled for {arg1}.",
+  "bitPerfectUsbDacEnabledFor": "{arg1} için bit-perfect (USB DAC) etkin.",
   "@bitPerfectUsbDacEnabledFor": {
     "description": "lib/widgets/uac2/usb_bit_perfect_prompt.dart:273",
     "placeholders": {
@@ -1038,27 +1038,27 @@
       }
     }
   },
-  "bitPerfectVerified": "Bit-perfect verified",
+  "bitPerfectVerified": "Bit-perfect doğrulandı",
   "@bitPerfectVerified": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:490"
   },
-  "bitSubslotsLlRrPer": "16-bit subslots: LL|RR per frame",
+  "bitSubslotsLlRrPer": "16 bit alt yuvalar: kare başına LL|RR",
   "@bitSubslotsLlRrPer": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1768"
   },
-  "bitSubslotsLlllRrrrPer": "32-bit subslots: LLLL|RRRR per frame (legacy)",
+  "bitSubslotsLlllRrrrPer": "32 bit alt yuvalar: kare başına LLLL|RRRR (eski yöntem)",
   "@bitSubslotsLlllRrrrPer": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1763"
   },
-  "bitrateAdjustsToSignalQuality": "Bitrate adjusts to signal quality",
+  "bitrateAdjustsToSignalQuality": "Bit hızı sinyal kalitesine göre ayarlanır",
   "@bitrateAdjustsToSignalQuality": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:503"
   },
-  "blocked": "Blocked",
+  "blocked": "Engellendi",
   "@blocked": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:683"
   },
-  "blue": "Blue",
+  "blue": "Mavi",
   "@blue": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:283"
   },
@@ -1066,51 +1066,51 @@
   "@bluetooth": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:225"
   },
-  "bluetoothCodecInfo": "Bluetooth codec info",
+  "bluetoothCodecInfo": "Bluetooth kodek bilgileri",
   "@bluetoothCodecInfo": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:558"
   },
-  "bluetoothOutput": "Bluetooth output",
+  "bluetoothOutput": "Bluetooth ses çıkışı",
   "@bluetoothOutput": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:929"
   },
-  "boldSaturatedColorsFromAlbumArt": "Bold, saturated colors from album art.",
+  "boldSaturatedColorsFromAlbumArt": "Albüm kapağından canlı ve doygun renkler.",
   "@boldSaturatedColorsFromAlbumArt": {
     "description": "lib/models/album_color_mode.dart:39"
   },
-  "border": "Border",
+  "border": "Kenarlık",
   "@border": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:208"
   },
-  "bothBitPerfectOptionsAreOff": "Both bit-perfect options are off on this DAP, so the standard engine is unavailable. You can still use Rust via Oboe or Isochronous USB.",
+  "bothBitPerfectOptionsAreOff": "Bu DAP'te her iki bit-perfect seçeneği de kapalı olduğundan standart motor kullanılamıyor. Rust üzerinden Oboe veya eşzamanlı USB'yi yine de kullanabilirsin.",
   "@bothBitPerfectOptionsAreOff": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:873"
   },
-  "bottom": "Bottom",
+  "bottom": "Alt",
   "@bottom": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:628"
   },
-  "bouncy": "Bouncy",
+  "bouncy": "Esnek",
   "@bouncy": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:169"
   },
-  "browseByArtworkOpenAnyAlbum": "Browse by artwork, open any album, and jump straight into the tracklist.",
+  "browseByArtworkOpenAnyAlbum": "Kapaklara göz at, istediğin albümü aç ve doğrudan şarkı listesine geç.",
   "@browseByArtworkOpenAnyAlbum": {
     "description": "lib/features/albums/screens/albums_screen.dart:348"
   },
-  "browseYourArtistLibrary": "Browse your artist library",
+  "browseYourArtistLibrary": "Sanatçı kitaplığına göz at",
   "@browseYourArtistLibrary": {
     "description": "lib/features/menu/screens/menu_screen.dart:1438"
   },
-  "browseYourArtistsExploreTheirDiscographies": "Browse your artists, explore their discographies, and play their tracks.",
+  "browseYourArtistsExploreTheirDiscographies": "Sanatçılarına göz at, diskografilerini keşfet ve şarkılarını çal.",
   "@browseYourArtistsExploreTheirDiscographies": {
     "description": "lib/features/artists/screens/artists_screen.dart:378"
   },
-  "buffer": "Buffer",
+  "buffer": "Arabellek",
   "@buffer": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:1024"
   },
-  "build": "{kAppVersion} (build {kAppBuild})",
+  "build": "{kAppVersion} (derleme {kAppBuild})",
   "@build": {
     "description": "lib/core/constants/app_constants.dart:6",
     "placeholders": {
@@ -1122,15 +1122,15 @@
       }
     }
   },
-  "buildingYourMusicHome": "Building your music home",
+  "buildingYourMusicHome": "Müzik ana sayfan hazırlanıyor",
   "@buildingYourMusicHome": {
     "description": "lib/features/menu/screens/menu_screen.dart:2252"
   },
-  "builtIn": "Built-in",
+  "builtIn": "Yerleşik",
   "@builtIn": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:766"
   },
-  "by": "\"{arg1}\" by {arg2}",
+  "by": "{arg2} sanatçısından \"{arg1}\"",
   "@by": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:726",
     "placeholders": {
@@ -1142,31 +1142,31 @@
       }
     }
   },
-  "bypassAllDspEqDynamicsCrossfade": "Bypass all DSP (EQ, dynamics, crossfade, speed) on the native DAP internal high-res path. Disable to use software effects. Turning off Bit-perfect (USB DAC) also disables this.",
+  "bypassAllDspEqDynamicsCrossfade": "Yerel DAP'in dahili yüksek çözünürlüklü yolunda tüm DSP işlemlerini (EQ, dinamikler, çapraz geçiş, hız) atla. Yazılım efektlerini kullanmak için devre dışı bırak. Bit-perfect (USB DAC) kapatılırsa bu da kapanır.",
   "@bypassAllDspEqDynamicsCrossfade": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:461"
   },
-  "byteInterleavedLrlrStream": "Byte-interleaved: LRLR stream",
+  "byteInterleavedLrlrStream": "Bayt iç içe geçirmeli: LRLR akışı",
   "@byteInterleavedLrlrStream": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1773"
   },
-  "calmFrequencies": "Calm Frequencies",
+  "calmFrequencies": "Sakin Frekanslar",
   "@calmFrequencies": {
     "description": "lib/models/song.dart:313"
   },
-  "camera": "Camera",
+  "camera": "Kamera",
   "@camera": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:404"
   },
-  "cameraAccessIsNeededYouCan": "Camera access is needed. You can enable it in Android settings.",
+  "cameraAccessIsNeededYouCan": "Kamera erişimi gerekli. Android ayarlarından izin verebilirsin.",
   "@cameraAccessIsNeededYouCan": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:146"
   },
-  "cancel": "Cancel",
+  "cancel": "İptal",
   "@cancel": {
     "description": "lib/features/player/widgets/online_lyrics_search_sheet.dart:1150"
   },
-  "capMs": "cap {arg1} ms",
+  "capMs": "sınır {arg1} ms",
   "@capMs": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:1027",
     "placeholders": {
@@ -1175,31 +1175,31 @@
       }
     }
   },
-  "capabilities": "Capabilities",
+  "capabilities": "Yetenekler",
   "@capabilities": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:82"
   },
-  "capabilitiesNotAvailable": "Capabilities not available",
+  "capabilitiesNotAvailable": "Yetenek bilgileri yok",
   "@capabilitiesNotAvailable": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:529"
   },
-  "capabilityState": "Capability State",
+  "capabilityState": "Yetenek durumu",
   "@capabilityState": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:625"
   },
-  "cast": "Cast",
+  "cast": "Cihaza yayınla",
   "@cast": {
     "description": "lib/features/player/widgets/player_action_button_row.dart:843"
   },
-  "casting": "Casting",
+  "casting": "Yayınlanıyor",
   "@casting": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:66"
   },
-  "castingTapToManage": "Casting — tap to manage",
+  "castingTapToManage": "Yayınlanıyor — yönetmek için dokun",
   "@castingTapToManage": {
     "description": "lib/features/player/widgets/player_action_button_row.dart:843"
   },
-  "castingTo": "Casting to {deviceName}",
+  "castingTo": "{deviceName} cihazına yayınlanıyor",
   "@castingTo": {
     "description": "Snack bar shown after starting a cast session.",
     "placeholders": {
@@ -1208,7 +1208,7 @@
       }
     }
   },
-  "castingTo2": "Casting to {arg1}",
+  "castingTo2": "{arg1} cihazına yayınlanıyor",
   "@castingTo2": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:54",
     "placeholders": {
@@ -1217,23 +1217,23 @@
       }
     }
   },
-  "categories": "Categories",
+  "categories": "Kategoriler",
   "@categories": {
     "description": "lib/models/shuffle_mode.dart:14"
   },
-  "ceiling": "Ceiling",
+  "ceiling": "Üst sınır",
   "@ceiling": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3420"
   },
-  "center": "Center",
+  "center": "Orta",
   "@center": {
     "description": "lib/features/settings/screens/lyrics_settings_screen.dart:68"
   },
-  "centeredWidensToFitYourControls": "Centered; widens to fit your controls",
+  "centeredWidensToFitYourControls": "Ortalanmış; denetimlerine uyacak şekilde genişler",
   "@centeredWidensToFitYourControls": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:91"
   },
-  "ch": "{channels} ch",
+  "ch": "{channels} kn",
   "@ch": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:621",
     "placeholders": {
@@ -1242,7 +1242,7 @@
       }
     }
   },
-  "ch2": "{ch} ch",
+  "ch2": "{ch} kn",
   "@ch2": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:932",
     "placeholders": {
@@ -1251,7 +1251,7 @@
       }
     }
   },
-  "ch3": "{arg1} / {arg2}ch",
+  "ch3": "{arg1} / {arg2} kn",
   "@ch3": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:273",
     "placeholders": {
@@ -1263,15 +1263,15 @@
       }
     }
   },
-  "changingSampleRateBitDepthOr": "Changing sample rate, bit depth, or channel handling can resample songs and may affect playback quality, pitch, speed, or stability on some devices.",
+  "changingSampleRateBitDepthOr": "Örnekleme hızını, bit derinliğini veya kanal işlenişini değiştirmek şarkıların yeniden örneklenmesine yol açabilir; bazı cihazlarda oynatma kalitesini, ses perdesini, hızı ya da kararlılığı etkileyebilir.",
   "@changingSampleRateBitDepthOr": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1234"
   },
-  "channels": "Channels",
+  "channels": "Kanallar",
   "@channels": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:620"
   },
-  "channels2": "{arg1} channels",
+  "channels2": "{arg1} kanal",
   "@channels2": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:660",
     "placeholders": {
@@ -1280,7 +1280,7 @@
       }
     }
   },
-  "channels3": "{ch} channels",
+  "channels3": "{ch} kanal",
   "@channels3": {
     "description": "lib/widgets/uac2/uac2_stream_config.dart:185",
     "placeholders": {
@@ -1289,27 +1289,27 @@
       }
     }
   },
-  "checkTheVersionsYouWantTo": "Check the versions you want to keep — unchecked ones will be removed from your library. At least one must stay.",
+  "checkTheVersionsYouWantTo": "Tutmak istediğin sürümleri seç. Seçilmeyenler kitaplığından kaldırılacak. En az bir sürüm kalmalı.",
   "@checkTheVersionsYouWantTo": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:1265"
   },
-  "checkVersionsToKeepUncheckedWill": "Check versions to keep — unchecked will be removed",
+  "checkVersionsToKeepUncheckedWill": "Saklanacak sürümleri işaretle; diğerleri kaldırılacak",
   "@checkVersionsToKeepUncheckedWill": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:321"
   },
-  "chooseAction": "Choose Action",
+  "chooseAction": "İşlem seç",
   "@chooseAction": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:968"
   },
-  "chooseAudioEngine": "Choose Audio Engine",
+  "chooseAudioEngine": "Ses motorunu seç",
   "@chooseAudioEngine": {
     "description": "lib/features/menu/screens/menu_screen.dart:464"
   },
-  "chooseLocationU2026": "Choose location…",
+  "chooseLocationU2026": "Konum seç…",
   "@chooseLocationU2026": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:494"
   },
-  "chooseWhichToKeep": "Choose which to keep",
+  "chooseWhichToKeep": "Hangisinin saklanacağını seç",
   "@chooseWhichToKeep": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:1178"
   },
@@ -1317,63 +1317,63 @@
   "@chromecast": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:46"
   },
-  "circularDotsRadiusFollowsAmplitude": "Circular dots — radius follows amplitude",
+  "circularDotsRadiusFollowsAmplitude": "Dairesel noktalar — yarıçap genliği izler",
   "@circularDotsRadiusFollowsAmplitude": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:112"
   },
-  "cityBeats": "City Beats",
+  "cityBeats": "Şehir Ritimleri",
   "@cityBeats": {
     "description": "lib/models/song.dart:331"
   },
-  "claimedByFlick": "Claimed by Lokal",
+  "claimedByFlick": "Lokal tarafından sahiplenildi",
   "@claimedByFlick": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:703"
   },
-  "cleanStraightLineWithPrecisionScrubbing": "Clean straight line with precision scrubbing.",
+  "cleanStraightLineWithPrecisionScrubbing": "Hassas konumlandırma sağlayan, sade ve düz bir çizgi.",
   "@cleanStraightLineWithPrecisionScrubbing": {
     "description": "lib/models/progress_bar_style.dart:27"
   },
-  "clear": "Clear",
+  "clear": "Temizle",
   "@clear": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1214"
   },
-  "clearAll": "Clear All",
+  "clearAll": "Tümünü temizle",
   "@clearAll": {
     "description": "lib/features/queue/screens/queue_screen.dart:434"
   },
-  "clearAllUac2Settings": "Clear all UAC2 settings",
+  "clearAllUac2Settings": "Tüm UAC2 ayarlarını temizle",
   "@clearAllUac2Settings": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:558"
   },
-  "clearFilters": "Clear filters",
+  "clearFilters": "Filtreleri temizle",
   "@clearFilters": {
     "description": "lib/features/player/widgets/online_lyrics_search_sheet.dart:807"
   },
-  "clearHistory": "Clear History",
+  "clearHistory": "Geçmişi temizle",
   "@clearHistory": {
     "description": "lib/features/recently_played/screens/recently_played_screen.dart:196"
   },
-  "clearLogs": "Clear logs?",
+  "clearLogs": "Günlükler temizlensin mi?",
   "@clearLogs": {
     "description": "lib/features/settings/screens/logs_screen.dart:230"
   },
-  "clearWord": "Clear Word",
+  "clearWord": "Sözcüğü temizle",
   "@clearWord": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1594"
   },
-  "clearWords": "Clear Words",
+  "clearWords": "Sözcükleri temizle",
   "@clearWords": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1418"
   },
-  "close": "Close",
+  "close": "Kapat",
   "@close": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:224"
   },
-  "closePreview": "Close preview",
+  "closePreview": "Önizlemeyi kapat",
   "@closePreview": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:473"
   },
-  "codecApplied": "Codec applied: {arg1}",
+  "codecApplied": "Kodek uygulandı: {arg1}",
   "@codecApplied": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:144",
     "placeholders": {
@@ -1382,99 +1382,99 @@
       }
     }
   },
-  "codecControl": "Codec Control",
+  "codecControl": "Kodek denetimi",
   "@codecControl": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:341"
   },
-  "codecForcingUnavailableOnThisDevice": "Codec forcing unavailable on this device — set it via Developer Options → Bluetooth Audio Codec.",
+  "codecForcingUnavailableOnThisDevice": "Bu cihazda kodek zorlaması kullanılamıyor — Geliştirici Seçenekleri → Bluetooth Ses Kodeği bölümünden ayarla.",
   "@codecForcingUnavailableOnThisDevice": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:152"
   },
-  "codecInfo": "Codec Info",
+  "codecInfo": "Kodek bilgisi",
   "@codecInfo": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:444"
   },
-  "codecU0026Audio": "Codec & Audio",
+  "codecU0026Audio": "Kodek ve ses",
   "@codecU0026Audio": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:336"
   },
-  "collapsed": "Collapsed",
+  "collapsed": "Daraltılmış",
   "@collapsed": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:334"
   },
-  "collection": "Collection",
+  "collection": "Koleksiyon",
   "@collection": {
     "description": "lib/features/albums/screens/albums_screen.dart:490"
   },
-  "color": "Color",
+  "color": "Renk",
   "@color": {
     "description": "lib/features/player/widgets/share/share_template.dart:9"
   },
-  "comingSoon": "Coming Soon",
+  "comingSoon": "Yakında",
   "@comingSoon": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1664"
   },
-  "compatibility": "Compatibility",
+  "compatibility": "Uyumluluk",
   "@compatibility": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1213"
   },
-  "compatibleWithPowerampEq": "Compatible with Poweramp EQ",
+  "compatibleWithPowerampEq": "Poweramp EQ ile uyumlu",
   "@compatibleWithPowerampEq": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:668"
   },
-  "compressor": "Compressor",
+  "compressor": "Kompresör",
   "@compressor": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3303"
   },
-  "compressorOff": "Compressor off",
+  "compressorOff": "Kompresör kapalı",
   "@compressorOff": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3263"
   },
-  "compressorOn": "Compressor on",
+  "compressorOn": "Kompresör açık",
   "@compressorOn": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3263"
   },
-  "connect": "Connect",
+  "connect": "Bağlan",
   "@connect": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:785"
   },
-  "connectAMusicServer": "Connect a music server",
+  "connectAMusicServer": "Müzik sunucusuna bağlan",
   "@connectAMusicServer": {
     "description": "lib/features/settings/screens/network_sources_screen.dart:155"
   },
-  "connectASubsonicJellyfinWebdavUpnp": "Connect a Subsonic, Jellyfin, WebDAV, UPnP, or Tidal server to stream your remote library.",
+  "connectASubsonicJellyfinWebdavUpnp": "Uzaktaki müzik kitaplığını dinlemek için Subsonic, Jellyfin, WebDAV, UPnP veya Tidal sunucusuna bağlan.",
   "@connectASubsonicJellyfinWebdavUpnp": {
     "description": "lib/features/settings/screens/network_sources_screen.dart:199"
   },
-  "connectAUsbDacOrAudio": "Connect a USB DAC or audio interface",
+  "connectAUsbDacOrAudio": "USB DAC veya ses arabirimi bağla",
   "@connectAUsbDacOrAudio": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:296"
   },
-  "connectListenbrainz": "Connect ListenBrainz",
+  "connectListenbrainz": "ListenBrainz'e bağlan",
   "@connectListenbrainz": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:651"
   },
-  "connectToScrobbleYourListeningHistory": "Connect to scrobble your listening history",
+  "connectToScrobbleYourListeningHistory": "Dinleme geçmişini scrobble etmek için bağlan",
   "@connectToScrobbleYourListeningHistory": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:979"
   },
-  "connectToScrobbleYourMusic": "Connect to scrobble your music",
+  "connectToScrobbleYourMusic": "Müzik dinlemelerini scrobble etmek için bağlan",
   "@connectToScrobbleYourMusic": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:356"
   },
-  "connectToSubmitYourListeningHistory": "Connect to submit your listening history",
+  "connectToSubmitYourListeningHistory": "Dinleme geçmişini göndermek için bağlan",
   "@connectToSubmitYourListeningHistory": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:481"
   },
-  "connected": "Connected",
+  "connected": "Bağlandı",
   "@connected": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:110"
   },
-  "connectedAccount": "Connected Account",
+  "connectedAccount": "Bağlı hesap",
   "@connectedAccount": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:888"
   },
-  "connectedAs": "Connected as {username}",
+  "connectedAs": "{username} olarak bağlandı",
   "@connectedAs": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:770",
     "placeholders": {
@@ -1483,35 +1483,35 @@
       }
     }
   },
-  "connecting": "Connecting",
+  "connecting": "Bağlanıyor",
   "@connecting": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:901"
   },
-  "connection": "Connection",
+  "connection": "Bağlantı",
   "@connection": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:428"
   },
-  "connectionBehavior": "Connection Behavior",
+  "connectionBehavior": "Bağlantı davranışı",
   "@connectionBehavior": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:244"
   },
-  "connectionFailedRetry": "Connection Failed — Retry",
+  "connectionFailedRetry": "Bağlantı başarısız — yeniden dene",
   "@connectionFailedRetry": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:355"
   },
-  "connectionManagement": "Connection Management",
+  "connectionManagement": "Bağlantı yönetimi",
   "@connectionManagement": {
     "description": "lib/widgets/uac2/uac2_connection_manager.dart:140"
   },
-  "connectionOk": "Connection OK",
+  "connectionOk": "Bağlantı başarılı",
   "@connectionOk": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:353"
   },
-  "connectionStatus": "Connection Status",
+  "connectionStatus": "Bağlantı durumu",
   "@connectionStatus": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:607"
   },
-  "containsValuesOutsideTheSupportedRanges": "\"{presetName}\" contains values outside the supported ranges; these were adjusted:",
+  "containsValuesOutsideTheSupportedRanges": "\"{presetName}\" desteklenen aralıkların dışında değerler içeriyor; bunlar düzeltildi:",
   "@containsValuesOutsideTheSupportedRanges": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:585",
     "placeholders": {
@@ -1520,27 +1520,27 @@
       }
     }
   },
-  "content": "Content",
+  "content": "İçerik",
   "@content": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:195"
   },
-  "contentControls": "Content & Controls",
+  "contentControls": "İçerik ve denetimler",
   "@contentControls": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:148"
   },
-  "contentPlacement": "Content placement",
+  "contentPlacement": "İçerik yerleşimi",
   "@contentPlacement": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:228"
   },
-  "contentPlacement2": "Content Placement",
+  "contentPlacement2": "İçerik yerleşimi",
   "@contentPlacement2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:271"
   },
-  "continueLabel": "Continue",
+  "continueLabel": "Devam et",
   "@continueLabel": {
     "description": "lib/features/milestone/widgets/streak_popup.dart:265"
   },
-  "conversionFailed": "Conversion failed: {error}",
+  "conversionFailed": "Dönüştürme başarısız: {error}",
   "@conversionFailed": {
     "description": "lib/widgets/alac_conversion_indicator.dart:249",
     "placeholders": {
@@ -1549,7 +1549,7 @@
       }
     }
   },
-  "convertedSuccessfully": "{fileName} converted successfully",
+  "convertedSuccessfully": "{fileName} başarıyla dönüştürüldü",
   "@convertedSuccessfully": {
     "description": "lib/widgets/alac_conversion_indicator.dart:233",
     "placeholders": {
@@ -1558,11 +1558,11 @@
       }
     }
   },
-  "convertingAudio": "Converting audio...",
+  "convertingAudio": "Ses dönüştürülüyor…",
   "@convertingAudio": {
     "description": "lib/widgets/alac_conversion_indicator.dart:39"
   },
-  "convertingToWav": "Converting {fileName} to WAV...",
+  "convertingToWav": "{fileName} WAV biçimine dönüştürülüyor…",
   "@convertingToWav": {
     "description": "lib/widgets/alac_conversion_indicator.dart:218",
     "placeholders": {
@@ -1571,11 +1571,11 @@
       }
     }
   },
-  "convolverImpulseResponse": "Convolver / Impulse Response",
+  "convolverImpulseResponse": "Convolver / Darbe yanıtı",
   "@convolverImpulseResponse": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3747"
   },
-  "copies": "{arg1} • {arg2} copies",
+  "copies": "{arg1} • {arg2} kopya",
   "@copies": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:1077",
     "placeholders": {
@@ -1587,51 +1587,51 @@
       }
     }
   },
-  "copy": "Copy",
+  "copy": "Kopyala",
   "@copy": {
     "description": "lib/features/settings/screens/logs_screen.dart:180"
   },
-  "copyLink": "Copy link",
+  "copyLink": "Bağlantıyı kopyala",
   "@copyLink": {
     "description": "lib/features/settings/screens/logs_screen.dart:299"
   },
-  "copyYourUserTokenFromListenbrainz": "Copy your user token from ListenBrainz settings and paste it below.",
+  "copyYourUserTokenFromListenbrainz": "ListenBrainz ayarlarından kullanıcı belirtecini kopyalayıp aşağıya yapıştır.",
   "@copyYourUserTokenFromListenbrainz": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:662"
   },
-  "copyright": "Copyright",
+  "copyright": "Telif hakkı",
   "@copyright": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:698"
   },
-  "cornerRadius": "Corner Radius",
+  "cornerRadius": "Köşe yuvarlaklığı",
   "@cornerRadius": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:136"
   },
-  "cosmicOrchestra": "Cosmic Orchestra",
+  "cosmicOrchestra": "Kozmik Orkestra",
   "@cosmicOrchestra": {
     "description": "lib/models/song.dart:322"
   },
-  "couldNotConnectToLastFm": "Could not connect to Last.fm. Check your API credentials and try again.",
+  "couldNotConnectToLastFm": "Last.fm'e bağlanılamadı. API kimlik bilgilerini kontrol edip tekrar dene.",
   "@couldNotConnectToLastFm": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:81"
   },
-  "couldNotConnectToListenbrainzCheck": "Could not connect to ListenBrainz. Check your token and try again.",
+  "couldNotConnectToListenbrainzCheck": "ListenBrainz'e bağlanılamadı. Belirtecini kontrol edip tekrar dene.",
   "@couldNotConnectToListenbrainzCheck": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:609"
   },
-  "couldNotLoadAlbumSongs": "Could not load album songs",
+  "couldNotLoadAlbumSongs": "Albüm şarkıları yüklenemedi",
   "@couldNotLoadAlbumSongs": {
     "description": "lib/features/player/widgets/player_navigation.dart:85"
   },
-  "couldNotCreateThePosterImage": "Could not create the poster image.",
+  "couldNotCreateThePosterImage": "Afiş görseli oluşturulamadı.",
   "@couldNotCreateThePosterImage": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:228"
   },
-  "couldNotLoadArtistSongs": "Could not load artist songs",
+  "couldNotLoadArtistSongs": "Sanatçı şarkıları yüklenemedi",
   "@couldNotLoadArtistSongs": {
     "description": "lib/features/player/widgets/player_navigation.dart:56"
   },
-  "couldNotLoadIr": "Could not load IR: {e}",
+  "couldNotLoadIr": "Darbe yanıtı yüklenemedi: {e}",
   "@couldNotLoadIr": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3723",
     "placeholders": {
@@ -1640,19 +1640,19 @@
       }
     }
   },
-  "couldNotLoadSession": "Could not load session",
+  "couldNotLoadSession": "Oturum yüklenemedi",
   "@couldNotLoadSession": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:755"
   },
-  "couldNotOpenBrowser": "Could not open browser.",
+  "couldNotOpenBrowser": "Tarayıcı açılamadı.",
   "@couldNotOpenBrowser": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:683"
   },
-  "couldNotOpenKoFiPlease": "Could not open Ko-fi. Please try again.",
+  "couldNotOpenKoFiPlease": "Ko-fi açılamadı. Lütfen tekrar dene.",
   "@couldNotOpenKoFiPlease": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:796"
   },
-  "couldNotOpenLink2": "Could not open link: {e}",
+  "couldNotOpenLink2": "Bağlantı açılamadı: {e}",
   "@couldNotOpenLink2": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:692",
     "placeholders": {
@@ -1661,15 +1661,15 @@
       }
     }
   },
-  "couldNotOpenThatPhotoTry": "Could not open that photo. Try another image.",
+  "couldNotOpenThatPhotoTry": "Bu fotoğraf açılamadı. Başka bir görsel dene.",
   "@couldNotOpenThatPhotoTry": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:170"
   },
-  "couldNotOpenThePlayStore": "Could not open the Play Store.",
+  "couldNotOpenThePlayStore": "Play Store açılamadı.",
   "@couldNotOpenThePlayStore": {
     "description": "lib/features/menu/screens/menu_screen.dart:229"
   },
-  "couldNotOpenThePlayStore2": "Could not open the Play Store: {error}",
+  "couldNotOpenThePlayStore2": "Play Store açılamadı: {error}",
   "@couldNotOpenThePlayStore2": {
     "description": "lib/features/menu/screens/menu_screen.dart:237",
     "placeholders": {
@@ -1678,43 +1678,43 @@
       }
     }
   },
-  "couldNotReadTheCoverColors": "Could not read the cover colors. Signal is still available.",
+  "couldNotReadTheCoverColors": "Kapak renkleri okunamadı. Ses sinyali kullanılabilir durumda.",
   "@couldNotReadTheCoverColors": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:103"
   },
-  "couldNotReadTheSelectedLyrics": "Could not read the selected lyrics file.",
+  "couldNotReadTheSelectedLyrics": "Seçilen şarkı sözü dosyası okunamadı.",
   "@couldNotReadTheSelectedLyrics": {
     "description": "lib/features/player/widgets/inline_lyrics_panel.dart:129"
   },
-  "couldNotSaveTheLyricsFile": "Could not save the lyrics file.",
+  "couldNotSaveTheLyricsFile": "Şarkı sözü dosyası kaydedilemedi.",
   "@couldNotSaveTheLyricsFile": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:565"
   },
-  "couldNotSaveYourRecapPlease": "Could not save your recap. Please try again.",
+  "couldNotSaveYourRecapPlease": "Yıl özetin kaydedilemedi. Lütfen tekrar dene.",
   "@couldNotSaveYourRecapPlease": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:259"
   },
-  "couldNotUseTheSelectedLyrics": "Could not use the selected lyrics file.",
+  "couldNotUseTheSelectedLyrics": "Seçilen şarkı sözü dosyası kullanılamadı.",
   "@couldNotUseTheSelectedLyrics": {
     "description": "lib/features/player/widgets/inline_lyrics_panel.dart:142"
   },
-  "couldnTOpenTheBrowserAutomatically": "Couldn't open the browser automatically. Authorize on any device with this link — we'll finish signing in once you do:",
+  "couldnTOpenTheBrowserAutomatically": "Tarayıcı otomatik açılamadı. Bu bağlantıyla herhangi bir cihazdan yetki ver; ardından oturum açma işlemini tamamlayacağız:",
   "@couldnTOpenTheBrowserAutomatically": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:589"
   },
-  "countingFiles": "Counting files…",
+  "countingFiles": "Dosyalar sayılıyor…",
   "@countingFiles": {
     "description": "lib/features/settings/screens/library_settings_screen.dart:985"
   },
-  "create": "Create",
+  "create": "Oluştur",
   "@create": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:403"
   },
-  "createACollection": "Create a collection",
+  "createACollection": "Koleksiyon oluştur",
   "@createACollection": {
     "description": "lib/features/menu/screens/menu_screen.dart:1448"
   },
-  "createACustomPreset": "Create a custom preset",
+  "createACustomPreset": "Özel ön ayar oluştur",
   "@createACustomPreset": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:738"
   },
