@@ -1,4 +1,5 @@
 import 'bini_lyrics_matcher.dart';
+import 'lyricsplus_normalizer.dart';
 import 'graceful_http_client.dart';
 
 import 'dart:async';
@@ -180,28 +181,12 @@ class AdditionalLyricsSources {
                 'duration': duration,
                 if (song.album != null) 'album': song.album!,
               });
-              final lines = body?['lyrics'];
-              if (lines is! List || lines.isEmpty) continue;
-              final out = StringBuffer();
-              for (final line in lines.whereType<Map>()) {
-                if (line['time'] is! num) continue;
-                final start = (line['time'] as num).toInt();
-                out.write('[${_stamp(start)}]');
-                final words = line['syllabus'];
-                if (words is List && words.isNotEmpty) {
-                  for (final word in words.whereType<Map>().where(
-                    (w) => w['isBackground'] != true && w['time'] is num,
-                  )) {
-                    out.write(
-                      '<${_stamp((word['time'] as num).toInt())}>${word['text'] ?? ''}',
-                    );
-                  }
-                } else {
-                  out.write(line['text'] ?? '');
-                }
-                out.writeln();
-              }
-              if (out.isNotEmpty) return out.toString();
+              final normalized = normalizeLyricsPlusV2(
+                body,
+                duration: song.duration,
+              );
+              if (normalized != null) return normalized;
+              // No usable match on this mirror: continue to the next one.
             } catch (_) {
               /* Try the next community mirror. */
             }
@@ -249,6 +234,5 @@ class AdditionalLyricsSources {
     return null;
   }
 
-  static String _stamp(int ms) =>
-      '${(ms ~/ 60000).toString().padLeft(2, '0')}:${((ms ~/ 1000) % 60).toString().padLeft(2, '0')}.${(ms % 1000).toString().padLeft(3, '0')}';
+
 }

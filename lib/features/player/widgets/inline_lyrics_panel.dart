@@ -67,6 +67,8 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
   void didUpdateWidget(covariant InlineLyricsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.song.id != widget.song.id) {
+      // Source overrides apply to one song; a new song starts in Automatic.
+      _selectedLyricsSource = 'auto';
       _loadLyricsForSong(widget.song);
     }
   }
@@ -89,12 +91,18 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
       _sublineLyrics = null;
     });
     try {
-      final warm = !refreshOnline && _selectedLyricsSource == 'auto';
-      final local = warm
+      final selected = _selectedLyricsSource;
+      final warm = !refreshOnline && selected == 'auto';
+      // Choosing an online provider must not fetch it twice (first as
+      // "local", then once more as "enhanced"). Keep the displayed lyrics
+      // while the explicit provider is being checked.
+      final local = selected != 'auto' && selected != 'local'
+          ? _lyricsData
+          : warm
           ? await LyricsPlaybackPrefetch.instance.local(song)
           : await widget.lyricsService.loadLyricsForSong(
               song, forceRefresh: refreshOnline, fetchOnline: false,
-              source: _selectedLyricsSource,
+              source: selected,
             );
       if (!mounted || request != _lyricsRequest ||
           widget.song.id != song.id) return;
@@ -107,7 +115,9 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
       // lyrics have already been painted. Opening Lyrics never starts its
       // first remote request; the player prefetches it on track changes.
       final manual = widget.lyricsService.getManualLyricsPathForSong(song);
-      final best = warm
+      final best = selected == 'local'
+          ? local
+          : warm
           ? await LyricsPlaybackPrefetch.instance.enhanced(song)
           : await widget.lyricsService.loadLyricsForSong(
               song, forceRefresh: refreshOnline,
@@ -121,7 +131,11 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
       if (!mounted || request != _lyricsRequest ||
           widget.song.id != song.id) return;
       setState(() {
-        if (lyricQualityRank(best) > lyricQualityRank(_lyricsData)) {
+        // A manual source choice is intentional, even if its timing quality
+        // is lower than Automatic's. A miss still retains the previous words.
+        if (selected != 'auto' && best != null) {
+          _lyricsData = best;
+        } else if (lyricQualityRank(best) > lyricQualityRank(_lyricsData)) {
           _lyricsData = best;
         } else {
           _lyricsData ??= best;
@@ -419,6 +433,8 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
           LyricsSourceButton(
             selected: _selectedLyricsSource,
             lyrics: _lyricsData,
+            song: widget.song,
+            lyricsService: widget.lyricsService,
             busy: _isLoading,
             onSelected: (source) {
               setState(() => _selectedLyricsSource = source);

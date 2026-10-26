@@ -5940,6 +5940,7 @@ impl SseDecode for crate::api::metadata_editor::TagEditFields {
         let mut var_album = <Option<String>>::sse_decode(deserializer);
         let mut var_albumArtist = <Option<String>>::sse_decode(deserializer);
         let mut var_genre = <Option<String>>::sse_decode(deserializer);
+        let mut var_lyrics = <Option<String>>::sse_decode(deserializer);
         let mut var_year = <Option<u32>>::sse_decode(deserializer);
         let mut var_trackNumber = <Option<u32>>::sse_decode(deserializer);
         let mut var_discNumber = <Option<u32>>::sse_decode(deserializer);
@@ -5949,6 +5950,7 @@ impl SseDecode for crate::api::metadata_editor::TagEditFields {
             album: var_album,
             album_artist: var_albumArtist,
             genre: var_genre,
+            lyrics: var_lyrics,
             year: var_year,
             track_number: var_trackNumber,
             disc_number: var_discNumber,
@@ -7277,6 +7279,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::metadata_editor::TagEditField
             self.album.into_into_dart().into_dart(),
             self.album_artist.into_into_dart().into_dart(),
             self.genre.into_into_dart().into_dart(),
+            self.lyrics.into_into_dart().into_dart(),
             self.year.into_into_dart().into_dart(),
             self.track_number.into_into_dart().into_dart(),
             self.disc_number.into_into_dart().into_dart(),
@@ -8298,6 +8301,7 @@ impl SseEncode for crate::api::metadata_editor::TagEditFields {
         <Option<String>>::sse_encode(self.album, serializer);
         <Option<String>>::sse_encode(self.album_artist, serializer);
         <Option<String>>::sse_encode(self.genre, serializer);
+        <Option<String>>::sse_encode(self.lyrics, serializer);
         <Option<u32>>::sse_encode(self.year, serializer);
         <Option<u32>>::sse_encode(self.track_number, serializer);
         <Option<u32>>::sse_encode(self.disc_number, serializer);

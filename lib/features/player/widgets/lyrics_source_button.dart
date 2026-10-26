@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'package:flick/models/song.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/lyrics_sources.dart';
@@ -21,21 +25,36 @@ String lyricsSourceLabel(LyricsData? lyrics, String selected) =>
         ? 'Local file'
         : lyricsSources[selected] ?? selected);
 
+String? lyricsSourceHitLabel(Song song, String provider) {
+  final hit = LyricsService.sourceHitFor(song, provider);
+  if (hit == null) return null;
+  if (hit.status == 'hit') return 'Found · ${hit.timing}';
+  if (hit.status == 'checking') return 'Checking…';
+  return 'No result';
+}
+
 class LyricsSourceButton extends StatelessWidget {
   const LyricsSourceButton({
     super.key,
     required this.selected,
     required this.lyrics,
+    required this.song,
+    required this.lyricsService,
     required this.onSelected,
     required this.onRefresh,
     this.busy = false,
   });
   final String selected;
   final LyricsData? lyrics;
+  final Song song;
+  final LyricsService lyricsService;
   final bool busy;
   final ValueChanged<String> onSelected;
   final VoidCallback onRefresh;
   Future<void> _show(BuildContext context) async {
+    // Availability checks are on-demand: opening the chooser starts bounded
+    // searches and reuses recent results; playback itself does not fan out.
+    unawaited(lyricsService.probeSourceHits(song));
     final t = context.lokal;
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -46,7 +65,9 @@ class LyricsSourceButton extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (context) => SafeArea(
+      builder: (context) => ValueListenableBuilder<int>(
+        valueListenable: LyricsService.sourceHitsRevision,
+        builder: (context, _, __) => SafeArea(
         child: DraggableScrollableSheet(
           expand: false,
           initialChildSize: .65,
@@ -106,7 +127,8 @@ class LyricsSourceButton extends StatelessWidget {
                   selectedTileColor: t.accent.withValues(alpha: .1),
                   title: Text(source.value),
                   subtitle: Text(
-                    source.key == 'auto'
+                    lyricsSourceHitLabel(song, source.key) ??
+                        (source.key == 'auto'
                         ? 'Use your priority order and keep the best timing'
                         : source.key == 'local'
                         ? 'Copied, sidecar or embedded lyrics'
@@ -114,15 +136,30 @@ class LyricsSourceButton extends StatelessWidget {
                         ? 'Line-synced and plain lyrics'
                         : source.key == 'lyricsovh'
                         ? 'Plain lyrics'
-                        : 'Supports syllable / word timing',
+                        : 'Supports syllable / word timing'),
                   ),
-                  trailing: selected == source.key
-                      ? Icon(Icons.check_rounded, color: t.accent)
-                      : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (LyricsService.sourceHitFor(song, source.key)?.status == 'hit')
+                        Icon(Icons.check_circle_rounded,
+                            color: t.accent, size: 18),
+                      if (LyricsService.sourceHitFor(song, source.key)?.status == 'checking')
+                        const SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                      if (selected == source.key)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check_rounded, color: t.accent),
+                        ),
+                    ],
+                  ),
                   onTap: () => Navigator.pop(context, source.key),
                 ),
             ],
           ),
+        ),
         ),
       ),
     );

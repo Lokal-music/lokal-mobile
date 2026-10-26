@@ -5752,17 +5752,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TagEditFields dco_decode_tag_edit_fields(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return TagEditFields(
       title: dco_decode_opt_String(arr[0]),
       artist: dco_decode_opt_String(arr[1]),
       album: dco_decode_opt_String(arr[2]),
       albumArtist: dco_decode_opt_String(arr[3]),
       genre: dco_decode_opt_String(arr[4]),
-      year: dco_decode_opt_box_autoadd_u_32(arr[5]),
-      trackNumber: dco_decode_opt_box_autoadd_u_32(arr[6]),
-      discNumber: dco_decode_opt_box_autoadd_u_32(arr[7]),
+      lyrics: dco_decode_opt_String(arr[5]),
+      year: dco_decode_opt_box_autoadd_u_32(arr[6]),
+      trackNumber: dco_decode_opt_box_autoadd_u_32(arr[7]),
+      discNumber: dco_decode_opt_box_autoadd_u_32(arr[8]),
     );
   }
 
@@ -6999,6 +7000,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_album = sse_decode_opt_String(deserializer);
     var var_albumArtist = sse_decode_opt_String(deserializer);
     var var_genre = sse_decode_opt_String(deserializer);
+    var var_lyrics = sse_decode_opt_String(deserializer);
     var var_year = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_trackNumber = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_discNumber = sse_decode_opt_box_autoadd_u_32(deserializer);
@@ -7008,6 +7010,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       album: var_album,
       albumArtist: var_albumArtist,
       genre: var_genre,
+      lyrics: var_lyrics,
       year: var_year,
       trackNumber: var_trackNumber,
       discNumber: var_discNumber,
@@ -8236,6 +8239,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.album, serializer);
     sse_encode_opt_String(self.albumArtist, serializer);
     sse_encode_opt_String(self.genre, serializer);
+    sse_encode_opt_String(self.lyrics, serializer);
     sse_encode_opt_box_autoadd_u_32(self.year, serializer);
     sse_encode_opt_box_autoadd_u_32(self.trackNumber, serializer);
     sse_encode_opt_box_autoadd_u_32(self.discNumber, serializer);
