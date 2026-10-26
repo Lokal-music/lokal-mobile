@@ -148,7 +148,7 @@ void main() {
     () async {
       await controller.play();
       expect(playback.playCalls, 1);
-      expect(playback.lastPlaylist.length, 3);
+      expect(playback.lastPlaylist.length, 5);
       expect(
         identical(
           playback.lastPlaylist.first,
@@ -163,7 +163,7 @@ void main() {
   );
 
   test(
-    'queue prefetches while three tracks remain without replay or duplicates',
+    'queue prefetches when four tracks remain without replay or duplicates',
     () async {
       await controller.play();
       final initial = [...playback.lastPlaylist];
@@ -183,7 +183,7 @@ void main() {
             .intersection(initial.map((s) => s.id).toSet()),
         isEmpty,
       );
-      expect(FlowCodec.decode(stored).session.trackIds.length, 23);
+      expect(FlowCodec.decode(stored).session.trackIds.length, 25);
       playback.seed = -1;
       playback.state = playback.state.copyWith(upNext: []);
       await controller.grow(onlyWhenLast: true);
@@ -241,7 +241,7 @@ void main() {
       failWrites = true;
       await expectLater(controller.grow(onlyWhenLast: true), throwsStateError);
       expect(playback.appended, isEmpty);
-      expect(FlowCodec.decode(stored).session.trackIds.length, 3);
+      expect(FlowCodec.decode(stored).session.trackIds.length, 5);
       failWrites = false;
       await controller.grow(onlyWhenLast: true);
       expect(playback.appended.length, 10);
@@ -288,8 +288,8 @@ void main() {
     expect(playback.appended, hasLength(10));
     expect(playback.appended.every((song) => song.id.startsWith('pending:')), isTrue);
     final data = container.read(flowControllerProvider).requireValue;
-    expect(data.session.trackIds, hasLength(13));
-    expect(library.mix(data, DateTime.now()).length, 13);
+    expect(data.session.trackIds, hasLength(15));
+    expect(library.mix(data, DateTime.now()).length, 15);
   });
 
   test(
