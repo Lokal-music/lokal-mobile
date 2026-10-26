@@ -1677,11 +1677,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       color: FullPlayerVisuals.tertiaryText,
     );
     return ValueListenableBuilder<Duration>(
-      valueListenable: _player.durationNotifier,
+      valueListenable: _videoActive
+          ? _videoController.durationNotifier : _player.durationNotifier,
       builder: (context, duration, _) {
         final totalMs = math.max(duration.inMilliseconds, 1).toDouble();
         return ValueListenableBuilder<Duration>(
-          valueListenable: _player.positionNotifier,
+          valueListenable: _videoActive
+              ? _videoController.positionNotifier : _player.positionNotifier,
           builder: (context, position, _) {
             final live = (position.inMilliseconds / totalMs).clamp(0.0, 1.0);
             final value = _draggingSeek ? _seekDrag : live;
@@ -1700,19 +1702,24 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   ),
                   child: Slider(
                     value: value,
-                    onChangeStart: (v) => setState(() {
+                    onChangeStart: _videoActive && !_videoController.nativeNotifier.value
+                        ? null : (v) => setState(() {
                       _draggingSeek = true;
                       _seekDrag = v;
                     }),
-                    onChanged: (v) => setState(() => _seekDrag = v),
+                    onChanged: _videoActive && !_videoController.nativeNotifier.value
+                        ? null : (v) => setState(() => _seekDrag = v),
                     onChangeEnd: (v) async {
                       // One double-pulse on release, not on continuous drag updates.
                       AppHaptics.doublePulse();
                       final id = _player.currentSongNotifier.value?.id;
                       try {
-                        await _player.seek(
-                          Duration(milliseconds: (v * totalMs).round()),
-                        );
+                        final target = Duration(milliseconds: (v * totalMs).round());
+                        if (_videoActive) {
+                          await _videoController.seek(target);
+                        } else {
+                          await _player.seek(target);
+                        }
                       } finally {
                         if (mounted &&
                             _player.currentSongNotifier.value?.id == id &&
@@ -1747,7 +1754,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
   Widget _transport(bool compact, double lyricsProgress) =>
       ValueListenableBuilder<bool>(
-        valueListenable: _player.isPlayingNotifier,
+        valueListenable: _videoActive
+            ? _videoController.playingNotifier : _player.isPlayingNotifier,
         builder: (context, playing, _) => PlayerTransportControls(
           compact: compact,
           tallerButtons: true,
@@ -1757,12 +1765,37 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             ref.watch(albumPaletteSyncProvider),
           ).play,
           onAccent: Colors.black,
-          onPrevious: () =>
-              _carouselKey.currentState?.animateToPrevious() ??
-              _player.previous(),
-          onNext: () =>
-              _carouselKey.currentState?.animateToNext() ?? _player.next(),
-          onPlayPause: () => _player.togglePlayPause(),
+          onPrevious: () {
+            if (_videoActive) {
+              if (widget.videoSong != null) {
+                _close();
+              } else {
+                _exitVideoMode(resumeAudio: false);
+                _player.previousBySwipe();
+              }
+              return;
+            }
+            _carouselKey.currentState?.animateToPrevious() ?? _player.previous();
+          },
+          onNext: () {
+            if (_videoActive) {
+              if (widget.videoSong != null) {
+                _close();
+              } else {
+                _exitVideoMode(resumeAudio: false);
+                _player.next();
+              }
+              return;
+            }
+            _carouselKey.currentState?.animateToNext() ?? _player.next();
+          },
+          onPlayPause: () {
+            if (_videoActive) {
+              unawaited(_videoController.togglePlayPause());
+            } else {
+              _player.togglePlayPause();
+            }
+          },
         ),
       );
 
