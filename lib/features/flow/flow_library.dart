@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/recently_played_repository.dart';
@@ -123,6 +125,13 @@ class FlowLibrary {
           historyIds: historyIds,
           data: data,
           excludeIds: data.session.trackIds.toSet(),
+          // Continue artist spacing from the existing queue's tail.
+          previousArtists: [
+            for (final id in data.session.trackIds.skip(
+              math.max(0, data.session.trackIds.length - 3),
+            ))
+              if (byId[id] case final song?) song.artist,
+          ],
           limit: remaining.clamp(0, FlowRules.topUpTracks),
         )
         .map((track) => byId[track.id]!)
