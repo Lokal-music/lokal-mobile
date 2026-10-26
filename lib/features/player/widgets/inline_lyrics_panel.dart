@@ -419,6 +419,8 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
           LyricsSourceButton(
             selected: _selectedLyricsSource,
             lyrics: _lyricsData,
+            song: widget.song,
+            lyricsService: widget.lyricsService,
             busy: _isLoading,
             onSelected: (source) {
               setState(() => _selectedLyricsSource = source);
