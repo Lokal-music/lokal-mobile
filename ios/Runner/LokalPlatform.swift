@@ -64,6 +64,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
       result([
         "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
         "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+        "bundleId": Bundle.main.bundleIdentifier ?? "",
       ])
     }
     integration.setMethodCallHandler { [weak self] call, result in

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'music_video_controller.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -11,13 +12,24 @@ import 'package:url_launcher/url_launcher.dart';
 /// deliberately unrelated to add-on/stream URLs or the audio engine.
 const musicVideoAppOrigin = 'https://com.lokalkonnekt.konnekted2';
 
+String musicVideoOriginForAppId(String appId) {
+  final id = appId.toLowerCase();
+  if (!RegExp(r'^[a-z0-9-]+(?:\.[a-z0-9-]+)+$').hasMatch(id)) {
+    throw const FormatException('Installed app identity is unavailable.');
+  }
+  return 'https://$id';
+}
+
+String musicVideoOriginPattern(String origin) =>
+    '^${RegExp.escape(origin)}(?::443)?\$';
+
 final _musicVideoId = RegExp(r'^[A-Za-z0-9_-]{11}$');
 
 bool validMusicVideoId(String videoId) => _musicVideoId.hasMatch(videoId);
 
 /// Uses YouTube's player; no media URL extraction, cookies, or stream proxy.
 @visibleForTesting
-String musicVideoEmbedHtml(String videoId) {
+String musicVideoEmbedHtml(String videoId, {String? appId}) {
   if (!validMusicVideoId(videoId)) {
     throw ArgumentError.value(videoId, 'videoId', 'Invalid YouTube video ID');
   }
@@ -26,7 +38,9 @@ String musicVideoEmbedHtml(String videoId) {
     'playsinline': '1',
     'rel': '0',
     'enablejsapi': '1',
-    'origin': musicVideoAppOrigin,
+    'origin': appId == null
+        ? musicVideoAppOrigin
+        : musicVideoOriginForAppId(appId),
   });
   return '''<!doctype html>
 <html><head>
@@ -122,12 +136,40 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
   int _generation = 0;
   int? _lease;
   InAppWebViewController? _webView;
+  bool _viewCreationStarted = false;
+  Completer<void> _webViewCreated = Completer<void>();
+  String? _appId;
+  bool _identityReady = !Platform.isIOS;
+  String get _appOrigin =>
+      _appId == null ? musicVideoAppOrigin : musicVideoOriginForAppId(_appId!);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _attach();
+    if (Platform.isIOS) unawaited(_loadInstalledIdentity());
+  }
+
+  Future<void> _loadInstalledIdentity() async {
+    try {
+      final info = await const MethodChannel('lokal/app_info')
+          .invokeMapMethod<String, dynamic>('get');
+      final id = info?['bundleId'];
+      if (id is! String) throw const FormatException('No installed bundle ID');
+      musicVideoOriginForAppId(id); // Validate before interpolating any HTML.
+      if (!mounted || _released) return;
+      setState(() {
+        _appId = id;
+        _identityReady = true;
+      });
+    } catch (_) {
+      if (!mounted || _released) return;
+      setState(() {
+        _failed = true;
+        _loading = false;
+      });
+    }
   }
 
   void _attach() {
@@ -136,10 +178,15 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
   }
 
   Future<void> _command(String method, Map<String, Object?> args) async {
-    final view = _webView;
     if (method == 'release') {
       _released = true;
-      if (view == null) return; // No web player has been created.
+      // A submitted platform-view creation can complete after this request.
+      // Await it before authorizing another output, or retain ownership on error.
+      if (_webView == null && _viewCreationStarted) {
+        await _webViewCreated.future.timeout(const Duration(seconds: 3));
+      }
+      final view = _webView;
+      if (view == null) return;
       await view.evaluateJavascript(
         source:
             "window.lokalVideoCommand && window.lokalVideoCommand('release')",
@@ -160,6 +207,7 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
       }
       return;
     }
+    final view = _webView;
     if (view == null || !_ready || _released) {
       throw StateError('Video controls are not ready.');
     }
@@ -224,7 +272,8 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
     final controller = widget.controller;
     if (controller != null && !controller.owns(_lease)) return;
     if (value['error'] != null) {
-      controller?.fallback(errorCode: (value['error'] as num?)?.toInt());
+      final error = value['error'];
+      controller?.fallback(errorCode: error is num ? error.toInt() : -1);
       setState(() {
         _failed = true;
         _loading = false;
@@ -264,7 +313,7 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
   ) async {
     if (action.isForMainFrame != true) return NavigationActionPolicy.ALLOW;
     final url = action.request.url;
-    if (url == null || url.toString() == '$musicVideoAppOrigin/') {
+    if (url == null || url.toString() == '$_appOrigin/') {
       return NavigationActionPolicy.ALLOW;
     }
     if (url.scheme == 'https') {
@@ -288,11 +337,15 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
         );
       }
       _webView = null;
+      _viewCreationStarted = false;
+      _webViewCreated = Completer<void>();
       _ready = false;
       _released = false;
       _loading = true;
       _failed = false;
       _attach();
+      if (Platform.isIOS && !_identityReady)
+        unawaited(_loadInstalledIdentity());
     } else if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.detach(_lease);
       _attach();
@@ -307,76 +360,91 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
       );
     }
     final generation = _generation;
+    if (_identityReady && !_released) _viewCreationStarted = true;
     return Column(
       children: [
         Expanded(
-          child: InAppWebView(
-            key: ValueKey(widget.videoId),
-            onWebViewCreated: (view) {
-              if (generation != _generation) return;
-              _webView = view;
-              view.addJavaScriptHandler(
-                handlerName: 'LokalVideo',
-                callback: (arguments) {
-                  if (arguments.isNotEmpty) {
-                    _snapshot(arguments.first, generation);
-                  }
-                  return null;
-                },
-              );
-              if (_released && Platform.isIOS) {
-                unawaited(
-                  view
-                      .setAllMediaPlaybackSuspended(suspended: true)
-                      .catchError((Object _) {}),
-                );
-              }
-            },
-            initialData: InAppWebViewInitialData(
-              data: musicVideoEmbedHtml(widget.videoId),
-              baseUrl: WebUri('$musicVideoAppOrigin/'),
-              historyUrl: WebUri('$musicVideoAppOrigin/'),
-            ),
-            initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true,
-              javaScriptHandlersForMainFrameOnly: true,
-              javaScriptBridgeForMainFrameOnly: true,
-              javaScriptHandlersOriginAllowList: {
-                r'^https://com\.lokalkonnekt\.konnekted2(?::443)?$',
-              },
-              javaScriptBridgeOriginAllowList: {
-                r'^https://com\.lokalkonnekt\.konnekted2(?::443)?$',
-              },
-              mediaPlaybackRequiresUserGesture: false,
-              allowsInlineMediaPlayback: true,
-              incognito: true,
-              thirdPartyCookiesEnabled: false,
-              useShouldOverrideUrlLoading: true,
-              supportMultipleWindows: false,
-              useHybridComposition: false,
-            ),
-            onLoadStop: (_, __) {
-              if (mounted && generation == _generation)
-                setState(() => _loading = false);
-            },
-            onReceivedError: (_, request, __) {
-              if (!mounted || generation != _generation) return;
-              final url = request.url;
-              final embedFailed =
-                  request.isForMainFrame == false &&
-                  url.host == 'www.youtube.com' &&
-                  url.path == '/embed/${widget.videoId}';
-              if (mounted && (request.isForMainFrame == true || embedFailed)) {
-                setState(() {
-                  _failed = true;
-                  _loading = false;
-                  _ready = false;
-                });
-                widget.controller?.fallback();
-              }
-            },
-            shouldOverrideUrlLoading: _navigate,
-          ),
+          child: !_identityReady || _released
+              ? const SizedBox.shrink()
+              : InAppWebView(
+                  key: ValueKey(widget.videoId),
+                  onWebViewCreated: (view) {
+                    if (!mounted || generation != _generation) {
+                      if (Platform.isIOS) {
+                        unawaited(
+                          view
+                              .setAllMediaPlaybackSuspended(suspended: true)
+                              .catchError((Object _) {}),
+                        );
+                      }
+                      return;
+                    }
+                    _webView = view;
+                    if (!_webViewCreated.isCompleted)
+                      _webViewCreated.complete();
+                    view.addJavaScriptHandler(
+                      handlerName: 'LokalVideo',
+                      callback: (arguments) {
+                        if (arguments.isNotEmpty) {
+                          _snapshot(arguments.first, generation);
+                        }
+                        return null;
+                      },
+                    );
+                    if (_released && Platform.isIOS) {
+                      unawaited(
+                        view
+                            .setAllMediaPlaybackSuspended(suspended: true)
+                            .catchError((Object _) {}),
+                      );
+                    }
+                  },
+                  initialData: InAppWebViewInitialData(
+                    data: musicVideoEmbedHtml(widget.videoId, appId: _appId),
+                    baseUrl: WebUri('$_appOrigin/'),
+                    historyUrl: WebUri('$_appOrigin/'),
+                  ),
+                  initialSettings: InAppWebViewSettings(
+                    javaScriptEnabled: true,
+                    javaScriptHandlersForMainFrameOnly: true,
+                    javaScriptBridgeForMainFrameOnly: true,
+                    javaScriptHandlersOriginAllowList: {
+                      musicVideoOriginPattern(_appOrigin),
+                    },
+                    javaScriptBridgeOriginAllowList: {
+                      musicVideoOriginPattern(_appOrigin),
+                    },
+                    mediaPlaybackRequiresUserGesture: false,
+                    allowsInlineMediaPlayback: true,
+                    incognito: true,
+                    thirdPartyCookiesEnabled: false,
+                    useShouldOverrideUrlLoading: true,
+                    supportMultipleWindows: false,
+                    useHybridComposition: false,
+                  ),
+                  onLoadStop: (_, __) {
+                    if (mounted && generation == _generation)
+                      setState(() => _loading = false);
+                  },
+                  onReceivedError: (_, request, __) {
+                    if (!mounted || generation != _generation) return;
+                    final url = request.url;
+                    final embedFailed =
+                        request.isForMainFrame == false &&
+                        url.host == 'www.youtube.com' &&
+                        url.path == '/embed/${widget.videoId}';
+                    if (mounted &&
+                        (request.isForMainFrame == true || embedFailed)) {
+                      setState(() {
+                        _failed = true;
+                        _loading = false;
+                        _ready = false;
+                      });
+                      widget.controller?.fallback();
+                    }
+                  },
+                  shouldOverrideUrlLoading: _navigate,
+                ),
         ),
         if (_loading) const LinearProgressIndicator(minHeight: 3),
         if (_failed)

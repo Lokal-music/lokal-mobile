@@ -747,7 +747,7 @@ buffering while transport can still represent a pending Play. Official player
 controls and branding stay unobstructed; captions and explicit Exit Space sit
 below the same live player.
 
-The current host selection passes **111** UI/transport/locale tests, including
+The current host selection passes **114** UI/transport/locale tests, including
 HTTP suffix/clamped/unsatisfiable/HEAD/empty-file behavior. A broader run also
 reached the known historical ARB unused-key failure; no full-suite-green claim is
 made. Analysis finds no errors; warning/info findings remain.

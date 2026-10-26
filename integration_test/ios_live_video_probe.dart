@@ -2,6 +2,8 @@ import 'package:flick/features/music_videos/music_video_controller.dart';
 import 'package:flick/features/music_videos/music_video_surface.dart';
 import 'package:flick/features/player/widgets/video_space_layout.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -33,6 +35,9 @@ Future<void> probeLiveIosVideo(
   );
 
   try {
+    final identity = await const MethodChannel('lokal/app_info')
+        .invokeMapMethod<String, dynamic>('get');
+    evidence['installed_bundle_id'] = identity?['bundleId'];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -110,8 +115,10 @@ Future<void> probeLiveIosVideo(
     // This acknowledgement is checked even when the public player is blocked.
     // It proves the real native WebKit method, not successful video playback.
     try {
+      final hadWebView = find.byType(InAppWebView).evaluate().isNotEmpty;
       await video.releaseAudio().timeout(const Duration(seconds: 5));
-      evidence['native_webkit_release_acknowledged'] = true;
+      evidence['native_webkit_release_acknowledged'] = hadWebView;
+      evidence['provider_error'] = video.embedErrorNotifier.value;
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
       video.dispose();

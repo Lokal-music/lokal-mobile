@@ -133,3 +133,16 @@ position advance, pause/seek, same-State Space entry/exit and native suspension.
 Unavailable/restricted playback is **inconclusive**, with a screenshot. A
 successful native release acknowledgement alone is not video playback acceptance.
 The deterministic playback corpus and its status remain visible separately.
+
+
+YouTube's current required-minimum-functionality documentation also requires the
+Referer URL host to match the installed app identifier, including alternative
+distribution. On iPhone, the native app-info bridge now returns the actual signed
+Bundle ID. The WebView's base/history URL, iframe origin and main-frame handler
+allowlist derive from that validated identity; Android's original identity remains.
+An early release prevents pending identity lookup from creating a player, and
+release awaits an already-submitted native view creation before suspension.
+Identity/origin rejection tests cover a signing suffix, default HTTPS port and
+lookalike/other-port/injected identifiers. Actual request/referrer acceptance is
+part of the opt-in native probe. Investigation run 28 was cancelled before native
+compilation after this documented mismatch was found; it is not a native result.

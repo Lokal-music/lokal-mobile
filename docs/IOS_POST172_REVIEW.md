@@ -1,8 +1,10 @@
 # iPhone review of mobile PRs after #172
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-The subsequent passes below carry merged updates through #210 (31 PRs total). The iPhone
-branch now merges main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
+Latest integration includes **37 merged PRs through #216**, main
+`63280241a5216ef987111eb8cd17c93e0626f1e4`. Build 27 validates the source through
+#210; the subsequent #211–#216/native WebKit investigation awaits its source run.
+The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
 (merge `b26d8b9e08a8acc4d60b8aa2e2b7e3c4b521fdb1`). All 20 PRs below are
 included by ancestry, including stacked #180/#181; none is copied as a divergent
 iPhone-only implementation. Rust, bridge dependencies and package locks are
@@ -387,7 +389,7 @@ merged mobile PRs after #172. #208 is the port's own companion and is not counte
 | #215 | Add concurrent/overlapping Space lines, Appearance video-quality preference, and separate album-artist targets. | Share concurrent renderer and artist links. Keep native Android height selection/generation guards; iPhone shows translated guidance for YouTube's quality control. A separate video advancing signal freezes Space during buffering. Native harness now checks two actual concurrent generated lines; awaiting its source build. |
 | #216 | Recover Android USB DAC registration and protect transfer/feedback lifetime. | Preserve upstream Kotlin/Rust changes. The transport is Android-only, not an iPhone USB feature. Compile verification and actual DAC qualification are separate. |
 
-The current UI/transport/locale selection passes **111** tests; the focused video
+The current UI/transport/locale selection passes **114** tests; the focused video
 clock/Space subset passes **16** (overlap). No analysis errors are found; existing
 warning/info findings and the historical unused-ARB-key failure remain. Native
 build 27 does not cover these subsequent changes. An opt-in live WebKit fixture
