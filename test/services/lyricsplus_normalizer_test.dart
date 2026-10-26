@@ -43,6 +43,18 @@ void main() {
     }, duration: const Duration(minutes: 3)), isNull);
   });
 
+  test('reject collapsed timestamps that would jump playback to the last lyric', () {
+    final result = normalizeLyricsPlusV2({
+      'lyrics': [
+        {'time': 0, 'text': 'Opening'},
+        {'time': 0, 'text': 'Second verse'},
+        {'time': 0, 'text': 'Final chorus'},
+        {'time': 0, 'text': 'Outro'},
+      ],
+    }, duration: const Duration(minutes: 3));
+    expect(result, isNull);
+  });
+
   test('preserve genuine syllabus timings, ignoring background vocals and sorting words', () {
     final result = normalizeLyricsPlusV2({
       'lyrics': [
