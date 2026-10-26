@@ -264,6 +264,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Space retains a lyric painter when an earlier line expires',
+      (tester) async {
+    final clock = ValueNotifier<Duration>(
+      const Duration(milliseconds: 1200),
+    );
+    addTearDown(clock.dispose);
+    const overlapping = LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [
+        LyricsLine(
+          timestamp: Duration.zero,
+          text: 'Previous voice',
+          words: [LyricsWord(
+            text: 'Previous voice', start: Duration.zero,
+            end: Duration(milliseconds: 1400),
+          )],
+        ),
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: 'Current voice',
+          words: [LyricsWord(
+            text: 'Current voice', start: Duration(seconds: 1),
+            end: Duration(seconds: 3),
+          )],
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: Center(child: SizedBox(width: 360,
+        child: ImmersiveLyricsSubtitle(lyrics: overlapping, position: clock),
+      )),
+    ));
+    const survivingKey = ValueKey('space-line:1000:1');
+    expect(find.byType(LyricMotionLine), findsNWidgets(2));
+    final survivingState = tester.state(find.byKey(survivingKey));
+
+    clock.value = const Duration(milliseconds: 1600);
+    await tester.pump();
+    expect(find.byType(LyricMotionLine), findsOneWidget);
+    expect(find.byKey(survivingKey), findsOneWidget);
+    expect(identical(tester.state(find.byKey(survivingKey)), survivingState),
+        isTrue, reason: 'The remaining lyric should not remount on shift');
+  });
+
   test('overlapping word end remains visible after next line starts', () {
     const overlapping = LyricsData(
       isSynchronized: true,
