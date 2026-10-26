@@ -59,9 +59,19 @@ class FlowRadioWidgetProvider : AppWidgetProvider() {
         else views.setImageViewResource(R.id.flow_cover, R.drawable.widget_art_placeholder)
         views.setInt(R.id.flow_root, "setBackgroundResource",
             WidgetArtworkPalette.background(art))
-        views.setTextViewText(R.id.flow_title, "Your Flow")
+        val compactHeading = if (compact) R.string.widget_flow_heading_small
+            else R.string.widget_flow_heading
+        views.setTextViewText(R.id.flow_heading, WidgetPrefs.localizedText(context, compactHeading))
+        views.setTextViewText(R.id.flow_title,
+            WidgetPrefs.localizedText(context, R.string.widget_flow_title))
         views.setTextViewText(R.id.flow_status,
-            state.ifBlank { "Play a mix curated for you" })
+            state.ifBlank { WidgetPrefs.localizedText(context, R.string.widget_flow_status_empty) })
+        views.setTextViewText(R.id.flow_action,
+            WidgetPrefs.localizedText(context, R.string.widget_action_play))
+        views.setTextViewText(R.id.flow_shuffle,
+            WidgetPrefs.localizedText(context, R.string.widget_action_mix))
+        views.setTextViewText(R.id.flow_radio,
+            WidgetPrefs.localizedText(context, R.string.widget_action_radio))
         views.setTextColor(R.id.flow_heading, WidgetPrefs.getAccentColor(context))
         views.setOnClickPendingIntent(R.id.flow_heading, WidgetIntents.openApp(context, 680))
         views.setOnClickPendingIntent(R.id.flow_title, WidgetIntents.openApp(context, 681))
