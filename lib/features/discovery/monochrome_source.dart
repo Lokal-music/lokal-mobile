@@ -19,7 +19,7 @@ abstract final class MonochromeSource {
     if (text.length > 200) {
       throw const DiscoveryException('Search is limited to 200 characters.');
     }
-    final safeLimit = limit.clamp(1, 50);
+    final safeLimit = limit.clamp(1, 50).toInt();
     final json = await http.json(Uri.https(host, '/search/tracks', {
       'q': text,
       'limit': '$safeLimit',

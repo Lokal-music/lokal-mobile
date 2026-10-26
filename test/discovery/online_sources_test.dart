@@ -34,6 +34,10 @@ void main() {
       ),
     );
 
+    expect(sources.singleWhere((source) => source.id == 'mono').name, 'Monochrome');
+    expect(sources.singleWhere((source) => source.id == 'mono').addon, isFalse);
+    expect(sources.singleWhere((source) => source.id == 'yt').addon, isFalse);
+
     expect(
       sources.where((source) => source.name == 'Home music'),
       hasLength(1),
