@@ -127,7 +127,7 @@ class LibraryDownloader {
             ],
           )
         : data.lines.map((l) => l.text).where((s) => s.trim().isNotEmpty)
-              .join('\\n');
+              .join('\n');
     return content.trim().isEmpty ? null : content;
   }
 
