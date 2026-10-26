@@ -640,7 +640,7 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
                 WidgetPrefs.localizedText(this, R.string.native_music_playback_channel),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = WidgetPrefs.localizedText(this, R.string.native_music_playback_description)
+                description = WidgetPrefs.localizedText(this@MusicNotificationService, R.string.native_music_playback_description)
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
