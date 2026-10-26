@@ -91,6 +91,25 @@ void main() {
     expect(LokalQualityTier.of(song), LokalQualityTier.lossless);
   });
 
+  test('incomplete resolver metadata does not inherit catalogue maxima', () {
+    final song = progressiveAddonSong(
+      const DiscoveryTrack(
+        id: 'partial', title: 'Partial', artist: 'Artist',
+        source: DiscoverySource.addon,
+        catalogueQuality: '24/96', catalogueCodec: 'FLAC',
+        catalogueBitDepth: 24, catalogueSampleRate: 96000,
+      ),
+      ResolvedDiscoveryAudio(
+        Uri.parse('https://cdn.example.com/selected.flac'),
+        codec: 'FLAC',
+      ),
+    );
+    expect(song.fileType, 'FLAC');
+    expect(song.bitDepth, isNull);
+    expect(song.sampleRate, isNull);
+    expect(LokalQualityTier.of(song), LokalQualityTier.unknown);
+  });
+
   test('Discovery skips alternate queries when the first matches', () async {
     final calls = <String>[];
     final source = OnlineSource(
