@@ -127,7 +127,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
 
   Future<void> _command(String method, [Map<String, Object?> args = const {}]) async {
     try {
-      await _player?.invokeMethod<void>(method, args);
+      await _player?.invokeMethod<Object?>(method, args);
       if (mounted) unawaited(_refresh());
     } on PlatformException {
       if (mounted) setState(() => _fallback = true);
@@ -139,6 +139,8 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
   @override
   void dispose() {
     _poller?.cancel();
+    // Pause the native audio owner before Lokal optionally resumes song audio.
+    unawaited(_player?.invokeMethod<Object?>('pause').catchError((Object _) => null) ?? Future<Object?>.value(null));
     _player = null;
     super.dispose();
   }
