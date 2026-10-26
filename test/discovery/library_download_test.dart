@@ -137,7 +137,7 @@ void main() {
     await downloader([
       LibraryDownloadFolder(uri: 'u', name: 'Music', path: music.path),
     ]).save(prepared());
-    expect(savedLyrics.single, 'Verse\\nChorus');
+    expect(savedLyrics.single, 'Verse\nChorus');
   });
 
   test('a lyrics lookup miss does not prevent downloaded audio from being saved', () async {
