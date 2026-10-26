@@ -53,6 +53,8 @@ class _Player implements ja.AudioPlayer {
   @override
   Stream<ja.ProcessingState> get processingStateStream => const Stream.empty();
   @override
+  ja.ProcessingState get processingState => ja.ProcessingState.ready;
+  @override
   Future<Duration?> setAudioSource(
     ja.AudioSource source, {
     bool preload = true,
