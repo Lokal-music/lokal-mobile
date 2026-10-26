@@ -62,7 +62,17 @@ internal object YoutubeNativeResolver {
             if (Innertube.updateSession(cookie, visitorData)) {
                 InnerTubeXResolver.onSessionChanged()
             }
-            val resolved = InnerTubeXResolver.resolvePlayableVideo(videoId)
+            val resolved = try {
+                InnerTubeXResolver.resolvePlayableVideo(videoId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A rotated sign-in session must not block public videos.
+                if (cookie.isNullOrBlank()) throw e
+                Innertube.updateSession(null, null)
+                InnerTubeXResolver.onSessionChanged()
+                InnerTubeXResolver.resolvePlayableVideo(videoId)
+            }
             val video = requireNotNull(resolved.videoUrl)
             mapOf(
                 "audioUrl" to resolved.url,
