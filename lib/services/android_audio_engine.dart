@@ -1023,7 +1023,7 @@ class AndroidAudioEngine implements AudioEngine {
         if (!valid()) { releaseIfOwned(); return; }
         final modelPair = modelMixEnd != null &&
             upcomingProfile != null && upcomingProfile.modelEntrances.isNotEmpty;
-        final mixEnd = modelPair ? modelMixEnd : normalMixEnd;
+        final mixEnd = modelPair ? modelMixEnd! : normalMixEnd;
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
         // A muted track must stay muted through the preparation and ramp.
@@ -1033,7 +1033,7 @@ class AndroidAudioEngine implements AudioEngine {
             .timeout(const Duration(seconds: 30));
         if (!valid()) { releaseIfOwned(); return; }
         final modelEntry = modelPair
-            ? upcomingProfile.modelEntrances.where((t) =>
+            ? upcomingProfile!.modelEntrances.where((t) =>
                 t >= 0 && t <= 45 &&
                 t <= upcomingProfile.durationSeconds - 20).firstOrNull
             : null;
