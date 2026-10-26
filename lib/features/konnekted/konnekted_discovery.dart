@@ -1396,6 +1396,54 @@ Song onlinePendingSong(
   return pending;
 }
 
+/// Try the most relevant query first. If it has no matching recording,
+/// search the alternate artist/title forms concurrently rather than serially
+/// paying for multiple provider timeouts. Source priority is unaffected.
+Future<DiscoveryTrack?> findDiscoverySourceMatch({
+  required OnlineSource source,
+  required RecommendationCandidate candidate,
+  required List<String> queries,
+  void Function()? checkCancelled,
+}) async {
+  Future<DiscoveryTrack?> search(String query) async {
+    checkCancelled?.call();
+    try {
+      final results = await source.search(query);
+      checkCancelled?.call();
+      return recommendationMatch(
+        candidate,
+        results,
+        (result) => RecommendationCandidate(
+          title: result.title,
+          artist: result.artist,
+          album: result.album,
+          duration: result.duration,
+        ),
+      );
+    } catch (_) {
+      // A failed alternate query is not a source failure. Propagate a
+      // cancellation even if a search completed at the same instant.
+      checkCancelled?.call();
+      return null;
+    }
+  }
+
+  if (queries.isEmpty) return null;
+  final first = await search(queries.first);
+  if (first != null) return first;
+  if (queries.length == 1) return null;
+
+  // The caller supplies at most three queries: only two parallel fallbacks.
+  final fallbacks = await Future.wait(
+    queries.skip(1).take(2).map(search),
+  );
+  checkCancelled?.call();
+  for (final matched in fallbacks) {
+    if (matched != null) return matched;
+  }
+  return null;
+}
+
 /// Finds [track] somewhere to play it and downloads it, as desktop does for
 /// songs you don't own: YouTube Music first (desktop's default order), then
 /// your add-ons. Null when none has it. [onStatus] hears what's happening;
@@ -1500,62 +1548,46 @@ Future<Song?> findDiscoverySong(
           );
         }
       }
-      for (final query in queries) {
-        check();
-        List<DiscoveryTrack> results;
-        try {
-          results = await source.search(query);
-        } catch (_) {
-          continue;
+      check();
+      final found = await findDiscoverySourceMatch(
+        source: source,
+        candidate: candidate,
+        queries: queries,
+        checkCancelled: check,
+      );
+      if (found == null) continue;
+      check();
+      onStatus?.call('Getting ${track.title} from ${source.name}…');
+      try {
+        final selected = found.withArtwork(_artworkOf(track));
+        final resolved = await source.play(selected);
+        final song = resolved.copyWith(sourceDisplayName: source.name);
+        if (source.id.startsWith('a-')) {
+          _rememberOnlineAddon(song, source.id.substring(2), selected);
         }
-        final found = recommendationMatch(
-          candidate,
-          results,
-          (result) => RecommendationCandidate(
-            title: result.title,
-            artist: result.artist,
-            album: result.album,
-            duration: result.duration,
-          ),
+        OnlineSongSaveRegistry.instance.register(
+          song,
+          () => playOnlineTrack(source.id, selected, forDownload: true),
         );
-        if (found == null) continue;
+        return song;
+      } catch (error) {
         check();
-        onStatus?.call('Getting ${track.title} from ${source.name}…');
-        try {
-          final selected = found.withArtwork(_artworkOf(track));
-          final resolved = await source.play(selected);
-          final song = resolved.copyWith(sourceDisplayName: source.name);
-          if (source.id.startsWith('a-')) {
-            _rememberOnlineAddon(song, source.id.substring(2), selected);
-          }
-          OnlineSongSaveRegistry.instance.register(
-            song,
-            () => playOnlineTrack(source.id, selected, forDownload: true),
-          );
-          return song;
-        } catch (error) {
-          check();
-          // A requested Atmos stream failing because Tidal's own server
-          // timed out/returned 5xx is not a valid reason to silently switch
-          // the user to a different provider's stereo recording.
-          if (found.atmosAvailable &&
-              error is DiscoveryException &&
-              error.message.startsWith('Tidal Atmos server')) {
-            onStatus?.call(error.message);
-            rethrow;
-          }
-          // Other source failures can still try the next playable result.
-          failure = error is DiscoveryException
-              ? error
-              : DiscoveryException(
-                  '${source.name} couldn’t get ${track.title} ready.',
-                );
-          onStatus?.call(
-            'Couldn’t get ${track.title} from ${source.name}. '
-            'Trying elsewhere…',
-          );
-          break;
+        // An Atmos server timeout must not silently switch to stereo.
+        if (found.atmosAvailable &&
+            error is DiscoveryException &&
+            error.message.startsWith('Tidal Atmos server')) {
+          onStatus?.call(error.message);
+          rethrow;
         }
+        failure = error is DiscoveryException
+            ? error
+            : DiscoveryException(
+                '${source.name} couldn’t get ${track.title} ready.',
+              );
+        onStatus?.call(
+          'Couldn’t get ${track.title} from ${source.name}. '
+          'Trying elsewhere…',
+        );
       }
     }
     if (failure != null) throw failure;
