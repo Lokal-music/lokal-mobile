@@ -214,8 +214,15 @@ class AutoMixAnalysisCache {
       final directory = await _directory();
       final file = File('${directory.path}/$identity.json');
       if (await file.exists()) {
-        final profile = AutoMixProfile.fromJson(jsonDecode(await file.readAsString()));
-        if (profile != null) return _remember(identity, profile);
+        try {
+          final profile = AutoMixProfile.fromJson(jsonDecode(await file.readAsString()));
+          if (profile != null) return _remember(identity, profile);
+        } catch (_) {
+          // Half-written/corrupted old entries are regenerable, not fatal.
+        }
+        // Delete only a malformed *derived* cache entry; never touch audio
+        // or the underlying Isar waveform scan.
+        try { await file.delete(); } catch (_) {}
       }
       final cached = await _loadWaveform(songId);
       if (cached == null || cached.version != 1 || cached.peaks.isEmpty ||
