@@ -168,7 +168,7 @@ void main() {
       library: songs,
       favoriteIds: {for (var i = 0; i < 16; i++) '$i'},
       data: FlowData(),
-      limit: 30,
+      limit: 18,
     );
     for (var i = 0; i < result.length; i++) {
       for (var back = 1; back <= 3 && i - back >= 0; back++) {
