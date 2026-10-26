@@ -1028,6 +1028,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
         ? (_sublineLyrics ?? _lyrics) : null,
     position: _videoActive
         ? _videoController.positionNotifier : _player.positionNotifier,
+    playing: _videoActive
+        ? _videoController.playingNotifier : _player.isPlayingNotifier,
+    playbackSpeed: _videoActive ? null : _player.playbackSpeedNotifier,
     loading: _lyricsLoading || _lyricsForSongId != song.id,
   );
 
