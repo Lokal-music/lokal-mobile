@@ -20,10 +20,22 @@ abstract final class MonochromeSource {
       throw const DiscoveryException('Search is limited to 200 characters.');
     }
     final safeLimit = limit.clamp(1, 50).toInt();
-    final json = await http.json(Uri.https(host, '/search/tracks', {
+    final endpoint = Uri.https(host, '/search/tracks', {
       'q': text,
       'limit': '$safeLimit',
-    }));
+    });
+    Map<String, dynamic> json;
+    try {
+      json = await http.json(endpoint);
+    } on DiscoveryException catch (error) {
+      // The public API intermittently responds with Cloudflare 5xx.
+      // Avoid retrying auth failures, invalid JSON or missing tracks.
+      if (!RegExp(r'HTTP 5\\d\\d|rate limiting requests').hasMatch(error.message)) {
+        rethrow;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      json = await http.json(endpoint);
+    }
     final rows = json['tracks'];
     if (rows is! List) {
       throw const DiscoveryException('Monochrome returned an unsupported catalogue response.');

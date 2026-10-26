@@ -51,6 +51,20 @@ void main() {
     expect(audio.sampleRate, isNull);
   });
 
+
+  test('Monochrome retries a transient server failure', () async {
+    var calls = 0;
+    final client = MockClient((_) async {
+      calls++;
+      if (calls == 1) return http.Response('Unavailable', 503);
+      return http.Response(jsonEncode({'tracks': []}), 200);
+    });
+    addTearDown(client.close);
+    final result = await MonochromeSource.search(DiscoveryHttp(client), 'query');
+    expect(result, isEmpty);
+    expect(calls, 2);
+  });
+
   test('Monochrome cannot resolve another provider or an invalid ID', () {
     expect(() => MonochromeSource.streamUri('../hello'), throwsA(isA<DiscoveryException>()));
     expect(() => MonochromeSource.resolve(const DiscoveryTrack(
