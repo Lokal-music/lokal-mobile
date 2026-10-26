@@ -252,7 +252,10 @@ class AutoMixAnalysisCache {
         }
       }
       if (profile == null && songId != null) {
-        final cached = await _loadWaveform(songId);
+        // Isar can be temporarily unavailable during startup. A valid model
+        // sidecar remains useful even if the ordinary waveform lookup fails.
+        SongAudioCacheEntity? cached;
+        try { cached = await _loadWaveform(songId); } catch (_) {}
         if (cached != null && cached.version == 1 && cached.peaks.isNotEmpty &&
             cached.computedAt >= stamp.modified.millisecondsSinceEpoch) {
           profile = AutoMixProfile.fromWaveform(cached.peaks, duration, lufs: cached.lufs);
