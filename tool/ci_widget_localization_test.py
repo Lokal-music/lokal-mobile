@@ -42,6 +42,20 @@ class NativeTurkishLocalizationTest(unittest.TestCase):
                     continue
                 self.fail(f"{path.name}: untranslated android:text={text!r}")
 
+    def test_notification_channel_uses_service_context_for_localized_description(self):
+        # Kotlin's receiver inside NotificationChannel.apply is a
+        # NotificationChannel, not an Android Context. This previously broke
+        # :app:compileFullReleaseKotlin in release run 40266183722.
+        source = (
+            ROOT / "android/app/src/main/kotlin/com/mossapps/flick/MusicNotificationService.kt"
+        ).read_text(encoding="utf-8")
+        channel_setup = source.split("private fun createNotificationChannel()", 1)[1]
+        channel_setup = channel_setup.split("private fun setupMediaSession()", 1)[0]
+        self.assertIn(
+            "description = WidgetPrefs.localizedText(this@MusicNotificationService,",
+            channel_setup,
+        )
+
     def test_native_runtime_resource_references_exist(self):
         names = resource_names(RESOURCES / "values/widget_strings.xml")
         native_dir = ROOT / "android/app/src/main/kotlin/com/mossapps/flick"
