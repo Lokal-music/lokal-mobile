@@ -313,6 +313,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
         child: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
+    final viewGeneration = _resolveGeneration;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -327,7 +328,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
             'videoUrl': _media!['videoUrl'],
             'headers': _media!['headers'] ?? <String, String>{},
           },
-          onPlatformViewCreated: (id) => _created(id, _resolveGeneration),
+          onPlatformViewCreated: (id) => _created(id, viewGeneration),
         ),
         if (!_ready || _buffering)
           const IgnorePointer(
