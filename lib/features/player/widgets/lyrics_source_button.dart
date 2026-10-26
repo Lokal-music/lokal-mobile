@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flick/models/song.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/lyrics_sources.dart';
@@ -26,16 +29,23 @@ class LyricsSourceButton extends StatelessWidget {
     super.key,
     required this.selected,
     required this.lyrics,
+    required this.song,
+    required this.lyricsService,
     required this.onSelected,
     required this.onRefresh,
     this.busy = false,
   });
   final String selected;
   final LyricsData? lyrics;
+  final Song song;
+  final LyricsService lyricsService;
   final bool busy;
   final ValueChanged<String> onSelected;
   final VoidCallback onRefresh;
   Future<void> _show(BuildContext context) async {
+    // Availability checks are on-demand: opening the chooser starts bounded
+    // searches and reuses recent results; playback itself does not fan out.
+    unawaited(lyricsService.probeSourceHits(song));
     final t = context.lokal;
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -46,7 +56,9 @@ class LyricsSourceButton extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (context) => SafeArea(
+      builder: (context) => ValueListenableBuilder<int>(
+        valueListenable: LyricsService.sourceHitsRevision,
+        builder: (context, _, __) => SafeArea(
         child: DraggableScrollableSheet(
           expand: false,
           initialChildSize: .65,
@@ -106,7 +118,10 @@ class LyricsSourceButton extends StatelessWidget {
                   selectedTileColor: t.accent.withValues(alpha: .1),
                   title: Text(source.value),
                   subtitle: Text(
-                    source.key == 'auto'
+                    source.key != 'auto' &&
+                            LyricsService.sourceHitFor(song, source.key) case final hit?
+                        ? '${hit.status == 'hit' ? 'Found · ${hit.timing}' : hit.status == 'checking' ? 'Checking…' : 'No result'}'
+                        : source.key == 'auto'
                         ? 'Use your priority order and keep the best timing'
                         : source.key == 'local'
                         ? 'Copied, sidecar or embedded lyrics'
@@ -116,13 +131,28 @@ class LyricsSourceButton extends StatelessWidget {
                         ? 'Plain lyrics'
                         : 'Supports syllable / word timing',
                   ),
-                  trailing: selected == source.key
-                      ? Icon(Icons.check_rounded, color: t.accent)
-                      : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (LyricsService.sourceHitFor(song, source.key)?.status == 'hit')
+                        const Icon(Icons.check_circle_rounded,
+                            color: Colors.greenAccent, size: 18),
+                      if (LyricsService.sourceHitFor(song, source.key)?.status == 'checking')
+                        const SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                      if (selected == source.key)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check_rounded, color: t.accent),
+                        ),
+                    ],
+                  ),
                   onTap: () => Navigator.pop(context, source.key),
                 ),
             ],
           ),
+        ),
         ),
       ),
     );
