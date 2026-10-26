@@ -23,4 +23,21 @@
     <string name="widget_flow_radio_desc">Adaptive personal Flow, new mixes and song radio, with playback status</string>
     <string name="widget_recommended_flow_name">Lokal · Cover Flow</string>
     <string name="widget_recommended_flow_desc">Browse and play recommended songs with three cover artworks</string>
+
+    <string name="widget_flow_heading">FLOW &amp; RADIO</string>
+    <string name="widget_flow_heading_small">FLOW</string>
+    <string name="widget_flow_title">Your Flow</string>
+    <string name="widget_flow_status">Music made for you</string>
+    <string name="widget_flow_status_small">Curated for you</string>
+    <string name="widget_flow_status_empty">Play a mix curated for you</string>
+    <string name="widget_action_play">Play</string>
+    <string name="widget_action_mix">Mix</string>
+    <string name="widget_action_radio">Radio</string>
+    <string name="widget_cover_flow_heading">COVER FLOW</string>
+    <string name="widget_cover_flow_next_favourite">Your next favourite</string>
+    <string name="widget_cover_flow_description">Discover music with Lokal</string>
+    <string name="widget_cover_flow_recommended">Recommended track</string>
+    <string name="widget_cover_flow_from_listening">From your listening</string>
+    <string name="widget_cover_flow_empty_description">Play something in Lokal to build your picks</string>
+    <string name="widget_cover_flow_play_pick">Play pick</string>
 </resources>
