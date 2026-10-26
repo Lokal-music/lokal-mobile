@@ -8,8 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> sample(int size, int modified) => {
   'schema':'lokal-automix-advanced-v1',
-  'source':{'size':size,'mtimeMs':modified,'sha256':'a' * 64},
-  'analyzer':{'id':'disco-eth/cue-detr','revision':'b' * 40},
+  'source':{'size':size,'mtimeMs':modified,'sha256':List.filled(64,'a').join()},
+  'analyzer':{'id':'disco-eth/cue-detr','revision':List.filled(40,'b').join()},
   'durationSeconds':180.0,
   'bpm':120.0,
   'transitionCues':{
@@ -88,6 +88,6 @@ void main() {
     expect(waveformCalls,1);
 
     await sidecar.writeAsString('corrupt');
-    expect((await cache.read(track))?.modelEntrances, isEmpty);
+    expect(await cache.read(track), isNull);
   });
 }
