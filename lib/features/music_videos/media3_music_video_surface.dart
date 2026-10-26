@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import 'package:flick/features/discovery/youtube_music_store.dart';
 import 'music_video_surface.dart';
+import 'video_quality_settings.dart';
 
 /// One clock and transport interface for the native video and the regular
 /// Full Player chrome/Space subtitles. Album playback has a separate clock.
@@ -98,12 +99,14 @@ class Media3MusicVideoSurface extends StatefulWidget {
   const Media3MusicVideoSurface({
     super.key, required this.videoId, this.controller, this.onFullscreen,
     this.showControls = true,
+    this.maxVideoHeight = defaultVideoQualityHeight,
   });
   final String videoId;
   final Media3MusicVideoController? controller;
   /// Enlarge the same native player into device fullscreen when requested.
   final VoidCallback? onFullscreen;
   final bool showControls;
+  final int maxVideoHeight;
 
   @override
   State<Media3MusicVideoSurface> createState() => _Media3MusicVideoSurfaceState();
@@ -141,7 +144,8 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       oldWidget.controller?.detach();
       widget.controller?.attach(_command);
     }
-    if (oldWidget.videoId != widget.videoId) {
+    if (oldWidget.videoId != widget.videoId ||
+        oldWidget.maxVideoHeight != widget.maxVideoHeight) {
       widget.controller?.reset();
       _poller?.cancel();
       _watchdog?.cancel();
@@ -172,6 +176,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       final result = await _resolver.invokeMapMethod<String, dynamic>(
         'resolveVideo', {
           'videoId': videoId,
+          'maxVideoHeight': effectiveVideoHeight(widget.maxVideoHeight),
           if (session != null) ...{
             'cookie': [for (final entry in session.cookies.entries) '${entry.key}=${entry.value}'].join('; '),
             'visitorData': session.visitorData,
