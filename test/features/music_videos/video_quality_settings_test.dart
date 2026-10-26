@@ -37,6 +37,34 @@ void main() {
     expect(second.read(videoQualityProvider), 720);
   });
 
+  test('a new selection survives an in-flight preferences restoration', () async {
+    SharedPreferences.setMockInitialValues({
+      'lokal.music_video.max_height': 360,
+    });
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    expect(container.read(videoQualityProvider), defaultVideoQualityHeight);
+
+    // select() updates the view before awaiting the preferences instance.
+    // The pending restore must not overwrite this newer value with 360p.
+    await container.read(videoQualityProvider.notifier).select(720);
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(videoQualityProvider), 720);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getInt('lokal.music_video.max_height'), 720);
+  });
+
+  test('rapid selections persist the most recent resolution', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(videoQualityProvider);
+    final notifier = container.read(videoQualityProvider.notifier);
+    await Future.wait([notifier.select(720), notifier.select(480)]);
+    expect(container.read(videoQualityProvider), 480);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getInt('lokal.music_video.max_height'), 480);
+  });
+
   test('ignores unsupported values and forwards actual height to Media3', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
