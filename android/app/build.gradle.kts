@@ -284,6 +284,10 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation("androidx.media:media:1.7.0")
+    // Full-player native music videos: single Media3 clock for separate
+    // video-only and audio-only legs, independent of the audio queue.
+    implementation("androidx.media3:media3-exoplayer:1.8.0")
+    implementation("androidx.media3:media3-ui:1.8.0")
     implementation("androidx.lifecycle:lifecycle-service:2.7.0")
     
     // Jetpack Glance for Widgets

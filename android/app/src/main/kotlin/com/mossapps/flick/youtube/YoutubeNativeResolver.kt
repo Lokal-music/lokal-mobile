@@ -49,6 +49,42 @@ internal object YoutubeNativeResolver {
         initialized = true
     }
 
+    /** Returns both Media3 playback legs without exposing cookies to the
+     * video view. The same extraction session and mutex serve audio/video.
+     */
+    suspend fun resolveVideo(
+        videoId: String,
+        cookie: String?,
+        visitorData: String?,
+    ): Map<String, Any?> = withTimeout(45_000L) {
+        resolveMutex.withLock {
+            check(initialized) { "YouTube resolver is not initialized." }
+            if (Innertube.updateSession(cookie, visitorData)) {
+                InnerTubeXResolver.onSessionChanged()
+            }
+            val resolved = try {
+                InnerTubeXResolver.resolvePlayableVideo(videoId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A rotated sign-in session must not block public videos.
+                if (cookie.isNullOrBlank()) throw e
+                Innertube.updateSession(null, null)
+                InnerTubeXResolver.onSessionChanged()
+                InnerTubeXResolver.resolvePlayableVideo(videoId)
+            }
+            val video = requireNotNull(resolved.videoUrl)
+            mapOf(
+                "audioUrl" to resolved.url,
+                "videoUrl" to video,
+                "audioMime" to resolved.mimeType.substringBefore(';'),
+                "videoMime" to resolved.videoMimeType,
+                "height" to resolved.videoHeight,
+                "headers" to resolved.headers,
+            )
+        }
+    }
+
     suspend fun resolveStream(
         videoId: String,
         cookie: String?,
