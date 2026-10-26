@@ -127,6 +127,29 @@ bool shouldPrepareCrossfade({
       left <= fadeMs + (math.max(0.0, preparationLeadSecs) * 1000).round();
 }
 
+/// Only substantial terminal silence should shorten an AutoMix overlap.
+/// A mismatch with the decoder duration or a very long quiet outro returns
+/// the original duration rather than risking a premature skip.
+@visibleForTesting
+Duration automixEffectiveAudibleEnd(
+  Duration duration,
+  AutoMixProfile? profile,
+) {
+  if (profile == null || duration.inMilliseconds < 25000) return duration;
+  if ((duration.inMilliseconds / 1000 - profile.durationSeconds).abs() > 2) {
+    return duration;
+  }
+  final audible = Duration(
+    milliseconds: (profile.audibleEndSeconds * 1000).round(),
+  );
+  final silence = duration - audible;
+  return silence >= const Duration(seconds: 3) &&
+          silence <= const Duration(seconds: 15) &&
+          audible >= const Duration(seconds: 20)
+      ? audible
+      : duration;
+}
+
 @visibleForTesting
 bool shouldUseFastStartCurrentTrackOnly({
   required bool allowFastStart,
@@ -904,23 +927,11 @@ class AndroidAudioEngine implements AudioEngine {
   /// Use cached waveform analysis only to omit a substantial trailing
   /// digital silence. Never trim ambiguous short fades or sources whose
   /// measured duration disagrees with the active decoder.
-  Duration _audibleTransitionEnd(Duration? decoderDuration) {
-    final duration = decoderDuration ?? _loadedTrack?.duration ?? Duration.zero;
-    final profile = _currentAutoMixProfile;
-    if (profile == null || duration.inMilliseconds < 25000) return duration;
-    if ((duration.inMilliseconds / 1000 - profile.durationSeconds).abs() > 2) {
-      return duration;
-    }
-    final audible = Duration(
-      milliseconds: (profile.audibleEndSeconds * 1000).round(),
-    );
-    final silence = duration - audible;
-    return silence >= const Duration(seconds: 3) &&
-            silence <= const Duration(seconds: 15) &&
-            audible >= const Duration(seconds: 20)
-        ? audible
-        : duration;
-  }
+  Duration _audibleTransitionEnd(Duration? decoderDuration) =>
+      automixEffectiveAudibleEnd(
+        decoderDuration ?? _loadedTrack?.duration ?? Duration.zero,
+        _currentAutoMixProfile,
+      );
 
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
     if (_crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
