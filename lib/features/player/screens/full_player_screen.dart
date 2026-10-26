@@ -1236,7 +1236,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   enabled: false,
                   child: Opacity(
                     opacity: p,
-                    child: _artwork(song, size, current: true, progress: p),
+                    child: _artwork(song, size, current: !_videoActive, progress: p),
                   ),
                 ),
               );
@@ -1982,7 +1982,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             active: _showLyrics,
             width: (constraints.maxWidth - 8) / 4,
           ),
-          if (_lyricsForSongId == _player.currentSongNotifier.value?.id &&
+          if (_lyricsForSongId ==
+                  (_videoOverrideSong ?? widget.videoSong ??
+                   _player.currentSongNotifier.value)?.id &&
               hasImmersiveLyrics(_lyrics))
             chip(
               LucideIcons.expand,
@@ -1991,16 +1993,24 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               active: _immersiveLyrics,
               width: (constraints.maxWidth - 8) / 4,
             ),
-          if (ref.watch(musicVideosEnabledProvider))
+          if (_videoOverrideId != null)
+            chip(
+              LucideIcons.disc3,
+              'Audio',
+              _exitVideoMode,
+              active: true,
+              width: (constraints.maxWidth - 8) / 4,
+            )
+          else if (ref.watch(musicVideosEnabledProvider))
             if (_player.currentSongNotifier.value case final current?)
               if (ref.watch(musicVideoIndexProvider).videoFor(current.id)
                   case final videoId?)
-              chip(
-                LucideIcons.video,
-                'Video',
-                () => unawaited(_enterVideoMode(current, videoId)),
-                width: (constraints.maxWidth - 8) / 4,
-              ),
+                chip(
+                  LucideIcons.video,
+                  'Video',
+                  () => unawaited(_enterVideoMode(current, videoId)),
+                  width: (constraints.maxWidth - 8) / 4,
+                ),
           ValueListenableBuilder<Duration?>(
             valueListenable: _player.sleepTimerRemainingNotifier,
             builder: (_, remaining, __) => chip(
