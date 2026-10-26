@@ -95,7 +95,7 @@ void main() {
         errors.add('${entry.key}: placeholder mismatch');
       }
     }
-    expect(errors, isEmpty, reason: errors.join('\\n'));
+    expect(errors, isEmpty, reason: errors.join('\n'));
   });
 
   test('legal attribution stays unchanged in Turkish locale', () {
