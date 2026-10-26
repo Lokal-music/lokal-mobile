@@ -914,29 +914,35 @@ class AndroidAudioEngine implements AudioEngine {
     bool valid() {
       final candidate = _onNextSong?.call();
       return _crossfadeArmed && epoch == _crossfadeEpoch &&
+          _crossfadeConfigProvider().enabled &&
           identical(_player, outgoing) &&
           identical(_loadedTrack, outgoingTrack) &&
           candidate != null &&
           androidAudioSourceIdentity(candidate) == nextIdentity;
     }
+    // A queue edit can invalidate the candidate without calling load/stop.
+    // In that case no new epoch is created, so release our own armed state.
+    void releaseIfOwned() {
+      if (epoch == _crossfadeEpoch) _crossfadeArmed = false;
+    }
 
     unawaited(() async {
       try {
         final incoming = await _ensureSecondary();
-        if (!valid()) return;
+        if (!valid()) { releaseIfOwned(); return; }
         final source = await _sourceBuilder(next);
-        if (!valid()) return;
+        if (!valid()) { releaseIfOwned(); return; }
         _rampUserVolume = outgoing.volume <= 0 ? 1.0 : outgoing.volume;
         await incoming
             .setAudioSource(source, preload: true)
             .timeout(const Duration(seconds: 30));
-        if (!valid()) return;
+        if (!valid()) { releaseIfOwned(); return; }
         await incoming.seek(Duration.zero).timeout(const Duration(seconds: 15));
-        if (!valid()) return;
+        if (!valid()) { releaseIfOwned(); return; }
         await incoming.setVolume(0);
         await incoming.setSpeed(outgoing.speed);
         await incoming.setLoopMode(just_audio.LoopMode.off);
-        if (!valid()) return;
+        if (!valid()) { releaseIfOwned(); return; }
 
         // Do not advance the queue while the next song is only buffered.
         // Poll the media position rather than wall time so pause/buffering
@@ -954,7 +960,7 @@ class AndroidAudioEngine implements AudioEngine {
           if (outgoing.playing && remainingMs <= fadeMs) break;
           await Future<void>.delayed(const Duration(milliseconds: 80));
         }
-        if (!valid()) return;
+        if (!valid()) { releaseIfOwned(); return; }
 
         final remainingMs =
             ((outgoing.duration ?? outgoingTrack.duration) - outgoing.position)
