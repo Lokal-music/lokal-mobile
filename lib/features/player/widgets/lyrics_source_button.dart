@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+
+import 'package:flutter/material.dart';
 
 import 'package:flick/models/song.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
@@ -127,7 +128,7 @@ class LyricsSourceButton extends StatelessWidget {
                   title: Text(source.value),
                   subtitle: Text(
                     lyricsSourceHitLabel(song, source.key) ??
-                    (source.key == 'auto'
+                        (source.key == 'auto'
                         ? 'Use your priority order and keep the best timing'
                         : source.key == 'local'
                         ? 'Copied, sidecar or embedded lyrics'
@@ -142,7 +143,7 @@ class LyricsSourceButton extends StatelessWidget {
                     children: [
                       if (LyricsService.sourceHitFor(song, source.key)?.status == 'hit')
                         const Icon(Icons.check_circle_rounded,
-                            color: Colors.greenAccent, size: 18),
+                            color: t.accent, size: 18),
                       if (LyricsService.sourceHitFor(song, source.key)?.status == 'checking')
                         const SizedBox.square(
                             dimension: 14,
