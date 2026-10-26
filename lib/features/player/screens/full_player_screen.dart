@@ -392,11 +392,24 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     unawaited(_loadLyrics());
   }
 
-  Future<void> _saveLyricsFile(Song song, LyricsData lyrics) async {
-    if (_savingLyricsFile) return;
+  Future<void> _saveLyricsFile(
+    Song song,
+    LyricsData lyrics, {
+    bool includeDisplayedSubline = false,
+  }) async {
+    if (_savingLyricsFile ||
+        _lyricsForSongId != song.id ||
+        (_videoOverrideSong ?? widget.videoSong ??
+                _player.currentSongNotifier.value)?.id != song.id) {
+      return;
+    }
     setState(() => _savingLyricsFile = true);
     try {
-      final saved = await saveCurrentLyricsFile(song: song, lyrics: lyrics);
+      final saved = await saveCurrentLyricsFile(
+        song: song,
+        lyrics: lyrics,
+        includeDisplayedSubline: includeDisplayedSubline,
+      );
       if (saved && mounted) {
         LokalToast.fromSnackBar(
           context,
@@ -420,6 +433,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
   void _showSpaceOptions() {
     if (!_immersiveLyrics) return;
+    final shownSong = _videoOverrideSong ?? widget.videoSong ??
+        _player.currentSongNotifier.value;
     final source = _lyrics;
     showModalBottomSheet<void>(
       context: context,
@@ -437,16 +452,31 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   unawaited(_chooseImmersiveLyricsSource());
                 },
               ),
-              if (source != null && source.lines.isNotEmpty)
+              if (source != null && hasUsableLyrics(source))
                 ListTile(
                   leading: const Icon(LucideIcons.download),
                   title: Text(l10n.saveLyrics),
                   enabled: !_savingLyricsFile,
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    final song = _videoOverrideSong ?? widget.videoSong ??
+                    // The sheet may outlive the song that supplied its lyrics.
+                    // Also use the latest displayed translation/romanization
+                    // when the subline controls changed inside this sheet.
+                    final currentSong = _videoOverrideSong ?? widget.videoSong ??
                         _player.currentSongNotifier.value;
-                    if (song != null) unawaited(_saveLyricsFile(song, source));
+                    if (shownSong == null ||
+                        currentSong?.id != shownSong.id ||
+                        _lyricsForSongId != shownSong.id) {
+                      return;
+                    }
+                    final displayed = _sublineLyrics ?? _lyrics;
+                    if (displayed != null && hasUsableLyrics(displayed)) {
+                      unawaited(_saveLyricsFile(
+                        shownSong,
+                        displayed,
+                        includeDisplayedSubline: _sublineLyrics != null,
+                      ));
+                    }
                   },
                 ),
               if (source != null)
@@ -1719,7 +1749,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             ),
-            if (data != null && data.lines.isNotEmpty)
+            if (display != null && hasUsableLyrics(display))
               IconButton(
                 key: const ValueKey('save-current-lyrics-file'),
                 tooltip: 'Save lyrics to file',
@@ -1734,7 +1764,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                         color: Colors.white70, size: 19),
                 onPressed: _savingLyricsFile
                     ? null
-                    : () => unawaited(_saveLyricsFile(song, data)),
+                    : () => unawaited(_saveLyricsFile(
+                        song,
+                        display,
+                        includeDisplayedSubline: _sublineLyrics != null,
+                      )),
               ),
             if (hasImmersiveLyrics(data))
               IconButton(
