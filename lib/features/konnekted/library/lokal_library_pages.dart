@@ -3,6 +3,7 @@ import 'package:flick/l10n/l10n.dart';
 import 'dart:async';
 
 import 'package:flick/features/konnekted/konnekted_data.dart';
+import 'package:flick/providers/favorites_provider.dart';
 import 'package:flick/features/search/library_download.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
@@ -62,9 +63,11 @@ Widget? lokalLibraryPage(String name) => switch (name) {
   'favorites' => LokalSongListPage(
     title: lokalText('Liked'),
     source: (ref) => ref.watch(konnektedFavoritesProvider),
-    // The Likes page uses the same working sort options as the library.
-    // No misleading "Recently liked" alias for the repository's title order.
+    // "Recently added" means added to Likes here, not imported into Library.
     initialSort: LokalSongSort.recentlyAdded,
+    recentlyAddedRanks: (ref) =>
+        ref.watch(favoritesProvider).value?.likedRanks ?? const <String, int>{},
+    preferencesKey: 'lokal.likes.song_browser_view.v1',
     emptyIcon: Icons.favorite_border_rounded,
     emptyTitle: 'No liked songs yet',
     emptyMessage: 'Tap the heart on any song and it shows up here.',
