@@ -75,6 +75,30 @@ void main() {
     expect(storage.listSync().whereType<File>().length, 2);
   });
 
+  test('corrupted derived files are regenerated without re-decoding audio', () async {
+    final dir = await Directory.systemTemp.createTemp('lokal-automix-corrupt-');
+    addTearDown(() async => dir.delete(recursive: true));
+    final source = File('${dir.path}/local.flac');
+    await source.writeAsString('unchanged source');
+    final storage = Directory('${dir.path}/profiles');
+    var count = 0;
+    AutoMixAnalysisCache create() => AutoMixAnalysisCache(
+      directory: () async => storage,
+      loadWaveform: (id) async {
+        count++;
+        return waveform(DateTime.now().add(const Duration(seconds: 4))
+            .millisecondsSinceEpoch);
+      },
+    );
+    final track = localSong(source.path);
+    expect(await create().read(track), isNotNull);
+    final jsonFile = storage.listSync().whereType<File>().single;
+    await jsonFile.writeAsString('{damaged');
+    expect(await create().read(track), isNotNull);
+    expect(count, 2, reason: 'corruption uses existing Isar peaks');
+    expect(jsonDecode(await jsonFile.readAsString()), isA<Map>());
+  });
+
   test('does not reuse stale waveform data or signed streaming handles', () async {
     final dir = await Directory.systemTemp.createTemp('lokal-automix-stale-');
     addTearDown(() async => dir.delete(recursive: true));
