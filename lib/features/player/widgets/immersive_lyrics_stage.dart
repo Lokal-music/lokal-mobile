@@ -255,6 +255,9 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
 
   Widget _subtitleLine(LyricsLine line, int index, Duration position) {
     return Column(
+      // Keep the entire line's subtree stable as adjacent active lines expire.
+      // A key only on LyricMotionLine cannot preserve its state if Column moves.
+      key: ValueKey('space-line-container:${line.timestamp.inMilliseconds}:$index'),
       mainAxisSize: MainAxisSize.min,
       children: [
         RepaintBoundary(
