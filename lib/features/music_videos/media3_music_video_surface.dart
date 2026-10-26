@@ -19,11 +19,13 @@ class Media3MusicVideoSurface extends StatefulWidget {
   State<Media3MusicVideoSurface> createState() => _Media3MusicVideoSurfaceState();
 }
 
-class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
+class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
+    with WidgetsBindingObserver {
   static const _resolver = MethodChannel('com.mossapps.flick/youtube_stream');
   Map<String, dynamic>? _media;
   MethodChannel? _player;
   Timer? _poller;
+  Timer? _watchdog;
   bool _fallback = false;
   bool _loading = true;
   bool _playing = false;
@@ -37,6 +39,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_resolve());
   }
 
@@ -45,6 +48,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoId != widget.videoId) {
       _poller?.cancel();
+      _watchdog?.cancel();
       _player = null;
       _media = null;
       _fallback = false;
@@ -85,6 +89,12 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
         _media = Map<String, dynamic>.from(result!);
         _loading = false;
       });
+      _watchdog?.cancel();
+      _watchdog = Timer(const Duration(seconds: 35), () {
+        if (mounted && !_ready && !_fallback && videoId == widget.videoId) {
+          setState(() => _fallback = true);
+        }
+      });
     } catch (_) {
       if (mounted && videoId == widget.videoId) {
         setState(() { _fallback = true; _loading = false; });
@@ -116,6 +126,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
         _playing = status?['playing'] == true;
         _buffering = status?['buffering'] == true;
         _ready = status?['ready'] == true;
+        if (_ready) _watchdog?.cancel();
         _position = (status?['positionMs'] as num?)?.toInt() ?? 0;
         _duration = (status?['durationMs'] as num?)?.toInt() ?? 0;
       });
@@ -127,7 +138,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
 
   Future<void> _command(String method, [Map<String, Object?> args = const {}]) async {
     try {
-      await _player?.invokeMethod<void>(method, args);
+      await _player?.invokeMethod<Object?>(method, args);
       if (mounted) unawaited(_refresh());
     } on PlatformException {
       if (mounted) setState(() => _fallback = true);
@@ -137,8 +148,20 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_command('pause'));
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poller?.cancel();
+    _watchdog?.cancel();
+    // Pause the native audio owner before Lokal optionally resumes song audio.
+    unawaited(_player?.invokeMethod<Object?>('pause').catchError((Object _) => null) ?? Future<Object?>.value(null));
     _player = null;
     super.dispose();
   }

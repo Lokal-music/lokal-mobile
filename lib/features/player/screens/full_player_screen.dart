@@ -244,7 +244,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   @override
   void dispose() {
     if (_videoFullscreen) {
-      // Restore standard edge-to-edge system bars when leaving a video.
+      // Restore Lokal's default portrait orientation on every exit path.
+      unawaited(SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]));
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     }
     LokalPerformanceAdvisor.exitPlayerSurface('modern-full-player');
@@ -486,19 +487,28 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     });
     // Resuming song playback is explicit after returning to the player.
     // The album version's clock cannot be equated with the music-video clock.
-    if (resume) unawaited(_player.play());
+    if (resume) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _videoOverrideId == null) unawaited(_player.resume());
+      });
+    }
   }
 
   void _toggleVideoFullscreen() {
     setState(() => _videoFullscreen = !_videoFullscreen);
+    unawaited(SystemChrome.setPreferredOrientations(
+      _videoFullscreen
+          ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+          : [DeviceOrientation.portraitUp],
+    ));
     unawaited(SystemChrome.setEnabledSystemUIMode(
       _videoFullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
     ));
   }
 
-  /// The video fills the artwork stage of the same full-player route. The
-  /// persistent YouTube iframe is the *only* audio owner while it is open;
-  /// it is never mixed with a second Lokal audio track or treated as Canvas.
+  /// The native video is the only audio owner while open; the separate
+  /// album recording remains paused and never plays in parallel with Media3.
+  /// Keep the platform view mounted across fullscreen/fit changes.
   Widget _videoScaffold(Song song, String videoId) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -506,12 +516,23 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
         fit: StackFit.expand,
         children: [
           Center(
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Media3MusicVideoSurface(
-                key: ValueKey('music-video:$videoId'),
-                videoId: videoId,
-              ),
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final width = _videoFullscreen
+                    ? box.maxWidth
+                    : math.min(box.maxWidth, box.maxHeight * 16 / 9);
+                final height = _videoFullscreen
+                    ? box.maxHeight
+                    : width * 9 / 16;
+                return SizedBox(
+                  width: width,
+                  height: height,
+                  child: Media3MusicVideoSurface(
+                    key: ValueKey('music-video:$videoId'),
+                    videoId: videoId,
+                  ),
+                );
+              },
             ),
           ),
           if (!_videoFullscreen)

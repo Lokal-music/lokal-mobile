@@ -10,6 +10,7 @@ void main() {
     title: 'Track',
     artist: 'Artist',
     duration: Duration(minutes: 3),
+    fileType: 'FLAC',
   );
 
   test('video ID validation rejects arbitrary embed destinations', () {

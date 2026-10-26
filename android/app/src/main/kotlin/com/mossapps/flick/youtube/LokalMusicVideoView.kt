@@ -5,6 +5,8 @@ import android.net.Uri
 import android.view.View
 import android.view.LayoutInflater
 import com.mossapps.flick.R
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -34,13 +36,22 @@ internal class LokalMusicVideoFactory(private val messenger: BinaryMessenger) :
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class LokalMusicVideoView(
     context: Context,
     messenger: BinaryMessenger,
     viewId: Int,
     params: Map<String, Any?>,
 ) : PlatformView {
-    private val player = ExoPlayer.Builder(context).build()
+    private val player = ExoPlayer.Builder(context).build().apply {
+        setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            true, // Own Android audio focus while native video is playing.
+        )
+    }
     private val view = (LayoutInflater.from(context).inflate(
         R.layout.lokal_music_video_player, null
     ) as PlayerView).apply {
