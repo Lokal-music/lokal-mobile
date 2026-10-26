@@ -53,6 +53,9 @@ object InnerTubeXResolver {
         /** InnerTubeX's catalog id for the exact client variant; what exclusions key on. */
         val profileId: String,
         val headers: Map<String, String>,
+        val videoUrl: String? = null,
+        val videoMimeType: String? = null,
+        val videoHeight: Int? = null,
     )
 
     /**
@@ -221,13 +224,15 @@ object InnerTubeXResolver {
         maxKbps: Int,
         skipClients: Set<String> = emptySet(),
         requireM4a: Boolean = false,
+        wantVideo: Boolean = false,
+        maxVideoHeight: Int = 1080,
     ): Extracted? {
         innerTube.cookie = Innertube.cookie
         innerTube.visitorData = Innertube.ensureVisitorData()
         innerTube.locale = YouTubeLocale(gl = Innertube.currentRegion, hl = Innertube.currentLanguage)
         val stream = extractor.extract(
             videoId = videoId,
-            hints = ContentHints().withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
+            hints = ContentHints(wantVideo = wantVideo, maxVideoHeight = maxVideoHeight).withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
             excludedClients = excludedFor(videoId) + skipClients,
             audioQuality = when {
                 requireM4a -> AudioQuality.MP4
@@ -247,6 +252,9 @@ object InnerTubeXResolver {
             clientName = stream.clientName,
             profileId = stream.profileId,
             headers = stream.headers,
+            videoUrl = stream.videoUrl,
+            videoMimeType = stream.videoMimeType,
+            videoHeight = stream.videoHeight,
         )
         if (minted.size >= MAX_REMEMBERED) minted.clear()
         minted[extracted.url] = extracted
@@ -287,6 +295,40 @@ object InnerTubeXResolver {
             failure,
         )
     }
+
+    /** Music-video playback requests separate audio and video tracks from the
+     * same extractor identity. Both legs must have playable URLs; otherwise
+     * the UI falls back to YouTube's official embedded player.
+     */
+    suspend fun resolvePlayableVideo(videoId: String, maxAttempts: Int = 3): Extracted {
+        var last: Throwable? = null
+        repeat(maxAttempts.coerceIn(1, 6)) {
+            val candidate = try {
+                extract(videoId, Int.MAX_VALUE, wantVideo = true, maxVideoHeight = 1080)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw IOException("Video stream extraction failed.", e)
+            } ?: throw IOException("No native video streams available.")
+            val video = candidate.videoUrl
+            if (video.isNullOrBlank() || !video.startsWith("https://")) {
+                throw IOException("No direct video-only stream available.")
+            }
+            val failedAudio = probeMedia(candidate)
+            val failedVideo = if (failedAudio == null) {
+                probeMedia(candidate.copyUrl(video))
+            } else null
+            if (failedAudio == null && failedVideo == null) return candidate
+            last = IOException(failedAudio ?: failedVideo!!)
+            onRefused(candidate.url)
+        }
+        throw IOException("Native video could not be verified.", last)
+    }
+
+    private fun Extracted.copyUrl(otherUrl: String) = Extracted(
+        videoId, otherUrl, kbps, mimeType, loudnessDb, clientName,
+        profileId, headers, videoUrl, videoMimeType, videoHeight,
+    )
 
     private suspend fun probeMedia(stream: Extracted): String? =
         kotlinx.coroutines.withContext(Dispatchers.IO) {

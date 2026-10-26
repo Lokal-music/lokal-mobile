@@ -1,6 +1,8 @@
 import 'package:flick/core/theme/lokal_performance_scope.dart';
 import 'dart:io';
-import 'package:flick/features/music_videos/music_video_surface.dart';
+import 'package:flick/features/music_videos/media3_music_video_surface.dart';
+import 'package:flick/features/music_videos/music_video_providers.dart';
+import 'package:flick/providers/opt_in_source_provider.dart';
 import 'package:flick/features/player/widgets/full_player_visuals.dart';
 import 'package:flick/features/player/widgets/full_bleed_artwork_frame.dart';
 import 'package:flick/features/player/widgets/full_player_identity_layout.dart';
@@ -103,6 +105,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
   bool _videoFullscreen = false;
   bool _immersiveLyrics = false;
+  String? _videoOverrideId;
+  Song? _videoOverrideSong;
+  bool _resumeAudioAfterVideo = false;
   bool _showLyrics = false;
   bool _lyricsLoading = false;
   String _lyricsSource = 'auto';
@@ -223,9 +228,17 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _player.currentSongNotifier.addListener(_onSongChanged);
     _player.favoriteNotificationToggleNotifier.addListener(_refreshFavorite);
     _refreshFavorite();
-    // The Space footer action must reflect *actual* line/word-timed
-    // lyrics. Warm cached/local lyrics before the Lyrics panel opens.
+    _discoverVideo(_player.currentSongNotifier.value);
     unawaited(_loadLyrics());
+  }
+
+  void _discoverVideo(Song? song) {
+    if (song == null || !ref.read(musicVideosEnabledProvider)) return;
+    // On-demand lookup (remembered by the same index as Library > Videos).
+    // Only a positively identified official video earns the footer button.
+    unawaited(ref.read(musicVideoIndexProvider.notifier).find(song).catchError(
+      (Object _) => null,
+    ));
   }
 
   @override
@@ -250,8 +263,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _restoreCanvasControls();
     _draggingSeek = false;
     _refreshFavorite();
-    // Availability changes when the playing track changes, even with the
-    // standard player visible.
+    _discoverVideo(_player.currentSongNotifier.value);
     unawaited(_loadLyrics());
   }
 
@@ -445,9 +457,36 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       _toggleImmersiveLyrics();
     } else if (_videoFullscreen) {
       _toggleVideoFullscreen();
+    } else if (_videoOverrideId != null) {
+      _exitVideoMode();
     } else {
       Navigator.of(context).pop();
     }
+  }
+
+  Future<void> _enterVideoMode(Song song, String videoId) async {
+    if (!RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)) return;
+    _resumeAudioAfterVideo = _player.isPlayingNotifier.value;
+    // One active audio owner: pause album audio before native video audio.
+    if (_resumeAudioAfterVideo) await _player.pause();
+    if (!mounted || _player.currentSongNotifier.value?.id != song.id) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _videoOverrideSong = song;
+      _videoOverrideId = videoId;
+    });
+  }
+
+  void _exitVideoMode() {
+    final resume = _resumeAudioAfterVideo;
+    setState(() {
+      _videoOverrideId = null;
+      _videoOverrideSong = null;
+      _resumeAudioAfterVideo = false;
+    });
+    // Resuming song playback is explicit after returning to the player.
+    // The album version's clock cannot be equated with the music-video clock.
+    if (resume) unawaited(_player.play());
   }
 
   void _toggleVideoFullscreen() {
@@ -469,7 +508,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
           Center(
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: MusicVideoSurface(
+              child: Media3MusicVideoSurface(
                 key: ValueKey('music-video:$videoId'),
                 videoId: videoId,
               ),
@@ -624,13 +663,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
     return PopScope(
       // Back puts the queue or the lyrics away first, then closes the player.
-      canPop: !_immersiveLyrics && !_videoFullscreen && !_showLyrics && !_queue.isOpen,
+      canPop: !_immersiveLyrics && _videoOverrideId == null && !_videoFullscreen && !_showLyrics && !_queue.isOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_immersiveLyrics) {
           _toggleImmersiveLyrics();
         } else if (_videoFullscreen) {
           _toggleVideoFullscreen();
+        } else if (_videoOverrideId != null) {
+          _exitVideoMode();
         } else if (_showLyrics) {
           _toggleLyrics();
         } else if (_queue.isOpen) {
@@ -654,8 +695,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     bool isCasting,
     AudioOutputDiagnostics? diagnostics,
   ) {
-    if (widget.videoSong case final videoSong?) {
-      return _videoScaffold(videoSong, widget.videoId!);
+    final videoSong = _videoOverrideSong ?? widget.videoSong;
+    final videoId = _videoOverrideId ?? widget.videoId;
+    if (videoSong != null && videoId != null) {
+      return _videoScaffold(videoSong, videoId);
     }
     if (_immersiveLyrics) {
       return ValueListenableBuilder<Song?>(
@@ -1440,8 +1483,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               ),
             ),
             IconButton(
-              tooltip: 'Immersive lyrics',
-              icon: const Icon(LucideIcons.maximize, color: Colors.white70, size: 19),
+              tooltip: 'Space — immersive lyrics',
+              icon: const Icon(LucideIcons.expand, color: Colors.white70, size: 19),
               onPressed: _toggleImmersiveLyrics,
             ),
             LyricsSourceButton(
@@ -1824,6 +1867,16 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               active: _immersiveLyrics,
               width: (constraints.maxWidth - 8) / 4,
             ),
+          if (ref.watch(musicVideosEnabledProvider) &&
+              _player.currentSongNotifier.value case final current?)
+            if (ref.watch(musicVideoIndexProvider).videoFor(current.id)
+                case final videoId?)
+              chip(
+                LucideIcons.video,
+                'Video',
+                () => unawaited(_enterVideoMode(current, videoId)),
+                width: (constraints.maxWidth - 8) / 4,
+              ),
           ValueListenableBuilder<Duration?>(
             valueListenable: _player.sleepTimerRemainingNotifier,
             builder: (_, remaining, __) => chip(
