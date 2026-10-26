@@ -8,7 +8,7 @@
 It does **not** decode audio on the playback thread and does not start a
 network request. The derived profile records:
 
-- leading digital silence and the last audible waveform bucket;
+- near-digital leading silence and the last audible waveform bucket;
 - a conservative fade-out hint and loudness-derived energy score;
 - low-resolution energy-rise/drop candidates that a later, optional
   structural model could refine.
@@ -22,7 +22,7 @@ as proven phrase or vocal boundaries.
 - Flow warms up to four nearby *local* songs asynchronously, without blocking
   Play or the online recommendation lookup.
 - The Android system player requests a profile when loading a track; when one
-  is already present it may start a crossfade before **3–15 seconds of proven
+  is already present it may start a crossfade before **3–15 seconds of near-digital
   trailing silence** and seek over up to three seconds of digital lead-in.
   Missing or uncertain profiles preserve existing transitions.
 - Identity is SHA-256 of the analyzer schema version, local path, file length,
