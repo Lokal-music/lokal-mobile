@@ -42,8 +42,8 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
         val hasSong = prefs.getBoolean(WidgetPrefs.KEY_HAS_SONG, false)
         val playing = prefs.getBoolean(WidgetPrefs.KEY_IS_PLAYING, false)
         val title = if (hasSong) prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
-            .ifBlank { context.getString(R.string.widget_nothing_playing) }
-            else context.getString(R.string.widget_nothing_playing)
+            .ifBlank { WidgetPrefs.localizedText(context, R.string.widget_nothing_playing) }
+            else WidgetPrefs.localizedText(context, R.string.widget_nothing_playing)
         val artist = prefs.getString(WidgetPrefs.KEY_ARTIST, "").orEmpty()
         val position = readMs(prefs, WidgetPrefs.KEY_POSITION_MS)
         val duration = readMs(prefs, WidgetPrefs.KEY_DURATION_MS)
@@ -56,6 +56,12 @@ class MiniPlayerWidgetProvider : AppWidgetProvider() {
             WidgetPrefs.scaledSp(14, width, if (horizontal) 340f else 240f,
                 WidgetPrefs.getMiniTextScale(context)).toFloat())
         views.setContentDescription(R.id.widget_title, title)
+        views.setContentDescription(R.id.widget_prev,
+            WidgetPrefs.localizedText(context, R.string.widget_previous))
+        views.setContentDescription(R.id.widget_play_pause,
+            WidgetPrefs.localizedText(context, R.string.widget_play_pause))
+        views.setContentDescription(R.id.widget_next,
+            WidgetPrefs.localizedText(context, R.string.widget_next))
         views.setOnClickPendingIntent(R.id.widget_title, WidgetIntents.openApp(context, 11))
 
         val showArtist = hasSong && WidgetPrefs.getShowArtist(context) && artist.isNotBlank()
