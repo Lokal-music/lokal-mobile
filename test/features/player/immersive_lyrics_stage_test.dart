@@ -59,6 +59,21 @@ void main() {
     expect(romanized.lines[1].translation, isNotNull);
   });
 
+  test('Space footer is visible only for synchronized line/word lyrics', () {
+    expect(hasImmersiveLyrics(null), isFalse);
+    expect(hasImmersiveLyrics(synchronized), isTrue);
+    expect(hasImmersiveLyrics(const LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [],
+    )), isFalse);
+    expect(hasImmersiveLyrics(const LyricsData(
+      isSynchronized: false,
+      rawContent: '',
+      lines: [LyricsLine(timestamp: Duration.zero, text: 'Plain')],
+    )), isFalse);
+  });
+
   test('plain lyrics never get fabricated timing', () {
     const plain = LyricsData(
       isSynchronized: false,
