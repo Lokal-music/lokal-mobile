@@ -96,10 +96,12 @@ class Media3MusicVideoController {
 /// It owns its own timeline and lets Flutter draw all transport controls.
 class Media3MusicVideoSurface extends StatefulWidget {
   const Media3MusicVideoSurface({
-    super.key, required this.videoId, this.controller,
+    super.key, required this.videoId, this.controller, this.onFullscreen,
   });
   final String videoId;
   final Media3MusicVideoController? controller;
+  /// Enlarge the same native player into device fullscreen when requested.
+  final VoidCallback? onFullscreen;
 
   @override
   State<Media3MusicVideoSurface> createState() => _Media3MusicVideoSurfaceState();
@@ -362,6 +364,13 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
                       ),
                       Text('${_clock(_position)} / ${_clock(_duration)}',
                           style: const TextStyle(fontSize: 11, color: Colors.white)),
+                      if (widget.onFullscreen != null)
+                        IconButton(
+                          tooltip: 'Full-screen video',
+                          icon: const Icon(Icons.fullscreen_rounded,
+                              color: Colors.white, size: 23),
+                          onPressed: widget.onFullscreen,
+                        ),
                       IconButton(
                         tooltip: _fill ? 'Fit video' : 'Fill video',
                         icon: Icon(_fill ? Icons.fit_screen_rounded : Icons.aspect_ratio_rounded,
