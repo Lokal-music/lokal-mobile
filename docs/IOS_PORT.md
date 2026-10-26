@@ -40,8 +40,9 @@ advertised HTTP endpoint on iOS 18.6. Its iOS 26 simulator failed to boot before
 app execution, so that newer suite has no iOS 26 result. No signed installation
 or physical iPhone behavior is validated.
 
-The branch now integrates every merged mobile PR after #172 through #196. See
+The branch now integrates every merged mobile PR after #172 through #207 (29 PRs). See
 [the PR-by-PR UI/behavior review and revised WidgetKit design](IOS_POST172_REVIEW.md)
+and [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md)
 for applied shared changes, test scope and remaining native acceptance.
 
 The earlier iOS 18.5 startup abort matches

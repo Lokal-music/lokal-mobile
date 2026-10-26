@@ -13,6 +13,8 @@
 // MaterialApp.builder on every build, and once from main() before the first
 // frame so that strings produced during startup already use the right locale.
 
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 import 'package:home_widget/home_widget.dart';
 
@@ -136,6 +138,7 @@ class LocaleController extends ValueNotifier<Locale?> {
     if (locale == value) return;
     value = locale;
     await AppPreferencesService().setAppLocale(_storedFromLocale(locale));
+    if (!Platform.isAndroid) return;
     // Android home-screen widgets use native resources, not Flutter's
     // Localizations delegate. Mirror the choice and refresh the widget views
     // so manually chosen Türkçe takes effect without requiring an OS switch.

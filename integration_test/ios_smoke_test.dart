@@ -11,6 +11,7 @@ import 'package:flick/features/search/widgets/search_filter_chips.dart';
 import 'package:flick/features/search/providers/search_filter_provider.dart';
 import 'package:flick/features/search/models/search_category.dart';
 import 'package:flick/features/player/screens/full_player_screen.dart';
+import 'package:flick/features/player/widgets/immersive_lyrics_stage.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_page.dart';
 import 'package:flick/features/onboarding/screens/onboarding_screen.dart';
 import 'package:flick/l10n/l10n.dart';
@@ -22,6 +23,7 @@ import 'package:flick/services/app_preferences_service.dart';
 import 'package:flick/services/replaygain_service.dart';
 import 'package:flick/services/playback_secure_storage.dart';
 import 'package:flick/services/link/lokal_link_service.dart';
+import 'package:flick/services/notification_service.dart';
 import 'package:flick/services/equalizer_service.dart';
 import 'package:flick/providers/equalizer_provider.dart';
 import 'package:flick/features/morneye/morneye_bootstrap.dart';
@@ -29,7 +31,6 @@ import 'package:flick/src/rust/api/morneye_api.dart';
 import 'package:flick/src/rust/api/scanner.dart' as scanner;
 import 'package:flick/src/rust/api/metadata_editor.dart' as tags;
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -220,6 +221,11 @@ void main() {
     expect(scan.totalFiles, 1);
     expect(scan.newOrModified.single.sampleRate, 44100);
     expect(scan.newOrModified.single.albumArtist, 'Various fixtures');
+    binding.reportData!.addAll({
+      'native_scan_files': scan.totalFiles,
+      'native_scan_sample_rate': scan.newOrModified.single.sampleRate,
+      'native_scan_album_artist': scan.newOrModified.single.albumArtist,
+    });
 
     // Keep the scanner's single-audio-file fixture free of artwork files.
     final artwork = File('${directory.path}/Generated artwork.png');
@@ -229,6 +235,13 @@ void main() {
         artworkData.offsetInBytes,
         artworkData.lengthInBytes,
       ),
+    );
+    await File('${directory.path}/Generated tone.lrc').writeAsString(
+      '[ar:Lokal test]\n[ti:Generated tone]\n'
+      '[00:00.00]First generated lyric\n'
+      '[00:03.00]Second generated lyric\n'
+      '[00:06.00]Final generated lyric\n',
+      flush: true,
     );
 
     debugPrint('iOS smoke: native scanner passed; executing QuickJS');
@@ -256,6 +269,7 @@ void main() {
     } finally {
       guest.close();
     }
+    binding.reportData!['quickjs_echo'] = quickJsResult;
 
     final player = PlayerService();
     final song = Song(
@@ -272,6 +286,7 @@ void main() {
     await player.play(song, playlist: [song]);
     final systemProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosSystem);
+    binding.reportData!['system_wav_progress_ms'] = systemProgress;
     await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
@@ -287,23 +302,62 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(FullPlayerScreen), findsOneWidget);
+    final playerRoute = ModalRoute.of(
+      tester.element(find.byType(FullPlayerScreen)),
+    )!;
+    for (
+      var frame = 0;
+      frame < 24 && playerRoute.animation!.status != AnimationStatus.completed;
+      frame++
+    ) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    expect(playerRoute.animation!.status, AnimationStatus.completed);
     for (var visit = 0; visit < 2; visit++) {
       for (final panel in [l10n.queue, l10n.lyrics]) {
-        final toggle = find
-            .descendant(
-              of: find.byType(FullPlayerScreen),
-              matching: find.text(panel),
-            )
-            .first;
+        // A panel header can repeat its footer label. Tap the actual control.
+        final toggle = find.widgetWithText(InkWell, panel);
+        expect(toggle, findsOneWidget);
         await tester.tap(toggle);
-        await tester.pump(const Duration(milliseconds: 750));
+        for (var frame = 0; frame < 4; frame++) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
         await tester.tap(toggle);
-        await tester.pump(const Duration(milliseconds: 750));
+        for (var frame = 0; frame < 4; frame++) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
       }
     }
     await binding.takeScreenshot('ios-full-player-after-panels');
+    for (var i = 0; i < 24 && find.text('Space').evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    expect(find.text('Space'), findsOneWidget);
+    await tester.ensureVisible(find.text('Space'));
+    await tester.pump(const Duration(milliseconds: 250));
+    await player.seek(const Duration(seconds: 3));
+    await tester.tap(find.text('Space'));
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(find.byType(ImmersiveLyricsStage), findsOneWidget);
+    expect(player.currentSongNotifier.value?.id, song.id);
+    expect(player.isPlayingNotifier.value, false);
+    expect(
+      player.positionNotifier.value.inMilliseconds,
+      greaterThanOrEqualTo(2500),
+    );
+    await binding.takeScreenshot('ios-immersive-lyrics');
+    await tester.tap(find.byTooltip('Return to full player'));
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(find.byType(ImmersiveLyricsStage), findsNothing);
+    binding.reportData!['post200_immersive_local_timed_lyrics'] = 'passed';
     Navigator.of(tester.element(find.byType(FullPlayerScreen))).pop();
-    await tester.pump(const Duration(seconds: 1));
+    for (
+      var frame = 0;
+      frame < 24 && find.byType(FullPlayerScreen).evaluate().isNotEmpty;
+      frame++
+    ) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
     expect(find.byType(FullPlayerScreen), findsNothing);
     expect(find.byType(KonnektedMiniPlayerContent), findsOneWidget);
     expect(tester.takeException(), isNull, reason: startupErrors.join('\n'));
@@ -327,6 +381,7 @@ void main() {
     await player.play(song, playlist: [song]);
     final dspProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
+    binding.reportData!['rust_dsp_progress_ms'] = dspProgress;
     await player.pause();
     await applyEqualizer(EqualizerState.initial());
     await player.syncIosProcessingRoute();
@@ -339,9 +394,11 @@ void main() {
     await player.setPitchSemitones(3);
     expect(player.currentEngineType, AudioEngineType.iosRust);
     final pitchProgress = await _expectPlaybackProgress(tester, player);
+    binding.reportData!['rust_pitch_progress_ms'] = pitchProgress;
     await player.setPitchSemitones(0);
     expect(player.currentEngineType, AudioEngineType.iosSystem);
     final pitchResetProgress = await _expectPlaybackProgress(tester, player);
+    binding.reportData!['system_pitch_reset_progress_ms'] = pitchResetProgress;
     await player.pause();
 
     // Positive normalization cannot be implemented by AVPlayer's capped volume.
@@ -356,6 +413,8 @@ void main() {
     expect(player.currentEngineType, AudioEngineType.iosRust);
     expect(player.replayGainState.gainDb, 3);
     final normalizationProgress = await _expectPlaybackProgress(tester, player);
+    binding.reportData!['rust_positive_replaygain_progress_ms'] =
+        normalizationProgress;
     await playbackPreferences.setReplayGainMode(ReplayGainMode.off);
     await player.applyReplayGainFromSettings();
     expect(player.currentEngineType, AudioEngineType.iosSystem);
@@ -382,6 +441,7 @@ void main() {
     await player.play(wvSong, playlist: [wvSong]);
     final wavpackProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
+    binding.reportData!['rust_wavpack_progress_ms'] = wavpackProgress;
     await player.pause();
 
     // Generated fixtures avoid redistributing copyrighted recordings. Decode
@@ -565,6 +625,49 @@ void main() {
     }
     binding.reportData!['bonjour_fixture_discovery_and_http'] = 'passed';
     binding.reportData!['bonjour_unsupported_protocol_filtered'] = true;
+
+    // Real HTTP -> shared artwork cache -> Swift UIImage -> Now Playing.
+    // The 40px remote fixture distinguishes this from the earlier local art.
+    await NotificationService.instance.updateNotification(
+      song: successor.copyWith(
+        albumArt: fixture.single.origin
+            .resolve('/lokal-ios-notification-art.png')
+            .toString(),
+      ),
+      isPlaying: false,
+      duration: song.duration,
+      position: const Duration(seconds: 2),
+    );
+    Map<String, dynamic>? nowPlaying;
+    for (var attempt = 0; attempt < 24; attempt++) {
+      await tester.pump(const Duration(milliseconds: 250));
+      nowPlaying = await const MethodChannel('lokal/ios')
+          .invokeMapMethod<String, dynamic>('nowPlayingMetadataState');
+      if ((nowPlaying?['artworkWidth'] as num?)?.toInt() == 40) break;
+    }
+    expect(nowPlaying?['artworkWidth'], 40);
+    expect(nowPlaying?['artworkHeight'], 40);
+    expect(nowPlaying?['playbackRate'], 0);
+    expect(nowPlaying?['durationSeconds'], 8);
+    expect(nowPlaying?['elapsedSeconds'], closeTo(2, .01));
+    binding.reportData!['post202_remote_artwork_and_native_metadata'] =
+        'passed';
+
+    final previousLocale = LocaleController.instance.value;
+    try {
+      await LocaleController.instance.select(const Locale('tr'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(l10n.settings, 'Ayarlar');
+      await tester.tap(find.byTooltip(lokalText('Library')));
+      await tester.pump(const Duration(milliseconds: 750));
+      expect(find.byType(KonnektedLibrary), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: startupErrors.join('\n'));
+      await binding.takeScreenshot('ios-turkish-library');
+      binding.reportData!['post201_live_turkish_locale'] = 'passed';
+    } finally {
+      await LocaleController.instance.select(previousLocale);
+      await tester.pump(const Duration(milliseconds: 500));
+    }
 
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();

@@ -53,7 +53,7 @@ jobs:
           rustup toolchain install 1.98.0 --profile minimal --no-self-update
           rustup target add --toolchain 1.98.0 aarch64-apple-ios aarch64-apple-ios-sim
           flutter pub get --enforce-lockfile
-          python3 tool/ios_readiness.py --require-scaffold
+          python3 tool/ios_readiness.py --require-scaffold --require-localizations
           python3 -m unittest discover -s tool -p test_ios_simulator.py
           python3 -m unittest discover -s tool -p test_ios_control_runner.py
       - name: Generate native alternate icons

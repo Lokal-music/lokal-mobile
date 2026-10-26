@@ -1,6 +1,7 @@
 # iPhone review of mobile PRs after #172
 
-Reviewed 26 October 2026 (Europe/Paris), through merged PR #196. The iPhone
+Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
+The subsequent pass below carries merged updates through #207 (29 PRs total). The iPhone
 branch now merges main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
 (merge `b26d8b9e08a8acc4d60b8aa2e2b7e3c4b521fdb1`). All 20 PRs below are
 included by ancestry, including stacked #180/#181; none is copied as a divergent
@@ -175,3 +176,58 @@ a separate app process relaunch, signing or hardware behavior. The combined real
 persistence, decoder recovery and iOS DSP/codec selection pass 17 checks; both new
 Dart test files analyze without findings. Explicit library-path environment
 variables are required, otherwise the host persistence case reports a skip.
+
+
+## Further upstream pass: merged PRs 198–207
+
+Main advanced during implementation. The branch now includes main
+`a2e1e622983d7e871233653421cb42970e2d5063` through merges `24abfc0` and `dda337f`.
+All 29 merged PRs after #172 are confirmed reachable, including the original 20.
+No PR numbered #197 or #205 appeared in the mobile PR list for this audit.
+
+| PR | iPhone disposition |
+| --- | --- |
+| #198 | Concurrent fallback search and explicit per-rendition 16/44.1 metadata are carried into Discovery. Keep the existing opaque progressive-stream processing guard. |
+| #199 | The contextual Video action, full-player presentation and queue-preserving audio handoff are shared. Android's Media3 implementation remains Android-only; iPhone explicitly uses the official WKWebView embed fallback. Native AVPlayer presentation and live embed/audio-handoff qualification remain open. |
+| #200 | Synchronized-only Space immersive lyrics and romanized/translated sublines use the shared player clock. New native generated-LRC/seek/entry/exit screenshot checks are added, pending a hosted result. |
+| #201 | Turkish Flutter strings and runtime locale switching are included. All 11 supported Flutter languages are now declared in the iOS bundle. The port gates Android widget locale updates to Android; otherwise iPhone language selection invokes unavailable Android-provider operations. The readiness gate checks bundle/language parity. |
+| #202 | Remote notification art is asynchronously cached to a local file, also usable by Swift Now Playing. Its existing partial-update handler preserves playback rate, duration and elapsed position. New native HTTP-cache-UIImage-Now Playing assertions distinguish a 40px remote fixture from earlier local art; pending native execution. |
+| #203 | Add-to-playlist rows use real shared playlist artwork. Repair the upstream test's invalid constant-property expression, retaining its artwork assertions. |
+| #204 | Heart timestamps, newest-liked-first order and persistent Liked sort/direction/location/quality/query apply to iPhone. |
+| #206 | Preserve the Kotlin service-context fix and native localization regression guard; Android full-debug Kotlin compilation and five widget-preference tests pass after this merge. |
+| #207 | Spotify account/cookie/liked-sync controls now appear together first in Data → Accounts; remove the duplicate Appearance entry. Resolve the merge while retaining iPhone icon/native settings adaptations. Hide unimplemented Android refresh-mode/RemoteViews settings on iPhone. |
+
+Validation: all 43 cases in the nine affected files through #206 pass; the #207
+placement/profile selection passes eight checks. Android full-debug Kotlin and
+five native widget-preference cases pass; Android CI stays manually disabled.
+Application/integration analysis has no errors (existing warnings/info remain).
+The localization inventory passes with all languages present and fails explicitly
+when Turkish is removed in an isolated source fixture. HTTP image/probe/404 and
+shutdown behavior pass locally with a real server and stubbed Bonjour publisher;
+that is not an Apple discovery or Now Playing pass.
+
+See [the integration follow-up](IOS_FOLLOWUP_FEASIBILITY.md) for the verified
+media-reset contract, current Google Cast SDK minimum OS and official iOS Discord
+SDK path. Those remain implementation/qualification work, with explicit evidence
+boundaries.
+
+
+Additional port corrections from this pass: the dock's canonical enum labels
+previously bypassed localization. Its visible labels, tooltips and accessibility
+labels now resolve at build time (including localized Home and the existing ARB
+Search label), while navigation IDs remain unchanged. A real dock widget test
+switches Turkish/English and taps the same destination enums; the combined dock,
+locale and shell selection passes 23 cases. Turkish output is regenerated from
+the ARB with pinned Flutter and a repeated generation leaves no diff. Separate
+localization/morph selections pass 16 checks (overlap).
+
+Build 22 passes the simulator control gate and reaches the actual full player
+with generated art, scanner/QuickJS and system WAV playback. Its dismissal check
+fails after one timed pump. The native screenshot shows the normal full-player
+layout; the harness now waits for completed opening animation, targets footer
+InkWells instead of repeated panel/header text, and waits for dismissal over a
+bounded sequence of frames. The route-disappearance assertion remains intact.
+Reports now record each native stage immediately so later failures do not erase
+prior measurements. The expanded Space/Turkish/HTTP Now Playing checks still
+require a new hosted result; a debug-only native probe reports numeric metadata
+and artwork dimensions without names, file paths or credentials.

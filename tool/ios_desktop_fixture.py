@@ -24,17 +24,26 @@ def fixture_identity():
 @contextmanager
 def desktop_fixture(output: Path):
     identity = fixture_identity()
+    # Existing generated app art: a small, deterministic 40px PNG, distinct
+    # from the full-size local artwork used earlier in the native test.
+    artwork = (Path(__file__).resolve().parents[1] /
+               'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png').read_bytes()
 
     class Probe(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path != '/lokal-ios-discovery-probe':
+            if self.path == '/lokal-ios-discovery-probe':
+                body = json.dumps({'id': identity, 'proto': 1}).encode()
+                content_type = 'application/json'
+            elif self.path == '/lokal-ios-notification-art.png':
+                body = artwork
+                content_type = 'image/png'
+            else:
                 self.send_response(404)
                 self.send_header('Content-Length', '0')
                 self.end_headers()
                 return
-            body = json.dumps({'id': identity, 'proto': 1}).encode()
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)

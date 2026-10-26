@@ -113,6 +113,20 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
           }
         }
       case "libraryRoot": result(try? self?.libraryRoot().path)
+      #if DEBUG
+      case "nowPlayingMetadataState":
+        // Native acceptance probe only; no song names, paths or credentials.
+        let metadata = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        let artwork = metadata[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork
+        let state: [String: Any] = [
+          "artworkWidth": Double(artwork?.bounds.width ?? 0),
+          "artworkHeight": Double(artwork?.bounds.height ?? 0),
+          "durationSeconds": metadata[MPMediaItemPropertyPlaybackDuration] as? Double ?? 0,
+          "elapsedSeconds": metadata[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double ?? 0,
+          "playbackRate": metadata[MPNowPlayingInfoPropertyPlaybackRate] as? Double ?? 0,
+        ]
+        result(state)
+      #endif
       case "audioRoute":
         let session = AVAudioSession.sharedInstance()
         result([

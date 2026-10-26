@@ -1,5 +1,6 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Home": "Accueil",
   "All sources": "Toutes les sources",
   "Online": "En ligne",
   "Artist": "Artiste",
@@ -518,6 +519,7 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Home": "Startseite",
   "All sources": "Alle Quellen",
   "Online": "Online",
   "Artist": "Künstler",
@@ -1029,6 +1031,7 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Home": "Inicio",
   "All sources": "Todas las fuentes",
   "Online": "En línea",
   "Artist": "Artista",
@@ -1548,6 +1551,7 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Home": "Home",
   "All sources": "Tutte le fonti",
   "Online": "Online",
   "Artist": "Artista",
@@ -2069,6 +2073,7 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Home": "Início",
   "All sources": "Todas as fontes",
   "Online": "Online",
   "Artist": "Artista",
@@ -2585,6 +2590,7 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Home": "Start",
   "All sources": "Alle bronnen",
   "Online": "Online",
   "Artist": "Artiest",
@@ -3113,6 +3119,7 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Home": "Start",
   "All sources": "Wszystkie źródła",
   "Online": "Online",
   "Artist": "Wykonawca",
@@ -3631,6 +3638,7 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Home": "Hem",
   "All sources": "Alla källor",
   "Online": "Online",
   "Artist": "Artist",
@@ -4155,6 +4163,7 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Home": "首页",
   "All sources": "所有来源",
   "Online": "在线",
   "Artist": "艺人",
@@ -4678,6 +4687,7 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Home": "Ana sayfa",
   "All sources": "Tüm kaynaklar",
   "Online": "Çevrimiçi",
   "Artist": "Sanatçı",

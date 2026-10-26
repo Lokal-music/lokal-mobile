@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import plistlib
 import re
 import shutil
 import subprocess
@@ -52,6 +53,15 @@ def inventory(root: Path) -> dict:
             plugin["name"] for plugin in data.get("plugins", {}).get("ios", [])
         )
 
+    translations = (root / 'lib/l10n/generated/app_localizations.dart').read_text()
+    locales = re.search(r'supportedLocales\s*=\s*<Locale>\[(.*?)\];', translations, re.S)
+    if locales is None:
+        raise ValueError('Cannot inventory the generated Flutter supportedLocales')
+    languages = sorted(set(re.findall(r"Locale\(['\"]([a-zA-Z-]+)['\"]", locales[1])))
+    info_file = root / 'ios/Runner/Info.plist'
+    info = plistlib.loads(info_file.read_bytes()) if info_file.exists() else {}
+    declared = info.get('CFBundleLocalizations', [])
+
     build_pod = (root / "rust_builder/cargokit/build_pod.sh").read_text()
     cargokit = (root / "rust/cargokit.yaml").read_text()
     quickjs = manifest["dependencies"].get("rquickjs", {})
@@ -69,6 +79,11 @@ def inventory(root: Path) -> dict:
             "flutter_on_path": shutil.which("flutter") is not None,
         },
         "missing_ios_scaffold": [p for p in SCAFFOLD if not (root / p).is_file()],
+        "localizations": {
+            "flutter_languages": languages,
+            "bundle_languages": declared,
+            "missing_bundle_languages": sorted(set(languages) - set(declared)),
+        },
         "rust": {
             "required_version": manifest["package"]["rust-version"],
             "default_features": manifest["features"].get("default", []),
@@ -99,6 +114,10 @@ def main() -> int:
         "--require-scaffold", action="store_true",
         help="Exit 1 if the iOS runner files are absent (only a structural gate)",
     )
+    parser.add_argument(
+        "--require-localizations", action="store_true",
+        help="Exit 1 if the iOS bundle omits a generated Flutter language",
+    )
     args = parser.parse_args()
     report = inventory(ROOT)
     if args.json:
@@ -109,6 +128,8 @@ def main() -> int:
         print(f"Host: {report['host']['os']}; Xcode: {report['host']['xcodebuild_on_path']}")
         missing = report["missing_ios_scaffold"]
         print("Missing iOS runner files: " + (", ".join(missing) or "none"))
+        print("Flutter languages absent from the iOS bundle: " +
+              (", ".join(report["localizations"]["missing_bundle_languages"]) or "none"))
         print("Rust default features: " + ", ".join(report["rust"]["default_features"]))
         print(f"Cargokit forces USB feature: {report['rust']['cargokit_explicitly_enables_uac2']}")
         print(f"QuickJS iOS binding generation declared: {report['rust']['quickjs_bindgen_explicitly_declared_for_ios']}")
@@ -117,7 +138,10 @@ def main() -> int:
         print("Resolved iOS plugins: " + (", ".join(plugins) if plugins is not None else "unknown; run flutter pub get"))
         print(f"Literal Dart channel callsites: {len(report['dart_channel_callsites'])}")
         print("Use --json for callsite locations and inventory limitations.")
-    return int(args.require_scaffold and bool(report["missing_ios_scaffold"]))
+    return int(
+        (args.require_scaffold and bool(report["missing_ios_scaffold"])) or
+        (args.require_localizations and bool(report["localizations"]["missing_bundle_languages"]))
+    )
 
 
 if __name__ == "__main__":

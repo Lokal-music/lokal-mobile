@@ -20,7 +20,7 @@ const _track = Song(
 final _owned = Playlist(
   id: 'owned',
   name: 'My playlist',
-  songIds: const [_track.id],
+  songIds: [_track.id],
   createdAt: DateTime(2026),
 );
 
