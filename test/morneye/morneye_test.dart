@@ -685,6 +685,18 @@ void main() {
       expect(updated.version, '2.0.0');
     });
 
+    test('imports a documented .spotiflac-ext URL and can search it', () async {
+      engine.scripts['v1'] = downloader();
+      const url = 'https://repo.example.com/qobuz.spotiflac-ext';
+      served[url] = packageBytes(manifestFor('qobuz'), 'v1');
+
+      final addon = await packages.install(url: url);
+      expect(addon.name, 'qobuz');
+      expect(addon.methods, containsAll(['searchTracks', 'download']));
+      final songs = await packages.search(addon.key, 'Song');
+      expect(songs.single.title, 'Song');
+    });
+
     test('installs from a repository and checks its SHA-256', () async {
       engine.scripts['v1'] = downloader();
       final bytes = packageBytes(manifestFor('tidal'), 'v1');
