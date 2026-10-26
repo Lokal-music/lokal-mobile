@@ -1,6 +1,7 @@
 import 'package:flick/core/theme/lokal_performance_scope.dart';
 import 'dart:io';
 import 'package:flick/features/music_videos/media3_music_video_surface.dart';
+import 'package:flick/features/music_videos/video_quality_settings.dart';
 import 'package:flick/features/music_videos/music_video_providers.dart';
 import 'package:flick/providers/opt_in_source_provider.dart';
 import 'package:flick/features/player/widgets/full_player_visuals.dart';
@@ -603,6 +604,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                      key: _videoSurfaceKey,
                      videoId: videoId,
                      controller: _videoController,
+                      maxVideoHeight: ref.watch(videoQualityProvider),
                      showControls: !_immersiveLyrics,
                    ),
                 );
@@ -1233,6 +1235,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                   key: _videoSurfaceKey,
                                   videoId: _activeVideoId!,
                                   controller: _videoController,
+                      maxVideoHeight: ref.watch(videoQualityProvider),
                 showControls: false,
                 onFullscreen: _immersiveLyrics ? null : _toggleVideoFullscreen,
                                 ),
@@ -1527,6 +1530,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 key: _videoSurfaceKey,
                 videoId: _activeVideoId!,
                 controller: _videoController,
+                      maxVideoHeight: ref.watch(videoQualityProvider),
                 showControls: false,
                 onFullscreen: _immersiveLyrics ? null : _toggleVideoFullscreen,
               ),
