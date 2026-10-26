@@ -146,3 +146,11 @@ Identity/origin rejection tests cover a signing suffix, default HTTPS port and
 lookalike/other-port/injected identifiers. Actual request/referrer acceptance is
 part of the opt-in native probe. Investigation run 28 was cancelled before native
 compilation after this documented mismatch was found; it is not a native result.
+
+
+The later probe follow-up reads the controller's raw `sourcePosition`, not its
+interpolated UI notifier, for advancement and seek acceptance. Nine controller/
+production-JavaScript tests pass, including a monotonic-clock check proving UI
+extrapolation cannot advance the retained transport sample. It also marks a
+native release failure as failed before teardown. These are later harness changes
+than build 29 and require the next native source run.

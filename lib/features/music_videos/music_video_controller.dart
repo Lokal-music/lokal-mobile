@@ -18,6 +18,9 @@ class Media3MusicVideoController {
   Timer? _ticker;
   final Stopwatch _sampleClock = Stopwatch();
   Duration _samplePosition = Duration.zero;
+
+  /// Last position reported by the transport, before UI interpolation.
+  Duration get sourcePosition => _samplePosition;
   bool _buffering = true;
   int _owner = 0;
   bool _disposed = false;

@@ -4,16 +4,57 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/features/music_videos/music_video_controller.dart';
 
 void main() {
+  testWidgets('transport samples remain distinct from the smoothed UI clock', (
+    tester,
+  ) async {
+    final video = Media3MusicVideoController();
+    video.update(
+      positionMs: 100,
+      durationMs: 4000,
+      playing: true,
+      buffering: false,
+    );
+      // Production uses a monotonic Stopwatch; let real time advance outside
+      // Flutter's fake clock before delivering the periodic UI samples.
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 70)));
+      await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      video.positionNotifier.value,
+      greaterThan(const Duration(milliseconds: 100)),
+    );
+    expect(
+      video.sourcePosition,
+      const Duration(milliseconds: 100),
+      reason: 'An interpolated UI clock cannot qualify real playback progress',
+    );
+    video.update(
+      positionMs: 500,
+      durationMs: 4000,
+      playing: true,
+      buffering: false,
+    );
+    expect(video.sourcePosition, const Duration(milliseconds: 500));
+    video.dispose();
+  });
+
   test('video clock freezes on buffering and on confirmed release', () async {
     final controller = Media3MusicVideoController();
     addTearDown(controller.dispose);
     controller.attach((_, _) async {});
-    controller.update(positionMs: 100, durationMs: 1000,
-        playing: true, buffering: true);
+    controller.update(
+      positionMs: 100,
+      durationMs: 1000,
+      playing: true,
+      buffering: true,
+    );
     expect(controller.playingNotifier.value, isTrue);
     expect(controller.advancingNotifier.value, isFalse);
-    controller.update(positionMs: 150, durationMs: 1000,
-        playing: true, buffering: false);
+    controller.update(
+      positionMs: 150,
+      durationMs: 1000,
+      playing: true,
+      buffering: false,
+    );
     expect(controller.advancingNotifier.value, isTrue);
     await controller.releaseAudio();
     expect(controller.advancingNotifier.value, isFalse);

@@ -71,15 +71,13 @@ Future<void> probeLiveIosVideo(
       return;
     }
     await video.command('play');
-    final initial = video.positionNotifier.value;
+    final initial = video.sourcePosition;
     final advancing = await until(
-      () =>
-          video.positionNotifier.value - initial >
-          const Duration(milliseconds: 300),
+      () => video.sourcePosition - initial > const Duration(milliseconds: 300),
       40,
     );
     evidence['observed_position_advance_ms'] =
-        (video.positionNotifier.value - initial).inMilliseconds;
+        (video.sourcePosition - initial).inMilliseconds;
     if (!advancing) {
       evidence['reason'] =
           'API ready, but playback advancement was not observed.';
@@ -95,7 +93,7 @@ Future<void> probeLiveIosVideo(
     await video.seek(const Duration(seconds: 2));
     expect(
       await until(
-        () => (video.positionNotifier.value.inMilliseconds - 2000).abs() < 1000,
+        () => (video.sourcePosition.inMilliseconds - 2000).abs() < 1000,
         20,
       ),
       isTrue,
