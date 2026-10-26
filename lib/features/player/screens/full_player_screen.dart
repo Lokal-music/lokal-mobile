@@ -2119,8 +2119,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               width: (constraints.maxWidth - 8) / 4,
             ),
           ),
-          if (!_videoActive &&
-              _player.currentSongNotifier.value case final song?)
+          if (!_videoActive)
+            if (_player.currentSongNotifier.value case final song?)
             // Probe all configured motion sources, including Spotify Canvas.
             // A saved per-song "off" setting must not hide this control:
             // it still needs to offer a way to turn the clip back on.
