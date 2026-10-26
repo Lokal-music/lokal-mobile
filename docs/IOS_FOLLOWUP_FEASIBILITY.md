@@ -13,7 +13,9 @@ This differs from an ordinary resumable interruption.
 The locked `audio_session` 0.2.4 already delivers
 `AVAudioSession().mediaServicesWereResetStream`; an additional Swift session owner
 is unnecessary. PlayerService currently subscribes to interruptions and noisy
-routes, but does not consume this reset event. Recovery remains unimplemented.
+routes, but does not consume this reset event. Recovery remains unimplemented. The [implementation architecture](IOS_MEDIA_RESET_ARCHITECTURE.md)
+records the native request fence, radio participation, cleanup ordering and
+required acceptance before enabling it.
 
 ```mermaid
 flowchart LR
