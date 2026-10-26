@@ -18,6 +18,7 @@ import 'package:flick/features/player/widgets/song_metadata_sheet.dart';
 import 'package:flick/features/songs/widgets/album_art_picker_bottom_sheet.dart';
 import 'package:flick/features/songs/widgets/metadata_editor_bottom_sheet.dart';
 import 'package:flick/models/song.dart';
+import 'package:flick/features/konnekted/library/replayable_stream_songs.dart';
 import 'package:flick/providers/opt_in_source_provider.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/services/music_folder_service.dart';
@@ -177,7 +178,7 @@ class SongActionsBottomSheet extends ConsumerWidget {
           label: lokalText('Play next'),
           onTap: close(() async {
             final player = container.read(playerProvider.notifier);
-            final index = await player.addToQueue(song);
+            final index = await player.addToQueue(replayableStreamSong(song));
             if (index > 0) await player.moveQueueItemToNext(index);
             _say(lokalText("“{arg0}” plays next", args: {'arg0': song.title}));
           }),
@@ -186,7 +187,7 @@ class SongActionsBottomSheet extends ConsumerWidget {
           icon: Icons.queue_music_rounded,
           label: lokalText('Add to queue'),
           onTap: close(() async {
-            await container.read(playerProvider.notifier).addToQueue(song);
+            await container.read(playerProvider.notifier).addToQueue(replayableStreamSong(song));
             _say(
               lokalText(
                 "Added “{arg0}” to the queue",
