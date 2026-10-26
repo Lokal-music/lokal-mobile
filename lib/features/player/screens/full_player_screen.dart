@@ -1857,9 +1857,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             width: (constraints.maxWidth - 8) / 4,
           ),
           if (_lyricsForSongId == _player.currentSongNotifier.value?.id &&
-              _lyrics != null &&
-              _lyrics!.isSynchronized &&
-              _lyrics!.lines.isNotEmpty)
+              hasImmersiveLyrics(_lyrics))
             chip(
               LucideIcons.expand,
               'Space',
