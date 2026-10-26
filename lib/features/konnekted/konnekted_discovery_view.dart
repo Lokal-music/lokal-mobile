@@ -34,8 +34,8 @@ import 'library/lokal_music_detail_page.dart';
 import 'library/lokal_library_kit.dart' show pushLokal;
 import 'library/lokal_online_catalogue.dart';
 
-/// Home's Discovery tab, desktop's `RecommendationSections`: Fresh Finds,
-/// Quick Picks, Scrobble History, Albums and Artists For You, from Last.fm.
+/// Home's Discovery tab: personalized recommendations from Last.fm,
+/// YouTube Music and Spotify, with source-specific shelves.
 class KonnektedDiscoveryView extends ConsumerStatefulWidget {
   const KonnektedDiscoveryView({
     super.key,
@@ -66,7 +66,7 @@ class KonnektedDiscoveryView extends ConsumerStatefulWidget {
       _KonnektedDiscoveryViewState();
 }
 
-enum _Shelf { fresh, liked, quick, history }
+enum _Shelf { fresh, quick, history }
 
 class _KonnektedDiscoveryViewState
     extends ConsumerState<KonnektedDiscoveryView> {
@@ -350,9 +350,7 @@ class _KonnektedDiscoveryViewState
       );
     }
     final fresh = data?.freshFinds ?? const <LokalDiscoveryTrack>[];
-    final liked = data?.liked ?? const <LokalDiscoveryTrack>[];
     final quick = data?.quickPicks ?? const <LokalDiscoveryTrack>[];
-    final history = data?.history ?? const <LokalDiscoveryTrack>[];
     final mixes = data?.mixes ?? const <LokalDiscoveryMix>[];
     final albums = data?.albums ?? const <LokalDiscoveryAlbum>[];
     final artists = data?.artists ?? const <LokalDiscoveryArtist>[];
@@ -438,7 +436,7 @@ class _KonnektedDiscoveryViewState
             child: KonnektedMessage(
               title: lokalText('Sign in to YouTube Music'),
               message: lokalText(
-                'Connect your account to see your mixes, Likes, history and personalized picks.',
+                'Connect your account to see your mixes and personalized picks.',
               ),
               icon: Icons.music_note_rounded,
               actionLabel: 'Sign in',
@@ -485,6 +483,30 @@ class _KonnektedDiscoveryViewState
               icon: Icons.auto_awesome_rounded,
             ),
           ),
+        if (source == KonnektedDiscoverySource.lastfm && albums.isNotEmpty) ...[
+          KonnektedSectionHeading(
+            title: lokalText('Albums For You'),
+            icon: Icons.album_rounded,
+          ),
+          _AlbumShelf(
+            albums: albums,
+            onTap: (album) => pushLokal(
+              context,
+              LokalMusicDetailPage.album(
+                title: album.title,
+                artist: album.artist,
+                localSongs: _library().album(album.title, album.artist),
+                initialOnline: true,
+                release: LokalCatalogueAlbum(
+                  title: album.title,
+                  artist: album.artist,
+                  artwork: album.artworkUrl,
+                  url: album.url,
+                ),
+              ),
+            ),
+          ),
+        ],
         if (source == KonnektedDiscoverySource.youtube && data != null) ...[
           KonnektedSectionHeading(
             title: lokalText('Mixed for you'),
@@ -520,16 +542,6 @@ class _KonnektedDiscoveryViewState
               style: TextStyle(fontSize: 12, color: t.muted),
             ),
           ),
-        if (source == KonnektedDiscoverySource.youtube && liked.isNotEmpty) ...[
-          heading(
-            _Shelf.liked,
-            'Your Likes',
-            Icons.thumb_up_alt_rounded,
-            liked.length,
-            subtitle: lokalText('Songs you liked on YouTube Music.'),
-          ),
-          tracks(_Shelf.liked, liked),
-        ],
         if (fresh.isNotEmpty) ...[
           heading(
             _Shelf.fresh,
@@ -542,7 +554,7 @@ class _KonnektedDiscoveryViewState
           ),
           tracks(_Shelf.fresh, fresh),
         ],
-        if (quick.isNotEmpty) ...[
+        if (source == KonnektedDiscoverySource.youtube && quick.isNotEmpty) ...[
           heading(
             _Shelf.quick,
             'Quick Picks',
@@ -553,63 +565,6 @@ class _KonnektedDiscoveryViewState
             ),
           ),
           tracks(_Shelf.quick, quick),
-        ],
-        if (history.isNotEmpty) ...[
-          heading(
-            _Shelf.history,
-            source == KonnektedDiscoverySource.youtube
-                ? 'History'
-                : 'Scrobble History',
-            Icons.history_rounded,
-            history.length,
-            subtitle: source == KonnektedDiscoverySource.youtube
-                ? lokalText('Your YouTube Music listening history.')
-                : lokalText('Your last 100 scrobbles, by day.'),
-          ),
-          _History(
-            entries: _open == _Shelf.history
-                ? history
-                : history.take(6).toList(),
-            row: (track) => KonnektedDiscoveryRow(
-              track: track,
-              inLibrary: library.match(track) != null,
-              busy: _busy == track.key,
-              trailing: track.scrobbledAt == null
-                  ? null
-                  : DateFormat.Hm().format(
-                      DateTime.fromMillisecondsSinceEpoch(
-                        track.scrobbledAt! * 1000,
-                      ),
-                    ),
-              onTap: () => _play(track, history),
-              onMore: () => unawaited(_actions(track, history)),
-              onQueue: () => _enqueue(track),
-            ),
-          ),
-        ],
-        if (source == KonnektedDiscoverySource.lastfm && albums.isNotEmpty) ...[
-          KonnektedSectionHeading(
-            title: lokalText('Albums For You'),
-            icon: Icons.album_rounded,
-          ),
-          _AlbumShelf(
-            albums: albums,
-            onTap: (album) => pushLokal(
-              context,
-              LokalMusicDetailPage.album(
-                title: album.title,
-                artist: album.artist,
-                localSongs: _library().album(album.title, album.artist),
-                initialOnline: true,
-                release: LokalCatalogueAlbum(
-                  title: album.title,
-                  artist: album.artist,
-                  artwork: album.artworkUrl,
-                  url: album.url,
-                ),
-              ),
-            ),
-          ),
         ],
         if (artists.isNotEmpty) ...[
           KonnektedSectionHeading(
@@ -642,7 +597,6 @@ class _KonnektedDiscoveryViewState
     final data = value?.data;
     final fresh = data?.freshFinds ?? const <LokalDiscoveryTrack>[];
     final quick = data?.quickPicks ?? const <LokalDiscoveryTrack>[];
-    final liked = data?.likedSongs ?? const <LokalDiscoveryTrack>[];
     final history = data?.recentlyPlayed ?? const <LokalDiscoveryTrack>[];
 
     Widget tracks(_Shelf shelf, List<LokalDiscoveryTrack> items) => Column(
@@ -779,16 +733,6 @@ class _KonnektedDiscoveryViewState
             subtitle: lokalText('Your short-term top tracks.'),
           ),
           tracks(_Shelf.quick, quick),
-        ],
-        if (liked.isNotEmpty) ...[
-          heading(
-            _Shelf.liked,
-            'Liked Songs',
-            Icons.favorite_rounded,
-            liked.length,
-            subtitle: lokalText('Your latest Spotify likes.'),
-          ),
-          tracks(_Shelf.liked, liked),
         ],
         if (history.isNotEmpty) ...[
           heading(
