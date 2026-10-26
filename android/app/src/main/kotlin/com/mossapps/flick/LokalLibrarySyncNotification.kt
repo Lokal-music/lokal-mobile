@@ -2,6 +2,7 @@ package com.mossapps.flick
 
 import android.Manifest
 import android.app.NotificationChannel
+import com.mossapps.flick.widgets.WidgetPrefs
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -40,9 +41,12 @@ object LokalLibrarySyncNotification {
                 return@setMethodCallHandler
             }
             channels.createNotificationChannel(NotificationChannel(
-                channel, if (libraryJob) "Library jobs" else "Library sync", NotificationManager.IMPORTANCE_LOW,
+                channel, WidgetPrefs.localizedText(context, if (libraryJob)
+                    R.string.native_library_jobs_channel else R.string.native_library_sync_channel),
+                NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = if (libraryJob) "Music video search and library metadata progress" else "Desktop library sync progress and completion"
+                description = WidgetPrefs.localizedText(context, if (libraryJob)
+                    R.string.native_library_jobs_description else R.string.native_library_sync_description)
                 setShowBadge(false)
                 setSound(null, null)
                 enableVibration(false)
@@ -57,7 +61,8 @@ object LokalLibrarySyncNotification {
                 }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val builder = NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle(call.argument<String>("title") ?: "Library sync")
+                .setContentTitle(call.argument<String>("title") ?:
+                    WidgetPrefs.localizedText(context, R.string.native_library_sync_channel))
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                 .setSubText(call.argument<String>("deviceName"))
