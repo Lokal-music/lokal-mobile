@@ -4,6 +4,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/features/music_videos/music_video_controller.dart';
 
 void main() {
+  test('video clock freezes on buffering and on confirmed release', () async {
+    final controller = Media3MusicVideoController();
+    addTearDown(controller.dispose);
+    controller.attach((_, _) async {});
+    controller.update(positionMs: 100, durationMs: 1000,
+        playing: true, buffering: true);
+    expect(controller.playingNotifier.value, isTrue);
+    expect(controller.advancingNotifier.value, isFalse);
+    controller.update(positionMs: 150, durationMs: 1000,
+        playing: true, buffering: false);
+    expect(controller.advancingNotifier.value, isTrue);
+    await controller.releaseAudio();
+    expect(controller.advancingNotifier.value, isFalse);
+  });
+
   test(
     'video transport and timeline stay independent from album playback',
     () async {

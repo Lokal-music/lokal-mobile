@@ -23,9 +23,10 @@ is required to perform these installation and acceptance steps.
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
 The engineering IPA is saved after binary inspection, before runtime tests;
-read the associated run's result for its acceptance status. Build 17 passes the
-expanded native UI, Keychain, metadata, codec/DSP and queue checks on iOS 26.0
-and 18.6. Physical iPhone installation, background
+read the associated run's result for its acceptance status. Build 27 passes the
+expanded native UI, Keychain, metadata, codec/DSP, queue, Bonjour and repeated
+Opus pause checks on iOS 26.0 and 18.6. It packages an iOS 16+ app; iOS 16 runtime
+acceptance is still open. Physical iPhone installation, background
 playback and accessory acceptance remain separate; this is not a qualified
 public release.
 

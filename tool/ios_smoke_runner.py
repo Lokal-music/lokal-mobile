@@ -25,7 +25,7 @@ with desktop_fixture(output), (output / 'ios-smoke-console.log').open('w') as co
             '--target=integration_test/ios_smoke_test.dart',
             '--driver=integration_test/ios_driver.dart',
             f'--use-existing-app={service}', '--verbose',
-        ], check=True, timeout=300)
+        ], check=True, timeout=420 if os.environ.get('LOKAL_IOS_VIDEO_PROBE') == 'true' else 300)
         passed = True
     finally:
         capture(device, bundle, output, 'ios-smoke-iphone', sample=not passed)

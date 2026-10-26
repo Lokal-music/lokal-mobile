@@ -224,7 +224,7 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
     final controller = widget.controller;
     if (controller != null && !controller.owns(_lease)) return;
     if (value['error'] != null) {
-      controller?.fallback();
+      controller?.fallback(errorCode: (value['error'] as num?)?.toInt());
       setState(() {
         _failed = true;
         _loading = false;

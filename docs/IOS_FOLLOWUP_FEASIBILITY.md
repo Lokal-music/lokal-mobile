@@ -103,3 +103,19 @@ and a [controlled official-embed transport](IOS_VIDEO_TRANSPORT.md). The dedicat
 video clock and native WebKit release path are implemented with host/JavaScript
 contracts; live WebKit/video qualification is still pending. The earlier
 asynchronous-exit handoff is superseded by serialized external-output leases.
+
+
+The branch now includes main through #216 (37 merged PRs after #172). Both
+runtimes pass the complete build-27 native checkpoint through #210. The subsequent
+UI/transport work is recorded in the PR audit: unobstructed official video,
+correct HTTP ranges, smooth concurrent captions and provider-controlled iPhone
+video quality. A new manual live-WebKit probe records observed behavior without
+turning a network restriction into successful acceptance.
+
+Media-services reset recovery remains the next local-playback lifecycle task.
+It must invalidate in-flight Rust HTTP probes before they can create a new output,
+await confirmed old-engine destruction, preserve queue/position while staying
+paused until user action, and include the separate radio player. Merely rebuilding
+the Dart player or queuing cleanup behind an old Play is insufficient: the former
+leaves native requests alive, and the latter can deadlock if old Play waits on its
+own queued recovery. No reset recovery is claimed by ordinary interruption tests.

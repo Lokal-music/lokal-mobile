@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flick/core/theme/lokal_performance_scope.dart';
 import 'package:flick/features/music_videos/media3_music_video_surface.dart';
+import 'package:flick/features/music_videos/video_quality_settings.dart';
 import 'package:flick/features/music_videos/music_video_providers.dart';
 import 'package:flick/providers/opt_in_source_provider.dart';
 import 'package:flick/features/player/widgets/full_player_visuals.dart';
@@ -18,6 +19,9 @@ import '../widgets/player_panel_stage.dart';
 import '../widgets/motion_art_widget.dart';
 
 import 'package:flick/services/motion_art/moving_cover_settings.dart';
+import 'package:flick/services/motion_art/moving_cover_availability.dart';
+import 'package:flick/services/motion_art/animated_artwork_service.dart';
+import 'package:flick/features/spotify/spotify_storage.dart';
 
 import '../widgets/player_transport_controls.dart';
 import '../widgets/artwork_gradient_backdrop.dart';
@@ -708,6 +712,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                      key: _videoSurfaceKey,
                      videoId: videoId,
                      controller: _videoController,
+                      maxVideoHeight: ref.watch(videoQualityProvider),
                      showControls: !_immersiveLyrics,
                    ),
                 );
@@ -1147,6 +1152,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       key: _videoSurfaceKey,
       videoId: videoId,
       controller: _videoController,
+      maxVideoHeight: ref.watch(videoQualityProvider),
       showControls: false,
     ),
     subtitles: ValueListenableBuilder<bool>(
@@ -1168,6 +1174,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
         ? (_sublineLyrics ?? _lyrics) : null,
     position: _videoActive
         ? _videoController.positionNotifier : _player.positionNotifier,
+    playing: _videoActive
+        ? _videoController.advancingNotifier : _player.isPlayingNotifier,
+    playbackSpeed: _videoActive ? null : _player.playbackSpeedNotifier,
     loading: _lyricsLoading || _lyricsForSongId != song.id,
   );
 
@@ -1370,6 +1379,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                   key: _videoSurfaceKey,
                                   videoId: _activeVideoId!,
                                   controller: _videoController,
+                      maxVideoHeight: ref.watch(videoQualityProvider),
                 showControls: false,
                 onFullscreen: _immersiveLyrics ? null : _toggleVideoFullscreen,
                                 ),
@@ -1670,6 +1680,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 key: _videoSurfaceKey,
                 videoId: _activeVideoId!,
                 controller: _videoController,
+                      maxVideoHeight: ref.watch(videoQualityProvider),
                 showControls: false,
                 onFullscreen: _immersiveLyrics ? null : _toggleVideoFullscreen,
               ),
@@ -2279,24 +2290,48 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               width: (constraints.maxWidth - 8) / 4,
             ),
           ),
-          if (_player.currentSongNotifier.value case final song?)
-            chip(
-              Icons.motion_photos_on_rounded,
-              lokalText('Cover'),
-              () => ref
-                  .read(movingCoverSettingsProvider.notifier)
-                  .setSongEnabled(
-                    movingCoverSongKey(song),
-                    ref
-                        .read(movingCoverSettingsProvider)
-                        .disabledSongs
-                        .contains(movingCoverSongKey(song)),
-                  ),
-              active: !ref
-                  .watch(movingCoverSettingsProvider)
-                  .disabledSongs
-                  .contains(movingCoverSongKey(song)),
-              width: (constraints.maxWidth - 8) / 4,
+          if (!_videoActive)
+            if (_player.currentSongNotifier.value case final song?)
+            // Probe all configured motion sources, including Spotify Canvas.
+            // A saved per-song "off" setting must not hide this control:
+            // it still needs to offer a way to turn the clip back on.
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                movingCoverRevision,
+                SecureSpotifyTokenStore.sessionRevision,
+                AnimatedArtworkService.instance.revision,
+              ]),
+              builder: (context, _) => Consumer(
+                builder: (context, coverRef, _) {
+                  final available = coverRef.watch(
+                    movingCoverAvailabilityProvider((
+                      title: song.title,
+                      artist: song.artist,
+                      album: song.album,
+                      duration: song.duration,
+                      sourceRevision: movingCoverRevision.value,
+                      spotifySessionRevision:
+                          SecureSpotifyTokenStore.sessionRevision.value,
+                      artworkRevision:
+                          AnimatedArtworkService.instance.revision.value,
+                    )),
+                  );
+                  if (available.value != true) return const SizedBox.shrink();
+                  final disabled = coverRef
+                      .watch(movingCoverSettingsProvider)
+                      .disabledSongs
+                      .contains(movingCoverSongKey(song));
+                  return chip(
+                    Icons.motion_photos_on_rounded,
+                    lokalText('Cover'),
+                    () => coverRef
+                        .read(movingCoverSettingsProvider.notifier)
+                        .setSongEnabled(movingCoverSongKey(song), disabled),
+                    active: !disabled,
+                    width: (constraints.maxWidth - 8) / 4,
+                  );
+                },
+              ),
             ),
           ValueListenableBuilder<double>(
             valueListenable: _player.playbackSpeedNotifier,

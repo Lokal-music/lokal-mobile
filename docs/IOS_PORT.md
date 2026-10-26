@@ -12,7 +12,7 @@ checksum and native evidence in the build-27 checkpoint below. Installation stil
 requires local signing; physical-device and Windows install/update acceptance
 remain open.
 
-The branch integrates **31 merged mobile PRs after #172 through #210**, including
+The branch integrates **37 merged mobile PRs after #172 through #216**, including
 Likes stream revalidation, retained-artwork Space, separate video timing, search,
 profile, notification artwork, playlists and locale updates. See
 [the PR-by-PR UI/behavior review and revised WidgetKit design](IOS_POST172_REVIEW.md)
@@ -729,3 +729,34 @@ These are simulator and package results, not physical iPhone, iOS 16 runtime,
 actual Cast receiver or live YouTube acceptance. The subsequent unobstructed
 embedded-video Space layout and HTTP range fixes require their own source build.
 The preceding build-24/build-26 sections are historical checkpoints.
+
+
+### Current continuation through #216
+
+Main `63280241a5216ef987111eb8cd17c93e0626f1e4` is integrated, including all six
+additional merged PRs #211–#216. Build 27 remains the validated checkpoint through
+#210; the current source needs a fresh native run. The detailed audit records
+Cover availability, Last.fm discovery, root video navigation, unshaded smooth and
+concurrent Space lyrics, video quality and individual artist links. Android's
+upstream USB registration/transfer-lifetime fix is preserved, excluded from iOS.
+
+The iPhone uses the official embed's own quality control, with translated guidance
+in Appearance. Native Android retains its 360p–4K/Auto selector. Space uses a
+separate advancing clock signal for video, so its interpolation freezes during
+buffering while transport can still represent a pending Play. Official player
+controls and branding stay unobstructed; captions and explicit Exit Space sit
+below the same live player.
+
+The current host selection passes **111** UI/transport/locale tests, including
+HTTP suffix/clamped/unsatisfiable/HEAD/empty-file behavior. A broader run also
+reached the known historical ARB unused-key failure; no full-suite-green claim is
+made. Analysis finds no errors; warning/info findings remain.
+
+A manual workflow input, `live_video_probe`, opts into the public YouTube fixture
+on both actual simulator WebKit runtimes. The probe uses production HTML and
+channels and records readiness, advancing playback, pause/seek, same-State Space
+entry/exit and native WebKit release. Network/provider restrictions are recorded
+as **inconclusive** with a screenshot and provider code, never successful video
+acceptance. Even an unavailable player must acknowledge native media suspension.
+The ordinary deterministic corpus runs regardless; this probe is not physical
+background/fullscreen/accessory acceptance.

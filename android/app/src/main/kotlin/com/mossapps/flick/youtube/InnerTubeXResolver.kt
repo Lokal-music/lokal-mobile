@@ -300,11 +300,16 @@ object InnerTubeXResolver {
      * same extractor identity. Both legs must have playable URLs; otherwise
      * the UI falls back to YouTube's official embedded player.
      */
-    suspend fun resolvePlayableVideo(videoId: String, maxAttempts: Int = 3): Extracted {
+    suspend fun resolvePlayableVideo(
+        videoId: String,
+        maxVideoHeight: Int = 1080,
+        maxAttempts: Int = 3,
+    ): Extracted {
         var last: Throwable? = null
         repeat(maxAttempts.coerceIn(1, 6)) {
             val candidate = try {
-                extract(videoId, Int.MAX_VALUE, wantVideo = true, maxVideoHeight = 1080)
+                extract(videoId, Int.MAX_VALUE, wantVideo = true,
+                    maxVideoHeight = maxVideoHeight.coerceIn(144, 2160))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

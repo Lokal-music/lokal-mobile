@@ -117,3 +117,19 @@ The subsequent layout/iframe/Space/real HTTP selection passes **24** host tests.
 The real HTTP tests include suffix and oversized ranges, clamped endpoints,
 unsatisfiable and empty files, malformed/multipart fallback, HEAD, method rejection
 and raw AAC MIME. These prove HTTP byte/framing behavior, not receiver support.
+
+
+The #214/#215 continuation preserves root video navigation using Lokal's existing
+full-player route, smooth unshaded syllables, concurrent/overlapping lines and
+separate artist targets. Native Android keeps the persisted height ceiling and
+stale-resolution guard. The iPhone Appearance row directs the user to YouTube's
+own quality control rather than presenting a nonfunctional height selector.
+Space listens to a separate advancing signal, which stops when a video buffers.
+
+For native investigation, manually dispatch the iPhone workflow with
+`live_video_probe=true`. The public short fixture uses the actual production
+WKWebView and API bridge. Its report records readiness/provider error, measured
+position advance, pause/seek, same-State Space entry/exit and native suspension.
+Unavailable/restricted playback is **inconclusive**, with a screenshot. A
+successful native release acknowledgement alone is not video playback acceptance.
+The deterministic playback corpus and its status remain visible separately.

@@ -370,3 +370,26 @@ These are simulator and package results, not physical iPhone, iOS 16 runtime,
 actual Cast receiver or live YouTube acceptance. The subsequent unobstructed
 embedded-video Space layout and HTTP range fixes require their own source build.
 The preceding build-24/build-26 sections are historical checkpoints.
+
+
+## Further upstream review: #211–#216
+
+Reviewed 26 October 2026 (Europe/Paris), main
+`63280241a5216ef987111eb8cd17c93e0626f1e4`. This brings the integration to **37**
+merged mobile PRs after #172. #208 is the port's own companion and is not counted.
+
+| PR | Applied UI/behavior | iPhone adaptation and validation |
+| --- | --- | --- |
+| #211 | Fix `ValueListenable` import for Space release compilation. | Matches the correction already made in the port; preserve upstream `ValueNotifier` for the new smooth renderer. |
+| #212 | Show Cover only when an enabled source can supply actual motion art/Spotify Canvas; allow re-enabling a disabled song. | Share revision-keyed async lookup and failure-safe availability. The source-order/cache tests pass; a static cover never advertises motion. |
+| #213 | Prefer Last.fm albums and remove redundant provider discovery shelves. | Carry shared recommendation order, deduplication and shelf changes. Discovery tests pass; live account/catalogue availability remains separate. |
+| #214 | Smooth unshaded Space syllables and hide shell footer on video routes. | Keep the standard Lyrics painter, use the root navigator with Lokal's existing full-player route, preserve the keyed embedded player and display captions below it. Provider touches remain reserved for its own controls. |
+| #215 | Add concurrent/overlapping Space lines, Appearance video-quality preference, and separate album-artist targets. | Share concurrent renderer and artist links. Keep native Android height selection/generation guards; iPhone shows translated guidance for YouTube's quality control. A separate video advancing signal freezes Space during buffering. Native harness now checks two actual concurrent generated lines; awaiting its source build. |
+| #216 | Recover Android USB DAC registration and protect transfer/feedback lifetime. | Preserve upstream Kotlin/Rust changes. The transport is Android-only, not an iPhone USB feature. Compile verification and actual DAC qualification are separate. |
+
+The current UI/transport/locale selection passes **111** tests; the focused video
+clock/Space subset passes **16** (overlap). No analysis errors are found; existing
+warning/info findings and the historical unused-ARB-key failure remain. Native
+build 27 does not cover these subsequent changes. An opt-in live WebKit fixture
+records observable readiness/playback/seek/Space and release, or a clearly
+inconclusive provider/network result. See the current port continuation for scope.

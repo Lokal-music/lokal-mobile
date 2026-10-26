@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flick/services/motion_art/moving_cover_settings.dart';
+import 'package:flick/features/music_videos/video_quality_settings.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -124,6 +125,36 @@ List<LokalSettingsSection> appearanceSettings(
           ),
           value: appearance.fullscreenCover,
           onChanged: look.setFullscreenCover,
+        ),
+        if (Platform.isIOS)
+          LokalSettingRow(
+            label: lokalText('Video quality'),
+            description: lokalText('Adjust video quality in the YouTube player.'),
+          )
+        else
+        LokalSettingRow(
+          label: lokalText('Video quality'),
+          description: lokalText(
+            'Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.',
+          ),
+          stacked: true,
+          trailing: DropdownButtonFormField<int>(
+            key: ValueKey(ref.watch(videoQualityProvider)),
+            initialValue: ref.watch(videoQualityProvider),
+            isExpanded: true,
+            items: [
+              for (final height in videoQualityHeights)
+                DropdownMenuItem(
+                  value: height,
+                  child: Text(lokalText(videoQualityLabel(height))),
+                ),
+            ],
+            onChanged: (height) {
+              if (height != null) {
+                unawaited(ref.read(videoQualityProvider.notifier).select(height));
+              }
+            },
+          ),
         ),
         LokalSettingRow.toggle(
           label: lokalText('Moving covers'),

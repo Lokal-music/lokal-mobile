@@ -2,6 +2,11 @@ name: iPhone build and sideload package
 
 on:
   workflow_dispatch:
+    inputs:
+      live_video_probe:
+        description: 'Observe the public YouTube embed in actual WebKit (network-dependent evidence)'
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'ios/**'
@@ -32,6 +37,7 @@ jobs:
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
       IPHONEOS_DEPLOYMENT_TARGET: '16.0'
       DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+      LOKAL_IOS_VIDEO_PROBE: ${{ inputs.live_video_probe || false }}
       IOS_SIMULATOR_RUNTIME_VERSION: '18.6'
       IOS_SIMULATOR_DEVICE_TYPE: com.apple.CoreSimulator.SimDeviceType.iPhone-16
       LOKAL_IOS_CARGO_CACHE_ROOT: ${{ github.workspace }}/.dart_tool/lokal-ios-cargo
@@ -68,7 +74,7 @@ jobs:
       - name: Verify playback ownership and transport contracts
         run: |
           node --version
-          flutter test --no-pub test/services/casting/cast_handoff_test.dart test/services/casting/chromecast_backend_test.dart test/services/casting/cast_source_test.dart test/services/external_playback_owner_test.dart test/services/rust_audio_engine_pause_test.dart test/features/music_videos test/features/player/space_video_overlay_test.dart test/features/player/video_space_layout_test.dart test/features/player/immersive_lyrics_stage_test.dart test/services/casting/cast_content_server_test.dart
+          flutter test --no-pub test/services/casting/cast_handoff_test.dart test/services/casting/chromecast_backend_test.dart test/services/casting/cast_source_test.dart test/services/external_playback_owner_test.dart test/services/rust_audio_engine_pause_test.dart test/features/music_videos test/features/player/space_video_overlay_test.dart test/features/player/video_space_layout_test.dart test/features/player/immersive_lyrics_stage_test.dart test/services/casting/cast_content_server_test.dart test/features/player/artist_credit_links_test.dart test/services/lyrics_word_timing_test.dart test/services/moving_cover_availability_test.dart test/konnekted/konnekted_discovery_test.dart
       - name: Check the native build helper before Xcode
         working-directory: rust_builder/cargokit/build_tool
         run: |
@@ -148,7 +154,7 @@ jobs:
         env:
           LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-18.6
         run: |
-          if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --dart-define=LOKAL_IOS_DISCOVERY_FIXTURE=lokal-ios-fixture-${{ github.run_id }}-${{ github.run_attempt }} --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
+          if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --dart-define=LOKAL_IOS_VIDEO_PROBE="$LOKAL_IOS_VIDEO_PROBE" --dart-define=LOKAL_IOS_DISCOVERY_FIXTURE=lokal-ios-fixture-${{ github.run_id }}-${{ github.run_attempt }} --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
             python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-build.log"
             exit 1
           fi

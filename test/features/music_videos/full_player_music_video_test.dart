@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/features/music_videos/music_video_player_page.dart';
 import 'package:flick/features/music_videos/music_video_surface.dart';
@@ -12,6 +13,39 @@ void main() {
     duration: Duration(minutes: 3),
     fileType: 'FLAC',
   );
+
+  testWidgets('video route uses root navigator, above the shell mini-player',
+      (tester) async {
+    final rootNavigator = GlobalKey<NavigatorState>();
+    final tabNavigator = GlobalKey<NavigatorState>();
+    NavigatorState? selected;
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: rootNavigator,
+      home: Scaffold(
+        body: Column(
+          children: [
+            Expanded(
+              child: Navigator(
+                key: tabNavigator,
+                onGenerateRoute: (_) => MaterialPageRoute(
+                  builder: (context) => Builder(
+                    builder: (tabContext) {
+                      selected = musicVideoRouteNavigator(tabContext);
+                      return const Text('Videos tab');
+                    },
+                  ),
+                ),
+              ),
+            ),
+            const Text('Persistent app-shell mini player'),
+          ],
+        ),
+      ),
+    ));
+    expect(selected, same(rootNavigator.currentState));
+    expect(selected, isNot(same(tabNavigator.currentState)),
+        reason: 'The video route must cover the shell footer');
+  });
 
   test('video ID validation rejects arbitrary embed destinations', () {
     expect(validMusicVideoId('abcdefghijk'), isTrue);

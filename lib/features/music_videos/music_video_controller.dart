@@ -8,8 +8,12 @@ class Media3MusicVideoController {
   final positionNotifier = ValueNotifier<Duration>(Duration.zero);
   final durationNotifier = ValueNotifier<Duration>(Duration.zero);
   final playingNotifier = ValueNotifier<bool>(false);
+  // A buffering player can still report "playing". Captions must not advance
+  // until the source clock actually resumes.
+  final advancingNotifier = ValueNotifier<bool>(false);
   final nativeNotifier = ValueNotifier<bool>(true);
   final timingAvailableNotifier = ValueNotifier<bool>(false);
+  final embedErrorNotifier = ValueNotifier<int?>(null);
   Future<void> Function(String, Map<String, Object?>)? _send;
   Timer? _ticker;
   final Stopwatch _sampleClock = Stopwatch();
@@ -32,6 +36,7 @@ class Media3MusicVideoController {
     _ticker?.cancel();
     _ticker = null;
     playingNotifier.value = false;
+    advancingNotifier.value = false;
     timingAvailableNotifier.value = false;
   }
 
@@ -49,6 +54,7 @@ class Media3MusicVideoController {
     _buffering = buffering;
     durationNotifier.value = Duration(milliseconds: durationMs);
     playingNotifier.value = playing;
+    advancingNotifier.value = playing && !buffering;
     positionNotifier.value = _samplePosition;
     timingAvailableNotifier.value = true;
     if (!playing || buffering) {
@@ -67,11 +73,13 @@ class Media3MusicVideoController {
     });
   }
 
-  void fallback() {
+  void fallback({int? errorCode}) {
     if (_disposed) return;
     nativeNotifier.value = false;
     playingNotifier.value = false;
+    advancingNotifier.value = false;
     timingAvailableNotifier.value = false;
+    embedErrorNotifier.value = errorCode;
     _ticker?.cancel();
     _ticker = null;
   }
@@ -83,8 +91,10 @@ class Media3MusicVideoController {
     positionNotifier.value = Duration.zero;
     durationNotifier.value = Duration.zero;
     playingNotifier.value = false;
+    advancingNotifier.value = false;
     nativeNotifier.value = true;
     timingAvailableNotifier.value = false;
+    embedErrorNotifier.value = null;
     _sampleClock
       ..stop()
       ..reset();
@@ -108,7 +118,12 @@ class Media3MusicVideoController {
     final owner = _owner;
     final send = _send;
     if (send != null) await send('release', const {});
-    if (owns(owner)) playingNotifier.value = false;
+    if (owns(owner)) {
+      _ticker?.cancel();
+      _ticker = null;
+      playingNotifier.value = false;
+      advancingNotifier.value = false;
+    }
   }
 
   Future<void> togglePlayPause() =>
@@ -123,7 +138,9 @@ class Media3MusicVideoController {
     positionNotifier.dispose();
     durationNotifier.dispose();
     playingNotifier.dispose();
+    advancingNotifier.dispose();
     nativeNotifier.dispose();
     timingAvailableNotifier.dispose();
+    embedErrorNotifier.dispose();
   }
 }

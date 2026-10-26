@@ -43,6 +43,7 @@ import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 
 import '../test/fixtures/generated_audio.dart';
+import 'ios_live_video_probe.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -273,6 +274,7 @@ void main() {
       '[ar:Lokal test]\n[ti:Generated tone]\n'
       '[00:00.00]First generated lyric\n'
       '[00:03.00]Second generated lyric\n'
+      '[00:03.00]Concurrent generated voice\n'
       '[00:06.00]Final generated lyric\n',
       flush: true,
     );
@@ -413,7 +415,8 @@ void main() {
     await tester.tap(find.text('Space'));
     await tester.pump(const Duration(milliseconds: 750));
     expect(find.byType(ImmersiveLyricsSubtitle), findsOneWidget);
-    expect(find.byKey(const ValueKey('space-line:3000')), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-line:3000:1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-line:3000:2')), findsOneWidget);
     final spaceArtworkElements = find
         .descendant(
           of: find.byType(FullPlayerScreen),
@@ -438,6 +441,7 @@ void main() {
     expect(find.byType(ImmersiveLyricsSubtitle), findsNothing);
     binding.reportData!['post210_space_preserves_artwork_and_song_clock'] =
         'passed';
+    binding.reportData!['post215_space_concurrent_lines'] = 'passed';
     Navigator.of(tester.element(find.byType(FullPlayerScreen))).pop();
     for (
       var frame = 0;
@@ -780,7 +784,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     }
 
+    if (const bool.fromEnvironment('LOKAL_IOS_VIDEO_PROBE')) {
+      await probeLiveIosVideo(tester, binding);
+    }
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();
-  }, timeout: const Timeout(Duration(minutes: 4)));
+  }, timeout: const Timeout(Duration(minutes:
+      bool.fromEnvironment('LOKAL_IOS_VIDEO_PROBE') ? 6 : 4)));
 }

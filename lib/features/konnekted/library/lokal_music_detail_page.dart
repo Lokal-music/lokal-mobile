@@ -21,6 +21,7 @@ import 'package:flick/features/discovery/recommendation_match.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/player/widgets/add_to_playlist_sheet.dart';
+import 'package:flick/features/player/widgets/artist_credit_links.dart';
 import 'package:flick/features/search/library_download.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/models/song.dart';
@@ -599,23 +600,20 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                         ),
                         if (!widget.isArtist) ...[
                           const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () => pushLokal(
+                          ArtistCreditLinks(
+                            credit: widget.artist,
+                            style: TextStyle(
+                              fontSize: 20,
+                              color: t.accent,
+                            ),
+                            onArtistTap: (artist) => pushLokal(
                               context,
                               LokalMusicDetailPage.artist(
-                                name: widget.artist,
+                                name: artist,
                                 localSongs: KonnektedLibraryIndex.of(library)
-                                    .artist(widget.artist),
+                                    .artist(artist),
                                 initialOnline: _online,
                               ),
-                            ),
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              foregroundColor: t.accent,
-                            ),
-                            child: Text(
-                              widget.artist,
-                              style: const TextStyle(fontSize: 20),
                             ),
                           ),
                         ],

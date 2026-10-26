@@ -1,10 +1,14 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Adjust video quality in the YouTube player.": "La qualité vidéo se règle dans le lecteur YouTube.",
   "Exit Space": "Quitter Space",
   "Use device volume buttons": "Utilisez les boutons de volume",
   "Waiting for video timing": "En attente de la synchronisation vidéo",
   "Video": "Vidéo",
   "Home": "Accueil",
+  "Video quality": "Qualité vidéo",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Résolution maximale des clips musicaux. Une qualité supérieure consomme plus de données ; la meilleure résolution disponible dans cette limite sera utilisée.",
+  "Auto (best available)": "Auto (meilleure qualité disponible)",
   "All sources": "Toutes les sources",
   "Online": "En ligne",
   "Artist": "Artiste",
@@ -101,6 +105,7 @@ const Map<String, String> _uifr = {
   "Connect Your Music Accounts": "Connectez vos comptes musicaux",
   "Connect your Spotify session to enable personal shelves.":
       "Connectez votre session Spotify pour activer les étagères personnelles.",
+  "Connect your account to see your mixes and personalized picks.": "Connectez votre compte pour voir vos mix et des recommandations personnalisées.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Connectez votre compte pour voir vos mix, vos likes, votre historique et vos choix personnalisés.",
   "Connected": "Connecté",
   "Continue": "Continuer",
@@ -523,11 +528,15 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Adjust video quality in the YouTube player.": "Die Videoqualität wird im YouTube-Player eingestellt.",
   "Exit Space": "Space verlassen",
   "Use device volume buttons": "Lautstärketasten verwenden",
   "Waiting for video timing": "Warten auf die Videozeit",
   "Video": "Video",
   "Home": "Startseite",
+  "Video quality": "Videoqualität",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maximale Auflösung für Musikvideos. Höhere Qualität verbraucht mehr Daten; die beste verfügbare Auflösung bis zu dieser Grenze wird verwendet.",
+  "Auto (best available)": "Automatisch (beste verfügbare Qualität)",
   "All sources": "Alle Quellen",
   "Online": "Online",
   "Artist": "Künstler",
@@ -623,6 +632,7 @@ const Map<String, String> _uide = {
   "Connect Spotify for Discovery": "Verbinden Sie Spotify für Discovery",
   "Connect Your Music Accounts": "Musikkonten verbinden",
   "Connect your Spotify session to enable personal shelves.": "Verbinden Sie Ihre Spotify-Sitzung, um persönliche Regale zu aktivieren.",
+  "Connect your account to see your mixes and personalized picks.": "Verknüpfen Sie Ihr Konto, um Ihre Mixe und personalisierten Empfehlungen zu sehen.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Verknüpfen Sie Ihr Konto, um Ihre Mixe, Likes, Ihren Verlauf und Ihre personalisierten Picks anzuzeigen.",
   "Connected": "Verbunden",
   "Continue": "Weiter",
@@ -1039,11 +1049,15 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Adjust video quality in the YouTube player.": "La calidad del vídeo se ajusta en el reproductor de YouTube.",
   "Exit Space": "Salir de Space",
   "Use device volume buttons": "Usa los botones de volumen",
   "Waiting for video timing": "Esperando la sincronización del vídeo",
   "Video": "Vídeo",
   "Home": "Inicio",
+  "Video quality": "Calidad de vídeo",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Resolución máxima de los vídeos musicales. Una calidad más alta consume más datos; se elegirá la mejor resolución disponible dentro del límite.",
+  "Auto (best available)": "Automático (mejor disponible)",
   "All sources": "Todas las fuentes",
   "Online": "En línea",
   "Artist": "Artista",
@@ -1142,6 +1156,7 @@ const Map<String, String> _uies = {
   "Connect Your Music Accounts": "Conecta tus cuentas musicales",
   "Connect your Spotify session to enable personal shelves.":
       "Conecte su sesión Spotify para habilitar estantes personales.",
+  "Connect your account to see your mixes and personalized picks.": "Conecte su cuenta para ver sus mezclas y recomendaciones personalizadas.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Conecte su cuenta para ver sus mezclas, Me gusta, historial y selecciones personalizadas.",
   "Connected": "Conectado",
   "Continue": "Continuar",
@@ -1563,11 +1578,15 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Adjust video quality in the YouTube player.": "La qualità video si regola nel player di YouTube.",
   "Exit Space": "Esci da Space",
   "Use device volume buttons": "Usa i pulsanti del volume",
   "Waiting for video timing": "In attesa della sincronizzazione video",
   "Video": "Video",
   "Home": "Home",
+  "Video quality": "Qualità video",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Risoluzione massima per i video musicali. Una qualità più alta consuma più dati; verrà scelta la migliore risoluzione disponibile entro questo limite.",
+  "Auto (best available)": "Auto (migliore disponibile)",
   "All sources": "Tutte le fonti",
   "Online": "Online",
   "Artist": "Artista",
@@ -1664,6 +1683,7 @@ const Map<String, String> _uiit = {
   "Connect Your Music Accounts": "Collega i tuoi account musicali",
   "Connect your Spotify session to enable personal shelves.":
       "Connetti la tua sessione Spotify per abilitare gli scaffali personali.",
+  "Connect your account to see your mixes and personalized picks.": "Collega il tuo account per vedere i tuoi mix e i consigli personalizzati.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Collega il tuo account per vedere i tuoi mix, i Mi piace, la cronologia e le scelte personalizzate.",
   "Connected": "Connesso",
   "Continue": "Continua",
@@ -2089,11 +2109,15 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Adjust video quality in the YouTube player.": "A qualidade do vídeo é ajustada no player do YouTube.",
   "Exit Space": "Sair do Space",
   "Use device volume buttons": "Use os botões de volume",
   "Waiting for video timing": "Aguardando a sincronização do vídeo",
   "Video": "Vídeo",
   "Home": "Início",
+  "Video quality": "Qualidade do vídeo",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Resolução máxima dos videoclipes. Qualidades maiores usam mais dados; a melhor resolução disponível dentro do limite será selecionada.",
+  "Auto (best available)": "Automático (melhor disponível)",
   "All sources": "Todas as fontes",
   "Online": "Online",
   "Artist": "Artista",
@@ -2190,6 +2214,7 @@ const Map<String, String> _uiptBR = {
   "Connect Your Music Accounts": "Liga as tuas contas de música",
   "Connect your Spotify session to enable personal shelves.":
       "Conecte sua sessão Spotify para ativar estantes pessoais.",
+  "Connect your account to see your mixes and personalized picks.": "Conecte sua conta para ver seus mixes e recomendações personalizadas.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Conecte sua conta para ver seus mixes, curtidas, histórico e escolhas personalizadas.",
   "Connected": "Ligado",
   "Continue": "Continuar",
@@ -2610,11 +2635,15 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Adjust video quality in the YouTube player.": "De videokwaliteit stel je in de YouTube-speler in.",
   "Exit Space": "Space verlaten",
   "Use device volume buttons": "Gebruik de volumeknoppen",
   "Waiting for video timing": "Wachten op de videotiming",
   "Video": "Video",
   "Home": "Start",
+  "Video quality": "Videokwaliteit",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maximale resolutie voor muziekvideo's. Hogere kwaliteit verbruikt meer data; de hoogst beschikbare resolutie binnen de limiet wordt gekozen.",
+  "Auto (best available)": "Automatisch (beste beschikbaar)",
   "All sources": "Alle bronnen",
   "Online": "Online",
   "Artist": "Artiest",
@@ -2713,6 +2742,7 @@ const Map<String, String> _uinl = {
   "Connect Your Music Accounts": "Verbind je muziekaccounts",
   "Connect your Spotify session to enable personal shelves.":
       "Verbind uw Spotify-sessie om persoonlijke planken in te schakelen.",
+  "Connect your account to see your mixes and personalized picks.": "Verbind uw account om uw mixen en persoonlijke aanbevelingen te bekijken.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Verbind uw account om uw mixen, likes, geschiedenis en gepersonaliseerde keuzes te bekijken.",
   "Connected": "Verbonden",
   "Continue": "Doorgaan",
@@ -3143,11 +3173,15 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Adjust video quality in the YouTube player.": "Jakość wideo ustawia się w odtwarzaczu YouTube.",
   "Exit Space": "Wyjdź z Space",
   "Use device volume buttons": "Użyj przycisków głośności",
   "Waiting for video timing": "Oczekiwanie na synchronizację wideo",
   "Video": "Wideo",
   "Home": "Start",
+  "Video quality": "Jakość wideo",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maksymalna rozdzielczość teledysków. Wyższa jakość zużywa więcej danych; zostanie wybrana najlepsza dostępna rozdzielczość w tym limicie.",
+  "Auto (best available)": "Automatycznie (najlepsza dostępna)",
   "All sources": "Wszystkie źródła",
   "Online": "Online",
   "Artist": "Wykonawca",
@@ -3244,6 +3278,7 @@ const Map<String, String> _uipl = {
   "Connect Your Music Accounts": "Połącz konta muzyczne",
   "Connect your Spotify session to enable personal shelves.":
       "Podłącz sesję Spotify, aby włączyć półki osobiste.",
+  "Connect your account to see your mixes and personalized picks.": "Połącz swoje konto, aby zobaczyć swoje miksy i spersonalizowane rekomendacje.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Połącz swoje konto, aby zobaczyć swoje składanki, polubienia, historię i spersonalizowane typy.",
   "Connected": "Połączono",
   "Continue": "Dalej",
@@ -3666,11 +3701,15 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Adjust video quality in the YouTube player.": "Videokvaliteten ställs in i YouTube-spelaren.",
   "Exit Space": "Lämna Space",
   "Use device volume buttons": "Använd volymknapparna",
   "Waiting for video timing": "Väntar på videons tidsinformation",
   "Video": "Video",
   "Home": "Hem",
+  "Video quality": "Videokvalitet",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Högsta upplösning för musikvideor. Högre kvalitet använder mer data; den bästa tillgängliga upplösningen inom gränsen väljs.",
+  "Auto (best available)": "Automatiskt (bästa tillgängliga)",
   "All sources": "Alla källor",
   "Online": "Online",
   "Artist": "Artist",
@@ -3770,6 +3809,7 @@ const Map<String, String> _uisv = {
   "Connect Your Music Accounts": "Anslut dina musikkonton",
   "Connect your Spotify session to enable personal shelves.":
       "Anslut din Spotify-session för att aktivera personliga hyllor.",
+  "Connect your account to see your mixes and personalized picks.": "Anslut ditt konto för att se dina mixar och personliga rekommendationer.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Anslut ditt konto för att se dina mixar, gilla-markeringar, historik och personliga val.",
   "Connected": "Ansluten",
   "Continue": "Fortsätt",
@@ -4195,11 +4235,15 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Adjust video quality in the YouTube player.": "请在 YouTube 播放器中调整视频画质。",
   "Exit Space": "退出 Space",
   "Use device volume buttons": "使用设备音量按钮",
   "Waiting for video timing": "正在等待视频时间信息",
   "Video": "视频",
   "Home": "首页",
+  "Video quality": "视频画质",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "音乐视频的最高分辨率。更高画质会消耗更多流量，播放时会选择不超过该上限的最佳可用清晰度。",
+  "Auto (best available)": "自动（最佳可用画质）",
   "All sources": "所有来源",
   "Online": "在线",
   "Artist": "艺人",
@@ -4298,6 +4342,7 @@ const Map<String, String> _uizh = {
   "Connect Your Music Accounts": "连接您的音乐帐户",
   "Connect your Spotify session to enable personal shelves.":
       "连接您的 Spotify 会话以启用个人书架。",
+  "Connect your account to see your mixes and personalized picks.": "连接账号，查看你的混音和个性化推荐。",
   "Connect your account to see your mixes, Likes, history and personalized picks.":
       "连接您的帐户以查看您的混音、喜欢、历史记录和个性化精选。",
   "Connected": "已连接",
@@ -4723,11 +4768,15 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Adjust video quality in the YouTube player.": "Video kalitesi YouTube oynatıcısında ayarlanır.",
   "Exit Space": "Space’ten çık",
   "Use device volume buttons": "Cihazın ses düğmelerini kullanın",
   "Waiting for video timing": "Video zamanlaması bekleniyor",
   "Video": "Video",
   "Home": "Ana sayfa",
+  "Video quality": "Video kalitesi",
+  "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Müzik videoları için en yüksek çözünürlük. Yüksek kalite daha fazla veri kullanır; bu sınır içindeki en iyi mevcut çözünürlük seçilir.",
+  "Auto (best available)": "Otomatik (mevcut en iyi kalite)",
   "All sources": "Tüm kaynaklar",
   "Online": "Çevrimiçi",
   "Artist": "Sanatçı",
@@ -4814,6 +4863,7 @@ const Map<String, String> _uitr = {
   "Connect Spotify for Discovery": "Keşif için Spotify'a bağlan",
   "Connect Your Music Accounts": "Müzik hesaplarını bağla",
   "Connect your Spotify session to enable personal shelves.": "Kişisel koleksiyonların için Spotify oturumunu bağla.",
+  "Connect your account to see your mixes and personalized picks.": "Mixlerini ve sana özel önerileri görmek için hesabını bağla.",
   "Connect your account to see your mixes, Likes, history and personalized picks.": "Karışımlarını, beğenilerini, geçmişini ve kişisel önerilerini görmek için hesabını bağla.",
   "Connected": "Bağlandı",
   "Continue": "Devam et",
