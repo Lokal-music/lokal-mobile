@@ -1,5 +1,6 @@
 import 'package:flick/core/theme/lokal_performance_scope.dart';
 import 'dart:io';
+import 'package:flick/features/music_videos/music_video_surface.dart';
 import 'package:flick/features/player/widgets/full_player_visuals.dart';
 import 'package:flick/features/player/widgets/full_bleed_artwork_frame.dart';
 import 'package:flick/features/player/widgets/full_player_identity_layout.dart';
@@ -78,7 +79,16 @@ const String _font = 'GoogleSansFlex';
 /// entry points working with this player.
 class FullPlayerScreen extends ConsumerStatefulWidget {
   final Object heroTag;
-  const FullPlayerScreen({super.key, this.heroTag = 'album_art_hero'});
+  /// When supplied, this same full player presents a video instead of song
+  /// audio. The local audio queue is not replaced by a different recording.
+  final Song? videoSong;
+  final String? videoId;
+  const FullPlayerScreen({
+    super.key,
+    this.heroTag = 'album_art_hero',
+    this.videoSong,
+    this.videoId,
+  }) : assert((videoSong == null) == (videoId == null));
 
   @override
   ConsumerState<FullPlayerScreen> createState() => _FullPlayerScreenState();
@@ -89,6 +99,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   final PlayerService _player = PlayerService();
   final LyricsService _lyricsService = LyricsService();
 
+  bool _videoFullscreen = false;
   bool _showLyrics = false;
   bool _lyricsLoading = false;
   String _lyricsSource = 'auto';
@@ -213,6 +224,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
   @override
   void dispose() {
+    if (_videoFullscreen) {
+      // Restore standard edge-to-edge system bars when leaving a video.
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
     LokalPerformanceAdvisor.exitPlayerSurface('modern-full-player');
     _volumeControl.dispose();
     _queue.dispose();
@@ -362,7 +377,128 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     }
   }
 
-  void _close() => Navigator.of(context).pop();
+  void _close() {
+    if (_videoFullscreen) {
+      _toggleVideoFullscreen();
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _toggleVideoFullscreen() {
+    setState(() => _videoFullscreen = !_videoFullscreen);
+    unawaited(SystemChrome.setEnabledSystemUIMode(
+      _videoFullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    ));
+  }
+
+  /// The video fills the artwork stage of the same full-player route. The
+  /// persistent YouTube iframe is the *only* audio owner while it is open;
+  /// it is never mixed with a second Lokal audio track or treated as Canvas.
+  Widget _videoScaffold(Song song, String videoId) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: MusicVideoSurface(
+                key: ValueKey('music-video:$videoId'),
+                videoId: videoId,
+              ),
+            ),
+          ),
+          if (!_videoFullscreen)
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Close video',
+                        onPressed: _close,
+                        icon: const Icon(LucideIcons.chevronLeft, color: Colors.white),
+                      ),
+                      const Expanded(
+                        child: Text(
+                          'MUSIC VIDEO',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontFamily: _font,
+                            fontSize: 12,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Full-screen video',
+                        onPressed: _toggleVideoFullscreen,
+                        icon: const Icon(LucideIcons.maximize, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  tooltip: 'Exit full-screen video',
+                  onPressed: _toggleVideoFullscreen,
+                  icon: const Icon(LucideIcons.minimize, color: Colors.white),
+                ),
+              ),
+            ),
+          if (!_videoFullscreen)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(25, 0, 25, 26),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        song.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: _font, fontWeight: FontWeight.w700,
+                          fontSize: 24, color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        song.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: _font, fontSize: 15, color: Colors.white70,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Video playback via YouTube',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   // ───────────────────────────── gestures ─────────────────────────────
 
@@ -423,10 +559,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
     return PopScope(
       // Back puts the queue or the lyrics away first, then closes the player.
-      canPop: !_showLyrics && !_queue.isOpen,
+      canPop: !_videoFullscreen && !_showLyrics && !_queue.isOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_showLyrics) {
+        if (_videoFullscreen) {
+          _toggleVideoFullscreen();
+        } else if (_showLyrics) {
           _toggleLyrics();
         } else if (_queue.isOpen) {
           _setQueueOpen(false);
@@ -449,6 +587,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     bool isCasting,
     AudioOutputDiagnostics? diagnostics,
   ) {
+    if (widget.videoSong case final videoSong?) {
+      return _videoScaffold(videoSong, widget.videoId!);
+    }
     final fullCover = ref.watch(
       lokalAppearanceProvider.select((look) => look.fullscreenCover),
     );
