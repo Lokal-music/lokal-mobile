@@ -1124,7 +1124,23 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
                       // Remove the video subtree entirely when disabled; a
                       // retained platform texture must not cover the poster.
-                      final content = current && motion
+                      // Reuse the fullscreen-cover slot for video. Do not
+                      // create another page or discard the original artwork
+                      // preferences when entering/exiting Video.
+                      final content = current && _videoActive &&
+                              track.id == (_videoOverrideSong ?? widget.videoSong)?.id
+                          ? frame(
+                              ColoredBox(
+                                color: Colors.black,
+                                child: Media3MusicVideoSurface(
+                                  key: _videoSurfaceKey,
+                                  videoId: _activeVideoId!,
+                                  controller: _videoController,
+                                ),
+                              ),
+                              false,
+                            )
+                          : current && motion
                           ? ValueListenableBuilder<bool>(
                               valueListenable: _player.isPlayingNotifier,
                               builder: (context, playing, _) => MotionArtView(
@@ -1399,7 +1415,23 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             .watch(movingCoverSettingsProvider)
             .disabledSongs
             .contains(movingCoverSongKey(song));
-    final art = ClipRRect(
+    // Video occupies the exact same cover slot; the full player, queue,
+    // Canvas settings and Space all stay on their original surfaces.
+    final showVideo = current && _videoActive &&
+        song.id == (_videoOverrideSong ?? widget.videoSong)?.id;
+    final art = showVideo
+        ? ClipRRect(
+            borderRadius: radius,
+            child: ColoredBox(
+              color: Colors.black,
+              child: Media3MusicVideoSurface(
+                key: _videoSurfaceKey,
+                videoId: _activeVideoId!,
+                controller: _videoController,
+              ),
+            ),
+          )
+        : ClipRRect(
       borderRadius: radius,
       child: ValueListenableBuilder<bool>(
         valueListenable: _player.isPlayingNotifier,
