@@ -8,12 +8,102 @@ import 'package:flutter/services.dart';
 import 'package:flick/features/discovery/youtube_music_store.dart';
 import 'music_video_surface.dart';
 
+/// One clock and transport interface for the native video and the regular
+/// Full Player chrome/Space subtitles. Album playback has a separate clock.
+class Media3MusicVideoController {
+  final positionNotifier = ValueNotifier<Duration>(Duration.zero);
+  final durationNotifier = ValueNotifier<Duration>(Duration.zero);
+  final playingNotifier = ValueNotifier<bool>(false);
+  final nativeNotifier = ValueNotifier<bool>(true);
+  Future<void> Function(String, Map<String, Object?>)? _send;
+  Timer? _ticker;
+  DateTime? _sampleTime;
+  Duration _samplePosition = Duration.zero;
+  bool _buffering = true;
+
+  void attach(Future<void> Function(String, Map<String, Object?>) command) {
+    _send = command;
+  }
+
+  void detach() {
+    _send = null;
+    _ticker?.cancel();
+    _ticker = null;
+    playingNotifier.value = false;
+  }
+
+  void update({
+    required int positionMs,
+    required int durationMs,
+    required bool playing,
+    required bool buffering,
+  }) {
+    _sampleTime = DateTime.now();
+    _samplePosition = Duration(milliseconds: positionMs);
+    _buffering = buffering;
+    durationNotifier.value = Duration(milliseconds: durationMs);
+    playingNotifier.value = playing;
+    positionNotifier.value = _samplePosition;
+    _ticker ??= Timer.periodic(const Duration(milliseconds: 33), (_) {
+      if (!playingNotifier.value || _buffering || _sampleTime == null) return;
+      final projected = _samplePosition + DateTime.now().difference(_sampleTime!);
+      final duration = durationNotifier.value;
+      final capped = duration > Duration.zero && projected > duration
+          ? duration : projected;
+      positionNotifier.value = capped;
+    });
+  }
+
+  void fallback() {
+    nativeNotifier.value = false;
+    playingNotifier.value = false;
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  void reset() {
+    _ticker?.cancel();
+    _ticker = null;
+    positionNotifier.value = Duration.zero;
+    durationNotifier.value = Duration.zero;
+    playingNotifier.value = false;
+    nativeNotifier.value = true;
+    _sampleTime = null;
+    _samplePosition = Duration.zero;
+    _buffering = true;
+  }
+
+  Future<void> command(String method, [Map<String, Object?> args = const {}]) async {
+    await _send?.call(method, args);
+  }
+
+  Future<void> togglePlayPause() => command(
+    playingNotifier.value ? 'pause' : 'play');
+  Future<void> seek(Duration position) => command(
+    'seek', {'positionMs': position.inMilliseconds});
+
+  void dispose() {
+    detach();
+    positionNotifier.dispose();
+    durationNotifier.dispose();
+    playingNotifier.dispose();
+    nativeNotifier.dispose();
+  }
+}
+
 /// Android's native Media3 player runs two tracks of this very same music
 /// video (audio-only + video-only), not Lokal's unrelated album recording.
 /// It owns its own timeline and lets Flutter draw all transport controls.
 class Media3MusicVideoSurface extends StatefulWidget {
-  const Media3MusicVideoSurface({super.key, required this.videoId});
+  const Media3MusicVideoSurface({
+    super.key, required this.videoId, this.controller, this.onFullscreen,
+    this.showControls = true,
+  });
   final String videoId;
+  final Media3MusicVideoController? controller;
+  /// Enlarge the same native player into device fullscreen when requested.
+  final VoidCallback? onFullscreen;
+  final bool showControls;
 
   @override
   State<Media3MusicVideoSurface> createState() => _Media3MusicVideoSurfaceState();
@@ -40,13 +130,19 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    widget.controller?.attach(_command);
     unawaited(_resolve());
   }
 
   @override
   void didUpdateWidget(covariant Media3MusicVideoSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.detach();
+      widget.controller?.attach(_command);
+    }
     if (oldWidget.videoId != widget.videoId) {
+      widget.controller?.reset();
       _poller?.cancel();
       _watchdog?.cancel();
       _player = null;
@@ -64,6 +160,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
     final videoId = widget.videoId;
     if (!Platform.isAndroid || !validMusicVideoId(videoId)) {
       if (mounted) setState(() { _fallback = true; _loading = false; });
+      widget.controller?.fallback();
       return;
     }
     try {
@@ -96,11 +193,13 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       _watchdog = Timer(const Duration(seconds: 35), () {
         if (mounted && !_ready && !_fallback && videoId == widget.videoId) {
           setState(() => _fallback = true);
+          widget.controller?.fallback();
         }
       });
     } catch (_) {
       if (mounted && videoId == widget.videoId) {
         setState(() { _fallback = true; _loading = false; });
+        widget.controller?.fallback();
       }
     }
   }
@@ -123,6 +222,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       if (status?['error'] != null) {
         _poller?.cancel();
         setState(() => _fallback = true);
+        widget.controller?.fallback();
         return;
       }
       setState(() {
@@ -133,6 +233,12 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
         _position = (status?['positionMs'] as num?)?.toInt() ?? 0;
         _duration = (status?['durationMs'] as num?)?.toInt() ?? 0;
       });
+      widget.controller?.update(
+        positionMs: _position,
+        durationMs: _duration,
+        playing: _playing,
+        buffering: _buffering,
+      );
     } catch (_) {
       // The AndroidView may still be registering its platform channel.
       // Preparation timeout / media errors will be surfaced by native status.
@@ -145,8 +251,10 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       if (mounted) unawaited(_refresh());
     } on PlatformException {
       if (mounted) setState(() => _fallback = true);
+      widget.controller?.fallback();
     } on MissingPluginException {
       if (mounted) setState(() => _fallback = true);
+      widget.controller?.fallback();
     }
   }
 
@@ -161,6 +269,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.controller?.detach();
     _poller?.cancel();
     _watchdog?.cancel();
     // Pause the native audio owner before Lokal optionally resumes song audio.
@@ -206,6 +315,21 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
           const IgnorePointer(
             child: Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
+        if (!widget.showControls && widget.onFullscreen != null)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Material(
+              color: Colors.black45,
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: 'Full-screen video',
+                icon: const Icon(Icons.fullscreen_rounded, color: Colors.white),
+                onPressed: widget.onFullscreen,
+              ),
+            ),
+          ),
+        if (widget.showControls)
         Positioned(
           left: 0, right: 0, bottom: 0,
           child: DecoratedBox(
@@ -257,6 +381,13 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
                       ),
                       Text('${_clock(_position)} / ${_clock(_duration)}',
                           style: const TextStyle(fontSize: 11, color: Colors.white)),
+                      if (widget.onFullscreen != null)
+                        IconButton(
+                          tooltip: 'Full-screen video',
+                          icon: const Icon(Icons.fullscreen_rounded,
+                              color: Colors.white, size: 23),
+                          onPressed: widget.onFullscreen,
+                        ),
                       IconButton(
                         tooltip: _fill ? 'Fit video' : 'Fill video',
                         icon: Icon(_fill ? Icons.fit_screen_rounded : Icons.aspect_ratio_rounded,
