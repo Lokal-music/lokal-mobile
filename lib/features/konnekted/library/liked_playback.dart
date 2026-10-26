@@ -28,7 +28,10 @@ bool likedSongNeedsFreshSource(Song song) {
   if (path == null || path.isEmpty) return true;
   // Never treat signed URLs or dead temporary files as durable downloads.
   final uri = Uri.tryParse(path);
-  if (uri != null && uri.hasScheme && uri.scheme != 'file') return true;
+  if (uri != null && uri.hasScheme) {
+    if (uri.scheme != 'file') return true;
+    return !File.fromUri(uri).existsSync();
+  }
   return !File(path).existsSync();
 }
 
