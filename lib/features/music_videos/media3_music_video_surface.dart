@@ -97,11 +97,13 @@ class Media3MusicVideoController {
 class Media3MusicVideoSurface extends StatefulWidget {
   const Media3MusicVideoSurface({
     super.key, required this.videoId, this.controller, this.onFullscreen,
+    this.showControls = true,
   });
   final String videoId;
   final Media3MusicVideoController? controller;
   /// Enlarge the same native player into device fullscreen when requested.
   final VoidCallback? onFullscreen;
+  final bool showControls;
 
   @override
   State<Media3MusicVideoSurface> createState() => _Media3MusicVideoSurfaceState();
@@ -313,6 +315,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
           const IgnorePointer(
             child: Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
+        if (widget.showControls)
         Positioned(
           left: 0, right: 0, bottom: 0,
           child: DecoratedBox(
