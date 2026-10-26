@@ -22,7 +22,11 @@ arm64 device and simulator, at minimum iOS 16.0. It uses the same archive throug
 the official SPM revision `543701c0bea92cfea527fce2fde3b82ee73f2902`.
 The report records the transport source hash
 `d529f2ebec4453883a823387211d74f9557ddf8e18857291e4abce4688238d1f`;
-subsequent diagnostics/numeric hardening require the next native check.
+The subsequent shutdown/numeric hardening passes
+[SDK probe 3](https://github.com/lokal-music/lokal-mobile/actions/runs/40286173923)
+at transport SHA-256
+`228ed599e8437196cbc0c74f8a72f6dc4d9c2c959afe9b98ae36276974c74881`.
+The complete application/receiver gates remain separate.
 Both compiler logs have no warnings/errors. This proves linkage, not invocation,
 Flutter application integration, discovery, receiver or background acceptance.
 

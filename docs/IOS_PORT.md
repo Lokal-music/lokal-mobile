@@ -678,3 +678,11 @@ native run; iOS 26 was not reached. This is partial native evidence, not a fully
 green run. The same logs expose repeated Android-only HomeWidget update calls on
 iPhone; the Android publisher is now gated on iOS until a real WidgetKit snapshot
 adapter exists, matching the already-gated settings UI.
+
+
+Current upstream review extends through merged **#209 and #210**, main
+`4504f64177e0826acacd7d06ab080718b947c3a4` (31 PRs after #172). Likes playback
+revalidates expired stream sources while preserving identity. Space now overlays
+the existing player artwork rather than opening a separate stage; the native
+harness has been updated to check the retained artwork elements and actual song
+clock. Its new native result is pending. See the audit for focused test evidence.

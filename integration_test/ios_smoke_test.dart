@@ -12,6 +12,7 @@ import 'package:flick/features/search/providers/search_filter_provider.dart';
 import 'package:flick/features/search/models/search_category.dart';
 import 'package:flick/features/player/screens/full_player_screen.dart';
 import 'package:flick/features/player/widgets/immersive_lyrics_stage.dart';
+import 'package:flick/features/player/widgets/player_artwork_image.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_page.dart';
 import 'package:flick/features/onboarding/screens/onboarding_screen.dart';
 import 'package:flick/l10n/l10n.dart';
@@ -361,20 +362,42 @@ void main() {
     await tester.ensureVisible(find.text('Space'));
     await tester.pump(const Duration(milliseconds: 250));
     await player.seek(const Duration(seconds: 3));
+    final artworkElements = find
+        .descendant(
+          of: find.byType(FullPlayerScreen),
+          matching: find.byType(PlayerArtworkImage),
+        )
+        .evaluate()
+        .toSet();
+    expect(artworkElements, isNotEmpty);
     await tester.tap(find.text('Space'));
     await tester.pump(const Duration(milliseconds: 750));
-    expect(find.byType(ImmersiveLyricsStage), findsOneWidget);
+    expect(find.byType(ImmersiveLyricsSubtitle), findsOneWidget);
+    expect(find.byKey(const ValueKey('space-line:3000')), findsOneWidget);
+    final spaceArtworkElements = find
+        .descendant(
+          of: find.byType(FullPlayerScreen),
+          matching: find.byType(PlayerArtworkImage),
+        )
+        .evaluate()
+        .toSet();
+    expect(
+      spaceArtworkElements,
+      containsAll(artworkElements),
+      reason: 'Space must preserve the actual player artwork elements.',
+    );
     expect(player.currentSongNotifier.value?.id, song.id);
     expect(player.isPlayingNotifier.value, false);
     expect(
       player.positionNotifier.value.inMilliseconds,
       greaterThanOrEqualTo(2500),
     );
-    await binding.takeScreenshot('ios-immersive-lyrics');
-    await tester.tap(find.byTooltip('Return to full player'));
+    await binding.takeScreenshot('ios-space-subtitles-over-player');
+    await tester.tap(find.byKey(const ValueKey('space-exit-surface')));
     await tester.pump(const Duration(milliseconds: 750));
-    expect(find.byType(ImmersiveLyricsStage), findsNothing);
-    binding.reportData!['post200_immersive_local_timed_lyrics'] = 'passed';
+    expect(find.byType(ImmersiveLyricsSubtitle), findsNothing);
+    binding.reportData!['post210_space_preserves_artwork_and_song_clock'] =
+        'passed';
     Navigator.of(tester.element(find.byType(FullPlayerScreen))).pop();
     for (
       var frame = 0;

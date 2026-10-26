@@ -1,7 +1,7 @@
 # iPhone review of mobile PRs after #172
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-The subsequent pass below carries merged updates through #207 (29 PRs total). The iPhone
+The subsequent passes below carry merged updates through #210 (31 PRs total). The iPhone
 branch now merges main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
 (merge `b26d8b9e08a8acc4d60b8aa2e2b7e3c4b521fdb1`). All 20 PRs below are
 included by ancestry, including stacked #180/#181; none is copied as a divergent
@@ -268,3 +268,23 @@ native run; iOS 26 was not reached. This is partial native evidence, not a fully
 green run. The same logs expose repeated Android-only HomeWidget update calls on
 iPhone; the Android publisher is now gated on iOS until a real WidgetKit snapshot
 adapter exists, matching the already-gated settings UI.
+
+
+## Subsequent merged PRs 209–210
+
+The current port working branch merges main
+`4504f64177e0826acacd7d06ab080718b947c3a4`, including both additional PRs.
+There are now **31 merged mobile PRs after #172** in scope; #208 is the separate
+unmerged iPhone Cast implementation, not an upstream main feature.
+
+| PR | Shared behavior carried into iPhone | Adaptation / validation |
+| --- | --- | --- |
+| #209 | Liked rows remain mounted during heart updates; expired add-on sessions become fresh registered lookups at playback/queue time; stable liked IDs, source/Atmos identity, local files and configured network libraries are retained. Large queues use a separate resolver registry. | No Android-only bridge is required by this repair. Host tests cover restored streams, retained live handles/downloaded/local/Subsonic sources, 650-track queues, source-specific resolvers, provider stability and Atmos preservation. Actual live add-on availability remains separate. |
+| #210 | Space is a subtitle overlay over the existing artwork/full cover/Canvas/video, with chrome hidden and carousel gestures disabled; tap exits and long press shows options. Video occupies the artwork slot; its controls and subtitles use its own clock. Syllable layout is cached. | Fix the upstream missing `ValueListenable` foundation import. Add an accessible Space exit surface. Native harness now asserts the actual artwork elements survive entry and the current generated lyric follows the retained song clock. The prior build-24 screenshot validates the older Space stage only; new overlay screenshots require the next source build. iPhone still uses the official embed fallback, whose outer transport/timing integration is follow-up work. |
+
+After the import correction, eight focused files pass **31 tests**, including
+both new PRs, timed subtitle eligibility/clock/rewind, artwork layout/morph and
+video route/embed contracts. The native fixture retains its queue/lyrics,
+paused playback, artwork identity, current line and dismissal assertions.
+No Android native source changes in these two PRs supersede the recorded
+post-#207 Kotlin compilation; current shared Dart behavior is checked separately.

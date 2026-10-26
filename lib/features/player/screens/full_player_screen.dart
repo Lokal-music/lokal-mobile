@@ -694,10 +694,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
           if (_immersiveLyrics)
             Positioned.fill(
               child: GestureDetector(
+                key: const ValueKey('space-exit-surface'),
+                excludeFromSemantics: true,
                 behavior: HitTestBehavior.opaque,
                 onTap: _toggleImmersiveLyrics,
                 onLongPress: _showSpaceOptions,
-                child: const SizedBox.expand(),
+                child: Semantics(label: 'Exit Space', button: true,
+                  onTap: _toggleImmersiveLyrics, child: const SizedBox.expand()),
               ),
             ),
           if (_immersiveLyrics)
@@ -983,10 +986,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 if (_immersiveLyrics)
                   Positioned.fill(
                     child: GestureDetector(
+                      key: const ValueKey('space-exit-surface'),
+                      excludeFromSemantics: true,
                       behavior: HitTestBehavior.opaque,
                       onTap: _toggleImmersiveLyrics,
                       onLongPress: _showSpaceOptions,
-                      child: const SizedBox.expand(),
+                      child: Semantics(label: 'Exit Space', button: true,
+                        onTap: _toggleImmersiveLyrics, child: const SizedBox.expand()),
                     ),
                   ),
                 if (_immersiveLyrics)
