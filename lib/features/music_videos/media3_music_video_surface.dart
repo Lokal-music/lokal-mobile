@@ -315,6 +315,20 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
           const IgnorePointer(
             child: Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
+        if (!widget.showControls && widget.onFullscreen != null)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Material(
+              color: Colors.black45,
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: 'Full-screen video',
+                icon: const Icon(Icons.fullscreen_rounded, color: Colors.white),
+                onPressed: widget.onFullscreen,
+              ),
+            ),
+          ),
         if (widget.showControls)
         Positioned(
           left: 0, right: 0, bottom: 0,
