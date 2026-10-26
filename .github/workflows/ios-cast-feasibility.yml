@@ -5,6 +5,7 @@ on:
     paths:
       - 'tool/cast_feasibility.py'
       - '.github/workflows/ios-cast-feasibility.yml'
+      - 'ios/Runner/LokalCastController.swift'
   workflow_dispatch:
 
 permissions:

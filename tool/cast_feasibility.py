@@ -5,6 +5,7 @@ No receiver discovery, account auth, application integration, or installation is
 executed by this probe. It does not change the app's deployment configuration.
 """
 import json
+import hashlib
 import os
 from pathlib import Path
 import platform
@@ -75,12 +76,17 @@ def main():
     source = root / 'Sources/LokalCastProbe/Probe.swift'
     source.parent.mkdir(parents=True)
     source.write_text(SOURCE)
+    controller = Path(__file__).resolve().parents[1] / 'ios/Runner/LokalCastController.swift'
+    adapter = source.parent / controller.name
+    adapter.write_bytes(controller.read_bytes())
     report = {
         'scope': 'Real Cast SDK Swift compile/link only; no runtime, receiver or app acceptance',
         'sdk_revision': SDK_REVISION,
         'sdk_version': '4.8.6',
         'sdk_static_archive_sha256': SDK_ARCHIVE_SHA256,
         'deployment_target': '16.0',
+        'adapter_sha256': hashlib.sha256(adapter.read_bytes()).hexdigest(),
+        'adapter_scope': 'Production sender transport compiled; not invoked by this probe',
         'source_commit': os.environ.get('GITHUB_SHA'),
         'run_id': os.environ.get('GITHUB_RUN_ID'),
         'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
