@@ -17,6 +17,7 @@ import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/discovery/discovery_registry.dart';
 import 'package:flick/features/discovery/discovery_settings.dart';
 import 'package:flick/features/discovery/discovery_sources.dart';
+import 'package:flick/features/discovery/monochrome_source.dart';
 import 'package:flick/features/discovery/lastfm_discovery.dart';
 import 'package:flick/features/discovery/recommendation_match.dart';
 import 'package:flick/features/discovery/spotify_discovery.dart';
@@ -1242,6 +1243,32 @@ Future<List<OnlineSource>> _playbackSources(
           OnlineResult(track, artwork: track.artwork),
       ],
       play: (found) => youtube.prepare(found, cache(), cancel: cancel),
+    ),
+    // Independent native source, without any add-on installation or credentials.
+    OnlineSource(
+      id: 'mono',
+      name: 'Monochrome',
+      results: (query) async => [
+        for (final track in await MonochromeSource.search(web, query))
+          OnlineResult(track, artwork: track.artwork),
+      ],
+      play: (found) async {
+        onStatus?.call('Connecting to Monochrome…');
+        final audio = MonochromeSource.resolve(found);
+        if (forDownload) {
+          return cache().prepare(found, audio, cancel: cancel,
+            onProgress: (received) {
+              if (audio.length case final total? when total > 0) {
+                onStatus?.call('Downloading from Monochrome… ${(received * 100 / total).clamp(0, 100).round()}%');
+              } else {
+                onStatus?.call('Downloading from Monochrome…');
+              }
+            },
+          );
+        }
+        onStatus?.call('Buffering from Monochrome…');
+        return progressiveAddonSong(found, audio);
+      },
     ),
     for (final addon in registry.addons)
       if (selectedSourceId == null || selectedSourceId == 'w-${addon.displayName}')
