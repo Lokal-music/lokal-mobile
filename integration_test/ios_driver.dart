@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:integration_test/integration_test_driver.dart';
 
 Future<void> main() => integrationDriver(
-  timeout: const Duration(minutes: 4),
+  timeout: Duration(
+    minutes: Platform.environment['LOKAL_IOS_VIDEO_PROBE'] == 'true' ? 6 : 4,
+  ),
   writeResponseOnFailure: true,
   responseDataCallback: (data) async {
     final output = Directory(

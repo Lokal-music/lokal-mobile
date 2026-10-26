@@ -5,9 +5,10 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
-**Build 27 passes the complete native suite on iOS 18.6 and 26.0.** Build 29
-validates the #216 continuation on iOS 18.6; its iOS 26 simulator fails before app
-execution. The iOS 16+
+**Build 27 remains the last complete native pass on iOS 18.6 and 26.0.**
+Build 32 validates the current continuation through #217 on iOS 18.6; its iOS 26
+simulator fails before app execution. The updated workflow isolates that runtime
+on a fresh Mac, with current-source results pending. The iOS 16+
 unsigned engineering IPA passes inspection of 34 device binaries, Cast resources,
 privacy metadata, source/notices and matching symbols. See the exact source,
 checksum and native evidence in the build-27 checkpoint below. Installation still
@@ -819,3 +820,54 @@ The package/panel selection passes **42** Flutter tests. All **308** host Rust
 tests pass, including the eight real QuickJS cases and the new heap-bound test.
 No FRB entrypoint/signature changed. The previous build-29 checkpoint is through
 #216 and does not cover #217; the updated source needs its fresh native run.
+
+
+### Build 32 and isolated current-runtime acceptance
+
+[Build 32](https://github.com/lokal-music/lokal-mobile/actions/runs/40321960451)
+passes the complete iOS 18.6 suite on the current source through #217, including
+the six translated Library shortcut assertions and concurrent Space. Exact source:
+`c2ad2f0bbcc8bfda32cb0e650647b8cfd72a77f5`; tree:
+`aa72e2cbfcd0ee87020577637f93027365bdd44e`. The preserved iOS 16+ engineering IPA
+SHA-256 is `6dda95cf443741d9d147a940f92bb0de2b35aa77fd858ca483cc77eed3589f2d`.
+
+The raw-source video probe reaches the real iframe API and acknowledges native
+WebKit suspension, but the hosted network again receives YouTube's sign-in/bot
+challenge (150) with zero source-position advance. Playback remains inconclusive.
+The iOS 26 simulator again fails to boot before any app test; the run is not a
+complete dual-runtime pass.
+
+The following CI change runs iOS 26 on a **fresh hosted Mac**, using the exact
+already-compiled integration app from the iOS 18.6 build job. An archive preserves
+bundle symlinks and executable modes; the receiving job downloads its exact
+artifact ID and safely extracts it. Both OS gates stay required. A failing iOS
+18.6 assertion does not suppress the second runtime when the compiled app exists;
+cancelling a workflow does suppress extra jobs. Failed iOS 26 jobs can now be
+retried without recompiling the IPA or rerunning the completed iOS 18.6 job.
+
+The iOS 26 host also runs the minimal Flutter control before Lokal. Boot, control,
+actual playback, reports and logs are recorded independently. No app assertion,
+OS-version requirement or simulator boot check is relaxed. Driver timeouts now
+match the selected four-minute deterministic/six-minute optional-video test bounds.
+The updated workflow passes YAML/shell parsing and all nine existing simulator/
+control-coordinator tests; the changed Dart driver analyzes without issues.
+
+```mermaid
+flowchart LR
+  Build[Compile release and simulator app once] --> IPA[Unsigned IPA / source / symbols]
+  Build --> Old[Native suite on iOS 18.6]
+  Build --> Bundle[Compiled integration app archive]
+  Bundle --> Fresh[Fresh hosted Mac]
+  Fresh --> Boot[Required iOS 26 boot and minimal Flutter control]
+  Boot --> Current[Same app / same native acceptance suite]
+  Old --> Evidence[Separate reports / screenshots / outcomes]
+  Current --> Evidence
+```
+
+The compiled app's Bonjour fixture identity is also forwarded to the isolated
+host, so retrying only that job does not change the identity baked into the app.
+A screenshot-driven Library follow-up allows two-line shortcut labels and switches
+to one column as text grows. All six Turkish labels fit the bundled app font at
+200% on 320/393/430px screens; navigation/import and component/dock selection
+passes **18** host tests. The native harness now checks rendered labels for actual
+truncation; that added assertion still requires the next hosted run.

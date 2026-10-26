@@ -215,7 +215,7 @@ class _Tiles extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 4),
       child: LayoutBuilder(
         builder: (context, c) {
-          final columns = c.maxWidth < 300 ? 1 : 2;
+          final columns = c.maxWidth < 2 * 148 * scale + 12 ? 1 : 2;
           final width = (c.maxWidth - 12 * (columns - 1)) / columns;
           return Wrap(
             spacing: 12,
@@ -269,7 +269,7 @@ class _Tile extends StatelessWidget {
                   Expanded(
                     child: Text(
                       label,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 16,

@@ -35,6 +35,7 @@ import 'package:flick/src/rust/api/metadata_editor.dart' as tags;
 import 'package:flick/src/rust/api/audio_api.dart' as native_audio;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -779,6 +780,10 @@ void main() {
       for (final label in ['Beğenildi', 'Çalma listeleri', 'Albümler',
         'Sanatçılar', 'Türler', 'İndirilenler']) {
         expect(find.text(label), findsOneWidget);
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(of: find.text(label), matching: find.byType(RichText)),
+        );
+        expect(paragraph.didExceedMaxLines, isFalse, reason: label);
       }
       expect(tester.takeException(), isNull, reason: startupErrors.join('\n'));
       await binding.takeScreenshot('ios-turkish-library');
