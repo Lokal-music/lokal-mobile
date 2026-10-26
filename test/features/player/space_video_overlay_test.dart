@@ -55,7 +55,7 @@ class _ArtworkMarkerState extends State<_ArtworkMarker> {
 
   @override
   Widget build(BuildContext context) =>
-      const ColoredBox(color: Colors.blue);
+      const ColoredBox(color: Colors.blue, child: SizedBox.expand());
 }
 
 void main() {
