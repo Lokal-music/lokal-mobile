@@ -4,4 +4,7 @@ class EqEngineHint {
   EqEngineHint._();
 
   static bool parametricPeqActive = false;
+  static bool iosDspActive = false;
+  static bool iosCrossfeedActive = false;
+  static bool iosPitchActive = false;
 }

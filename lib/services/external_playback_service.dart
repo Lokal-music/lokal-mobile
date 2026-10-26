@@ -12,9 +12,7 @@ class ExternalPlaybackService {
   ExternalPlaybackService._();
 
   static final ExternalPlaybackService _instance = ExternalPlaybackService._();
-  static const _channel = MethodChannel(
-    'com.mossapps.flick/integration',
-  );
+  static const _channel = MethodChannel('com.mossapps.flick/integration');
   static const _lockerPackage = 'com.mossapps.locker';
 
   factory ExternalPlaybackService() => _instance;
@@ -51,6 +49,8 @@ class ExternalPlaybackService {
       return await _playExternalPayload(payload.cast<String, dynamic>());
     } on PlatformException catch (e) {
       devLog('Failed to consume pending external playback: ${e.message}');
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }

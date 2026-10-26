@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -983183974;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1051665677;
 
 // Section: executor
 
@@ -264,9 +264,9 @@ fn wire__crate__api__morneye_api__MorneyeEngine_is_closed_impl(
                     }
                 }
                 let api_that_guard = api_that_guard.unwrap();
-                let output_ok = Ok::<_, ()>(
-                    crate::api::morneye_api::MorneyeEngine::is_closed(&*api_that_guard),
-                )?;
+                let output_ok = Ok::<_, ()>(crate::api::morneye_api::MorneyeEngine::is_closed(
+                    &*api_that_guard,
+                ))?;
                 std::result::Result::Ok(output_ok)
             })())
         },
@@ -3104,6 +3104,155 @@ fn wire__crate__api__audio_api__last_volume_impl(
         },
     )
 }
+fn wire__crate__api__morneye_api__morneye_cipher_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "morneye_cipher",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_algorithm = <String>::sse_decode(&mut deserializer);
+            let api_mode = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_iv = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_pkcs7 = <bool>::sse_decode(&mut deserializer);
+            let api_decrypt = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::morneye_api::morneye_cipher(
+                        api_data,
+                        api_algorithm,
+                        api_mode,
+                        api_key,
+                        api_iv,
+                        api_pkcs7,
+                        api_decrypt,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__morneye_api__morneye_media_info_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "morneye_media_info",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::morneye_api::morneye_media_info(api_path)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__morneye_api__morneye_open_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "morneye_open",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::morneye_api::morneye_open(api_data, api_key)?;
+                    std::result::Result::Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__morneye_api__morneye_seal_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "morneye_seal",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_nonce = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok =
+                        crate::api::morneye_api::morneye_seal(api_data, api_key, api_nonce)?;
+                    std::result::Result::Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
 fn wire__crate__api__replaygain__read_replaygain_tags_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3751,155 +3900,6 @@ fn wire__crate__api__smb_api__smb_read_file_impl(
                     .await,
                 )
             }
-        },
-    )
-}
-fn wire__crate__api__morneye_api__morneye_cipher_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "morneye_cipher",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_algorithm = <String>::sse_decode(&mut deserializer);
-            let api_mode = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_iv = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_pkcs7 = <bool>::sse_decode(&mut deserializer);
-            let api_decrypt = <bool>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::morneye_api::morneye_cipher(
-                        api_data,
-                        api_algorithm,
-                        api_mode,
-                        api_key,
-                        api_iv,
-                        api_pkcs7,
-                        api_decrypt,
-                    )?;
-                    std::result::Result::Ok(output_ok)
-                })(),
-            )
-        },
-    )
-}
-fn wire__crate__api__morneye_api__morneye_media_info_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "morneye_media_info",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::morneye_api::morneye_media_info(api_path)?;
-                        std::result::Result::Ok(output_ok)
-                    })(),
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__morneye_api__morneye_open_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "morneye_open",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::morneye_api::morneye_open(api_data, api_key)?;
-                    std::result::Result::Ok(output_ok)
-                })(),
-            )
-        },
-    )
-}
-fn wire__crate__api__morneye_api__morneye_seal_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "morneye_seal",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_nonce = <Vec<u8>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok =
-                        crate::api::morneye_api::morneye_seal(api_data, api_key, api_nonce)?;
-                    std::result::Result::Ok(output_ok)
-                })(),
-            )
         },
     )
 }
@@ -5186,6 +5186,7 @@ impl SseDecode for crate::api::scanner::AudioFileMetadata {
         let mut var_title = <Option<String>>::sse_decode(deserializer);
         let mut var_artist = <Option<String>>::sse_decode(deserializer);
         let mut var_album = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtist = <Option<String>>::sse_decode(deserializer);
         let mut var_durationMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_format = <String>::sse_decode(deserializer);
         let mut var_lastModified = <i64>::sse_decode(deserializer);
@@ -5206,6 +5207,7 @@ impl SseDecode for crate::api::scanner::AudioFileMetadata {
             title: var_title,
             artist: var_artist,
             album: var_album,
+            album_artist: var_albumArtist,
             duration_ms: var_durationMs,
             format: var_format,
             last_modified: var_lastModified,
@@ -6341,62 +6343,62 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         88 => wire__crate__api__audio_api__last_volume_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__replaygain__read_replaygain_tags_impl(
+        90 => wire__crate__api__morneye_api__morneye_media_info_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__api__metadata_editor__read_tags_impl(port, ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__logging__register_log_sink_impl(port, ptr, rust_vec_len, data_len),
-        92 => wire__crate__api__scanner__scan_music_library_impl(port, ptr, rust_vec_len, data_len),
-        93 => wire__crate__api__scanner__scan_root_dir_impl(port, ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__audio_api__set_dsd_source_channels_impl(
+        93 => wire__crate__api__replaygain__read_replaygain_tags_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => {
+        94 => wire__crate__api__metadata_editor__read_tags_impl(port, ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__logging__register_log_sink_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__scanner__scan_music_library_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__scanner__scan_root_dir_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__audio_api__set_dsd_source_channels_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        99 => {
             wire__crate__api__audio_api__set_dsd_track_rate_impl(port, ptr, rust_vec_len, data_len)
         }
-        96 => wire__crate__api__audio_api__set_pending_crossfade_impl(
+        100 => wire__crate__api__audio_api__set_pending_crossfade_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__audio_api__set_pending_crossfade_curve_impl(
+        101 => wire__crate__api__audio_api__set_pending_crossfade_curve_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__api__audio_api__set_pending_crossfeed_impl(
+        102 => wire__crate__api__audio_api__set_pending_crossfeed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => wire__crate__api__audio_api__set_pending_equalizer_impl(
+        103 => wire__crate__api__audio_api__set_pending_equalizer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => {
+        104 => {
             wire__crate__api__audio_api__set_pending_volume_impl(port, ptr, rust_vec_len, data_len)
         }
-        101 => wire__crate__api__smb_api__smb_download_file_impl(port, ptr, rust_vec_len, data_len),
-        102 => wire__crate__api__smb_api__smb_list_share_impl(port, ptr, rust_vec_len, data_len),
-        103 => wire__crate__api__smb_api__smb_ping_impl(port, ptr, rust_vec_len, data_len),
-        104 => wire__crate__api__smb_api__smb_read_file_impl(port, ptr, rust_vec_len, data_len),
-        106 => wire__crate__api__morneye_api__morneye_media_info_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
+        105 => wire__crate__api__smb_api__smb_download_file_impl(port, ptr, rust_vec_len, data_len),
+        106 => wire__crate__api__smb_api__smb_list_share_impl(port, ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__smb_api__smb_ping_impl(port, ptr, rust_vec_len, data_len),
+        108 => wire__crate__api__smb_api__smb_read_file_impl(port, ptr, rust_vec_len, data_len),
         109 => wire__crate__api__audio_api__take_pending_crossfade_impl(
             port,
             ptr,
@@ -6511,19 +6513,11 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        2 => {
-            wire__crate__api__morneye_api__MorneyeEngine_close_impl(ptr, rust_vec_len, data_len)
+        2 => wire__crate__api__morneye_api__MorneyeEngine_close_impl(ptr, rust_vec_len, data_len),
+        4 => {
+            wire__crate__api__morneye_api__MorneyeEngine_is_closed_impl(ptr, rust_vec_len, data_len)
         }
-        4 => wire__crate__api__morneye_api__MorneyeEngine_is_closed_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        5 => wire__crate__api__morneye_api__MorneyeEngine_methods_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
+        5 => wire__crate__api__morneye_api__MorneyeEngine_methods_impl(ptr, rust_vec_len, data_len),
         7 => wire__crate__api__alac_converter_api__alac_close_session_impl(
             ptr,
             rust_vec_len,
@@ -6638,9 +6632,9 @@ fn pde_ffi_dispatcher_sync_impl(
             data_len,
         ),
         85 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        105 => wire__crate__api__morneye_api__morneye_cipher_impl(ptr, rust_vec_len, data_len),
-        107 => wire__crate__api__morneye_api__morneye_open_impl(ptr, rust_vec_len, data_len),
-        108 => wire__crate__api__morneye_api__morneye_seal_impl(ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__morneye_api__morneye_cipher_impl(ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__morneye_api__morneye_open_impl(ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__morneye_api__morneye_seal_impl(ptr, rust_vec_len, data_len),
         117 => wire__crate__api__uac2_api__uac2_force_release_usb_session_impl(
             ptr,
             rust_vec_len,
@@ -6857,6 +6851,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::scanner::AudioFileMetadata {
             self.title.into_into_dart().into_dart(),
             self.artist.into_into_dart().into_dart(),
             self.album.into_into_dart().into_dart(),
+            self.album_artist.into_into_dart().into_dart(),
             self.duration_ms.into_into_dart().into_dart(),
             self.format.into_into_dart().into_dart(),
             self.last_modified.into_into_dart().into_dart(),
@@ -7689,6 +7684,7 @@ impl SseEncode for crate::api::scanner::AudioFileMetadata {
         <Option<String>>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.artist, serializer);
         <Option<String>>::sse_encode(self.album, serializer);
+        <Option<String>>::sse_encode(self.album_artist, serializer);
         <Option<u64>>::sse_encode(self.duration_ms, serializer);
         <String>::sse_encode(self.format, serializer);
         <i64>::sse_encode(self.last_modified, serializer);

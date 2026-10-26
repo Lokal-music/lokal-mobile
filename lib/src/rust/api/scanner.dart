@@ -63,6 +63,7 @@ class AudioFileMetadata {
   final String? title;
   final String? artist;
   final String? album;
+  final String? albumArtist;
   final BigInt? durationMs;
   final String format;
   final PlatformInt64 lastModified;
@@ -92,6 +93,7 @@ class AudioFileMetadata {
     this.title,
     this.artist,
     this.album,
+    this.albumArtist,
     this.durationMs,
     required this.format,
     required this.lastModified,
@@ -115,6 +117,7 @@ class AudioFileMetadata {
       title.hashCode ^
       artist.hashCode ^
       album.hashCode ^
+      albumArtist.hashCode ^
       durationMs.hashCode ^
       format.hashCode ^
       lastModified.hashCode ^
@@ -140,6 +143,7 @@ class AudioFileMetadata {
           title == other.title &&
           artist == other.artist &&
           album == other.album &&
+          albumArtist == other.albumArtist &&
           durationMs == other.durationMs &&
           format == other.format &&
           lastModified == other.lastModified &&

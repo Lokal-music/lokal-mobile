@@ -60,20 +60,23 @@ void main() {
 
     Future<Color> sample(int px, int py) async {
       await tester.pump();
-      final image = await (capture.currentContext!.findRenderObject()
-          as RenderRepaintBoundary).toImage(pixelRatio: 1);
-      final bytes = (await image.toByteData(
-        format: ui.ImageByteFormat.rawRgba,
-      ))!;
-      final index = (py * image.width + px) * 4;
-      final color = Color.fromARGB(
-        bytes.getUint8(index + 3),
-        bytes.getUint8(index),
-        bytes.getUint8(index + 1),
-        bytes.getUint8(index + 2),
-      );
-      image.dispose();
-      return color;
+      // Raster futures complete outside the widget test's fake clock.
+      return (await tester.runAsync(() async {
+        final image = await (capture.currentContext!.findRenderObject()
+            as RenderRepaintBoundary).toImage(pixelRatio: 1);
+        final bytes = (await image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!;
+        final index = (py * image.width + px) * 4;
+        final color = Color.fromARGB(
+          bytes.getUint8(index + 3),
+          bytes.getUint8(index),
+          bytes.getUint8(index + 1),
+          bytes.getUint8(index + 2),
+        );
+        image.dispose();
+        return color;
+      }))!;
     }
 
     final halfway = await sample(65, 565);
@@ -137,23 +140,25 @@ void main() {
           ),
         ));
         await tester.pump();
-        final rb = boundary.currentContext!.findRenderObject()
-            as RenderRepaintBoundary;
-        final image = await rb.toImage(pixelRatio: 1);
-        final data = (await image.toByteData(
-          format: ui.ImageByteFormat.rawRgba,
-        ))!;
-        // With the sheet halfway open, the flying Canvas covers this point
-        // unless the chrome has its own foreground paint pass.
-        final index = (y * image.width + x) * 4;
-        final color = Color.fromARGB(
-          data.getUint8(index + 3),
-          data.getUint8(index),
-          data.getUint8(index + 1),
-          data.getUint8(index + 2),
-        );
-        image.dispose();
-        return color;
+        return (await tester.runAsync(() async {
+          final rb = boundary.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
+          final image = await rb.toImage(pixelRatio: 1);
+          final data = (await image.toByteData(
+            format: ui.ImageByteFormat.rawRgba,
+          ))!;
+          // With the sheet halfway open, the flying Canvas covers this point
+          // unless the chrome has its own foreground paint pass.
+          final index = (y * image.width + x) * 4;
+          final color = Color.fromARGB(
+            data.getUint8(index + 3),
+            data.getUint8(index),
+            data.getUint8(index + 1),
+            data.getUint8(index + 2),
+          );
+          image.dispose();
+          return color;
+        }))!;
       }
 
       final behindCanvas = await pixelAt(.5, liftChrome: false);

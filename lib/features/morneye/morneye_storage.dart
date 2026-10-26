@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 import 'package:path/path.dart' as p;
 
 /// What Morneye add-ons keep between runs, as desktop's
@@ -27,7 +28,7 @@ abstract class MorneyeKeyVault {
 
 class SecureMorneyeKeyVault implements MorneyeKeyVault {
   SecureMorneyeKeyVault([FlutterSecureStorage? storage])
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const PlaybackSecureStorage();
 
   static const _key = 'lokal.morneye.master.v1';
   final FlutterSecureStorage _storage;

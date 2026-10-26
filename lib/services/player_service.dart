@@ -30,6 +30,7 @@ import 'package:flick/services/audio_engine_manager.dart';
 import 'package:flick/services/audio_session_manager.dart';
 import 'package:flick/services/song_engine_routing.dart';
 import 'package:flick/services/equalizer_service.dart';
+import 'package:flick/services/eq_engine_hint.dart';
 import 'package:flick/services/android_audio_processing_service.dart';
 import 'package:flick/services/last_played_service.dart';
 import 'package:flick/services/favorites_service.dart';
@@ -54,6 +55,8 @@ import 'package:flick/services/playback_cache_preferences_service.dart';
 import 'package:flick/services/remote_source_service.dart';
 import 'package:flick/services/wav_stream_audio_source.dart';
 import 'package:flick/services/casting/casting_service.dart';
+import 'package:flick/services/playback_output_transition.dart';
+import 'package:flick/services/external_playback_owner.dart';
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/core/utils/dev_log.dart';
 
@@ -159,17 +162,21 @@ enum LoopMode {
 /// version is being installed. In particular an old Media3 stop() event must
 /// never rewind the current song or its carousel position.
 @visibleForTesting
-bool shouldHoldPendingPresentation(String? expectedTrackId, Song? engineTrack) =>
+bool shouldHoldPendingPresentation(
+  String? expectedTrackId,
+  Song? engineTrack,
+) =>
     expectedTrackId != null &&
-    (engineTrack == null || engineTrack.id != expectedTrackId ||
+    (engineTrack == null ||
+        engineTrack.id != expectedTrackId ||
         engineTrack.isPending);
 
 @visibleForTesting
 bool shouldReplaceQueuedAudioSource(Song queued, Song selected) =>
     queued.id == selected.id &&
     (queued.filePath != selected.filePath ||
-     queued.atmosEncoded != selected.atmosEncoded ||
-     queued.fileType != selected.fileType);
+        queued.atmosEncoded != selected.atmosEncoded ||
+        queued.fileType != selected.fileType);
 
 @visibleForTesting
 List<Song> buildShufflePlaybackOrder({
@@ -535,6 +542,8 @@ class PlayerService {
   final RustAudioService _rustAudioService = RustAudioService();
   final Uac2Service _uac2Service = Uac2Service.instance;
   final CastingService _castingService = CastingService.instance;
+  final ExternalPlaybackOwner _externalPlaybackOwner = ExternalPlaybackOwner();
+  int get playbackIntentRevision => _pendingPlaybackGeneration;
   bool get isCasting => _castingService.isActive;
   final ColorExtractionService _colorExtractionService =
       ColorExtractionService();
@@ -624,6 +633,7 @@ class PlayerService {
   VoidCallback? _rustPositionListener;
   VoidCallback? _rustDurationListener;
   StreamSubscription<AudioInterruptionEvent>? _audioFocusSubscription;
+  StreamSubscription<void>? _noisyAudioSubscription;
   StreamSubscription<Map<Object?, Object?>>? _bluetoothDeviceEventSubscription;
   StreamSubscription<void>? _usbDacDetachSubscription;
   StreamSubscription<void>? _usbDacAttachSubscription;
@@ -694,11 +704,13 @@ class PlayerService {
 
   /// Set synchronously when a new online track is selected, before the player
   /// queue, native engine or provider can block on network setup.
-  final ValueNotifier<String?> onlinePreparationTitleNotifier =
-      ValueNotifier(null);
+  final ValueNotifier<String?> onlinePreparationTitleNotifier = ValueNotifier(
+    null,
+  );
 
   void _markOnlinePreparation(Song song) {
-    if (song.isPending || song.isNetworkSource ||
+    if (song.isPending ||
+        song.isNetworkSource ||
         song.sourcePackage == 'konnekted.progressive' ||
         song.sourcePackage == 'konnekted.morneye-live') {
       onlinePreparationTitleNotifier.value = song.title;
@@ -707,6 +719,7 @@ class PlayerService {
       onlinePreparationTitleNotifier.value = null;
     }
   }
+
   // ponytail: monotonically increasing token; only the most-recent network
   // play request is allowed to clear the loading flag. Upgrade path: a per-
   // song Set<int> if multiple concurrent network loads ever need tracking.
@@ -1052,6 +1065,9 @@ class PlayerService {
   }
 
   void _initBluetoothReconnectHandling() {
+    // iOS route/interruption events come from audio_session. This channel
+    // belongs to Android's A2DP/HEADSET integration.
+    if (!Platform.isAndroid) return;
     _bluetoothDeviceEventSubscription = BluetoothService.instance.deviceEvents
         .listen((event) {
           final type = event['event'] as String?;
@@ -1262,8 +1278,8 @@ class PlayerService {
   Future<void> setDuckOnInterruption(bool enabled) async {
     duckOnInterruptionNotifier.value = enabled;
     await _preferencesService.setDuckOnInterruption(enabled);
-    if (Platform.isAndroid && _audioSessionConfigured) {
-      await _applyAndroidAudioSessionConfig();
+    if ((Platform.isAndroid || Platform.isIOS) && _audioSessionConfigured) {
+      await _applySystemAudioSessionConfig();
     }
   }
 
@@ -1315,7 +1331,8 @@ class PlayerService {
     // while crossfade was off used a ConcatenatingAudioSource (hard cut). On the
     // on-transition, reload the current track as a single source at the same
     // position so the engine can intercept the tail and crossfade.
-    if (currentEngineType == AudioEngineType.normalAndroid &&
+    if ((currentEngineType == AudioEngineType.normalAndroid ||
+            currentEngineType == AudioEngineType.iosSystem) &&
         !wasEnabled &&
         enabled &&
         currentSongNotifier.value != null &&
@@ -1395,9 +1412,40 @@ class PlayerService {
   /// engine command is routed through [_applyRustPlaybackProcessingPolicy],
   /// which suppresses it in bit-perfect mode and under 432 Hz tuning.
   Future<void> applyCrossfeedSettings() async {
+    if (Platform.isIOS) {
+      EqEngineHint.iosCrossfeedActive =
+          await _appPreferencesService.getCrossfeedLevel() > 0;
+      await syncIosProcessingRoute();
+    }
     if (_usingRustBackend) {
       await _applyRustPlaybackProcessingPolicy(currentEngineType);
     }
+  }
+
+  Future<void> syncIosProcessingRoute() async {
+    if (!Platform.isIOS) return;
+    await _sessionManager.syncRouteSelection(
+      reason: 'iOS processing preference changed',
+    );
+    if (!isPlayingNotifier.value || !_playbackManager.hasAttachedEngine) return;
+    await _enqueuePlaybackRequest(() async {
+      final song = currentSongNotifier.value;
+      if (song == null || !isPlayingNotifier.value) return;
+      final desired = await _sessionManager.resolvePreferredMode();
+      final prepared = await _prepareRequestedEngineForSong(
+        desired,
+        song: song,
+        reason: 'iOS processing',
+      );
+      if (prepared == currentEngineType) return;
+      final position = positionNotifier.value;
+      await _ensureEngineReady(prepared, song: song, reason: 'iOS processing');
+      if (_usingRustBackend) {
+        await _refreshReplayGainForSong(song, pushSpawnDefault: true);
+      }
+      await _playbackManager.playTrack(song, initialPosition: position);
+      if (!_usingRustBackend) await _applyReplayGainForSystemTier(song);
+    });
   }
 
   Future<void> _loadFloatingPlayerPreference() async {
@@ -1982,6 +2030,7 @@ class PlayerService {
   bool get isBitPerfectProcessingLocked =>
       bitPerfectProcessingLockedNotifier.value;
   bool get isCurrentTrackDoP =>
+      Platform.isAndroid &&
       (Uac2PreferencesService.dsdOutputModeSync == DsdOutputMode.forceDop ||
           Uac2PreferencesService.dsdOutputModeSync == DsdOutputMode.native ||
           Uac2PreferencesService.dsdOutputModeSync == DsdOutputMode.auto) &&
@@ -2064,10 +2113,12 @@ class PlayerService {
 
   Future<void> _prepareForAppLaunchInternal() async {
     await initAudio();
-    if (Platform.isAndroid && !_sessionManager.selectedMode.usesRustBackend) {
+    if ((Platform.isAndroid || Platform.isIOS) &&
+        !_sessionManager.selectedMode.usesRustBackend) {
       await _ensureAndroidPlayer();
     }
     await reapplyEqualizer();
+    if (Platform.isIOS) await applyCrossfeedSettings();
   }
 
   Future<void> setHiFiModeEnabled(bool enabled) async {
@@ -2205,8 +2256,8 @@ class PlayerService {
   }
 
   Future<void> _activateAudioSessionForRustEngine() async {
-    if (!Platform.isAndroid) return;
-    await _configureAndroidAudioSession();
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    await _configureSystemAudioSession();
     try {
       final session = await AudioSession.instance;
       final granted = await session.setActive(true);
@@ -2230,26 +2281,34 @@ class PlayerService {
     await _deactivateAndroidAudioSession();
   }
 
-  Future<void> _configureAndroidAudioSession() async {
-    if (!Platform.isAndroid || _audioSessionConfigured) {
+  Future<void> _configureSystemAudioSession() async {
+    if ((!Platform.isAndroid && !Platform.isIOS) || _audioSessionConfigured) {
       return;
     }
 
     try {
       final session = await AudioSession.instance;
-      await _applyAndroidAudioSessionConfig();
+      await _applySystemAudioSessionConfig();
       _audioFocusSubscription ??= session.interruptionEventStream.listen((
         event,
       ) {
         _onAudioInterruptionEvent(event);
       });
+      if (Platform.isIOS) {
+        _noisyAudioSubscription ??= session.becomingNoisyEventStream.listen((
+          _,
+        ) {
+          _wasPlayingBeforeAudioInterruption = false;
+          unawaited(pause());
+        });
+      }
       _audioSessionConfigured = true;
     } catch (e) {
       _debugLog('[AudioFocus] Failed to configure Android audio session: $e');
     }
   }
 
-  Future<void> _applyAndroidAudioSessionConfig() async {
+  Future<void> _applySystemAudioSessionConfig() async {
     final session = await AudioSession.instance;
     // When ducking is enabled we keep the stream alive at reduced gain for
     // transient losses (notifications) instead of pausing. Users who prefer
@@ -2359,10 +2418,13 @@ class PlayerService {
       return existing;
     }
 
-    await _configureAndroidAudioSession();
+    await _configureSystemAudioSession();
     // Android supports request headers natively. Avoid the Dart loopback
     // proxy: a sleeping/unreachable desktop can leave its sockets pending.
-    final player = just_audio.AudioPlayer(useProxyForRequestHeaders: false);
+    final player = just_audio.AudioPlayer(
+      useProxyForRequestHeaders: false,
+      handleInterruptions: !Platform.isIOS,
+    );
     _justAudioPlayer = player;
     int? lastEqSessionId;
     player.androidAudioSessionIdStream.listen((sessionId) {
@@ -2382,7 +2444,7 @@ class PlayerService {
       _justAudioPlayer = player;
     }
 
-    if (Platform.isAndroid && _audioSessionConfigured) {
+    if ((Platform.isAndroid || Platform.isIOS) && _audioSessionConfigured) {
       try {
         final session = await AudioSession.instance;
         await session.setActive(true);
@@ -2398,6 +2460,15 @@ class PlayerService {
 
   AndroidAudioEngine _createAndroidEngine() {
     final engine = AndroidAudioEngine(
+      engineType: Platform.isIOS
+          ? AudioEngineType.iosSystem
+          : AudioEngineType.normalAndroid,
+      secondaryPlayerProvider: Platform.isIOS
+          ? () async => just_audio.AudioPlayer(
+              useProxyForRequestHeaders: false,
+              handleInterruptions: false,
+            )
+          : null,
       playerProvider: _ensureAndroidPlayer,
       sourcesBuilder: _buildAudioSources,
       sourceBuilder: _buildAudioSourceForSong,
@@ -2698,6 +2769,7 @@ class PlayerService {
   /// only available on the software and system tiers when the toggle is on;
   /// hardware, passthrough, DoP and casting paths stay clamped at 1.0.
   double get maxVolume {
+    if (Platform.isIOS && !_usingRustBackend) return 1.0;
     if (!_extendedVolumeEnabled || _castingService.isActive) return 1.0;
     final tier = _determineCurrentTier();
     return (tier == VolumeTier.software || tier == VolumeTier.system)
@@ -2828,6 +2900,22 @@ class PlayerService {
     final mode = currentEngineType;
     final activeEngineType = _playbackManager.activeEngineType ?? mode;
     final usesRustDiagnostics = activeEngineType.usesRustBackend;
+    Map<String, dynamic>? iosRoute;
+    if (Platform.isIOS) {
+      try {
+        iosRoute = await const MethodChannel('lokal/ios')
+            .invokeMapMethod<String, dynamic>('audioRoute');
+      } on PlatformException {
+        // Do not invent a negotiated output rate when Apple cannot report it.
+      } on MissingPluginException {
+        // The integration smoke test separately verifies native registration.
+      }
+    }
+    final iosOutputs = (iosRoute?['outputs'] as List?)
+        ?.whereType<Map>()
+        .toList();
+    final iosOutput = iosOutputs?.isNotEmpty == true ? iosOutputs!.first : null;
+    final iosSampleRate = (iosRoute?['sampleRate'] as num?)?.round();
     final song = activeSong ?? currentSongNotifier.value;
     final trackFormat = _deriveUac2FormatFromSong(song);
     final deviceInfo = Platform.isAndroid
@@ -2933,7 +3021,9 @@ class PlayerService {
         deviceInfo.hasAttachedUac2Device ||
         deviceInfo.looksLikeUsbAudioRoute;
 
-    final pathManagement = !Platform.isAndroid
+    final pathManagement = Platform.isIOS
+        ? AudioPathManagement.iosSystemManaged
+        : !Platform.isAndroid
         ? AudioPathManagement.androidManagedShared
         : !usesRustDiagnostics
         ? AudioPathManagement.androidManagedShared
@@ -2949,24 +3039,32 @@ class PlayerService {
         pathManagement != AudioPathManagement.directUsbExperimental &&
         pathManagement != AudioPathManagement.alsaDirectDap &&
         pathManagement != AudioPathManagement.managedDirectExclusive;
-    final requestedOutputSampleRate =
-        (!usesRustDiagnostics ? trackFormat?.sampleRate : null) ??
-        engineRequestedSampleRate ??
-        (pathManagement == AudioPathManagement.directUsbExperimental
-            ? directUsbConfiguredSampleRate
-            : engineConfiguredSampleRate ?? trackFormat?.sampleRate);
-    final reportedOutputSampleRate = !usesRustDiagnostics
+    final requestedOutputSampleRate = Platform.isIOS
+        ? engineRequestedSampleRate
+        : (!usesRustDiagnostics ? trackFormat?.sampleRate : null) ??
+              engineRequestedSampleRate ??
+              (pathManagement == AudioPathManagement.directUsbExperimental
+                  ? directUsbConfiguredSampleRate
+                  : engineConfiguredSampleRate ?? trackFormat?.sampleRate);
+    final reportedOutputSampleRate = Platform.isIOS
+        ? (iosSampleRate != null && iosSampleRate > 0 ? iosSampleRate : null)
+        : !usesRustDiagnostics
         ? null
         : directUsbActive
         ? directUsbClockReportedSampleRate
         : engineActualSampleRate ?? engineConfiguredSampleRate;
     final resamplerActive =
+        (Platform.isIOS &&
+            trackFormat?.sampleRate != null &&
+            reportedOutputSampleRate != null &&
+            trackFormat!.sampleRate != reportedOutputSampleRate) ||
         (usesRustDiagnostics && engineResamplerActive) ||
         (requestedOutputSampleRate != null &&
             usesRustDiagnostics &&
             reportedOutputSampleRate != null &&
             requestedOutputSampleRate != reportedOutputSampleRate);
-    final passthroughAllowed = usesRustDiagnostics && enginePassthroughAllowed;
+    final passthroughAllowed =
+        !Platform.isIOS && usesRustDiagnostics && enginePassthroughAllowed;
     // These checks describe the active configuration, clock and framing.
     // They are not an independent byte-for-byte comparison against the source.
     final effectiveBitPerfect = directUsbActive
@@ -2986,7 +3084,9 @@ class PlayerService {
                       ? 'Direct USB verification failed'
                       : null)
             : null);
-    final outputStrategyLabel = !usesRustDiagnostics
+    final outputStrategyLabel = Platform.isIOS
+        ? 'iOS system-managed'
+        : !usesRustDiagnostics
         ? 'Android shared'
         : switch (outputStrategy) {
             'dap_native' => 'DAP native',
@@ -2999,7 +3099,11 @@ class PlayerService {
             'resampled_fallback' => 'Resampled fallback',
             _ => 'Adaptive',
           };
-    final backendDescription = !usesRustDiagnostics
+    final backendDescription = Platform.isIOS
+        ? (usesRustDiagnostics
+              ? 'Rust decoders / Core Audio'
+              : 'just_audio / AVPlayer')
+        : !usesRustDiagnostics
         ? 'just_audio / ExoPlayer'
         : switch (outputStrategy) {
             'usb_dsd_native' => 'Rust engine via USB direct native DSD',
@@ -3033,7 +3137,9 @@ class PlayerService {
             _ => 'Rust adaptive playback engine',
           };
 
-    final capabilityStateLabel = !usesRustDiagnostics
+    final capabilityStateLabel = Platform.isIOS
+        ? 'System audio · bit-perfect output not verified'
+        : !usesRustDiagnostics
         ? (androidManagedUsbRoute
               ? 'Android shared (USB route)'
               : 'Android shared')
@@ -3215,9 +3321,11 @@ class PlayerService {
       outputStrategyLabel: outputStrategyLabel,
       capabilityStateLabel: capabilityStateLabel,
       backendDescription: backendDescription,
-      routeType: deviceInfo.routeType ?? 'unknown',
-      routeLabel: deviceInfo.routeSummary,
+      routeType:
+          iosOutput?['type'] as String? ?? deviceInfo.routeType ?? 'unknown',
+      routeLabel: iosOutput?['name'] as String? ?? deviceInfo.routeSummary,
       outputDeviceLabel:
+          iosOutput?['name'] as String? ??
           _stringValue(
             directUsbState?['product_name'] ?? directUsbState?['productName'],
           ) ??
@@ -3565,7 +3673,8 @@ class PlayerService {
         if (isPlayingNotifier.value) isPlayingNotifier.value = false;
         return;
       }
-      if (presentedId != null && state.currentTrack?.id == presentedId &&
+      if (presentedId != null &&
+          state.currentTrack?.id == presentedId &&
           state.currentTrack?.isPending != true) {
         _pendingPresentationTrackId = null;
       }
@@ -3724,7 +3833,7 @@ class PlayerService {
   /// handling, ducking preference) before another player in the app, such as
   /// internet radio, requests audio focus through it.
   Future<void> prepareAudioSessionForExternalPlayer() =>
-      _configureAndroidAudioSession();
+      _configureSystemAudioSession();
 
   // ponytail: remote volume ticks can be rapid (slider drags); keep them on the
   // lightweight cast-only notification path instead of a full metadata refresh.
@@ -4058,8 +4167,7 @@ class PlayerService {
     final liveMorneye = song.sourcePackage == 'konnekted.morneye-live'
         ? MorneyeLiveRegistry.instance.resolve(song.filePath)
         : null;
-    if (song.sourcePackage == 'konnekted.morneye-live' &&
-        liveMorneye == null) {
+    if (song.sourcePackage == 'konnekted.morneye-live' && liveMorneye == null) {
       throw StateError('Morneye stream expired. Select the song again.');
     }
     if (liveMorneye != null) {
@@ -4420,7 +4528,8 @@ class PlayerService {
 
   Future<void> _prepareImmediatePlaybackAsset(Song song) async {
     if (song.sourcePackage == 'konnekted.progressive' ||
-        song.sourcePackage == 'konnekted.morneye-live') return;
+        song.sourcePackage == 'konnekted.morneye-live')
+      return;
     if (!_usingRustBackend && _streamSourceForSong(song) != null) {
       // The just_audio stream source stages/decodes lazily; pre-converting
       // here would write the WAV that source exists to avoid.
@@ -4563,6 +4672,11 @@ class PlayerService {
       await _applyRustPlaybackProcessingPolicy(playbackMode);
     }
 
+    if (Platform.isIOS) {
+      await _activateAudioSessionForRustEngine();
+      await _rustAudioService.prepareEngine();
+      await _applyRustPlaybackProcessingPolicy(playbackMode);
+    }
     _setupRustAudioListeners();
   }
 
@@ -4832,7 +4946,9 @@ class PlayerService {
   /// operation. Do not hand the same player back to the next tap: detach it
   /// immediately, then dispose with a bounded wait so playback remains usable
   /// even if Media3 itself never completes the old operation.
-  Future<void> _retireStalledAndroidPlayer(just_audio.AudioPlayer player) async {
+  Future<void> _retireStalledAndroidPlayer(
+    just_audio.AudioPlayer player,
+  ) async {
     if (identical(_justAudioPlayer, player)) {
       _justAudioPlayer = null;
       _audioSourceSequence = null;
@@ -5020,6 +5136,12 @@ class PlayerService {
     AudioEngineType desiredEngine, {
     required String reason,
   }) async {
+    if (Platform.isIOS) {
+      return desiredEngine == AudioEngineType.iosRust ||
+              desiredEngine == AudioEngineType.rustOboe
+          ? AudioEngineType.iosRust
+          : AudioEngineType.iosSystem;
+    }
     if (desiredEngine != AudioEngineType.usbDacExperimental ||
         !Platform.isAndroid) {
       return desiredEngine;
@@ -5065,6 +5187,30 @@ class PlayerService {
       reason: reason,
     );
 
+    if (Platform.isIOS) {
+      _sessionManager.clearFallbackReason();
+      final systemStreaming =
+          song.sourcePackage == 'konnekted.progressive' ||
+          song.sourcePackage == 'konnekted.morneye-live';
+      if (systemStreaming && normalizedEngine == AudioEngineType.iosRust) {
+        await _sessionManager.recordFallback(
+          requestedMode: normalizedEngine,
+          fallbackMode: AudioEngineType.iosSystem,
+          reason:
+              'This add-on stream uses system playback; Rust DSP is bypassed',
+        );
+      }
+      final needsRust =
+          _requiresRustDecoderForSong(song) ||
+          // AVPlayer volume is capped at unity. Positive ReplayGain needs
+          // native DSP; Android's LoudnessEnhancer is unavailable on iPhone.
+          await _computeReplayGainDbFor(song) > 0;
+      return resolveEngineForSong(
+        preferred: normalizedEngine,
+        requiresRustDecoder: needsRust,
+        requiresSystemStreaming: systemStreaming,
+      );
+    }
     if (!Platform.isAndroid) {
       _sessionManager.clearFallbackReason();
       return normalizedEngine;
@@ -5073,6 +5219,9 @@ class PlayerService {
     final engineForSong = _routeEngineForSong(normalizedEngine, song);
 
     switch (engineForSong) {
+      case AudioEngineType.iosSystem:
+      case AudioEngineType.iosRust:
+        return engineForSong;
       case AudioEngineType.normalAndroid:
         await _uac2Service.releaseAndroidDirectUsbRuntime();
         await _rustAudioService.setHighResMode(false);
@@ -5231,7 +5380,9 @@ class PlayerService {
         'codec': 'eac3_joc',
         'desiredEngine': desiredEngine.name,
         'engine': routed.name,
-        'reason': routed != desiredEngine ? 'joc_requires_system' : 'native_system',
+        'reason': routed != desiredEngine
+            ? 'joc_requires_system'
+            : 'native_system',
       });
     } else if (routed != desiredEngine) {
       _debugLog(
@@ -5247,6 +5398,16 @@ class PlayerService {
   /// Rust engine because ExoPlayer cannot decode their container.
   final Set<String> _rustDecoderRerouteAttempts = <String>{};
 
+  bool _requiresRustDecoderForSong(Song song) =>
+      song.requiresRustDecoder ||
+      (Platform.isIOS &&
+          const {
+            'ogg',
+            'oga',
+            'ogx',
+            'opus',
+          }.contains(_playbackFileType(song)));
+
   /// Auto-advance and crossfade swaps inside a just_audio playlist never pass
   /// through [_playInternal]; restart a DSF/DFF/WavPack track the system tier
   /// cannot decode on the Rust engine.
@@ -5254,7 +5415,8 @@ class PlayerService {
     Song song, {
     required Duration position,
   }) {
-    if (_usingRustBackend || !song.requiresRustDecoder) return;
+    final needsRust = _requiresRustDecoderForSong(song);
+    if (_usingRustBackend || !needsRust) return;
     if (song.filePath == null || _castingService.isActive) return;
     if (!_rustDecoderRerouteAttempts.add(song.id)) return;
     _debugLog(
@@ -5344,6 +5506,77 @@ class PlayerService {
     return operation;
   }
 
+  /// Serialize a confirmed output handoff with track changes and local engine
+  /// operations. Unlike ordinary UI requests, transport errors reach the caller.
+  Future<T> runOutputTransition<T>(
+    Future<T> Function(PlaybackOutputTransition local) action,
+  ) {
+    final result = Completer<T>();
+    unawaited(_enqueuePlaybackRequest(() async {
+      try {
+        await _externalPlaybackOwner.releaseCurrent();
+      } catch (error, stack) {
+        result.completeError(error, stack);
+        return;
+      }
+      final generation = _pendingPlaybackGeneration;
+      final local = PlaybackOutputTransition(
+        song: currentSongNotifier.value,
+        position: positionNotifier.value,
+        wasPlaying: isPlayingNotifier.value,
+        isCurrent: () => generation == _pendingPlaybackGeneration,
+        pauseLocal: () async {
+          // Deliberately address the attached local engine directly: publishing
+          // remote ownership first would make pause() pause the receiver instead.
+          if (_playbackManager.hasAttachedEngine) await _playbackManager.pause();
+          isPlayingNotifier.value = false;
+          _wasPlayingBeforeAudioInterruption = false;
+          _updatePriorityAnchor();
+        },
+        resumeLocal: _resumeInternal,
+      );
+      try {
+        result.complete(await action(local));
+      } catch (error, stack) {
+        result.completeError(error, stack);
+      }
+    }));
+    return result.future;
+  }
+
+  /// Claim video only after the previous output and local/Cast audio have
+  /// yielded. A newer user selection cancels the pending video acquisition.
+  Future<ExternalPlaybackLease> acquireExternalPlayback(
+    Future<void> Function() release,
+  ) {
+    final generation = _pendingPlaybackGeneration;
+    return runOutputTransition((local) async {
+      if (generation != _pendingPlaybackGeneration) {
+        throw StateError('Playback changed before video could take ownership.');
+      }
+      if (_castingService.isActive) {
+        await _castingService.delegatePause();
+      } else {
+        await local.pauseLocal();
+      }
+      if (generation != _pendingPlaybackGeneration) {
+        throw StateError('Playback changed before video could take ownership.');
+      }
+      return _externalPlaybackOwner.claim(release);
+    });
+  }
+
+  Future<void> resumeAfterExternalPlayback(
+    ExternalPlaybackLease lease, Song? expectedSong, {required int intentRevision}
+  ) {
+    return _enqueuePlaybackRequest(() async {
+      if (!lease.isReleased || !lease.isLatest ||
+          intentRevision != _pendingPlaybackGeneration ||
+          !identical(currentSongNotifier.value, expectedSong)) return;
+      await _resumeInternal(intentRevision: intentRevision);
+    });
+  }
+
   List<Song> _wrapAroundPlaylist(List<Song> songs, Song current) {
     final start = songs.indexWhere((s) => s.id == current.id);
     if (start <= 0) return songs;
@@ -5351,6 +5584,9 @@ class PlayerService {
   }
 
   Future<void> _playInternal(Song song, {List<Song>? playlist}) async {
+    final intent = _pendingPlaybackGeneration;
+    await _externalPlaybackOwner.releaseCurrent();
+    if (intent != _pendingPlaybackGeneration) return;
     await initAudio();
     final loadingGen = ++_networkLoadingGen;
     _markOnlinePreparation(song);
@@ -5405,11 +5641,14 @@ class PlayerService {
       // standard releases. The latest selected file is authoritative; leaving
       // the prior queue entry intact makes Media3 seek/play a stale source
       // after a same-song version change or a source-provider switch.
-      if (_currentIndex >= 0 && _currentIndex < _playlist.length &&
+      if (_currentIndex >= 0 &&
+          _currentIndex < _playlist.length &&
           _playlist[_currentIndex].id == song.id &&
           shouldReplaceQueuedAudioSource(_playlist[_currentIndex], song)) {
-        _debugLog('[Playback] Replacing queued audio version for selected song '
-            '(Atmos=${song.atmosEncoded})');
+        _debugLog(
+          '[Playback] Replacing queued audio version for selected song '
+          '(Atmos=${song.atmosEncoded})',
+        );
         _playlist[_currentIndex] = song;
       }
 
@@ -5434,7 +5673,12 @@ class PlayerService {
         // Route changes are already pushed into the session manager via the
         // device listener initialized in initAudio(). Re-querying the platform
         // here adds latency to the first tap on stable speaker routes.
-        final desiredEngine = _sessionManager.selectedMode;
+        // A codec fallback changes the selected engine. Re-evaluate iPhone
+        // processing preferences so the next ordinary track can return to
+        // AVPlayer instead of inheriting the previous track's Rust fallback.
+        final desiredEngine = Platform.isIOS
+            ? await _sessionManager.resolvePreferredMode()
+            : _sessionManager.selectedMode;
         final activeEngine = await _ensureEngineReady(
           desiredEngine,
           song: song,
@@ -5443,11 +5687,14 @@ class PlayerService {
         _debugLog(
           '[Engine] Playback route resolved to ${activeEngine.logLabel}',
         );
-        if (song.atmosEncoded) AtmosDiagnostics.record('playback_route', {
-          'engine': activeEngine.name,
-          'encoded': true,
-          'reason': _usingRustBackend ? 'unexpected_rust_engine' : 'android_mediacodec',
-        });
+        if (song.atmosEncoded)
+          AtmosDiagnostics.record('playback_route', {
+            'engine': activeEngine.name,
+            'encoded': true,
+            'reason': _usingRustBackend
+                ? 'unexpected_rust_engine'
+                : 'android_mediacodec',
+          });
         if (_usingRustBackend) {
           await _applyRustPlaybackProcessingPolicy(activeEngine);
           // ReplayGain must reach the engine before the play command so the
@@ -5457,10 +5704,11 @@ class PlayerService {
         await _runWithSuppressedSequenceStateUpdates(() async {
           await _playbackManager.playTrack(song);
         });
-        if (song.atmosEncoded) AtmosDiagnostics.record('player_loaded', {
-          'outcome': 'source_submitted',
-          'engine': activeEngine.name,
-        });
+        if (song.atmosEncoded)
+          AtmosDiagnostics.record('player_loaded', {
+            'outcome': 'source_submitted',
+            'engine': activeEngine.name,
+          });
         if (!_usingRustBackend && !song.atmosEncoded) {
           unawaited(_applyReplayGainForSystemTier(song));
         }
@@ -5681,7 +5929,7 @@ class PlayerService {
       );
       return;
     }
-    if (!song.requiresRustDecoder) {
+    if (!_requiresRustDecoderForSong(song)) {
       onlinePlaybackError.value =
           'Could not open “${song.title}”. Retry, or check that the file or source is available.';
       return;
@@ -5793,6 +6041,7 @@ class PlayerService {
   }
 
   Future<void> _pauseInternal() async {
+    await _externalPlaybackOwner.releaseCurrent();
     if (_castingService.isActive) {
       await _castingService.delegatePause();
       return;
@@ -5812,22 +6061,32 @@ class PlayerService {
       );
       return;
     }
+    var pauseConfirmed = false;
     try {
       await _playbackManager.pause();
+      pauseConfirmed = true;
     } catch (e) {
       _debugLog('Pause failed: $e');
+      if (Platform.isIOS) {
+        onlinePlaybackError.value = 'Audio did not confirm Pause. Try again.';
+      }
     }
     await _refreshAudioOutputDiagnostics(
       reason: 'playback paused',
       activeSong: currentSongNotifier.value,
     );
+    if (Platform.isIOS && pauseConfirmed) isPlayingNotifier.value = false;
   }
 
   Future<void> resume() {
-    return _enqueuePlaybackRequest(_resumeInternal);
+    final intent = _pendingPlaybackGeneration;
+    return _enqueuePlaybackRequest(() => _resumeInternal(intentRevision: intent));
   }
 
-  Future<void> _resumeInternal() async {
+  Future<void> _resumeInternal({int? intentRevision}) async {
+    final intent = intentRevision ?? _pendingPlaybackGeneration;
+    await _externalPlaybackOwner.releaseCurrent();
+    if (intent != _pendingPlaybackGeneration) return;
     if (_castingService.isActive) {
       await _castingService.delegateResume();
       return;
@@ -5843,13 +6102,18 @@ class PlayerService {
     onlinePlaybackError.value = null;
     // Use the cached route selection maintained by the session manager's device
     // listener rather than doing another blocking device probe on resume.
-    final desiredEngine = _sessionManager.selectedMode;
+    final desiredEngine = Platform.isIOS
+        ? await _sessionManager.resolvePreferredMode()
+        : _sessionManager.selectedMode;
     final activeEngine = await _ensureEngineReady(
       desiredEngine,
       song: song,
       reason: 'resume requested',
     );
     _debugLog('[Engine] Resume route resolved to ${activeEngine.logLabel}');
+    if (Platform.isIOS && _usingRustBackend) {
+      await _refreshReplayGainForSong(song, pushSpawnDefault: true);
+    }
 
     final latestState = _playbackManager.latestState;
     final canResumeDirectly =
@@ -6769,6 +7033,15 @@ class PlayerService {
   /// LoudnessEnhancer boost for [song].
   Future<void> _applyReplayGainForSystemTier(Song? song) async {
     await _refreshReplayGainForSong(song);
+    if (Platform.isIOS &&
+        _replayGainState.gainDb > 0 &&
+        song?.id == currentSongNotifier.value?.id &&
+        !_usingRustBackend) {
+      // Native playlist auto-advance does not pass through play(). Re-resolve
+      // this track's processing requirement before applying a capped volume.
+      await syncIosProcessingRoute();
+      if (_usingRustBackend) return;
+    }
     if (_determineCurrentTier() != VolumeTier.system) return;
     final player = _justAudioPlayer;
     if (player == null) return;
@@ -6788,6 +7061,7 @@ class PlayerService {
     final song =
         currentSongNotifier.value ?? _playbackManager.latestState?.currentTrack;
     await _refreshReplayGainForSong(song);
+    if (Platform.isIOS) await syncIosProcessingRoute();
     if (_usingRustBackend && _rustAudioService.isInitialized) {
       try {
         // Live update: the running source must change with the settings too.
@@ -7152,18 +7426,24 @@ class PlayerService {
         await _rustAudioService.setPitchShiftSemitones(0.0);
       } else {
         final player = _justAudioPlayer;
-        if (player != null) {
+        if (player != null && !Platform.isIOS) {
           await player.setPitch(1.0);
         }
       }
       return;
     }
     pitchSemitonesNotifier.value = clamped;
+    if (Platform.isIOS) {
+      // just_audio's independent pitch API is Android-only. SoundTouch in
+      // the Rust backend implements this control on iPhone.
+      EqEngineHint.iosPitchActive = clamped != 0;
+      await syncIosProcessingRoute();
+    }
     if (_usingRustBackend) {
       await _rustAudioService.setPitchShiftSemitones(clamped);
     } else {
       final player = _justAudioPlayer;
-      if (player != null) {
+      if (player != null && !Platform.isIOS) {
         // ponytail: just_audio setPitch takes a frequency ratio (1.0 = no shift).
         final ratio = math.pow(2, clamped / 12).toDouble();
         await player.setPitch(ratio);
@@ -7351,6 +7631,7 @@ class PlayerService {
     _positionSaveTimer?.cancel();
     _stopHwVolumeHealthTimer();
     unawaited(_audioFocusSubscription?.cancel());
+    unawaited(_noisyAudioSubscription?.cancel());
     unawaited(_bluetoothDeviceEventSubscription?.cancel());
     unawaited(_usbDacDetachSubscription?.cancel());
     unawaited(_usbDacAttachSubscription?.cancel());

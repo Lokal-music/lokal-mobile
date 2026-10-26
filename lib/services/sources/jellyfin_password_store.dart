@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 
 /// Platform-keystore copy of a Jellyfin password, keyed by server id.
 ///
@@ -8,7 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// re-authenticates instead of forcing a manual re-entry.
 class JellyfinPasswordStore {
   JellyfinPasswordStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ?? const PlaybackSecureStorage();
 
   final FlutterSecureStorage _storage;
 

@@ -5,6 +5,24 @@ This is the implementation ledger for the Flutter fusion. A feature is marked
 "Inherited" means the Flick implementation is present in this repository; it
 does not mean a USB DAC or every Android OEM has been tested here.
 
+The iPhone port is **implemented in part, with native simulator coverage; device qualification is pending**. Hosted builds
+produce a simulator app and unsigned release/AOT IPA; both native Rust targets
+compile. The actual Lokal app shell renders on iOS 26.0 and 18.6, and the integration
+driver attaches. Android-only event subscriptions are gated; native scanner, QuickJS, WAV
+play/pause/seek, Rust DSP, pitch/normalization transitions, Keychain migration,
+metadata transport, the codec corpus and mixed-codec queues pass on iOS 26.0 and
+18.6 in build 17. Build 18 passes real Bonjour discovery and the advertised HTTP
+probe on iOS 18.6 (iOS 26 simulator boot failed before testing). Shared changes
+from mobile PRs through #196 are merged; [the review](IOS_POST172_REVIEW.md)
+separates carried UI behavior from pending native WidgetKit work. Storage,
+media/session adapters, ordinary DSP/codec routing, Files playlist/recap exports,
+Spotify session bridge and platform settings are implemented. No physical iPhone
+installation or hardware behavior is validated.
+
+See the [iOS architecture and evidence ledger](IOS_PORT.md) and
+[Windows sideloading guide](IOS_SIDELOADING.md). The tables below describe the
+existing Android/shared implementation, and do not establish iOS support.
+
 ## Konnekted / `flow-feature`
 
 | Area | Status | Evidence / boundary |

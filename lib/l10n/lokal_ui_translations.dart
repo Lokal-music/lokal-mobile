@@ -1,5 +1,12 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Add a music folder": "Ajouter un dossier de musique",
+  "Adjust video quality in the YouTube player.": "La qualité vidéo se règle dans le lecteur YouTube.",
+  "Exit Space": "Quitter Space",
+  "Use device volume buttons": "Utilisez les boutons de volume",
+  "Waiting for video timing": "En attente de la synchronisation vidéo",
+  "Video": "Vidéo",
+  "Home": "Accueil",
   "Video quality": "Qualité vidéo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Résolution maximale des clips musicaux. Une qualité supérieure consomme plus de données ; la meilleure résolution disponible dans cette limite sera utilisée.",
   "Auto (best available)": "Auto (meilleure qualité disponible)",
@@ -522,6 +529,13 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Add a music folder": "Musikordner hinzufügen",
+  "Adjust video quality in the YouTube player.": "Die Videoqualität wird im YouTube-Player eingestellt.",
+  "Exit Space": "Space verlassen",
+  "Use device volume buttons": "Lautstärketasten verwenden",
+  "Waiting for video timing": "Warten auf die Videozeit",
+  "Video": "Video",
+  "Home": "Startseite",
   "Video quality": "Videoqualität",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maximale Auflösung für Musikvideos. Höhere Qualität verbraucht mehr Daten; die beste verfügbare Auflösung bis zu dieser Grenze wird verwendet.",
   "Auto (best available)": "Automatisch (beste verfügbare Qualität)",
@@ -1037,6 +1051,13 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Add a music folder": "Añadir una carpeta de música",
+  "Adjust video quality in the YouTube player.": "La calidad del vídeo se ajusta en el reproductor de YouTube.",
+  "Exit Space": "Salir de Space",
+  "Use device volume buttons": "Usa los botones de volumen",
+  "Waiting for video timing": "Esperando la sincronización del vídeo",
+  "Video": "Vídeo",
+  "Home": "Inicio",
   "Video quality": "Calidad de vídeo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Resolución máxima de los vídeos musicales. Una calidad más alta consume más datos; se elegirá la mejor resolución disponible dentro del límite.",
   "Auto (best available)": "Automático (mejor disponible)",
@@ -1560,6 +1581,13 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Add a music folder": "Aggiungi una cartella di musica",
+  "Adjust video quality in the YouTube player.": "La qualità video si regola nel player di YouTube.",
+  "Exit Space": "Esci da Space",
+  "Use device volume buttons": "Usa i pulsanti del volume",
+  "Waiting for video timing": "In attesa della sincronizzazione video",
+  "Video": "Video",
+  "Home": "Home",
   "Video quality": "Qualità video",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Risoluzione massima per i video musicali. Una qualità più alta consuma più dati; verrà scelta la migliore risoluzione disponibile entro questo limite.",
   "Auto (best available)": "Auto (migliore disponibile)",
@@ -2085,6 +2113,13 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Add a music folder": "Adicionar uma pasta de música",
+  "Adjust video quality in the YouTube player.": "A qualidade do vídeo é ajustada no player do YouTube.",
+  "Exit Space": "Sair do Space",
+  "Use device volume buttons": "Use os botões de volume",
+  "Waiting for video timing": "Aguardando a sincronização do vídeo",
+  "Video": "Vídeo",
+  "Home": "Início",
   "Video quality": "Qualidade do vídeo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Resolução máxima dos videoclipes. Qualidades maiores usam mais dados; a melhor resolução disponível dentro do limite será selecionada.",
   "Auto (best available)": "Automático (melhor disponível)",
@@ -2605,6 +2640,13 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Add a music folder": "Een muziekmap toevoegen",
+  "Adjust video quality in the YouTube player.": "De videokwaliteit stel je in de YouTube-speler in.",
+  "Exit Space": "Space verlaten",
+  "Use device volume buttons": "Gebruik de volumeknoppen",
+  "Waiting for video timing": "Wachten op de videotiming",
+  "Video": "Video",
+  "Home": "Start",
   "Video quality": "Videokwaliteit",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maximale resolutie voor muziekvideo's. Hogere kwaliteit verbruikt meer data; de hoogst beschikbare resolutie binnen de limiet wordt gekozen.",
   "Auto (best available)": "Automatisch (beste beschikbaar)",
@@ -3137,6 +3179,13 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Add a music folder": "Dodaj folder z muzyką",
+  "Adjust video quality in the YouTube player.": "Jakość wideo ustawia się w odtwarzaczu YouTube.",
+  "Exit Space": "Wyjdź z Space",
+  "Use device volume buttons": "Użyj przycisków głośności",
+  "Waiting for video timing": "Oczekiwanie na synchronizację wideo",
+  "Video": "Wideo",
+  "Home": "Start",
   "Video quality": "Jakość wideo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maksymalna rozdzielczość teledysków. Wyższa jakość zużywa więcej danych; zostanie wybrana najlepsza dostępna rozdzielczość w tym limicie.",
   "Auto (best available)": "Automatycznie (najlepsza dostępna)",
@@ -3659,6 +3708,13 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Add a music folder": "Lägg till en musikmapp",
+  "Adjust video quality in the YouTube player.": "Videokvaliteten ställs in i YouTube-spelaren.",
+  "Exit Space": "Lämna Space",
+  "Use device volume buttons": "Använd volymknapparna",
+  "Waiting for video timing": "Väntar på videons tidsinformation",
+  "Video": "Video",
+  "Home": "Hem",
   "Video quality": "Videokvalitet",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Högsta upplösning för musikvideor. Högre kvalitet använder mer data; den bästa tillgängliga upplösningen inom gränsen väljs.",
   "Auto (best available)": "Automatiskt (bästa tillgängliga)",
@@ -4187,6 +4243,13 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Add a music folder": "添加音乐文件夹",
+  "Adjust video quality in the YouTube player.": "请在 YouTube 播放器中调整视频画质。",
+  "Exit Space": "退出 Space",
+  "Use device volume buttons": "使用设备音量按钮",
+  "Waiting for video timing": "正在等待视频时间信息",
+  "Video": "视频",
+  "Home": "首页",
   "Video quality": "视频画质",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "音乐视频的最高分辨率。更高画质会消耗更多流量，播放时会选择不超过该上限的最佳可用清晰度。",
   "Auto (best available)": "自动（最佳可用画质）",
@@ -4714,6 +4777,13 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Add a music folder": "Müzik klasörü ekle",
+  "Adjust video quality in the YouTube player.": "Video kalitesi YouTube oynatıcısında ayarlanır.",
+  "Exit Space": "Space’ten çık",
+  "Use device volume buttons": "Cihazın ses düğmelerini kullanın",
+  "Waiting for video timing": "Video zamanlaması bekleniyor",
+  "Video": "Video",
+  "Home": "Ana sayfa",
   "Video quality": "Video kalitesi",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Müzik videoları için en yüksek çözünürlük. Yüksek kalite daha fazla veri kullanır; bu sınır içindeki en iyi mevcut çözünürlük seçilir.",
   "Auto (best available)": "Otomatik (mevcut en iyi kalite)",

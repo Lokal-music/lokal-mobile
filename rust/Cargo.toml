@@ -86,6 +86,11 @@ jni = "0.22"
 ndk-context = "0.1"
 android_logger = "0.15"
 
+# QuickJS ships no iPhone/simulator bindings. Generate them against the selected
+# Xcode SDK rather than reusing the macOS ABI.
+[target.'cfg(target_os = "ios")'.dependencies]
+rquickjs = { version = "0.14", features = ["bindgen"] }
+
 # Desktop platforms use default CPAL backends
 [target.'cfg(not(target_os = "android"))'.dependencies]
 cpal = { path = "vendor/cpal" }

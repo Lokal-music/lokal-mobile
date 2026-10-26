@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flick/providers/equalizer_provider.dart';
 import 'package:flick/services/android_audio_processing_service.dart';
 import 'package:flick/services/eq_engine_hint.dart';
@@ -10,6 +11,21 @@ import 'package:flick/src/rust/audio/equalizer.dart';
 
 EqualizerState _lastRequestedState = EqualizerState.initial();
 
+/// AVPlayer does not implement the shared graphic EQ or dynamics chain. Keep
+/// flat, disabled processing on the system player; use Rust when DSP is wanted.
+bool requiresIosRustDsp(EqualizerState state) =>
+    state.enabled &&
+    (state.mode == EqMode.parametric ||
+        state.preampDb != 0 ||
+        state.bassDb != 0 ||
+        state.midDb != 0 ||
+        state.trebleDb != 0 ||
+        state.graphicGainsDb.any((gain) => gain != 0) ||
+        state.compressor.enabled ||
+        state.limiter.enabled ||
+        state.fx.enabled ||
+        state.convolver.enabled);
+
 /// Applies EQ and processing state to the active audio backend.
 /// Rust engine: graphic EQ, dynamics, and creative FX are applied natively.
 /// just_audio on Android: uses native AudioEffect counterparts where available.
@@ -17,6 +33,13 @@ Future<void> applyEqualizer(EqualizerState state) async {
   _lastRequestedState = _snapshotState(state);
 
   final playerService = PlayerService();
+  if (Platform.isIOS) {
+    final needsDsp = requiresIosRustDsp(state);
+    if (EqEngineHint.iosDspActive != needsDsp) {
+      EqEngineHint.iosDspActive = needsDsp;
+      unawaited(playerService.syncIosProcessingRoute());
+    }
+  }
 
   // The fixed-band AudioEffect cannot render an arbitrary parametric curve, so
   // a parametric EQ with enabled bands asks the session manager for the Rust
@@ -334,21 +357,17 @@ List<double> _applyBmt({
   // Bass: indices 0-3 (32, 64, 125, 250 Hz)
   // Mid: indices 4-7 (500, 1k, 2k, 4k Hz)
   // Treble: indices 8-9 (8k, 16k Hz)
-  return List<double>.generate(
-    gains.length,
-    (index) {
-      var gain = gains[index];
-      if (index <= 3) {
-        gain += bassDb;
-      } else if (index <= 7) {
-        gain += midDb;
-      } else {
-        gain += trebleDb;
-      }
-      return gain
-          .clamp(EqualizerNotifier.gainMinDb, EqualizerNotifier.gainMaxDb)
-          .toDouble();
-    },
-    growable: false,
-  );
+  return List<double>.generate(gains.length, (index) {
+    var gain = gains[index];
+    if (index <= 3) {
+      gain += bassDb;
+    } else if (index <= 7) {
+      gain += midDb;
+    } else {
+      gain += trebleDb;
+    }
+    return gain
+        .clamp(EqualizerNotifier.gainMinDb, EqualizerNotifier.gainMaxDb)
+        .toDouble();
+  }, growable: false);
 }

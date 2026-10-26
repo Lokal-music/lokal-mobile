@@ -73,6 +73,7 @@ class _RecordingRepository implements SongRepository {
     int? discNumber,
     int? year,
     String? genre,
+    bool recordLink = true,
   }) async {
     updatedFiles.add(filePath);
     if (title != null) titles[filePath] = title;

@@ -15,9 +15,9 @@ class GallerySaveService {
     String albumName = 'Lokal',
     bool retryOnPermissionRequest = true,
   }) async {
-    if (!Platform.isAndroid) {
+    if (!Platform.isAndroid && !Platform.isIOS) {
       throw const GallerySaveException(
-        'Saving images is currently supported on Android only.',
+        'Saving images is not supported on this platform.',
       );
     }
 

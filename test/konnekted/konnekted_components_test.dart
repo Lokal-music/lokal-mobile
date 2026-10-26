@@ -119,11 +119,11 @@ void main() {
     expect(find.text('MADE FOR YOU'), findsOneWidget);
     expect(find.text('RECENT'), findsNothing);
     expect(find.text('NEW'), findsNothing);
-    expect(find.text('Track r1'), findsOneWidget);
+    expect(find.text('Track r2'), findsOneWidget); // The shelf starts in the middle.
     final stage = find.bySemanticsLabel(RegExp('^Cover Flow'));
     await tester.tapAt(tester.getCenter(stage) + const Offset(150, 0));
     await tester.pumpAndSettle();
-    expect(played?.id, 'r2');
+    expect(played?.id, 'r3');
     expect(queue?.map((s) => s.id), ['r1', 'r2', 'r3']);
     expect(tester.takeException(), isNull);
   });

@@ -168,7 +168,7 @@ void main() {
 
     // Perspective cancellation: the apparent X position must equal the
     // intended horizontal rail, even during the depth/rotation transition.
-    for (final d in [.1, .2, .35, .5, .65, .8, .9, 1, 1.5, 2, 4]) {
+    for (final d in <double>[.1, .2, .35, .5, .65, .8, .9, 1, 1.5, 2, 4]) {
       expect(world(d) / (1 + depth(d) / 1.92),
           closeTo(projected(d), 1e-9));
       expect(projected(d), greaterThan(projected(d - .001)),

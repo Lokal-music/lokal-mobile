@@ -14,6 +14,8 @@ import 'package:flick/core/utils/dev_log.dart';
 import 'package:flick/services/sources/subsonic_service.dart';
 import 'package:flick/l10n/l10n.dart';
 
+import 'ios_document_service.dart';
+
 class PlaylistImportResult {
   final Playlist playlist;
   final int totalEntries;
@@ -234,7 +236,11 @@ class PlaylistService {
     return true;
   }
 
-  Future<bool> addSongToPlaylist(String playlistId, String songId, {Song? song}) async {
+  Future<bool> addSongToPlaylist(
+    String playlistId,
+    String songId, {
+    Song? song,
+  }) async {
     await _ensureLoaded();
 
     final index = _playlists.indexWhere((p) => p.id == playlistId);
@@ -242,7 +248,8 @@ class PlaylistService {
 
     final playlist = _playlists[index];
     final alreadyAdded = playlist.songIds.contains(songId);
-    if (alreadyAdded && (song == null || playlist.songSnapshots.containsKey(songId))) {
+    if (alreadyAdded &&
+        (song == null || playlist.songSnapshots.containsKey(songId))) {
       return true;
     }
 
@@ -314,7 +321,8 @@ class PlaylistService {
 
     if (songIds.asMap().entries.every(
       (entry) => playlist.songIds[entry.key] == entry.value,
-    )) return true;
+    ))
+      return true;
     _playlists[index] = playlist.copyWith(
       songIds: List<String>.of(songIds),
       updatedAt: DateTime.now(),
@@ -523,9 +531,9 @@ class PlaylistService {
   }
 
   Future<PlaylistImportResult?> importM3uPlaylist() async {
-    if (!Platform.isAndroid) {
+    if (!Platform.isAndroid && !Platform.isIOS) {
       throw UnsupportedError(
-        'Playlist import is currently supported on Android only.',
+        'Playlist import is supported on Android and iPhone.',
       );
     }
 
@@ -533,6 +541,22 @@ class PlaylistService {
     _importInProgress = true;
 
     try {
+      if (Platform.isIOS) {
+        final document = await IosDocumentService().importPlaylist();
+        if (document == null) return null;
+        try {
+          return await _upsertPlaylistFromSource(
+            PlaylistSourceFile(
+              sourcePath: document.file.path,
+              displayName: document.name,
+            ),
+            content: document.content,
+          );
+        } catch (_) {
+          await document.discard();
+          rethrow;
+        }
+      }
       final uri = await _storageChannel.invokeMethod<String>('openDocument', {
         'mimeTypes': _playlistMimeTypes,
       });
@@ -681,9 +705,9 @@ class PlaylistService {
     String playlistId, {
     required bool utf8,
   }) async {
-    if (!Platform.isAndroid) {
+    if (!Platform.isAndroid && !Platform.isIOS) {
       throw UnsupportedError(
-        'Playlist export is currently supported on Android only.',
+        'Playlist export is supported on Android and iPhone.',
       );
     }
 
@@ -695,6 +719,21 @@ class PlaylistService {
 
     final extension = utf8 ? 'm3u8' : 'm3u';
     final fileName = '${_sanitizeFileName(playlist.name)}.$extension';
+    if (Platform.isIOS) {
+      final orderedSongs = await _getOrderedSongs(playlist.songIds);
+      final saved = await IosDocumentService().saveText(
+        fileName: fileName,
+        mimeType: utf8 ? 'application/vnd.apple.mpegurl' : 'audio/x-mpegurl',
+        content: _buildM3uContent(orderedSongs),
+      );
+      return saved
+          ? PlaylistExportResult(
+              fileName: fileName,
+              exportedSongs: orderedSongs.length,
+              isUtf8: utf8,
+            )
+          : null;
+    }
     final documentUri = await _storageChannel.invokeMethod<String>(
       'createDocument',
       {

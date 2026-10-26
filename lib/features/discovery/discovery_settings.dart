@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flick/services/playback_secure_storage.dart';
 
 import 'discovery_models.dart';
 
@@ -120,7 +121,7 @@ class DiscoverySettings {
 /// No shared-preferences copy, logs, account cookies or provider credentials.
 class DiscoverySettingsStore {
   DiscoverySettingsStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const PlaybackSecureStorage();
   final FlutterSecureStorage _storage;
   // The secure slot stays stable across schema versions.
   static const _key = 'konnekted.discovery.sources.v1';

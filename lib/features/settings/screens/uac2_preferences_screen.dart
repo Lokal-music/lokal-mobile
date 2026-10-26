@@ -201,7 +201,8 @@ class _Uac2PreferencesSectionsState
                   await service.clearDeclinedUsbDevices();
                   ref.invalidate(declinedUsbDevicesProvider);
                   if (context.mounted) {
-                    LokalToast.fromSnackBar(context, 
+                    LokalToast.fromSnackBar(
+                      context,
                       SnackBar(
                         content: Text(l10n.usbDacAutoBitPerfectOffers),
                         behavior: SnackBarBehavior.floating,
@@ -469,12 +470,16 @@ class _Uac2PreferencesSectionsState
     ref.invalidate(killIsochronousUsbOnQuitProvider);
     if (!context.mounted) return;
     if (!applied && value) {
-      LokalToast.fromSnackBar(context, SnackBar(content: Text(l10n.bitPerfectUsbDacCouldNot)));
+      LokalToast.fromSnackBar(
+        context,
+        SnackBar(content: Text(l10n.bitPerfectUsbDacCouldNot)),
+      );
       return;
     }
     if (changed) {
       if (value && EqEngineHint.parametricPeqActive) {
-        LokalToast.fromSnackBar(context, 
+        LokalToast.fromSnackBar(
+          context,
           SnackBar(
             content: Text(l10n.bitPerfectEnabledParametricEqIs),
             behavior: SnackBarBehavior.floating,
@@ -497,6 +502,8 @@ class _Uac2PreferencesSectionsState
         l10n.playbackIsUsingAndroidManagedOutput,
       AudioPathManagement.androidManagedShared =>
         l10n.playbackIsUsingTheStandardAndroid,
+      AudioPathManagement.iosSystemManaged =>
+        'Playback uses the iPhone audio system.',
       null => l10n.playbackModeWillUpdateAfterThe,
     };
     return LokalSettingRow(
@@ -903,7 +910,8 @@ class _Uac2PreferencesSectionsState
         ref.invalidate(uac2BitPerfectEnabledProvider);
         ref.invalidate(uac2ExclusiveDacModeProvider);
         if (context.mounted) {
-          LokalToast.fromSnackBar(context, 
+          LokalToast.fromSnackBar(
+            context,
             SnackBar(content: Text(l10n.uac2PreferencesResetSuccessfully)),
           );
         }

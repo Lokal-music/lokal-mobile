@@ -26,6 +26,9 @@ pub enum AudioCommand {
     },
     /// Pause playback (maintains position)
     Pause,
+    /// Pause and acknowledge after the command worker has applied it. The
+    /// bounded reply never blocks the real-time audio callback or worker.
+    PauseAcknowledged { reply: crossbeam_channel::Sender<()> },
     /// Resume playback from paused position
     Resume,
     /// Stop playback completely and clear buffers

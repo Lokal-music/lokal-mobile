@@ -30,6 +30,7 @@ pub struct AudioFileMetadata {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub album_artist: Option<String>,
     pub duration_ms: Option<u64>,
     pub format: String,
     pub last_modified: i64,
@@ -112,11 +113,8 @@ pub fn scan_root_dir(
 ) -> ScanResult {
     let files_on_disk = collect_scan_file_entries(&root_path, &scan_options);
     let total_files = files_on_disk.len() as u32;
-    let (to_process, deleted_paths, _) = classify_scan_work(
-        files_on_disk,
-        &known_files,
-        scan_options.force_full_rescan,
-    );
+    let (to_process, deleted_paths, _) =
+        classify_scan_work(files_on_disk, &known_files, scan_options.force_full_rescan);
 
     let new_or_modified = to_process
         .par_iter()
@@ -137,10 +135,8 @@ pub async fn scan_music_library(
     sink: StreamSink<ScanChunk>,
 ) -> anyhow::Result<()> {
     let aborted = std::cell::Cell::new(false);
-    let files_on_disk = collect_scan_file_entries_with_progress(
-        &root_path,
-        &scan_options,
-        |walked| {
+    let files_on_disk =
+        collect_scan_file_entries_with_progress(&root_path, &scan_options, |walked| {
             let ok = sink
                 .add(ScanChunk {
                     new_or_modified: Vec::new(),
@@ -155,8 +151,7 @@ pub async fn scan_music_library(
                 aborted.set(true);
             }
             ok
-        },
-    );
+        });
 
     // The stream was cancelled mid-walk (Dart stopped consuming); bail without
     // classifying or sending more chunks.
@@ -165,11 +160,8 @@ pub async fn scan_music_library(
     }
 
     let total_files = files_on_disk.len() as u32;
-    let (to_process, deleted_paths, _) = classify_scan_work(
-        files_on_disk,
-        &known_files,
-        scan_options.force_full_rescan,
-    );
+    let (to_process, deleted_paths, _) =
+        classify_scan_work(files_on_disk, &known_files, scan_options.force_full_rescan);
 
     // Everything that is not in to_process is already settled: unchanged files
     // plus deletions. Reporting them up front keeps the bar honest on rescans
@@ -235,11 +227,8 @@ pub fn check_deleted_paths(
     scan_options: ScanOptions,
 ) -> Vec<String> {
     let files_on_disk = collect_scan_file_entries(&root_path, &scan_options);
-    let (_, deleted_paths, _) = classify_scan_work(
-        files_on_disk,
-        &known_files,
-        scan_options.force_full_rescan,
-    );
+    let (_, deleted_paths, _) =
+        classify_scan_work(files_on_disk, &known_files, scan_options.force_full_rescan);
     deleted_paths
 }
 
@@ -433,7 +422,9 @@ fn collect_playlist_file_entries(
     root_path: &str,
     scan_options: &ScanOptions,
 ) -> Vec<FileScanEntry> {
-    collect_file_entries(root_path, scan_options, is_supported_playlist_path, |_| true)
+    collect_file_entries(root_path, scan_options, is_supported_playlist_path, |_| {
+        true
+    })
 }
 
 fn collect_file_entries<F, P>(
@@ -550,9 +541,9 @@ fn classify_scan_work(
     for file in files_on_disk {
         let path = file.path.clone();
         let needs_processing = force_full_rescan
-            || known_files
-                .get(&path)
-                .map_or(true, |known_timestamp| *known_timestamp != file.last_modified);
+            || known_files.get(&path).map_or(true, |known_timestamp| {
+                *known_timestamp != file.last_modified
+            });
 
         found_paths.insert(path);
 
@@ -574,9 +565,7 @@ fn classify_scan_work(
 /// Returns None for anything that isn't a finite float.
 fn parse_rg_db(value: Option<&str>) -> Option<f64> {
     let raw = value?.trim();
-    let id3 = raw.strip_suffix("dB").or_else(|| {
-        raw.strip_suffix(" dB")
-    });
+    let id3 = raw.strip_suffix("dB").or_else(|| raw.strip_suffix(" dB"));
     let number = id3.map(str::trim).unwrap_or(raw);
     number.parse::<f64>().ok().filter(|v| v.is_finite())
 }
@@ -654,14 +643,14 @@ fn extract_lofty_metadata(
         .or_else(|| tagged_file.first_tag());
     let properties = tagged_file.properties();
     let duration_ms = properties.duration().as_millis().min(u128::from(u64::MAX)) as u64;
-    let (rg_track_gain, rg_track_peak, rg_album_gain, rg_album_peak) =
-        lofty_replaygains(tag);
+    let (rg_track_gain, rg_track_peak, rg_album_gain, rg_album_peak) = lofty_replaygains(tag);
 
     Some(AudioFileMetadata {
         path: entry.path.clone(),
         title: tag.and_then(|t| t.title().map(|s| s.to_string())),
         artist: tag.and_then(|t| t.artist().map(|s| s.to_string())),
         album: tag.and_then(|t| t.album().map(|s| s.to_string())),
+        album_artist: tag.and_then(|t| t.get_string(ItemKey::AlbumArtist).map(str::to_owned)),
         duration_ms: Some(duration_ms),
         format,
         last_modified: entry.last_modified,
@@ -707,6 +696,7 @@ fn extract_wavpack_metadata(
                 title: None,
                 artist: None,
                 album: None,
+                album_artist: None,
                 duration_ms: None,
                 format: String::new(),
                 last_modified: entry.last_modified,
@@ -805,13 +795,13 @@ fn extract_dsf_metadata(
     });
 
     let tag = dsf.id3_tag().as_ref();
-    let (rg_track_gain, rg_track_peak, rg_album_gain, rg_album_peak) =
-        id3_replaygains(tag);
+    let (rg_track_gain, rg_track_peak, rg_album_gain, rg_album_peak) = id3_replaygains(tag);
     Some(AudioFileMetadata {
         path: entry.path.clone(),
         title: tag.and_then(|t| t.title().map(|s| s.to_string())),
         artist: tag.and_then(|t| t.artist().map(|s| s.to_string())),
         album: tag.and_then(|t| t.album().map(|s| s.to_string())),
+        album_artist: tag.and_then(|t| t.album_artist().map(str::to_owned)),
         duration_ms,
         format,
         last_modified: entry.last_modified,
@@ -871,13 +861,13 @@ fn extract_dff_metadata(
             recovered_tag.as_ref()
         }
     };
-    let (rg_track_gain, rg_track_peak, rg_album_gain, rg_album_peak) =
-        id3_replaygains(tag);
+    let (rg_track_gain, rg_track_peak, rg_album_gain, rg_album_peak) = id3_replaygains(tag);
     Some(AudioFileMetadata {
         path: entry.path.clone(),
         title: tag.and_then(|t| t.title().map(|s| s.to_string())),
         artist: tag.and_then(|t| t.artist().map(|s| s.to_string())),
         album: tag.and_then(|t| t.album().map(|s| s.to_string())),
+        album_artist: tag.and_then(|t| t.album_artist().map(str::to_owned)),
         duration_ms,
         format,
         last_modified: entry.last_modified,
@@ -974,6 +964,28 @@ mod tests {
         assert_eq!(meta.format, "wav");
         assert_eq!(meta.sample_rate, Some(44100));
         assert_eq!(meta.bit_depth, Some(16));
+        assert!(meta.album_artist.is_none());
+        let written = crate::api::metadata_editor::write_tags(
+            path.to_string_lossy().to_string(),
+            crate::api::metadata_editor::TagEditFields {
+                title: None,
+                artist: Some("Track Artist".into()),
+                album: None,
+                album_artist: Some("Compilation Artist".into()),
+                genre: None,
+                year: None,
+                track_number: None,
+                disc_number: None,
+            },
+        )
+        .unwrap();
+        assert!(written.success, "{:?}", written.error);
+        let rescanned = extract_file_metadata(path.to_string_lossy().to_string()).unwrap();
+        assert_eq!(rescanned.artist.as_deref(), Some("Track Artist"));
+        assert_eq!(
+            rescanned.album_artist.as_deref(),
+            Some("Compilation Artist")
+        );
     }
 
     #[test]
@@ -1107,6 +1119,7 @@ mod tests {
         let cover_data = b"\x89PNG\r\n\x1a\nfake-cover-bytes".to_vec();
         let mut tag = id3::Tag::new();
         tag.set_title("Dff Title");
+        tag.set_album_artist("DSD Compilation Artist");
         tag.set_genre("Jazz");
         tag.set_year(2024);
         tag.add_frame(id3::frame::Picture {
@@ -1128,6 +1141,7 @@ mod tests {
         assert!(meta.is_some());
         let meta = meta.unwrap();
         assert_eq!(meta.title.as_deref(), Some("Dff Title"));
+        assert_eq!(meta.album_artist.as_deref(), Some("DSD Compilation Artist"));
         assert_eq!(meta.genre.as_deref(), Some("Jazz"));
         assert_eq!(meta.year, Some(2024));
         assert_eq!(meta.sample_rate, None);

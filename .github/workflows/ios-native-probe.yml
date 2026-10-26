@@ -1,0 +1,47 @@
+name: iOS native feasibility probe
+
+# Deliberately manual while investigating the port. No Apple credentials,
+# provisioning profiles, release publication, or changes to Android CI.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'rust/**'
+      - 'rust_builder/**'
+      - 'tool/ios_native_probe.sh'
+      - '.github/workflows/ios-native-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-ios:
+    name: Rust engine / ${{ matrix.target }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-ios, aarch64-apple-ios-sim]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Source inventory
+        run: python3 tool/ios_readiness.py
+      - name: Compile actual engine with the proposed iOS features
+        run: bash tool/ios_native_probe.sh '${{ matrix.target }}'
+      - name: State the scope of the result
+        if: always()
+        env:
+          PROBE_TARGET: ${{ matrix.target }}
+          PROBE_RESULT: ${{ job.status }}
+        run: |
+          {
+            printf '## iOS Rust probe: %s\n\n' "$PROBE_TARGET"
+            printf 'Job status before summary: %s\n\n' "$PROBE_RESULT"
+            printf 'Tests compilation with native_audio, generated QuickJS bindings and without uac2.\n\n'
+            printf 'Does not build a Flutter app, export an IPA, test signing, or validate device playback.\n'
+          } >> "$GITHUB_STEP_SUMMARY"

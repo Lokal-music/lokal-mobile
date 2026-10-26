@@ -579,6 +579,40 @@ pub struct AudioEngineHandle {
 unsafe impl Send for AudioEngineHandle {}
 unsafe impl Sync for AudioEngineHandle {}
 
+#[cfg(any(target_os = "ios", test))]
+fn request_pause_acknowledgement(commands: &Sender<AudioCommand>) -> Result<Receiver<()>, String> {
+    let (reply, acknowledged) = bounded(1);
+    commands
+        .try_send(AudioCommand::PauseAcknowledged { reply })
+        .map_err(|error| format!("Failed to queue audio pause: {error}"))?;
+    Ok(acknowledged)
+}
+
+#[cfg(test)]
+fn pause_with_acknowledgement(
+    commands: &Sender<AudioCommand>,
+    timeout: std::time::Duration,
+) -> Result<(), String> {
+    request_pause_acknowledgement(commands)?
+        .recv_timeout(timeout)
+        .map_err(|error| format!("Audio pause was not acknowledged: {error}"))
+}
+
+fn apply_pause(
+    callback_data: &AudioCallbackData,
+    state: &AtomicU8,
+    events: &Sender<AudioEvent>,
+) {
+    // No source means playback already ended. Do not create a resumable paused
+    // state that would subsequently resume into silence.
+    let has_source = callback_data.sources.lock().current().is_some();
+    if has_source {
+        callback_data.set_paused(true);
+        state.store(PlaybackState::Paused as u8, Ordering::Relaxed);
+        let _ = events.try_send(AudioEvent::StateChanged(PlaybackState::Paused));
+    }
+}
+
 impl AudioEngineHandle {
     /// Send a command to the audio engine.
     pub fn send_command(&self, command: AudioCommand) -> Result<(), String> {
@@ -635,6 +669,11 @@ impl AudioEngineHandle {
     /// Pause playback.
     pub fn pause(&self) -> Result<(), String> {
         self.send_command(AudioCommand::Pause)
+    }
+
+    #[cfg(target_os = "ios")]
+    pub(crate) fn begin_pause_acknowledgement(&self) -> Result<Receiver<()>, String> {
+        request_pause_acknowledgement(&self.command_tx)
     }
 
     /// Resume playback.
@@ -3789,18 +3828,11 @@ fn command_processing_loop(
                         );
                     }
                     AudioCommand::Pause => {
-                        // empty and state is already Stopped (see the track-ended
-                        // handler above). Blindly flipping to Paused here leaves
-                        // resume (audio_resume) silently "playing" nothing, which
-                        // breaks resume after the queue ends. Skip the transition
-                        // when there's no live source to pause.
-                        let has_source = callback_data.sources.lock().current().is_some();
-                        if has_source {
-                            callback_data.set_paused(true);
-                            state.store(PlaybackState::Paused as u8, Ordering::Relaxed);
-                            let _ = event_tx
-                                .try_send(AudioEvent::StateChanged(PlaybackState::Paused));
-                        }
+                        apply_pause(&callback_data, &state, &event_tx);
+                    }
+                    AudioCommand::PauseAcknowledged { reply } => {
+                        apply_pause(&callback_data, &state, &event_tx);
+                        let _ = reply.try_send(());
                     }
                     AudioCommand::Resume => {
                         callback_data.set_paused(false);
@@ -4705,6 +4737,72 @@ mod tests {
     use crate::audio::source::{AudioSource, SourceInfo};
     use crossbeam_channel::bounded;
     use std::path::PathBuf;
+
+    #[test]
+    fn pause_acknowledgement_waits_for_the_worker_reply() {
+        let (commands, receiver) = bounded(1);
+        let (done, completion) = bounded(1);
+        let worker = std::thread::spawn(move || {
+            let result = pause_with_acknowledgement(&commands, std::time::Duration::from_secs(2));
+            done.send(result).unwrap();
+        });
+        let command = receiver.recv_timeout(std::time::Duration::from_secs(1)).unwrap();
+        assert!(completion.try_recv().is_err(), "enqueueing must not acknowledge pause");
+        match command {
+            AudioCommand::PauseAcknowledged { reply } => reply.try_send(()).unwrap(),
+            _ => panic!("expected acknowledged pause"),
+        }
+        assert!(completion.recv_timeout(std::time::Duration::from_secs(1)).unwrap().is_ok());
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn pause_acknowledgement_timeout_does_not_block_a_late_worker_reply() {
+        let (commands, receiver) = bounded(1);
+        assert!(pause_with_acknowledgement(&commands, std::time::Duration::from_millis(10)).is_err());
+        match receiver.try_recv().unwrap() {
+            AudioCommand::PauseAcknowledged { reply } => assert!(reply.try_send(()).is_err()),
+            _ => panic!("expected acknowledged pause"),
+        }
+    }
+
+    #[test]
+    fn acknowledged_pause_is_applied_by_the_real_command_worker_before_returning() {
+        let data = Arc::new(build_callback_data(48_000, 2));
+        data.sources.lock().set_current(build_source(&[0.25; 128], 48_000, 2));
+        let state = Arc::new(AtomicU8::new(PlaybackState::Playing as u8));
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let (commands, receiver) = bounded(8);
+        let (_finished, finished_receiver) = bounded(8);
+        let (events, _event_receiver) = bounded(8);
+        let thread_data = Arc::clone(&data);
+        let thread_state = Arc::clone(&state);
+        let thread_shutdown = Arc::clone(&shutdown);
+        let worker = std::thread::spawn(move || {
+            command_processing_loop(receiver, finished_receiver, events, thread_data,
+                thread_state, Arc::new(Mutex::new(Vec::new())), 48_000, thread_shutdown, None);
+        });
+        let paused = pause_with_acknowledgement(&commands, std::time::Duration::from_secs(2));
+        let applied = data.is_paused();
+        let observed = state.load(Ordering::Relaxed);
+        let output = run_callback(&data, 32);
+        commands.send(AudioCommand::Shutdown).unwrap();
+        worker.join().unwrap();
+        assert!(paused.is_ok());
+        assert!(applied);
+        assert_eq!(observed, PlaybackState::Paused as u8);
+        assert!(output.iter().all(|sample| *sample == 0.0));
+    }
+
+    #[test]
+    fn pause_without_a_source_keeps_the_completed_state() {
+        let data = build_callback_data(48_000, 2);
+        let state = AtomicU8::new(PlaybackState::Stopped as u8);
+        let (events, receiver) = bounded(8);
+        apply_pause(&data, &state, &events);
+        assert_eq!(state.load(Ordering::Relaxed), PlaybackState::Stopped as u8);
+        assert!(receiver.try_recv().is_err());
+    }
 
     fn build_source_with_path(
         path: &str,

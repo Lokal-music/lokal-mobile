@@ -8,9 +8,9 @@ import 'dart:async';
 import 'package:flick/features/search/widgets/online_catalogue_search_section.dart';
 import 'package:flick/features/search/providers/search_filter_provider.dart';
 import 'package:flick/features/search/models/search_category.dart';
-import 'package:flick/providers/apple_music_provider.dart';
-import 'package:flick/services/apple_music/apple_music_metadata_service.dart';
-import 'package:flick/services/apple_music/apple_music_models.dart';
+import 'package:flick/services/global_catalogue_search.dart';
+import 'package:flick/services/global_catalogue_source.dart';
+import 'package:flick/features/search/widgets/global_catalogue_search_section.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flutter/material.dart';
@@ -18,50 +18,39 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class _Api implements AppleMusicMetadataService {
+// Stub the current catalogue boundary. The catalogue's Apple/Spotify HTTP
+// requests have separate service tests; these checks exercise UI filtering,
+// scope changes and stale-result handling without live requests.
+class _Catalogue extends GlobalCatalogueSearchService {
   final calls = <String>[];
-  Completer<List<AppleMusicAlbumMatch>>? old;
-  @override
-  Future<List<AppleMusicAlbumMatch>> searchAlbums(
-    String term, {
-    int limit = 25,
-    String? storefront,
-    bool refresh = false,
-  }) async {
-    calls.add('albums:$term');
-    if (term == 'old') return old!.future;
-    return [
-      for (var i = 0; i < 6; i++)
-        AppleMusicAlbumMatch(
-          collectionId: '$i',
-          name: '$term album $i',
-          artistName: 'Composer',
-          url: '',
-        ),
-    ];
-  }
+  Completer<GlobalCatalogueMatches>? old;
 
   @override
-  Future<List<AppleMusicArtist>> searchArtists(
-    String term, {
-    int limit = 25,
-    String? storefront,
-    bool refresh = false,
-  }) async {
-    calls.add('artists:$term');
-    return [AppleMusicArtist(artistId: 'a', name: '$term performer')];
+  Future<GlobalCatalogueMatches> search(
+    String query, {String? selected, bool refresh = false, bool songsOnly = false}
+  ) async {
+    calls.add(query);
+    if (query == 'old') return old!.future;
+    return GlobalCatalogueMatches(
+      catalogue: GlobalCatalogueSource.apple,
+      albums: [
+        for (var i = 0; i < 6; i++)
+          GlobalCatalogueAlbum(name: '$query album $i', artist: 'Composer'),
+      ],
+      artists: [GlobalCatalogueArtist(name: '$query performer')],
+    );
   }
-
-  @override
-  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    GlobalCatalogueSource.selected.value = GlobalCatalogueSource.apple;
+  });
   testWidgets(
     'whole search screen isolates a category and switches to online without library work',
     (tester) async {
-      final api = _Api();
+      final api = _Catalogue();
       var libraryReads = 0;
       const song = Song(
         id: '1',
@@ -72,7 +61,9 @@ void main() {
       );
       final c = ProviderContainer(
         overrides: [
-          appleMusicMetadataServiceProvider.overrideWithValue(api),
+          globalCatalogueSearchServiceProvider.overrideWithValue(
+            api,
+          ),
           globalSearchResultsProvider.overrideWith((ref, query) async {
             libraryReads++;
             return GlobalSearchResults(
@@ -97,10 +88,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Artists'));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Dude');
       await tester.pump(const Duration(milliseconds: 350));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Artists'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Library Composer 6'), 250,
         scrollable: find.descendant(of: find.byType(CustomScrollView), matching: find.byType(Scrollable)).last);
@@ -122,12 +113,14 @@ void main() {
     },
   );
 
-  testWidgets('artist and album filters use their own catalogue endpoints', (
+  testWidgets('artist and album filters show only their catalogue entity type', (
     tester,
   ) async {
-    final api = _Api();
+    final api = _Catalogue();
     final c = ProviderContainer(
-      overrides: [appleMusicMetadataServiceProvider.overrideWithValue(api)],
+      overrides: [globalCatalogueSearchServiceProvider.overrideWithValue(
+            api,
+          )],
     );
     addTearDown(c.dispose);
     Widget app(SearchCategory type, String query, {int? preview}) =>
@@ -158,15 +151,17 @@ void main() {
     await tester.tap(find.text('See all albums'));
     await tester.pumpAndSettle();
     expect(c.read(searchFilterProvider), {SearchCategory.albums});
-    expect(api.calls, ['artists:Dude', 'albums:Dude']);
+    expect(api.calls, ['Dude', 'Dude']);
     expect(tester.takeException(), isNull);
   });
   testWidgets('late results from the old query never replace a newer query', (
     tester,
   ) async {
-    final api = _Api()..old = Completer<List<AppleMusicAlbumMatch>>();
+    final api = _Catalogue()..old = Completer<GlobalCatalogueMatches>();
     final c = ProviderContainer(
-      overrides: [appleMusicMetadataServiceProvider.overrideWithValue(api)],
+      overrides: [globalCatalogueSearchServiceProvider.overrideWithValue(
+            api,
+          )],
     );
     addTearDown(c.dispose);
     Widget app(String query) => UncontrolledProviderScope(
@@ -187,14 +182,10 @@ void main() {
     await tester.pump();
     await tester.pumpWidget(app('new'));
     await tester.pumpAndSettle();
-    api.old!.complete([
-      const AppleMusicAlbumMatch(
-        collectionId: 'old',
-        name: 'Obsolete album',
-        artistName: 'Wrong',
-        url: '',
-      ),
-    ]);
+    api.old!.complete(const GlobalCatalogueMatches(
+      catalogue: GlobalCatalogueSource.apple,
+      albums: [GlobalCatalogueAlbum(name: 'Obsolete album', artist: 'Wrong')],
+    ));
     await tester.pumpAndSettle();
     expect(find.text('new album 0'), findsOneWidget);
     expect(find.text('Obsolete album'), findsNothing);

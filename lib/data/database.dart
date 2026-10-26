@@ -37,7 +37,25 @@ class Database {
   static Future<void> init() async {
     if (_instance != null) return;
 
-    final dir = await getApplicationDocumentsDirectory();
+    // Music is exposed through Files on iPhone. Keep database internals in
+    // Application Support so file sharing cannot accidentally edit the store.
+    final dir = Platform.isIOS
+        ? await getApplicationSupportDirectory()
+        : await getApplicationDocumentsDirectory();
+    File? migratedLegacy;
+    if (Platform.isIOS) {
+      final documents = await getApplicationDocumentsDirectory();
+      final legacy = File('${documents.path}/$_databaseName.isar');
+      final current = File('${dir.path}/$_databaseName.isar');
+      if (!await current.exists() && await legacy.exists()) {
+        await dir.create(recursive: true);
+        final staging = File('${current.path}.migrating');
+        await legacy.copy(staging.path);
+        await staging.rename(current.path);
+        migratedLegacy = legacy;
+        // Keep the original until the migrated database opens successfully.
+      }
+    }
     final schemas = [
       SongEntitySchema,
       FolderEntitySchema,
@@ -56,6 +74,7 @@ class Database {
         name: _databaseName,
       );
     } on IsarError catch (e) {
+      if (Platform.isIOS) rethrow;
       if (e.message.contains('MDBX_INCOMPATIBLE')) {
         await _deleteDatabaseFiles(dir.path);
         await _clearFingerprintCache(dir.path);
@@ -66,6 +85,16 @@ class Database {
         );
       } else {
         rethrow;
+      }
+    }
+    if (migratedLegacy != null) {
+      final backup = File(
+        '${dir.path}/$_databaseName.pre-storage-migration.isar',
+      );
+      try {
+        if (!await backup.exists()) await migratedLegacy.rename(backup.path);
+      } on FileSystemException {
+        // Retain the original backup if moving it fails; never delete it.
       }
     }
   }

@@ -2,8 +2,10 @@ import 'package:flick/features/settings/widgets/lyrics_sources_panel.dart';
 import 'package:flick/l10n/l10n.dart';
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
@@ -283,42 +285,61 @@ List<LokalSettingsSection> outputSettings(BuildContext context, WidgetRef ref) {
   final player = ref.watch(playerServiceProvider);
   final locked = player.bitPerfectProcessingLockedNotifier.value;
   return [
-    LokalSettingsSection(
-      title: lokalText('USB DAC'),
-      children: [
-        LokalSettingLink(
-          label: lokalText('USB DAC'),
-          description: lokalText(
-            "Devices, playback engine, bit-perfect output, format, DSD and 432 Hz tuning.",
+    if (Platform.isIOS)
+      LokalSettingsSection(
+        title: 'Audio output',
+        children: [
+          LokalSettingLink(
+            label: 'AirPlay and headphones',
+            description: 'Choose an output using the iPhone audio controls.',
+            onTap: () => unawaited(
+              const MethodChannel('lokal/ios')
+                  .invokeMethod<void>('showRoutePicker'),
+            ),
           ),
-          onTap: () => _push(context, const Uac2SettingsScreen()),
-        ),
-      ],
-    ),
-    LokalSettingsSection(
-      title: lokalText('Bluetooth'),
-      children: [
-        LokalSettingLink(
-          label: lokalText('Bluetooth'),
-          description: lokalText(
-            'Codec, and what happens when headphones connect or drop.',
+        ],
+      ),
+    if (!Platform.isIOS)
+      LokalSettingsSection(
+        title: lokalText('USB DAC'),
+        children: [
+          LokalSettingLink(
+            label: lokalText('USB DAC'),
+            description: lokalText(
+              "Devices, playback engine, bit-perfect output, format, DSD and 432 Hz tuning.",
+            ),
+            onTap: () => _push(context, const Uac2SettingsScreen()),
           ),
-          onTap: () => _push(context, const BluetoothSettingsScreen()),
-        ),
-      ],
-    ),
+        ],
+      ),
+    if (!Platform.isIOS)
+      LokalSettingsSection(
+        title: lokalText('Bluetooth'),
+        children: [
+          LokalSettingLink(
+            label: lokalText('Bluetooth'),
+            description: lokalText(
+              'Codec, and what happens when headphones connect or drop.',
+            ),
+            onTap: () => _push(context, const BluetoothSettingsScreen()),
+          ),
+        ],
+      ),
     LokalSettingsSection(
       title: lokalText('Volume'),
       children: [
-        LokalSettingRow.toggle(
-          label: lokalText('Extended volume'),
-          description: lokalText('Let the volume go past 100 %, up to 200 %.'),
-          value: prefs.extendedVolumeEnabled,
-          onChanged: (value) async {
-            await notifier.setExtendedVolumeEnabled(value);
-            await player.setExtendedVolumeEnabled(value);
-          },
-        ),
+        if (!Platform.isIOS)
+          LokalSettingRow.toggle(
+            label: lokalText('Extended volume'),
+            description: lokalText(
+              'Let the volume go past 100 %, up to 200 %.',
+            ),
+            value: prefs.extendedVolumeEnabled,
+            onChanged: (value) async {
+              await notifier.setExtendedVolumeEnabled(value);
+              await player.setExtendedVolumeEnabled(value);
+            },
+          ),
         LokalSettingChoice<int>(
           label: lokalText('Crossfeed'),
           description: locked
@@ -336,32 +357,33 @@ List<LokalSettingsSection> outputSettings(BuildContext context, WidgetRef ref) {
         ),
       ],
     ),
-    LokalSettingsSection(
-      title: lokalText('Background'),
-      children: [
-        LokalSettingRow.toggle(
-          label: lokalText('Background playback anchor'),
-          description: lokalText(
-            'Help keep bit-perfect audio alive in the background. Some phones and routes may still stop it.',
+    if (!Platform.isIOS)
+      LokalSettingsSection(
+        title: lokalText('Background'),
+        children: [
+          LokalSettingRow.toggle(
+            label: lokalText('Background playback anchor'),
+            description: lokalText(
+              'Help keep bit-perfect audio alive in the background. Some phones and routes may still stop it.',
+            ),
+            value: prefs.priorityAnchorEnabled,
+            onChanged: (value) {
+              player.setPriorityAnchorEnabled(value);
+              notifier.setPriorityAnchorEnabled(value);
+            },
           ),
-          value: prefs.priorityAnchorEnabled,
-          onChanged: (value) {
-            player.setPriorityAnchorEnabled(value);
-            notifier.setPriorityAnchorEnabled(value);
-          },
-        ),
-        LokalSettingRow.toggle(
-          label: lokalText('Moving covers in bit-perfect'),
-          description: lokalText(
-            'Play moving covers during bit-perfect output. Off: a still cover instead.',
+          LokalSettingRow.toggle(
+            label: lokalText('Moving covers in bit-perfect'),
+            description: lokalText(
+              'Play moving covers during bit-perfect output. Off: a still cover instead.',
+            ),
+            value: prefs.motionArtDuringBitPerfect,
+            onChanged: (value) {
+              player.setMotionArtDuringBitPerfect(value);
+              notifier.setMotionArtDuringBitPerfect(value);
+            },
           ),
-          value: prefs.motionArtDuringBitPerfect,
-          onChanged: (value) {
-            player.setMotionArtDuringBitPerfect(value);
-            notifier.setMotionArtDuringBitPerfect(value);
-          },
-        ),
-      ],
-    ),
+        ],
+      ),
   ];
 }

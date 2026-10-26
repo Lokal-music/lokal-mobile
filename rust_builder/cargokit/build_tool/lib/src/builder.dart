@@ -1,6 +1,8 @@
 /// This is copied from Cargokit (which is the official way to use it currently)
 /// Details: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin
 
+import 'dart:io';
+
 import 'package:collection/collection.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
@@ -137,7 +139,12 @@ class RustBuilder {
 
   /// Returns the path of directory containing build artifacts.
   Future<String> build() async {
-    final extraArgs = _buildOptions?.flags ?? [];
+    final isIOS = target.darwinPlatform == 'iphoneos' ||
+        target.darwinPlatform == 'iphonesimulator';
+    final extraArgs = [
+      ...?_buildOptions?.flags,
+      if (isIOS) ...['--no-default-features', '--features', 'native_audio'],
+    ];
     final manifestPath = path.join(environment.manifestDir, 'Cargo.toml');
     runCommand(
       'rustup',
@@ -146,6 +153,7 @@ class RustBuilder {
         _toolchain,
         'cargo',
         'build',
+        '--lib',
         ...extraArgs,
         '--manifest-path',
         manifestPath,
@@ -167,6 +175,27 @@ class RustBuilder {
   }
 
   Future<Map<String, String>> _buildEnvironment() async {
+    if (target.darwinPlatform == 'iphoneos' ||
+        target.darwinPlatform == 'iphonesimulator') {
+      final deploymentTarget =
+          Platform.environment['IPHONEOS_DEPLOYMENT_TARGET'] ?? '16.0';
+      if (!RegExp(r'^\d+\.\d+(?:\.\d+)?$').hasMatch(deploymentTarget)) {
+        throw StateError('Invalid iPhone deployment target: $deploymentTarget');
+      }
+      final sdk = runCommand('xcrun', [
+        '--sdk',
+        target.darwinPlatform!,
+        '--show-sdk-path',
+      ]).stdout.toString().trim();
+      return {
+        'SDKROOT': sdk,
+        'IPHONEOS_DEPLOYMENT_TARGET': deploymentTarget,
+        'BINDGEN_EXTRA_CLANG_ARGS':
+            '${Platform.environment['BINDGEN_EXTRA_CLANG_ARGS'] ?? ''} '
+                '--target=${target.darwinArch == 'arm64' ? 'arm64' : 'x86_64'}-apple-ios$deploymentTarget${target.darwinPlatform == 'iphonesimulator' ? '-simulator' : ''} '
+                '-isysroot "$sdk"',
+      };
+    }
     if (target.android == null) {
       return {};
     } else {

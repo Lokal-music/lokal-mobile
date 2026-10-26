@@ -134,6 +134,7 @@ bool shouldExitSingleTrackMode({
 
 class AndroidAudioEngine implements AudioEngine {
   AndroidAudioEngine({
+    AudioEngineType engineType = AudioEngineType.normalAndroid,
     required AndroidPlayerProvider playerProvider,
     required AndroidAudioSourcesBuilder sourcesBuilder,
     required AndroidAudioSourceBuilder sourceBuilder,
@@ -166,7 +167,9 @@ class AndroidAudioEngine implements AudioEngine {
            crossfadeConfigProvider ?? (() => AndroidCrossfadeConfig.disabled),
        _onNextSong = onNextSong,
        _onTrackAdvanced = onTrackAdvanced,
-       _onTrackError = onTrackError;
+       _onTrackError = onTrackError {
+    _state = PlaybackState.empty(engineType);
+  }
 
   final AndroidPlayerProvider _playerProvider;
   final AndroidAudioSourcesBuilder _sourcesBuilder;
@@ -407,7 +410,8 @@ class AndroidAudioEngine implements AudioEngine {
         if (state == just_audio.ProcessingState.completed) {
           if (_loadedTrack?.atmosEncoded == true) {
             AtmosDiagnostics.record('playback_end', {
-              'codec': 'eac3_joc', 'outcome': 'completed',
+              'codec': 'eac3_joc',
+              'outcome': 'completed',
             });
           }
           onTrackEnded?.call();
@@ -531,8 +535,8 @@ class AndroidAudioEngine implements AudioEngine {
     _sourceFailed = true;
     final orphanedFadePlayer =
         survivor != null && !identical(survivor, _providerPlayer)
-            ? survivor
-            : null;
+        ? survivor
+        : null;
     if (identical(player, _providerPlayer)) _providerPlayer = null;
     final oldSubscriptions = List<StreamSubscription<dynamic>>.of(
       _subscriptions,
@@ -543,9 +547,7 @@ class AndroidAudioEngine implements AudioEngine {
     }
     if (orphanedFadePlayer != null) {
       try {
-        await orphanedFadePlayer.dispose().timeout(
-          const Duration(seconds: 3),
-        );
+        await orphanedFadePlayer.dispose().timeout(const Duration(seconds: 3));
       } catch (error) {
         devLog('[Playback] Crossfade player cleanup failed: $error');
       }
@@ -555,8 +557,9 @@ class AndroidAudioEngine implements AudioEngine {
     // re-attached by _ensurePlayer(), never as a secondary.
     try {
       final retire = _retireStalledPlayer;
-      await (retire == null ? player.dispose() : retire(player))
-          .timeout(const Duration(seconds: 3));
+      await (retire == null ? player.dispose() : retire(player)).timeout(
+        const Duration(seconds: 3),
+      );
     } catch (error) {
       devLog('[Playback] Timed-out Android player retirement failed: $error');
     }
@@ -883,8 +886,7 @@ class AndroidAudioEngine implements AudioEngine {
         return;
       }
       final next = _onNextSong?.call();
-      if (next == null || next.atmosEncoded ||
-          next.id == _loadedTrack?.id) {
+      if (next == null || next.atmosEncoded || next.id == _loadedTrack?.id) {
         // Nothing to crossfade into (end of list / loop-one): let the track
         // end naturally so onTrackEnded handles it.
         _crossfadeArmed = false;

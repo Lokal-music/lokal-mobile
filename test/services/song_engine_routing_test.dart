@@ -34,23 +34,85 @@ void main() {
       }
     });
 
-    test('verified E-AC-3 JOC routes to Android Media3 from every selected engine', () {
-      for (final preferred in AudioEngineType.values) {
+    test(
+      'verified E-AC-3 JOC routes to Android Media3 from every selected engine',
+      () {
+        for (final preferred in AudioEngineType.values.where(
+          (mode) =>
+              mode != AudioEngineType.iosSystem &&
+              mode != AudioEngineType.iosRust,
+        )) {
+          expect(
+            resolveEngineForSong(
+              preferred: preferred,
+              requiresRustDecoder: false,
+              isAtmosJoc: true,
+            ),
+            AudioEngineType.normalAndroid,
+            reason: 'Atmos objects cannot pass through the Rust PCM decoder',
+          );
+        }
+        final song = _song(
+          id: 'joc',
+          fileType: 'E-AC-3 JOC',
+          filePath: '/music/atmos.m4a',
+        ).copyWith(atmosEncoded: true, atmosAvailable: true);
+        expect(song.atmosEncoded, isTrue);
+        expect(song.filePath, '/music/atmos.m4a');
+      },
+    );
+
+    test('iPhone codec fallback never selects an Android output', () {
+      expect(
+        resolveEngineForSong(
+          preferred: AudioEngineType.iosSystem,
+          requiresRustDecoder: true,
+        ),
+        AudioEngineType.iosRust,
+      );
+      expect(
+        resolveEngineForSong(
+          preferred: AudioEngineType.iosSystem,
+          requiresRustDecoder: false,
+          isAtmosJoc: true,
+        ),
+        AudioEngineType.iosSystem,
+      );
+      expect(
+        resolveEngineForSong(
+          preferred: AudioEngineType.iosRust,
+          requiresRustDecoder: false,
+        ),
+        AudioEngineType.iosRust,
+      );
+    });
+
+    test(
+      'iPhone add-on streaming retains its adapter when DSP is selected',
+      () {
+        for (final preferred in [
+          AudioEngineType.iosSystem,
+          AudioEngineType.iosRust,
+        ]) {
+          expect(
+            resolveEngineForSong(
+              preferred: preferred,
+              requiresRustDecoder: true,
+              requiresSystemStreaming: true,
+            ),
+            AudioEngineType.iosSystem,
+          );
+        }
         expect(
           resolveEngineForSong(
-            preferred: preferred,
+            preferred: AudioEngineType.rustOboe,
             requiresRustDecoder: false,
-            isAtmosJoc: true,
+            requiresSystemStreaming: true,
           ),
-          AudioEngineType.normalAndroid,
-          reason: 'Atmos objects cannot pass through the Rust PCM decoder',
+          AudioEngineType.rustOboe,
         );
-      }
-      final song = _song(id: 'joc', fileType: 'E-AC-3 JOC', filePath: '/music/atmos.m4a')
-          .copyWith(atmosEncoded: true, atmosAvailable: true);
-      expect(song.atmosEncoded, isTrue);
-      expect(song.filePath, '/music/atmos.m4a');
-    });
+      },
+    );
 
     test('routes Rust-decoder containers to the shared Rust output', () {
       expect(
@@ -69,10 +131,7 @@ void main() {
         AudioEngineType.dapInternalHighRes,
       ]) {
         expect(
-          resolveEngineForSong(
-            preferred: preferred,
-            requiresRustDecoder: true,
-          ),
+          resolveEngineForSong(preferred: preferred, requiresRustDecoder: true),
           preferred,
         );
       }
@@ -89,10 +148,7 @@ void main() {
         ).requiresRustDecoder,
         isTrue,
       );
-      expect(
-        _song(id: '2', fileType: 'DSD').requiresRustDecoder,
-        isTrue,
-      );
+      expect(_song(id: '2', fileType: 'DSD').requiresRustDecoder, isTrue);
     });
 
     test('covers WavPack DSD and PCM payloads', () {

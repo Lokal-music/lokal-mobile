@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flick/core/constants/app_constants.dart';
 
 import 'package:flick/features/internet_radio/radio_providers.dart';
 import 'package:flick/features/player/screens/full_player_screen.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/player_provider.dart';
+import 'package:flick/widgets/lokal/lokal_player_route.dart';
 
 export 'music_video_surface.dart' show musicVideoEmbedHtml;
 
@@ -34,7 +36,9 @@ Future<void> openMusicVideo(
   // Videos tab Navigator. Pushing on the root ensures the shell's persistent
   // mini-player/footer cannot remain *inside* the video player.
   await musicVideoRouteNavigator(context).push<void>(
-    MaterialPageRoute(
+    LokalPlayerRoute<void>(
+      reduceMotion: () => AppConstants.animationNormal == Duration.zero,
+      settings: const RouteSettings(name: '/music_video'),
       builder: (_) => FullPlayerScreen(
         heroTag: 'music-video:${song.id}',
         videoSong: song,

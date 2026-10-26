@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 BASEDIR=$(dirname "$0")
@@ -10,8 +10,6 @@ BASEDIR=$(cd "$BASEDIR" ; pwd -P)
 NEW_PATH=`echo $PATH | tr ":" "\n" | grep -v "Contents/Developer/" | tr "\n" ":"`
 
 export PATH=${NEW_PATH%?} # remove trailing :
-
-env
 
 # Platform name (macosx, iphoneos, iphonesimulator)
 export CARGOKIT_DARWIN_PLATFORM_NAME=$PLATFORM_NAME
@@ -27,6 +25,11 @@ export CARGOKIT_MANIFEST_DIR=$PODS_TARGET_SRCROOT/$1
 
 # Temporary directory for build artifacts.
 export CARGOKIT_TARGET_TEMP_DIR=$TARGET_TEMP_DIR
+if [[ -n "${LOKAL_IOS_CARGO_CACHE_ROOT:-}" && "$PLATFORM_NAME" == iphone* ]]; then
+  # Keep Cargo fingerprints independent of Xcode's DerivedData identity. SDK
+  # and configuration remain isolated; Cargo separates each target architecture.
+  export CARGOKIT_TARGET_TEMP_DIR="$LOKAL_IOS_CARGO_CACHE_ROOT/$PLATFORM_NAME/$CONFIGURATION"
+fi
 
 # Output directory for final artifacts.
 export CARGOKIT_OUTPUT_DIR=$PODS_CONFIGURATION_BUILD_DIR/$PRODUCT_NAME

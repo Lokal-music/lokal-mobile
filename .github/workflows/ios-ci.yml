@@ -1,0 +1,262 @@
+name: iPhone build and sideload package
+
+on:
+  workflow_dispatch:
+    inputs:
+      live_video_probe:
+        description: 'Observe the public YouTube embed in actual WebKit (network-dependent evidence)'
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'lib/**'
+      - 'rust/**'
+      - 'rust_builder/**'
+      - 'pubspec.*'
+      - 'integration_test/**'
+      - 'tool/ios_*'
+      - 'tool/test_ios_simulator.py'
+      - 'test/native/**'
+      - 'test/fixtures/**'
+      - '.github/workflows/ios-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iphone:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      IPHONEOS_DEPLOYMENT_TARGET: '16.0'
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+      LOKAL_IOS_VIDEO_PROBE: ${{ inputs.live_video_probe || false }}
+      IOS_SIMULATOR_RUNTIME_VERSION: '18.6'
+      IOS_SIMULATOR_DEVICE_TYPE: com.apple.CoreSimulator.SimDeviceType.iPhone-16
+      LOKAL_IOS_CARGO_CACHE_ROOT: ${{ github.workspace }}/.dart_tool/lokal-ios-cargo
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - name: Configure the Apple build
+        run: |
+          xcodebuild -version
+          flutter config --no-enable-swift-package-manager
+          rustup toolchain install 1.98.0 --profile minimal --no-self-update
+          rustup target add --toolchain 1.98.0 aarch64-apple-ios aarch64-apple-ios-sim
+          flutter pub get --enforce-lockfile
+          python3 tool/ios_readiness.py --require-scaffold --require-localizations
+          python3 -m unittest discover -s tool -p test_ios_simulator.py
+          python3 -m unittest discover -s tool -p test_ios_control_runner.py
+      - name: Generate native alternate icons
+        run: |
+          python3 -m venv "$RUNNER_TEMP/lokal-ios-assets"
+          "$RUNNER_TEMP/lokal-ios-assets/bin/pip" install -r tool/requirements-release-art.txt
+          "$RUNNER_TEMP/lokal-ios-assets/bin/python" tool/gen_ios_icons.py
+      - name: Verify the FFmpeg native dependency
+        run: python3 tool/ios_prepare_ffmpeg.py
+      - name: Check application and integration-test compilation
+        run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib integration_test
+      - name: Verify playback ownership and transport contracts
+        run: |
+          node --version
+          flutter test --no-pub test/services/casting/cast_handoff_test.dart test/services/casting/chromecast_backend_test.dart test/services/casting/cast_source_test.dart test/services/external_playback_owner_test.dart test/services/rust_audio_engine_pause_test.dart test/features/music_videos test/features/player/space_video_overlay_test.dart test/features/player/video_space_layout_test.dart test/features/player/immersive_lyrics_stage_test.dart test/services/casting/cast_content_server_test.dart test/features/player/artist_credit_links_test.dart test/services/lyrics_word_timing_test.dart test/services/moving_cover_availability_test.dart test/konnekted/konnekted_discovery_test.dart test/konnekted/library_localization_test.dart test/konnekted/dock_localization_test.dart test/morneye/morneye_test.dart test/morneye/morneye_addons_panel_test.dart
+      - name: Check the native build helper before Xcode
+        working-directory: rust_builder/cargokit/build_tool
+        run: |
+          dart pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/src/builder.dart
+      - name: Restore the matching native build cache
+        id: rust_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .dart_tool/lokal-ios-cargo
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            ~/.cargo/registry/index
+          key: ios-cargo-symbols-v2-${{ runner.os }}-${{ runner.arch }}-xcode26.0.1-rust1.98.0-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml', 'rust/cargokit.yaml', 'rust/**/*.rs', 'rust/vendor/**', 'rust_builder/cargokit/build_tool/lib/**', 'rust_builder/cargokit/*.sh') }}
+      - name: Build the release iPhone app without signing credentials
+        id: device_build
+        run: flutter build ios --release --no-codesign --no-pub --build-number '${{ github.run_number }}' --split-debug-info=build/ios/dart-symbols
+      - name: Inspect and package the engineering IPA
+        id: package
+        run: |
+          python3 tool/ios_package.py build/ios/iphoneos/Runner.app build/ios/ipa/Lokal-unsigned.ipa --dart-symbols build/ios/dart-symbols
+          git archive --format=tar.gz HEAD -o build/ios/ipa/Lokal-source.tar.gz
+      - name: Preserve the unsigned engineering build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Lokal-iPhone-engineering-unsigned-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: |
+            build/ios/ipa/*
+            build/ios/iphoneos/*.dSYM
+          if-no-files-found: error
+          retention-days: 14
+      - name: Boot an iPhone simulator
+        timeout-minutes: 8
+        run: python3 tool/ios_simulator.py
+      - name: Verify the simulator with a minimal Flutter control app
+        id: control
+        timeout-minutes: 16
+        run: |
+          flutter create --platforms=ios --org app.lokal --project-name lokal_control "$RUNNER_TEMP/lokal-control"
+          (
+            cd "$RUNNER_TEMP/lokal-control"
+            if ! flutter build ios --simulator --debug --verbose > "$RUNNER_TEMP/ios-control-build.log" 2>&1; then
+              python3 "$GITHUB_WORKSPACE/tool/ios_build_diagnostics.py" "$RUNNER_TEMP/ios-control-build.log"
+              exit 1
+            fi
+          )
+          python3 tool/ios_control_runner.py "$RUNNER_TEMP/lokal-control/build/ios/iphonesimulator/Runner.app"
+      - name: Preserve simulator control evidence
+        if: always() && env.IOS_SIMULATOR_UDID != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-simulator-control-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-control*
+          if-no-files-found: ignore
+      - name: Build the complete app for iOS simulator
+        id: simulator_build
+        run: |
+          if ! flutter build ios --simulator --debug --no-pub --verbose > "$RUNNER_TEMP/ios-simulator-build.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-simulator-build.log"
+            exit 1
+          fi
+      - name: Capture the actual first launch
+        id: launch
+        run: python3 tool/ios_launch_probe.py
+      - name: Preserve the first-launch evidence before testing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-first-launch-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/lokal-iphone.log
+            ${{ runner.temp }}/lokal-iphone.json
+            ${{ runner.temp }}/lokal-iphone.png
+      - name: Exercise actual startup, FFI and playback
+        id: smoke
+        timeout-minutes: 12
+        env:
+          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-18.6
+        run: |
+          if ! flutter build ios --simulator --debug --no-pub --target integration_test/ios_smoke_test.dart --dart-define=LOKAL_IOS_VIDEO_PROBE="$LOKAL_IOS_VIDEO_PROBE" --dart-define=LOKAL_IOS_DISCOVERY_FIXTURE=lokal-ios-fixture-${{ github.run_id }}-${{ github.run_attempt }} --verbose > "$RUNNER_TEMP/ios-smoke-build.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-build.log"
+            exit 1
+          fi
+          if ! python3 tool/ios_smoke_runner.py > "$RUNNER_TEMP/ios-smoke.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke.log"
+            exit 1
+          fi
+      - name: Preserve iOS 18.6 runtime evidence immediately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-runtime-18.6-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-runtime-18.6/
+          if-no-files-found: ignore
+      - name: Boot the current iOS simulator runtime
+        timeout-minutes: 8
+        env:
+          IOS_SIMULATOR_RUNTIME_VERSION: '26.0'
+        run: |
+          xcrun simctl shutdown "$IOS_SIMULATOR_UDID"
+          python3 tool/ios_simulator.py
+      - name: Exercise the same native app on iOS 26.0
+        id: smoke_current
+        timeout-minutes: 8
+        env:
+          LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-26
+        run: |
+          if ! python3 tool/ios_smoke_runner.py > "$RUNNER_TEMP/ios-smoke-26.log" 2>&1; then
+            python3 tool/ios_build_diagnostics.py "$RUNNER_TEMP/ios-smoke-26.log"
+            exit 1
+          fi
+      - name: Preserve iOS 26.0 runtime evidence immediately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-runtime-26.0-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-runtime-26/
+          if-no-files-found: ignore
+      - name: Preserve dependency locks
+        run: git diff --exit-code -- pubspec.lock rust/Cargo.lock
+      - name: Collect simulator diagnostics
+        if: failure() && env.IOS_SIMULATOR_UDID != ''
+        timeout-minutes: 3
+        run: |
+          xcrun simctl spawn "$IOS_SIMULATOR_UDID" log show --last 5m --info --debug --style compact --predicate 'process == "Runner"' > "$RUNNER_TEMP/ios-simulator-console.log" || true
+          mkdir -p "$RUNNER_TEMP/ios-crash-reports"
+          if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
+            find "$HOME/Library/Logs/DiagnosticReports" -name 'Runner*.ips' -type f -exec cp '{}' "$RUNNER_TEMP/ios-crash-reports/" \;
+          fi
+      - name: Preserve build and runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: iPhone-build-diagnostics-${{ github.run_number }}-attempt${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ios-simulator-build.log
+            ${{ runner.temp }}/ios-smoke.log
+            ${{ runner.temp }}/ios-smoke-build.log
+            ${{ runner.temp }}/ios-smoke-console.log
+            ${{ runner.temp }}/ios-smoke-iphone.png
+            ${{ runner.temp }}/ios-main-player.png
+            ${{ runner.temp }}/ios-runtime-report.json
+            ${{ runner.temp }}/ios-runtime-26/
+            ${{ runner.temp }}/ios-runtime-18.6/
+            ${{ runner.temp }}/ios-smoke-26.log
+            ${{ runner.temp }}/ios-simulator-boot-*/
+            ${{ runner.temp }}/ios-simulator-console.log
+            ${{ runner.temp }}/lokal-iphone.log
+            ${{ runner.temp }}/lokal-iphone.json
+            ${{ runner.temp }}/lokal-iphone-processes.txt
+            ${{ runner.temp }}/lokal-iphone-threads-*.txt
+            ${{ runner.temp }}/ios-smoke-iphone-processes.txt
+            ${{ runner.temp }}/ios-smoke-iphone-threads-*.txt
+            ${{ runner.temp }}/ios-crash-reports/
+            ${{ runner.temp }}/lokal-iphone.png
+          if-no-files-found: ignore
+      - name: Summarize validation gates
+        if: always()
+        env:
+          PACKAGE_RESULT: ${{ steps.package.outcome }}
+          CONTROL_RESULT: ${{ steps.control.outcome }}
+          LAUNCH_RESULT: ${{ steps.launch.outcome }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          CURRENT_SMOKE_RESULT: ${{ steps.smoke_current.outcome }}
+        run: |
+          {
+            printf '## iPhone engineering build\n\n'
+            printf '| Gate | Result |\n| --- | --- |\n'
+            printf '| Minimal Flutter simulator control | %s |\n' "$CONTROL_RESULT"
+            printf '| Device binary/package inspection | %s |\n' "$PACKAGE_RESULT"
+            printf '| Native first launch | %s |\n' "$LAUNCH_RESULT"
+            printf '| Real startup, scanner, QuickJS and playback on iOS 18.6 | %s |\n' "$SMOKE_RESULT"
+            printf '| Same integration checks on iOS 26.0 | %s |\n' "$CURRENT_SMOKE_RESULT"
+            printf '\nAn engineering IPA is not a qualified release. Physical iPhone and Windows installation acceptance remain separate.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save successfully compiled native dependencies
+        if: always() && steps.device_build.outcome == 'success' && steps.simulator_build.outcome == 'success' && steps.rust_cache.outputs.cache-hit != 'true' && steps.rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .dart_tool/lokal-ios-cargo
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            ~/.cargo/registry/index
+          key: ${{ steps.rust_cache.outputs.cache-primary-key }}

@@ -45,7 +45,8 @@ extension AdvanceListOrderL10n on AdvanceListOrder {
   };
 
   String get description => switch (this) {
-    AdvanceListOrder.alphabetical => l10n.advanceToTheNextCategoryAlphabetically,
+    AdvanceListOrder.alphabetical =>
+      l10n.advanceToTheNextCategoryAlphabetically,
     AdvanceListOrder.dateAdded => l10n.advanceToTheNextMostRecently,
     AdvanceListOrder.random => l10n.advanceToARandomCategory,
   };
@@ -79,6 +80,8 @@ extension AudioEngineTypeL10n on AudioEngineType {
     AudioEngineType.rustOboe => l10n.rustViaOboe,
     AudioEngineType.usbDacExperimental => l10n.bitPerfectUsbDac,
     AudioEngineType.dapInternalHighRes => l10n.rustViaOboeHighRes,
+    AudioEngineType.iosSystem => 'iOS system audio',
+    AudioEngineType.iosRust => 'Rust / Core Audio',
   };
 }
 

@@ -1,5 +1,20 @@
 # Build Konnekted2
 
+The iPhone port builds on hosted macOS using Xcode 26.0.1, Flutter 3.47.1 and
+Rust 1.98.0. CI inspects and saves an unsigned release/AOT IPA, checksum, source
+and notices. Build 17 reaches the full app shell and passes real metadata,
+Keychain, QuickJS, pitch/normalization, codec-corpus and mixed-codec queue checks
+on iOS 26.0 and 18.6. Matching
+native and Dart crash symbols are preserved. Build 18 additionally passes real
+Bonjour discovery and its advertised HTTP probe on iOS 18.6; iOS 26 failed to boot
+before that suite could execute. Physical iPhone and Windows installation are
+untested. The branch integrates mobile PRs through #196; see the
+[UI/behavior review and revised widget plan](IOS_POST172_REVIEW.md).
+
+See the [architecture and validation ledger](IOS_PORT.md) and
+[Windows signing/install guide](IOS_SIDELOADING.md). An engineering artifact does
+not establish a qualified iPhone release.
+
 ## Prerequisites
 
 - Flutter 3.47+ / Dart 3.13+ (verified with 3.47.1 / 3.13.1).
@@ -155,3 +170,21 @@ accepts only the exact configured redirect host/path.
    introduce software gain.
 5. Test pause/resume, headset/Bluetooth changes, USB detach, screen-off and
    notification/widget controls.
+
+
+### Real host library persistence check
+
+After building the host Rust library with the prerequisites above, explicitly
+select that library and the locked Isar host binary. For Linux x86_64 with
+`PUB_CACHE` pointing to the populated package cache:
+
+```bash
+LOKAL_NATIVE_LIBRARY="$PWD/rust/target/debug/librust_lib_flick_player.so" \
+LOKAL_ISAR_LIBRARY="$PUB_CACHE/hosted/pub.dev/isar_community_flutter_libs-3.3.2/linux/libisar.so" \
+flutter test --no-pub test/native/library_persistence_test.dart
+```
+
+The test uses real Rust and Isar, with isolated directories/preferences. It
+checks scan/retag/rescan identity and persisted playlist references after a store
+reopen. It does not exercise native Files UI, a separate app process or audio
+hardware. Without both explicit library paths it reports a skip, not acceptance.

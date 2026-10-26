@@ -1643,6 +1643,16 @@ pub fn audio_queue_next_from_http(
 
 /// Pause playback.
 pub fn audio_pause() -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        // Release the global engine mutex before waiting. Synchronous progress
+        // and route queries on the Dart UI isolate must remain non-blocking.
+        let applied = with_audio_engine(|handle| handle.begin_pause_acknowledgement())?;
+        applied
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .map_err(|error| format!("Audio pause was not acknowledged: {error}"))
+    }
+    #[cfg(not(target_os = "ios"))]
     with_audio_engine(|handle| handle.pause())
 }
 

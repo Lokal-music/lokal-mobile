@@ -7,6 +7,8 @@ import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/search/library_download.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -54,31 +56,76 @@ void main() {
     fallbackRoot: p.join(root.path, 'Music'),
     registerFolder: (path, name) async => registered.add(path),
     upsert: (entity) async => upserts.add(entity),
-    tag: (path, song) async { tags.add(path); return tagged; },
+    tag: (path, song) async {
+      tags.add(path);
+      return tagged;
+    },
     cover: (path, song, url) async => covers.add(url),
     indexMedia: (paths) async => indexed.addAll(paths),
     now: () => DateTime(2026, 10, 20),
   );
 
-  test('Atmos download remains byte-identical and retains codec identity', () async {
-    final music = Directory(p.join(root.path, 'Library'))..createSync();
-    final original = await cached.readAsBytes();
-    final joc = prepared().copyWith(
-      fileType: 'E-AC-3 JOC',
-      atmosAvailable: true,
-      atmosEncoded: true,
+  test('iPhone download fallback uses persistent app-owned Music', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    const channel = MethodChannel('plugins.flutter.io/path_provider');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'getApplicationDocumentsDirectory');
+      return p.join(root.path, 'Documents');
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(channel, null);
+      debugDefaultTargetPlatformOverride = null;
+    });
+    final saved = await LibraryDownloader(
+      folders: () async => [],
+      registerFolder: (path, _) async => registered.add(path),
+      upsert: (entity) async => upserts.add(entity),
+      tag: (_, _) async => false,
+      indexMedia: (_) async {},
+    ).save(prepared());
+    final expectedRoot = p.join(
+      root.path,
+      'Documents',
+      'Music',
+      'Lokal Downloads',
     );
-    final saved = await downloader([
-      LibraryDownloadFolder(uri: 'content://music', name: 'Music',
-        path: music.path),
-    ]).save(joc, artwork: 'https://example.com/cover.jpg');
-    expect(saved.path, endsWith('.atmos.m4a'));
-    expect(await File(saved.path).readAsBytes(), original);
-    expect(upserts.single.fileType, 'E-AC-3 JOC');
-    expect(upserts.single.hasLocalEdits, isTrue);
-    expect(tags, isEmpty, reason: 'Tagging must not rewrite JOC MP4 boxes');
-    expect(covers, isEmpty, reason: 'Do not embed artwork into the Atmos container');
+    expect(p.isWithin(expectedRoot, saved.path), true);
+    expect(registered, [expectedRoot]);
+    expect(File(saved.path).readAsBytesSync(), cached.readAsBytesSync());
+    expect(upserts.single.folderUri, expectedRoot);
   });
+
+  test(
+    'Atmos download remains byte-identical and retains codec identity',
+    () async {
+      final music = Directory(p.join(root.path, 'Library'))..createSync();
+      final original = await cached.readAsBytes();
+      final joc = prepared().copyWith(
+        fileType: 'E-AC-3 JOC',
+        atmosAvailable: true,
+        atmosEncoded: true,
+      );
+      final saved = await downloader([
+        LibraryDownloadFolder(
+          uri: 'content://music',
+          name: 'Music',
+          path: music.path,
+        ),
+      ]).save(joc, artwork: 'https://example.com/cover.jpg');
+      expect(saved.path, endsWith('.atmos.m4a'));
+      expect(await File(saved.path).readAsBytes(), original);
+      expect(upserts.single.fileType, 'E-AC-3 JOC');
+      expect(upserts.single.hasLocalEdits, isTrue);
+      expect(tags, isEmpty, reason: 'Tagging must not rewrite JOC MP4 boxes');
+      expect(
+        covers,
+        isEmpty,
+        reason: 'Do not embed artwork into the Atmos container',
+      );
+    },
+  );
 
   test('copies into the first writable library folder and adds it', () async {
     final music = Directory(p.join(root.path, 'Library'))..createSync();

@@ -8,11 +8,11 @@ import 'api/audio_analysis.dart';
 import 'api/audio_api.dart';
 import 'api/logging.dart';
 import 'api/metadata_editor.dart';
+import 'api/morneye_api.dart';
 import 'api/replaygain.dart';
 import 'api/scanner.dart';
 import 'api/simple.dart';
 import 'api/smb_api.dart';
-import 'api/morneye_api.dart';
 import 'api/uac2_api.dart';
 import 'audio/crossfader.dart';
 import 'audio/dsd_engine/dsd.dart';
@@ -83,7 +83,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -983183974;
+  int get rustContentHash => 1051665677;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -101,9 +101,7 @@ abstract class RustLibApi extends BaseApi {
     required String argsJson,
   });
 
-  void crateApiMorneyeApiMorneyeEngineClose({
-    required MorneyeEngine that,
-  });
+  void crateApiMorneyeApiMorneyeEngineClose({required MorneyeEngine that});
 
   Future<String> crateApiMorneyeApiMorneyeEngineInvoke({
     required MorneyeEngine that,
@@ -112,9 +110,7 @@ abstract class RustLibApi extends BaseApi {
     required BigInt timeoutMs,
   });
 
-  bool crateApiMorneyeApiMorneyeEngineIsClosed({
-    required MorneyeEngine that,
-  });
+  bool crateApiMorneyeApiMorneyeEngineIsClosed({required MorneyeEngine that});
 
   List<String> crateApiMorneyeApiMorneyeEngineMethods({
     required MorneyeEngine that,
@@ -388,6 +384,29 @@ abstract class RustLibApi extends BaseApi {
 
   Future<double> crateApiAudioApiLastVolume();
 
+  Uint8List crateApiMorneyeApiMorneyeCipher({
+    required List<int> data,
+    required String algorithm,
+    required String mode,
+    required List<int> key,
+    required List<int> iv,
+    required bool pkcs7,
+    required bool decrypt,
+  });
+
+  Future<String> crateApiMorneyeApiMorneyeMediaInfo({required String path});
+
+  Uint8List crateApiMorneyeApiMorneyeOpen({
+    required List<int> data,
+    required List<int> key,
+  });
+
+  Uint8List crateApiMorneyeApiMorneyeSeal({
+    required List<int> data,
+    required List<int> key,
+    required List<int> nonce,
+  });
+
   Future<ReplayGainTagFields?> crateApiReplaygainReadReplaygainTags({
     required String path,
   });
@@ -465,29 +484,6 @@ abstract class RustLibApi extends BaseApi {
     required String path,
     required String user,
     required String pass,
-  });
-
-  Uint8List crateApiMorneyeApiMorneyeCipher({
-    required List<int> data,
-    required String algorithm,
-    required String mode,
-    required List<int> key,
-    required List<int> iv,
-    required bool pkcs7,
-    required bool decrypt,
-  });
-
-  Future<String> crateApiMorneyeApiMorneyeMediaInfo({required String path});
-
-  Uint8List crateApiMorneyeApiMorneyeOpen({
-    required List<int> data,
-    required List<int> key,
-  });
-
-  Uint8List crateApiMorneyeApiMorneyeSeal({
-    required List<int> data,
-    required List<int> key,
-    required List<int> nonce,
   });
 
   Future<(bool, double, CrossfadeCurve)?>
@@ -638,9 +634,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  void crateApiMorneyeApiMorneyeEngineClose({
-    required MorneyeEngine that,
-  }) {
+  void crateApiMorneyeApiMorneyeEngineClose({required MorneyeEngine that}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -663,10 +657,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   TaskConstMeta get kCrateApiMorneyeApiMorneyeEngineCloseConstMeta =>
-      const TaskConstMeta(
-        debugName: "MorneyeEngine_close",
-        argNames: ["that"],
-      );
+      const TaskConstMeta(debugName: "MorneyeEngine_close", argNames: ["that"]);
 
   @override
   Future<String> crateApiMorneyeApiMorneyeEngineInvoke({
@@ -711,9 +702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  bool crateApiMorneyeApiMorneyeEngineIsClosed({
-    required MorneyeEngine that,
-  }) {
+  bool crateApiMorneyeApiMorneyeEngineIsClosed({required MorneyeEngine that}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -3221,6 +3210,141 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "last_volume", argNames: []);
 
   @override
+  Uint8List crateApiMorneyeApiMorneyeCipher({
+    required List<int> data,
+    required String algorithm,
+    required String mode,
+    required List<int> key,
+    required List<int> iv,
+    required bool pkcs7,
+    required bool decrypt,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(data, serializer);
+          sse_encode_String(algorithm, serializer);
+          sse_encode_String(mode, serializer);
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          sse_encode_list_prim_u_8_loose(iv, serializer);
+          sse_encode_bool(pkcs7, serializer);
+          sse_encode_bool(decrypt, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiMorneyeApiMorneyeCipherConstMeta,
+        argValues: [data, algorithm, mode, key, iv, pkcs7, decrypt],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMorneyeApiMorneyeCipherConstMeta =>
+      const TaskConstMeta(
+        debugName: "morneye_cipher",
+        argNames: [
+          "data",
+          "algorithm",
+          "mode",
+          "key",
+          "iv",
+          "pkcs7",
+          "decrypt",
+        ],
+      );
+
+  @override
+  Future<String> crateApiMorneyeApiMorneyeMediaInfo({required String path}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 90,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiMorneyeApiMorneyeMediaInfoConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMorneyeApiMorneyeMediaInfoConstMeta =>
+      const TaskConstMeta(debugName: "morneye_media_info", argNames: ["path"]);
+
+  @override
+  Uint8List crateApiMorneyeApiMorneyeOpen({
+    required List<int> data,
+    required List<int> key,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(data, serializer);
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 91)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiMorneyeApiMorneyeOpenConstMeta,
+        argValues: [data, key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMorneyeApiMorneyeOpenConstMeta =>
+      const TaskConstMeta(debugName: "morneye_open", argNames: ["data", "key"]);
+
+  @override
+  Uint8List crateApiMorneyeApiMorneyeSeal({
+    required List<int> data,
+    required List<int> key,
+    required List<int> nonce,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(data, serializer);
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          sse_encode_list_prim_u_8_loose(nonce, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 92)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiMorneyeApiMorneyeSealConstMeta,
+        argValues: [data, key, nonce],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMorneyeApiMorneyeSealConstMeta =>
+      const TaskConstMeta(
+        debugName: "morneye_seal",
+        argNames: ["data", "key", "nonce"],
+      );
+
+  @override
   Future<ReplayGainTagFields?> crateApiReplaygainReadReplaygainTags({
     required String path,
   }) {
@@ -3232,7 +3356,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 89,
+            funcId: 93,
             port: port_,
           );
         },
@@ -3263,7 +3387,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 90,
+            funcId: 94,
             port: port_,
           );
         },
@@ -3293,7 +3417,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 91,
+              funcId: 95,
               port: port_,
             );
           },
@@ -3332,7 +3456,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 92,
+              funcId: 96,
               port: port_,
             );
           },
@@ -3371,7 +3495,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 93,
+            funcId: 97,
             port: port_,
           );
         },
@@ -3401,7 +3525,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 94,
+            funcId: 98,
             port: port_,
           );
         },
@@ -3432,7 +3556,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 95,
+            funcId: 99,
             port: port_,
           );
         },
@@ -3464,7 +3588,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 96,
+            funcId: 100,
             port: port_,
           );
         },
@@ -3497,7 +3621,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 97,
+            funcId: 101,
             port: port_,
           );
         },
@@ -3528,7 +3652,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 98,
+            funcId: 102,
             port: port_,
           );
         },
@@ -3565,7 +3689,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 99,
+            funcId: 103,
             port: port_,
           );
         },
@@ -3596,7 +3720,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 100,
+            funcId: 104,
             port: port_,
           );
         },
@@ -3644,7 +3768,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 101,
+              funcId: 105,
               port: port_,
             );
           },
@@ -3701,7 +3825,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 102,
+              funcId: 106,
               port: port_,
             );
           },
@@ -3743,7 +3867,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 103,
+            funcId: 107,
             port: port_,
           );
         },
@@ -3785,7 +3909,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 104,
+            funcId: 108,
             port: port_,
           );
         },
@@ -3804,161 +3928,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     debugName: "smb_read_file",
     argNames: ["host", "port", "share", "path", "user", "pass"],
   );
-
-  @override
-  Uint8List crateApiMorneyeApiMorneyeCipher({
-    required List<int> data,
-    required String algorithm,
-    required String mode,
-    required List<int> key,
-    required List<int> iv,
-    required bool pkcs7,
-    required bool decrypt,
-  }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_prim_u_8_loose(data, serializer);
-          sse_encode_String(algorithm, serializer);
-          sse_encode_String(mode, serializer);
-          sse_encode_list_prim_u_8_loose(key, serializer);
-          sse_encode_list_prim_u_8_loose(iv, serializer);
-          sse_encode_bool(pkcs7, serializer);
-          sse_encode_bool(decrypt, serializer);
-          return pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 105,
-          )!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_prim_u_8_strict,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiMorneyeApiMorneyeCipherConstMeta,
-        argValues: [data, algorithm, mode, key, iv, pkcs7, decrypt],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiMorneyeApiMorneyeCipherConstMeta =>
-      const TaskConstMeta(
-        debugName: "morneye_cipher",
-        argNames: [
-          "data",
-          "algorithm",
-          "mode",
-          "key",
-          "iv",
-          "pkcs7",
-          "decrypt",
-        ],
-      );
-
-  @override
-  Future<String> crateApiMorneyeApiMorneyeMediaInfo({
-    required String path,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(path, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 106,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiMorneyeApiMorneyeMediaInfoConstMeta,
-        argValues: [path],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiMorneyeApiMorneyeMediaInfoConstMeta =>
-      const TaskConstMeta(
-        debugName: "morneye_media_info",
-        argNames: ["path"],
-      );
-
-  @override
-  Uint8List crateApiMorneyeApiMorneyeOpen({
-    required List<int> data,
-    required List<int> key,
-  }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_prim_u_8_loose(data, serializer);
-          sse_encode_list_prim_u_8_loose(key, serializer);
-          return pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 107,
-          )!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_prim_u_8_strict,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiMorneyeApiMorneyeOpenConstMeta,
-        argValues: [data, key],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiMorneyeApiMorneyeOpenConstMeta =>
-      const TaskConstMeta(
-        debugName: "morneye_open",
-        argNames: ["data", "key"],
-      );
-
-  @override
-  Uint8List crateApiMorneyeApiMorneyeSeal({
-    required List<int> data,
-    required List<int> key,
-    required List<int> nonce,
-  }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_prim_u_8_loose(data, serializer);
-          sse_encode_list_prim_u_8_loose(key, serializer);
-          sse_encode_list_prim_u_8_loose(nonce, serializer);
-          return pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 108,
-          )!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_prim_u_8_strict,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiMorneyeApiMorneyeSealConstMeta,
-        argValues: [data, key, nonce],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiMorneyeApiMorneyeSealConstMeta =>
-      const TaskConstMeta(
-        debugName: "morneye_seal",
-        argNames: ["data", "key", "nonce"],
-      );
 
   @override
   Future<(bool, double, CrossfadeCurve)?>
@@ -5105,28 +5074,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AudioFileMetadata dco_decode_audio_file_metadata(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 19)
-      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
+    if (arr.length != 20)
+      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
     return AudioFileMetadata(
       path: dco_decode_String(arr[0]),
       title: dco_decode_opt_String(arr[1]),
       artist: dco_decode_opt_String(arr[2]),
       album: dco_decode_opt_String(arr[3]),
-      durationMs: dco_decode_opt_box_autoadd_u_64(arr[4]),
-      format: dco_decode_String(arr[5]),
-      lastModified: dco_decode_i_64(arr[6]),
-      bitDepth: dco_decode_opt_box_autoadd_u_8(arr[7]),
-      sampleRate: dco_decode_opt_box_autoadd_u_32(arr[8]),
-      bitrate: dco_decode_opt_box_autoadd_u_32(arr[9]),
-      trackNumber: dco_decode_opt_box_autoadd_u_32(arr[10]),
-      discNumber: dco_decode_opt_box_autoadd_u_32(arr[11]),
-      genre: dco_decode_opt_String(arr[12]),
-      year: dco_decode_opt_box_autoadd_u_32(arr[13]),
-      fileSize: dco_decode_u_64(arr[14]),
-      replaygainTrackGain: dco_decode_opt_box_autoadd_f_64(arr[15]),
-      replaygainTrackPeak: dco_decode_opt_box_autoadd_f_64(arr[16]),
-      replaygainAlbumGain: dco_decode_opt_box_autoadd_f_64(arr[17]),
-      replaygainAlbumPeak: dco_decode_opt_box_autoadd_f_64(arr[18]),
+      albumArtist: dco_decode_opt_String(arr[4]),
+      durationMs: dco_decode_opt_box_autoadd_u_64(arr[5]),
+      format: dco_decode_String(arr[6]),
+      lastModified: dco_decode_i_64(arr[7]),
+      bitDepth: dco_decode_opt_box_autoadd_u_8(arr[8]),
+      sampleRate: dco_decode_opt_box_autoadd_u_32(arr[9]),
+      bitrate: dco_decode_opt_box_autoadd_u_32(arr[10]),
+      trackNumber: dco_decode_opt_box_autoadd_u_32(arr[11]),
+      discNumber: dco_decode_opt_box_autoadd_u_32(arr[12]),
+      genre: dco_decode_opt_String(arr[13]),
+      year: dco_decode_opt_box_autoadd_u_32(arr[14]),
+      fileSize: dco_decode_u_64(arr[15]),
+      replaygainTrackGain: dco_decode_opt_box_autoadd_f_64(arr[16]),
+      replaygainTrackPeak: dco_decode_opt_box_autoadd_f_64(arr[17]),
+      replaygainAlbumGain: dco_decode_opt_box_autoadd_f_64(arr[18]),
+      replaygainAlbumPeak: dco_decode_opt_box_autoadd_f_64(arr[19]),
     );
   }
 
@@ -6147,6 +6117,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_title = sse_decode_opt_String(deserializer);
     var var_artist = sse_decode_opt_String(deserializer);
     var var_album = sse_decode_opt_String(deserializer);
+    var var_albumArtist = sse_decode_opt_String(deserializer);
     var var_durationMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_format = sse_decode_String(deserializer);
     var var_lastModified = sse_decode_i_64(deserializer);
@@ -6167,6 +6138,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       title: var_title,
       artist: var_artist,
       album: var_album,
+      albumArtist: var_albumArtist,
       durationMs: var_durationMs,
       format: var_format,
       lastModified: var_lastModified,
@@ -7461,6 +7433,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.title, serializer);
     sse_encode_opt_String(self.artist, serializer);
     sse_encode_opt_String(self.album, serializer);
+    sse_encode_opt_String(self.albumArtist, serializer);
     sse_encode_opt_box_autoadd_u_64(self.durationMs, serializer);
     sse_encode_String(self.format, serializer);
     sse_encode_i_64(self.lastModified, serializer);
@@ -8419,10 +8392,10 @@ class MorneyeEngineImpl extends RustOpaque implements MorneyeEngine {
     timeoutMs: timeoutMs,
   );
 
-  bool isClosed() => RustLib.instance.api
-      .crateApiMorneyeApiMorneyeEngineIsClosed(that: this);
+  bool isClosed() =>
+      RustLib.instance.api.crateApiMorneyeApiMorneyeEngineIsClosed(that: this);
 
   /// The functions the package registered.
-  List<String> methods() => RustLib.instance.api
-      .crateApiMorneyeApiMorneyeEngineMethods(that: this);
+  List<String> methods() =>
+      RustLib.instance.api.crateApiMorneyeApiMorneyeEngineMethods(that: this);
 }

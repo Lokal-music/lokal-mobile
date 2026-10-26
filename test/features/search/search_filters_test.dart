@@ -121,6 +121,8 @@ void main() {
       expect(find.text('Album Artists'), findsNothing);
       expect(find.text('Playlists'), findsNothing);
       expect(c.read(searchFilterProvider), {SearchCategory.albums});
+      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Lyrics'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Lyrics'));
       await tester.pumpAndSettle();
       expect(c.read(searchFilterProvider), {SearchCategory.lyrics});

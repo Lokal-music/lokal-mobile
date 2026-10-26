@@ -59,6 +59,34 @@ class _ArtworkMarkerState extends State<_ArtworkMarker> {
 }
 
 void main() {
+  testWidgets('video Space interpolation freezes during buffering', (tester) async {
+    final video = Media3MusicVideoController();
+    addTearDown(video.dispose);
+    video.update(positionMs: 100, durationMs: 4000,
+        playing: true, buffering: false);
+    await tester.pumpWidget(MaterialApp(home: Center(child: SizedBox(width: 340,
+      child: ImmersiveLyricsSubtitle(lyrics: _lyrics,
+        position: video.positionNotifier, playing: video.advancingNotifier),
+    ))));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 32));
+    video.update(positionMs: 200, durationMs: 4000,
+        playing: true, buffering: true);
+    await tester.pump();
+    final frozen = tester.widget<LyricMotionLine>(find.byType(LyricMotionLine)).position;
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.widget<LyricMotionLine>(find.byType(LyricMotionLine)).position, frozen);
+    expect(frozen, const Duration(milliseconds: 200));
+    video.update(positionMs: 200, durationMs: 4000,
+        playing: true, buffering: false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+    expect(tester.widget<LyricMotionLine>(find.byType(LyricMotionLine)).position,
+        greaterThan(frozen));
+    await tester.pumpWidget(const SizedBox());
+    video.dispose();
+  });
+
   testWidgets('Space changes syllables/lines without remounting album artwork',
       (tester) async {
     final audioClock = ValueNotifier<Duration>(Duration.zero);

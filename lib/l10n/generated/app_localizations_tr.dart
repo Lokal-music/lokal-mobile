@@ -1,30 +1,40 @@
-// ignore_for_file: type=lint
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
-/// Turkish translations (`tr`). Generated from app_tr.arb.
+// ignore_for_file: type=lint
+
+/// The translations for Turkish (`tr`).
 class AppLocalizationsTr extends AppLocalizations {
   AppLocalizationsTr([String locale = 'tr']) : super(locale);
 
   @override
-  String get aLittleRecordOfWhatStayed => 'Tekrar tekrar dinlediklerinden küçük bir hatıra.';
+  String get aLittleRecordOfWhatStayed =>
+      'Tekrar tekrar dinlediklerinden küçük bir hatıra.';
 
   @override
-  String get aNewerFlickBuildIsOn => 'Play Store\'da Lokal\'in daha yeni bir sürümü var.';
+  String get aNewerFlickBuildIsOn =>
+      'Play Store\'da Lokal\'in daha yeni bir sürümü var.';
 
   @override
-  String get aPlaylistWithThisNameAlready => 'Bu adda bir çalma listesi zaten var.';
+  String get aPlaylistWithThisNameAlready =>
+      'Bu adda bir çalma listesi zaten var.';
 
   @override
-  String get aSmoothContinuousWaveAcrossFrequencies => 'Frekanslar boyunca uzanan pürüzsüz, kesintisiz bir dalga';
+  String get aSmoothContinuousWaveAcrossFrequencies =>
+      'Frekanslar boyunca uzanan pürüzsüz, kesintisiz bir dalga';
 
   @override
   String get aSongWithALongTitle => 'Önizleme için uzun başlıklı bir şarkı';
 
   @override
-  String get aTighterMixOfFavoritesAnd => 'Favorilerin ve dönüp dolaşıp dinlediğin şarkılardan daha seçkin bir karışım.';
+  String get aTighterMixOfFavoritesAnd =>
+      'Favorilerin ve dönüp dolaşıp dinlediğin şarkılardan daha seçkin bir karışım.';
 
   @override
-  String get aWeekAndCountingYourDedication => 'Bir haftayı geride bıraktın. İstikrarın ortada.';
+  String get aWeekAndCountingYourDedication =>
+      'Bir haftayı geride bıraktın. İstikrarın ortada.';
 
   @override
   String get aaudio => 'AAudio';
@@ -33,7 +43,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get aaudioAndroid81 => 'AAudio (Android 8.1+)';
 
   @override
-  String get aaudioWithOpenslEsFallbackDefault => 'OpenSL ES yedekli AAudio (varsayılan)';
+  String get aaudioWithOpenslEsFallbackDefault =>
+      'OpenSL ES yedekli AAudio (varsayılan)';
 
   @override
   String get about => 'Hakkında';
@@ -52,7 +63,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String achieved(Object arg1) {
-    return '' + arg1.toString() + ' başarısı kazanıldı';
+    return '$arg1 başarısı kazanıldı';
   }
 
   @override
@@ -66,7 +77,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String activeBands(Object activeCount) {
-    return '' + activeCount.toString() + ' etkin bant';
+    return '$activeCount etkin bant';
   }
 
   @override
@@ -97,10 +108,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addMusicFoldersInSettings => 'Ayarlardan müzik klasörleri ekle';
 
   @override
-  String get addMusicWithAlbumTagsTo => 'Albümleri burada görmek için albüm bilgisi içeren müzikler ekle';
+  String get addMusicWithAlbumTagsTo =>
+      'Albümleri burada görmek için albüm bilgisi içeren müzikler ekle';
 
   @override
-  String get addMusicWithArtistTagsTo => 'Sanatçıları burada görmek için sanatçı bilgisi içeren müzikler ekle';
+  String get addMusicWithArtistTagsTo =>
+      'Sanatçıları burada görmek için sanatçı bilgisi içeren müzikler ekle';
 
   @override
   String get addServer => 'Sunucu ekle';
@@ -109,16 +122,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addSongsFromThePlayerMenu => 'Oynatıcı menüsünden şarkı ekle';
 
   @override
-  String get addSongsFromThePlayerOr => 'Oynatıcıdan veya şarkı seçenekleri menüsünden şarkı ekle.';
+  String get addSongsFromThePlayerOr =>
+      'Oynatıcıdan veya şarkı seçenekleri menüsünden şarkı ekle.';
 
   @override
   String addSongsToPlaylist(Object arg1) {
-    return '' + arg1.toString() + ' şarkıyı çalma listesine ekle';
+    return '$arg1 şarkıyı çalma listesine ekle';
   }
 
   @override
   String addSongsToPlaylist2(Object arg1) {
-    return '' + arg1.toString() + ' şarkıyı çalma listesine ekle';
+    return '$arg1 şarkıyı çalma listesine ekle';
   }
 
   @override
@@ -141,37 +155,43 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String addedSongsTo(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' şarkı "' + '' + arg2.toString() + '" listesine eklendi';
+    return '$arg1 şarkı \"$arg2\" listesine eklendi';
   }
 
   @override
   String addedSongsTo2(Object arg1, Object playlistName) {
-    return '' + arg1.toString() + ' şarkı ' + '' + playlistName.toString() + ' listesine eklendi';
+    return '$arg1 şarkı $playlistName listesine eklendi';
   }
 
   @override
   String addedSongsToFavorites(Object arg1) {
-    return '' + arg1.toString() + ' şarkı favorilere eklendi';
+    return '$arg1 şarkı favorilere eklendi';
   }
 
   @override
   String addedSongsToFavorites3(Object arg1) {
-    return '' + arg1.toString() + ' şarkı favorilere eklendi';
+    return '$arg1 şarkı favorilere eklendi';
   }
 
   @override
   String addedSongsToQueue(int count) {
-    return (count == 1 ? 'Sıraya eklendi' : '' + count.toString() + ' şarkı sıraya eklendi');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı sıraya eklendi',
+      one: 'Sıraya eklendi',
+    );
+    return '$_temp0';
   }
 
   @override
   String addedTo(Object arg1) {
-    return '' + arg1.toString() + ' konumuna eklendi';
+    return '$arg1 konumuna eklendi';
   }
 
   @override
   String addedTo2(Object arg1) {
-    return '"' + '' + arg1.toString() + '" listesine eklendi';
+    return '\"$arg1\" listesine eklendi';
   }
 
   @override
@@ -179,17 +199,20 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String addedToFavorites2(Object arg1) {
-    return '"' + '' + arg1.toString() + '" favorilere eklendi';
+    return '\"$arg1\" favorilere eklendi';
   }
 
   @override
-  String get addsPreDriveAndCatchesPeaks => 'Ön yükseltme uygular ve çıkış tavanına ulaşan tepe seviyelerini sınırlar.';
+  String get addsPreDriveAndCatchesPeaks =>
+      'Ön yükseltme uygular ve çıkış tavanına ulaşan tepe seviyelerini sınırlar.';
 
   @override
-  String get adjustMetadataTextSizeInArtwork => 'Albüm kapağı kartı modunda parça bilgisi metninin boyutunu ayarla';
+  String get adjustMetadataTextSizeInArtwork =>
+      'Albüm kapağı kartı modunda parça bilgisi metninin boyutunu ayarla';
 
   @override
-  String get adjustMetadataTextSizeInImmersive => 'Sürükleyici modda parça bilgisi metninin boyutunu ayarla';
+  String get adjustMetadataTextSizeInImmersive =>
+      'Sürükleyici modda parça bilgisi metninin boyutunu ayarla';
 
   @override
   String get adjustTheMiniPlayerSurface => 'Mini oynatıcının görünümünü ayarla';
@@ -198,10 +221,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get advanceToARandomCategory => 'Rastgele bir kategoriye geç';
 
   @override
-  String get advanceToTheNextCategoryAlphabetically => 'Alfabetik sıradaki kategoriye geç';
+  String get advanceToTheNextCategoryAlphabetically =>
+      'Alfabetik sıradaki kategoriye geç';
 
   @override
-  String get advanceToTheNextMostRecently => 'En son eklenen bir sonraki kategoriye geç';
+  String get advanceToTheNextMostRecently =>
+      'En son eklenen bir sonraki kategoriye geç';
 
   @override
   String get advanced => 'Gelişmiş';
@@ -213,7 +238,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get afterHours => 'Gece Saatleri';
 
   @override
-  String get afterScanningMatchFilesWithMissing => 'Taramadan sonra eksik etiketli dosyaları Apple Music ile eşleştir. Yalnızca güvenilir eşleşmeler otomatik uygulanır.';
+  String get afterScanningMatchFilesWithMissing =>
+      'Taramadan sonra eksik etiketli dosyaları Apple Music ile eşleştir. Yalnızca güvenilir eşleşmeler otomatik uygulanır.';
 
   @override
   String get air => 'Ferahlık';
@@ -223,7 +249,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String alacBit(Object arg1) {
-    return 'ALAC ' + '' + arg1.toString() + ' bit';
+    return 'ALAC $arg1 bit';
   }
 
   @override
@@ -264,12 +290,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String albums2(Object arg1) {
-    return '' + arg1.toString() + ' albüm';
+    return '$arg1 albüm';
   }
 
   @override
   String albums3(Object _totalAlbums) {
-    return '' + _totalAlbums.toString() + ' albüm';
+    return '$_totalAlbums albüm';
   }
 
   @override
@@ -277,7 +303,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String albumsSongs(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' albüm • ' + '' + arg2.toString() + ' şarkı';
+    return '$arg1 albüm • $arg2 şarkı';
   }
 
   @override
@@ -299,7 +325,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get allPass => 'Tüm Geçiren';
 
   @override
-  String get allResultsAreHiddenByActive => 'Etkin filtreler nedeniyle tüm sonuçlar gizli.';
+  String get allResultsAreHiddenByActive =>
+      'Etkin filtreler nedeniyle tüm sonuçlar gizli.';
 
   @override
   String get allSongs => 'Tüm şarkılar';
@@ -314,11 +341,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get alphabetical => 'Alfabetik';
 
   @override
-  String get alsoRespectsYourSystemTextSize => 'Sisteminin yazı tipi boyutuna da uyar';
+  String get alsoRespectsYourSystemTextSize =>
+      'Sisteminin yazı tipi boyutuna da uyar';
 
   @override
   String alt(Object arg1) {
-    return 'Alt ' + '' + arg1.toString();
+    return 'Alt $arg1';
   }
 
   @override
@@ -329,7 +357,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String andMoreInRotation(Object arg1) {
-    return '' + arg1.toString() + ' ve dönüşümlü çalınan diğerleri';
+    return '$arg1 ve dönüşümlü çalınan diğerleri';
   }
 
   @override
@@ -339,16 +367,19 @@ class AppLocalizationsTr extends AppLocalizations {
   String get androidAudioApi => 'Android Ses API\'si';
 
   @override
-  String get androidBlockedWritingToThisFile => 'Android bu dosyaya yazılmasını engelledi. Düzenleme izni vermek için klasörü Ayarlar\'dan kaldırıp yeniden ekle, ardından tekrar dene.';
+  String get androidBlockedWritingToThisFile =>
+      'Android bu dosyaya yazılmasını engelledi. Düzenleme izni vermek için klasörü Ayarlar\'dan kaldırıp yeniden ekle, ardından tekrar dene.';
 
   @override
-  String get androidDeveloperOptionsTheReliableWay => 'Android Geliştirici Seçenekleri — kodek değiştirmek için güvenilir yöntem (uygulama içinden zorlamak, standart Android\'de engellenen gizli bir sistem API\'sini kullanır)';
+  String get androidDeveloperOptionsTheReliableWay =>
+      'Android Geliştirici Seçenekleri — kodek değiştirmek için güvenilir yöntem (uygulama içinden zorlamak, standart Android\'de engellenen gizli bir sistem API\'sini kullanır)';
 
   @override
   String get androidDockRoute => 'Android bağlantı istasyonu çıkışı';
 
   @override
-  String get androidManagedRustPlaybackPathUsing => 'Yerel Oboe altyapısını kullanan, Android tarafından yönetilen Rust oynatma yolu.';
+  String get androidManagedRustPlaybackPathUsing =>
+      'Yerel Oboe altyapısını kullanan, Android tarafından yönetilen Rust oynatma yolu.';
 
   @override
   String get androidUsbRoute => 'Android USB çıkışı';
@@ -372,11 +403,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get appleMusicDataUpdated => 'Apple Music verileri güncellendi';
 
   @override
-  String get appleMusicLookupFailedCheckYour => 'Apple Music araması başarısız oldu. Bağlantını kontrol et.';
+  String get appleMusicLookupFailedCheckYour =>
+      'Apple Music araması başarısız oldu. Bağlantını kontrol et.';
 
   @override
   String appliedAutoeqFor(Object arg1) {
-    return '' + arg1.toString() + ' için AutoEQ uygulandı';
+    return '$arg1 için AutoEQ uygulandı';
   }
 
   @override
@@ -384,7 +416,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String apply2(Object arg1) {
-    return '' + arg1.toString() + ' uygula';
+    return '$arg1 uygula';
   }
 
   @override
@@ -392,7 +424,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String applyTo(int count) {
-    return (count == 1 ? '' + count.toString() + ' şarkıya uygula' : '' + count.toString() + ' şarkıya uygula');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkıya uygula',
+      one: '$count şarkıya uygula',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -408,13 +446,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get aptxHd => 'aptX HD';
 
   @override
-  String get areYouSureYouWantTo => 'Bu çalma listesini silmek istediğinden emin misin?';
+  String get areYouSureYouWantTo =>
+      'Bu çalma listesini silmek istediğinden emin misin?';
 
   @override
-  String get areYouSureYouWantTo2 => 'Tüm dinleme geçmişini silmek istediğinden emin misin? Bu işlem geri alınamaz.';
+  String get areYouSureYouWantTo2 =>
+      'Tüm dinleme geçmişini silmek istediğinden emin misin? Bu işlem geri alınamaz.';
 
   @override
-  String get areYouSureYouWantTo3 => 'Tüm UAC2 tercihlerini sıfırlamak istediğinden emin misin? Bu işlem geri alınamaz.';
+  String get areYouSureYouWantTo3 =>
+      'Tüm UAC2 tercihlerini sıfırlamak istediğinden emin misin? Bu işlem geri alınamaz.';
 
   @override
   String get artist => 'Sanatçı';
@@ -427,7 +468,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String artistUnit(int count) {
-    return (count == 1 ? 'sanatçı' : 'sanatçı');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'sanatçı',
+      one: 'sanatçı',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -435,7 +482,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String artists2(Object arg1) {
-    return '' + arg1.toString() + ' sanatçı';
+    return '$arg1 sanatçı';
   }
 
   @override
@@ -464,7 +511,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String atKhzBit(Object arg1, Object arg2) {
-    return ' ' + '' + arg1.toString() + ' kHz/' + '' + arg2.toString() + ' bit hızında';
+    return ' $arg1 kHz/$arg2 bit hızında';
   }
 
   @override
@@ -495,10 +542,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get autoAdvance => 'Otomatik ilerleme';
 
   @override
-  String get autoBeMsbDefaultOnlyChange => 'Otomatik — varsayılan BE-MSB; yalnızca yerel DSD\'de cızırtı varsa değiştir';
+  String get autoBeMsbDefaultOnlyChange =>
+      'Otomatik — varsayılan BE-MSB; yalnızca yerel DSD\'de cızırtı varsa değiştir';
 
   @override
-  String get autoBitPerfectForUsbDacs => 'USB DAC\'ler için otomatik bit-perfect';
+  String get autoBitPerfectForUsbDacs =>
+      'USB DAC\'ler için otomatik bit-perfect';
 
   @override
   String get autoFill => 'Otomatik doldur';
@@ -510,16 +559,19 @@ class AppLocalizationsTr extends AppLocalizations {
   String get autoIdentifyUntaggedAlbums => 'Etiketsiz albümleri otomatik tanı';
 
   @override
-  String get autoNativeDsdOnDapsDop => 'Otomatik — DAP\'lerde yerel DSD, USB DAC\'lerde DoP, diğer durumlarda PCM';
+  String get autoNativeDsdOnDapsDop =>
+      'Otomatik — DAP\'lerde yerel DSD, USB DAC\'lerde DoP, diğer durumlarda PCM';
 
   @override
   String get autoReconnect => 'Otomatik yeniden bağlan';
 
   @override
-  String get autoShowFullViewAfterInactivity => 'Hareketsizlikten sonra tam görünümü otomatik göster';
+  String get autoShowFullViewAfterInactivity =>
+      'Hareketsizlikten sonra tam görünümü otomatik göster';
 
   @override
-  String get autoU8ByteInterleavedRecommended => 'Otomatik — U8 bayt iç içe geçirme (önerilen)';
+  String get autoU8ByteInterleavedRecommended =>
+      'Otomatik — U8 bayt iç içe geçirme (önerilen)';
 
   @override
   String get autoeqHeadphones => 'AutoEQ kulaklıklar';
@@ -535,7 +587,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String b(Object arg1) {
-    return 'B' + '' + arg1.toString();
+    return 'B$arg1';
   }
 
   @override
@@ -564,11 +616,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String balance2(Object arg1) {
-    return 'Denge ' + '' + arg1.toString();
+    return 'Denge $arg1';
   }
 
   @override
-  String get balanceTempoDampFilterDelaysSize => 'Denge, tempo, sönümleme, filtre, gecikmeler, boyut, karışım ve ek genişlik ayarları.';
+  String get balanceTempoDampFilterDelaysSize =>
+      'Denge, tempo, sönümleme, filtre, gecikmeler, boyut, karışım ve ek genişlik ayarları.';
 
   @override
   String get balancedQualityAndStability => 'Dengeli kalite ve kararlılık';
@@ -587,32 +640,32 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String bandU2022(Object arg1, Object arg2) {
-    return 'Bant ' + '' + arg1.toString() + '  •  ' + '' + arg2.toString();
+    return 'Bant $arg1  •  $arg2';
   }
 
   @override
   String bands(Object arg1) {
-    return '' + arg1.toString() + '/31 bant';
+    return '$arg1/31 bant';
   }
 
   @override
   String bandsActive(Object activeCount, Object arg1) {
-    return '' + activeCount.toString() + '/' + '' + arg1.toString() + ' bant etkin';
+    return '$activeCount/$arg1 bant etkin';
   }
 
   @override
   String bandsAdjusted(Object adjustedBands) {
-    return '' + adjustedBands.toString() + ' bant ayarlandı';
+    return '$adjustedBands bant ayarlandı';
   }
 
   @override
   String bandsAdjusted2(Object adjustedCount, Object arg1) {
-    return '' + adjustedCount.toString() + '/' + '' + arg1.toString() + ' bant ayarlandı';
+    return '$adjustedCount/$arg1 bant ayarlandı';
   }
 
   @override
   String bandsPreampDb(Object arg1, Object arg2, Object arg3) {
-    return '' + arg1.toString() + ' bant · ön yükseltme ' + '' + arg2.toString() + ' dB · ' + '' + arg3.toString();
+    return '$arg1 bant · ön yükseltme $arg2 dB · $arg3';
   }
 
   @override
@@ -629,30 +682,35 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String battery(Object battery) {
-    return 'Pil %' + '' + battery.toString();
+    return 'Pil %$battery';
   }
 
   @override
-  String get beLsbBigEndianSubslotLsb => 'BE-LSB — büyük sonlu alt yuva, önce LSB';
+  String get beLsbBigEndianSubslotLsb =>
+      'BE-LSB — büyük sonlu alt yuva, önce LSB';
 
   @override
-  String get beMsbBigEndianSubslotMsb => 'BE-MSB — büyük sonlu alt yuva, önce MSB (varsayılan)';
+  String get beMsbBigEndianSubslotMsb =>
+      'BE-MSB — büyük sonlu alt yuva, önce MSB (varsayılan)';
 
   @override
-  String get beMsbPackingTheDefaultWire => 'BE-MSB paketleme — varsayılan aktarım düzeni';
+  String get beMsbPackingTheDefaultWire =>
+      'BE-MSB paketleme — varsayılan aktarım düzeni';
 
   @override
   String get besideTheSong => 'Şarkının yanında';
 
   @override
-  String get bigEndian32BitSubslotMsb => 'Büyük sonlu 32 bit alt yuva, önce MSB bitleri';
+  String get bigEndian32BitSubslotMsb =>
+      'Büyük sonlu 32 bit alt yuva, önce MSB bitleri';
 
   @override
-  String get bigEndianSubslotLsbFirstBit => 'Büyük sonlu alt yuva, önce LSB (ters çevrilmiş) bitleri';
+  String get bigEndianSubslotLsbFirstBit =>
+      'Büyük sonlu alt yuva, önce LSB (ters çevrilmiş) bitleri';
 
   @override
   String bit(Object depth) {
-    return '' + depth.toString() + 'bit';
+    return '${depth}bit';
   }
 
   @override
@@ -677,28 +735,32 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bitPerfectDapInternal => 'Bit-perfect (DAP dahili)';
 
   @override
-  String get bitPerfectDapInternalDisabledSoftware => 'Bit-perfect (DAP dahili) kapalı — yazılım efektleri etkin.';
+  String get bitPerfectDapInternalDisabledSoftware =>
+      'Bit-perfect (DAP dahili) kapalı — yazılım efektleri etkin.';
 
   @override
-  String get bitPerfectDapInternalEnabledAll => 'Bit-perfect (DAP dahili) açık — tüm DSP işlemleri atlanıyor.';
+  String get bitPerfectDapInternalEnabledAll =>
+      'Bit-perfect (DAP dahili) açık — tüm DSP işlemleri atlanıyor.';
 
   @override
-  String get bitPerfectEnabledParametricEqIs => 'Bit-perfect açık — doğrudan USB yolunda parametrik EQ devre dışı. Oynatma değişikliklerini uygulamak için uygulamayı yeniden başlat.';
+  String get bitPerfectEnabledParametricEqIs =>
+      'Bit-perfect açık — doğrudan USB yolunda parametrik EQ devre dışı. Oynatma değişikliklerini uygulamak için uygulamayı yeniden başlat.';
 
   @override
   String get bitPerfectUsbDac => 'Bit-perfect (USB DAC)';
 
   @override
-  String get bitPerfectUsbDacCouldNot => 'Bit-perfect (USB DAC) etkinleştirilemedi. Nedeni için USB tanılamasını kontrol et.';
+  String get bitPerfectUsbDacCouldNot =>
+      'Bit-perfect (USB DAC) etkinleştirilemedi. Nedeni için USB tanılamasını kontrol et.';
 
   @override
   String bitPerfectUsbDacCouldNot2(Object arg1) {
-    return '' + arg1.toString() + ' için bit-perfect (USB DAC) etkinleştirilemedi. USB tanılamasını kontrol et.';
+    return '$arg1 için bit-perfect (USB DAC) etkinleştirilemedi. USB tanılamasını kontrol et.';
   }
 
   @override
   String bitPerfectUsbDacEnabledFor(Object arg1) {
-    return '' + arg1.toString() + ' için bit-perfect (USB DAC) etkin.';
+    return '$arg1 için bit-perfect (USB DAC) etkin.';
   }
 
   @override
@@ -708,10 +770,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bitSubslotsLlRrPer => '16 bit alt yuvalar: kare başına LL|RR';
 
   @override
-  String get bitSubslotsLlllRrrrPer => '32 bit alt yuvalar: kare başına LLLL|RRRR (eski yöntem)';
+  String get bitSubslotsLlllRrrrPer =>
+      '32 bit alt yuvalar: kare başına LLLL|RRRR (eski yöntem)';
 
   @override
-  String get bitrateAdjustsToSignalQuality => 'Bit hızı sinyal kalitesine göre ayarlanır';
+  String get bitrateAdjustsToSignalQuality =>
+      'Bit hızı sinyal kalitesine göre ayarlanır';
 
   @override
   String get blocked => 'Engellendi';
@@ -729,13 +793,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bluetoothOutput => 'Bluetooth ses çıkışı';
 
   @override
-  String get boldSaturatedColorsFromAlbumArt => 'Albüm kapağından canlı ve doygun renkler.';
+  String get boldSaturatedColorsFromAlbumArt =>
+      'Albüm kapağından canlı ve doygun renkler.';
 
   @override
   String get border => 'Kenarlık';
 
   @override
-  String get bothBitPerfectOptionsAreOff => 'Bu DAP\'te her iki bit-perfect seçeneği de kapalı olduğundan standart motor kullanılamıyor. Rust üzerinden Oboe veya eşzamanlı USB\'yi yine de kullanabilirsin.';
+  String get bothBitPerfectOptionsAreOff =>
+      'Bu DAP\'te her iki bit-perfect seçeneği de kapalı olduğundan standart motor kullanılamıyor. Rust üzerinden Oboe veya eşzamanlı USB\'yi yine de kullanabilirsin.';
 
   @override
   String get bottom => 'Alt';
@@ -744,20 +810,22 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bouncy => 'Esnek';
 
   @override
-  String get browseByArtworkOpenAnyAlbum => 'Kapaklara göz at, istediğin albümü aç ve doğrudan şarkı listesine geç.';
+  String get browseByArtworkOpenAnyAlbum =>
+      'Kapaklara göz at, istediğin albümü aç ve doğrudan şarkı listesine geç.';
 
   @override
   String get browseYourArtistLibrary => 'Sanatçı kitaplığına göz at';
 
   @override
-  String get browseYourArtistsExploreTheirDiscographies => 'Sanatçılarına göz at, diskografilerini keşfet ve şarkılarını çal.';
+  String get browseYourArtistsExploreTheirDiscographies =>
+      'Sanatçılarına göz at, diskografilerini keşfet ve şarkılarını çal.';
 
   @override
   String get buffer => 'Arabellek';
 
   @override
   String build(Object kAppVersion, Object kAppBuild) {
-    return '' + kAppVersion.toString() + ' (derleme ' + '' + kAppBuild.toString() + ')';
+    return '$kAppVersion (derleme $kAppBuild)';
   }
 
   @override
@@ -768,11 +836,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String by(Object arg1, Object arg2) {
-    return '' + arg2.toString() + ' sanatçısından "' + '' + arg1.toString() + '"';
+    return '$arg2 sanatçısından \"$arg1\"';
   }
 
   @override
-  String get bypassAllDspEqDynamicsCrossfade => 'Yerel DAP\'in dahili yüksek çözünürlüklü yolunda tüm DSP işlemlerini (EQ, dinamikler, çapraz geçiş, hız) atla. Yazılım efektlerini kullanmak için devre dışı bırak. Bit-perfect (USB DAC) kapatılırsa bu da kapanır.';
+  String get bypassAllDspEqDynamicsCrossfade =>
+      'Yerel DAP\'in dahili yüksek çözünürlüklü yolunda tüm DSP işlemlerini (EQ, dinamikler, çapraz geçiş, hız) atla. Yazılım efektlerini kullanmak için devre dışı bırak. Bit-perfect (USB DAC) kapatılırsa bu da kapanır.';
 
   @override
   String get byteInterleavedLrlrStream => 'Bayt iç içe geçirmeli: LRLR akışı';
@@ -784,14 +853,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get camera => 'Kamera';
 
   @override
-  String get cameraAccessIsNeededYouCan => 'Kamera erişimi gerekli. Android ayarlarından izin verebilirsin.';
+  String get cameraAccessIsNeededYouCan =>
+      'Kamera erişimi gerekli. Android ayarlarından izin verebilirsin.';
 
   @override
   String get cancel => 'İptal';
 
   @override
   String capMs(Object arg1) {
-    return 'sınır ' + '' + arg1.toString() + ' ms';
+    return 'sınır $arg1 ms';
   }
 
   @override
@@ -814,12 +884,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String castingTo(Object deviceName) {
-    return '' + deviceName.toString() + ' cihazına yayınlanıyor';
+    return '$deviceName cihazına yayınlanıyor';
   }
 
   @override
   String castingTo2(Object arg1) {
-    return '' + arg1.toString() + ' cihazına yayınlanıyor';
+    return '$arg1 cihazına yayınlanıyor';
   }
 
   @override
@@ -832,44 +902,48 @@ class AppLocalizationsTr extends AppLocalizations {
   String get center => 'Orta';
 
   @override
-  String get centeredWidensToFitYourControls => 'Ortalanmış; denetimlerine uyacak şekilde genişler';
+  String get centeredWidensToFitYourControls =>
+      'Ortalanmış; denetimlerine uyacak şekilde genişler';
 
   @override
   String ch(Object channels) {
-    return '' + channels.toString() + ' kn';
+    return '$channels kn';
   }
 
   @override
   String ch2(Object ch) {
-    return '' + ch.toString() + ' kn';
+    return '$ch kn';
   }
 
   @override
   String ch3(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' / ' + '' + arg2.toString() + ' kn';
+    return '$arg1 / $arg2 kn';
   }
 
   @override
-  String get changingSampleRateBitDepthOr => 'Örnekleme hızını, bit derinliğini veya kanal işlenişini değiştirmek şarkıların yeniden örneklenmesine yol açabilir; bazı cihazlarda oynatma kalitesini, ses perdesini, hızı ya da kararlılığı etkileyebilir.';
+  String get changingSampleRateBitDepthOr =>
+      'Örnekleme hızını, bit derinliğini veya kanal işlenişini değiştirmek şarkıların yeniden örneklenmesine yol açabilir; bazı cihazlarda oynatma kalitesini, ses perdesini, hızı ya da kararlılığı etkileyebilir.';
 
   @override
   String get channels => 'Kanallar';
 
   @override
   String channels2(Object arg1) {
-    return '' + arg1.toString() + ' kanal';
+    return '$arg1 kanal';
   }
 
   @override
   String channels3(Object ch) {
-    return '' + ch.toString() + ' kanal';
+    return '$ch kanal';
   }
 
   @override
-  String get checkTheVersionsYouWantTo => 'Tutmak istediğin sürümleri seç. Seçilmeyenler kitaplığından kaldırılacak. En az bir sürüm kalmalı.';
+  String get checkTheVersionsYouWantTo =>
+      'Tutmak istediğin sürümleri seç. Seçilmeyenler kitaplığından kaldırılacak. En az bir sürüm kalmalı.';
 
   @override
-  String get checkVersionsToKeepUncheckedWill => 'Saklanacak sürümleri işaretle; diğerleri kaldırılacak';
+  String get checkVersionsToKeepUncheckedWill =>
+      'Saklanacak sürümleri işaretle; diğerleri kaldırılacak';
 
   @override
   String get chooseAction => 'İşlem seç';
@@ -887,7 +961,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get chromecast => 'Chromecast';
 
   @override
-  String get circularDotsRadiusFollowsAmplitude => 'Dairesel noktalar — yarıçap genliği izler';
+  String get circularDotsRadiusFollowsAmplitude =>
+      'Dairesel noktalar — yarıçap genliği izler';
 
   @override
   String get cityBeats => 'Şehir Ritimleri';
@@ -896,7 +971,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get claimedByFlick => 'Lokal tarafından sahiplenildi';
 
   @override
-  String get cleanStraightLineWithPrecisionScrubbing => 'Hassas konumlandırma sağlayan, sade ve düz bir çizgi.';
+  String get cleanStraightLineWithPrecisionScrubbing =>
+      'Hassas konumlandırma sağlayan, sade ve düz bir çizgi.';
 
   @override
   String get clear => 'Temizle';
@@ -930,14 +1006,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String codecApplied(Object arg1) {
-    return 'Kodek uygulandı: ' + '' + arg1.toString();
+    return 'Kodek uygulandı: $arg1';
   }
 
   @override
   String get codecControl => 'Kodek denetimi';
 
   @override
-  String get codecForcingUnavailableOnThisDevice => 'Bu cihazda kodek zorlaması kullanılamıyor — Geliştirici Seçenekleri → Bluetooth Ses Kodeği bölümünden ayarla.';
+  String get codecForcingUnavailableOnThisDevice =>
+      'Bu cihazda kodek zorlaması kullanılamıyor — Geliştirici Seçenekleri → Bluetooth Ses Kodeği bölümünden ayarla.';
 
   @override
   String get codecInfo => 'Kodek bilgisi';
@@ -979,7 +1056,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get connectAMusicServer => 'Müzik sunucusuna bağlan';
 
   @override
-  String get connectASubsonicJellyfinWebdavUpnp => 'Uzaktaki müzik kitaplığını dinlemek için Subsonic, Jellyfin, WebDAV, UPnP veya Tidal sunucusuna bağlan.';
+  String get connectASubsonicJellyfinWebdavUpnp =>
+      'Uzaktaki müzik kitaplığını dinlemek için Subsonic, Jellyfin, WebDAV, UPnP veya Tidal sunucusuna bağlan.';
 
   @override
   String get connectAUsbDacOrAudio => 'USB DAC veya ses arabirimi bağla';
@@ -988,13 +1066,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get connectListenbrainz => 'ListenBrainz\'e bağlan';
 
   @override
-  String get connectToScrobbleYourListeningHistory => 'Dinleme geçmişini scrobble etmek için bağlan';
+  String get connectToScrobbleYourListeningHistory =>
+      'Dinleme geçmişini scrobble etmek için bağlan';
 
   @override
-  String get connectToScrobbleYourMusic => 'Müzik dinlemelerini scrobble etmek için bağlan';
+  String get connectToScrobbleYourMusic =>
+      'Müzik dinlemelerini scrobble etmek için bağlan';
 
   @override
-  String get connectToSubmitYourListeningHistory => 'Dinleme geçmişini göndermek için bağlan';
+  String get connectToSubmitYourListeningHistory =>
+      'Dinleme geçmişini göndermek için bağlan';
 
   @override
   String get connected => 'Bağlandı';
@@ -1004,7 +1085,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String connectedAs(Object username) {
-    return '' + username.toString() + ' olarak bağlandı';
+    return '$username olarak bağlandı';
   }
 
   @override
@@ -1030,7 +1111,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String containsValuesOutsideTheSupportedRanges(Object presetName) {
-    return '"' + '' + presetName.toString() + '" desteklenen aralıkların dışında değerler içeriyor; bunlar düzeltildi:';
+    return '\"$presetName\" desteklenen aralıkların dışında değerler içeriyor; bunlar düzeltildi:';
   }
 
   @override
@@ -1050,12 +1131,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String conversionFailed(Object error) {
-    return 'Dönüştürme başarısız: ' + '' + error.toString();
+    return 'Dönüştürme başarısız: $error';
   }
 
   @override
   String convertedSuccessfully(Object fileName) {
-    return '' + fileName.toString() + ' başarıyla dönüştürüldü';
+    return '$fileName başarıyla dönüştürüldü';
   }
 
   @override
@@ -1063,7 +1144,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String convertingToWav(Object fileName) {
-    return '' + fileName.toString() + ' WAV biçimine dönüştürülüyor…';
+    return '$fileName WAV biçimine dönüştürülüyor…';
   }
 
   @override
@@ -1071,7 +1152,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String copies(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' • ' + '' + arg2.toString() + ' kopya';
+    return '$arg1 • $arg2 kopya';
   }
 
   @override
@@ -1081,7 +1162,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get copyLink => 'Bağlantıyı kopyala';
 
   @override
-  String get copyYourUserTokenFromListenbrainz => 'ListenBrainz ayarlarından kullanıcı belirtecini kopyalayıp aşağıya yapıştır.';
+  String get copyYourUserTokenFromListenbrainz =>
+      'ListenBrainz ayarlarından kullanıcı belirtecini kopyalayıp aşağıya yapıştır.';
 
   @override
   String get copyright => 'Telif hakkı';
@@ -1093,10 +1175,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get cosmicOrchestra => 'Kozmik Orkestra';
 
   @override
-  String get couldNotConnectToLastFm => 'Last.fm\'e bağlanılamadı. API kimlik bilgilerini kontrol edip tekrar dene.';
+  String get couldNotConnectToLastFm =>
+      'Last.fm\'e bağlanılamadı. API kimlik bilgilerini kontrol edip tekrar dene.';
 
   @override
-  String get couldNotConnectToListenbrainzCheck => 'ListenBrainz\'e bağlanılamadı. Belirtecini kontrol edip tekrar dene.';
+  String get couldNotConnectToListenbrainzCheck =>
+      'ListenBrainz\'e bağlanılamadı. Belirtecini kontrol edip tekrar dene.';
 
   @override
   String get couldNotLoadAlbumSongs => 'Albüm şarkıları yüklenemedi';
@@ -1109,7 +1193,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String couldNotLoadIr(Object e) {
-    return 'Darbe yanıtı yüklenemedi: ' + '' + e.toString();
+    return 'Darbe yanıtı yüklenemedi: $e';
   }
 
   @override
@@ -1123,37 +1207,43 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String couldNotOpenLink2(Object e) {
-    return 'Bağlantı açılamadı: ' + '' + e.toString();
+    return 'Bağlantı açılamadı: $e';
   }
 
   @override
-  String get couldNotOpenThatPhotoTry => 'Bu fotoğraf açılamadı. Başka bir görsel dene.';
+  String get couldNotOpenThatPhotoTry =>
+      'Bu fotoğraf açılamadı. Başka bir görsel dene.';
 
   @override
   String get couldNotOpenThePlayStore => 'Play Store açılamadı.';
 
   @override
   String couldNotOpenThePlayStore2(Object error) {
-    return 'Play Store açılamadı: ' + '' + error.toString();
+    return 'Play Store açılamadı: $error';
   }
 
   @override
-  String get couldNotReadTheCoverColors => 'Kapak renkleri okunamadı. Ses sinyali kullanılabilir durumda.';
+  String get couldNotReadTheCoverColors =>
+      'Kapak renkleri okunamadı. Ses sinyali kullanılabilir durumda.';
 
   @override
-  String get couldNotReadTheSelectedLyrics => 'Seçilen şarkı sözü dosyası okunamadı.';
+  String get couldNotReadTheSelectedLyrics =>
+      'Seçilen şarkı sözü dosyası okunamadı.';
 
   @override
   String get couldNotSaveTheLyricsFile => 'Şarkı sözü dosyası kaydedilemedi.';
 
   @override
-  String get couldNotSaveYourRecapPlease => 'Yıl özetin kaydedilemedi. Lütfen tekrar dene.';
+  String get couldNotSaveYourRecapPlease =>
+      'Yıl özetin kaydedilemedi. Lütfen tekrar dene.';
 
   @override
-  String get couldNotUseTheSelectedLyrics => 'Seçilen şarkı sözü dosyası kullanılamadı.';
+  String get couldNotUseTheSelectedLyrics =>
+      'Seçilen şarkı sözü dosyası kullanılamadı.';
 
   @override
-  String get couldnTOpenTheBrowserAutomatically => 'Tarayıcı otomatik açılamadı. Bu bağlantıyla herhangi bir cihazdan yetki ver; ardından oturum açma işlemini tamamlayacağız:';
+  String get couldnTOpenTheBrowserAutomatically =>
+      'Tarayıcı otomatik açılamadı. Bu bağlantıyla herhangi bir cihazdan yetki ver; ardından oturum açma işlemini tamamlayacağız:';
 
   @override
   String get countingFiles => 'Dosyalar sayılıyor…';
@@ -1168,7 +1258,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get createACustomPreset => 'Özel ön ayar oluştur';
 
   @override
-  String get createAPlaylistImportAnM3u => 'Bir çalma listesi oluştur, M3U içe aktar veya müziği yukarıdaki karışımlara bırak.';
+  String get createAPlaylistImportAnM3u =>
+      'Bir çalma listesi oluştur, M3U içe aktar veya müziği yukarıdaki karışımlara bırak.';
 
   @override
   String get createLyrics => 'Şarkı sözü oluştur';
@@ -1183,27 +1274,30 @@ class AppLocalizationsTr extends AppLocalizations {
   String get createPlaylist => 'Çalma listesi oluştur';
 
   @override
-  String get createPlaylistFromSelected => 'Seçilenlerden çalma listesi oluştur';
+  String get createPlaylistFromSelected =>
+      'Seçilenlerden çalma listesi oluştur';
 
   @override
-  String get createYourFirstPlaylistOrJump => 'İlk çalma listeni oluştur veya kaydettiğin koleksiyonlara göz at.';
+  String get createYourFirstPlaylistOrJump =>
+      'İlk çalma listeni oluştur veya kaydettiğin koleksiyonlara göz at.';
 
   @override
-  String get createYourFirstPlaylistToOrganize => 'Favori şarkılarını düzenlemek için\nilk çalma listeni oluştur.';
+  String get createYourFirstPlaylistToOrganize =>
+      'Favori şarkılarını düzenlemek için\nilk çalma listeni oluştur.';
 
   @override
   String created(Object arg1) {
-    return '' + arg1.toString() + ' oluşturuldu';
+    return '$arg1 oluşturuldu';
   }
 
   @override
   String createdAndAddedSong(Object arg1) {
-    return '' + arg1.toString() + ' oluşturuldu ve şarkı eklendi';
+    return '$arg1 oluşturuldu ve şarkı eklendi';
   }
 
   @override
   String createdAndAddedSongs(Object name, Object arg1) {
-    return '' + name.toString() + ' oluşturuldu ve ' + '' + arg1.toString() + ' şarkı eklendi';
+    return '$name oluşturuldu ve $arg1 şarkı eklendi';
   }
 
   @override
@@ -1211,7 +1305,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String credentialsRejectedByReEnterThe(Object arg1) {
-    return '' + arg1.toString() + ' kimlik bilgilerini reddetti. Şifreyi yeniden gir.';
+    return '$arg1 kimlik bilgilerini reddetti. Şifreyi yeniden gir.';
   }
 
   @override
@@ -1221,10 +1315,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get crystalCaverns => 'Kristal Mağaralar';
 
   @override
-  String get cueSheetTracksCannotBeEdited => 'CUE sayfası parçaları düzenlenemez.';
+  String get cueSheetTracksCannotBeEdited =>
+      'CUE sayfası parçaları düzenlenemez.';
 
   @override
-  String get cueSheetTracksCannotBeEdited2 => 'CUE sayfası parçaları düzenlenemez';
+  String get cueSheetTracksCannotBeEdited2 =>
+      'CUE sayfası parçaları düzenlenemez';
 
   @override
   String get currentArtwork => 'Geçerli kapak görseli';
@@ -1237,7 +1333,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String currentRoute(Object arg1) {
-    return 'Geçerli çıkış: ' + '' + arg1.toString() + '.';
+    return 'Geçerli çıkış: $arg1.';
   }
 
   @override
@@ -1259,31 +1355,35 @@ class AppLocalizationsTr extends AppLocalizations {
   String get customFormat => 'Özel biçim';
 
   @override
-  String get customFormatForcesPlaybackToThe => 'Özel biçim, sesi seçilen çıkış biçiminde oynatmaya zorlar. Örnekleme hızı, bit derinliği veya kanal sayısı şarkıya ya da cihaza uygun değilse ses, perde, hız veya kararlılık etkilenebilir.';
+  String get customFormatForcesPlaybackToThe =>
+      'Özel biçim, sesi seçilen çıkış biçiminde oynatmaya zorlar. Örnekleme hızı, bit derinliği veya kanal sayısı şarkıya ya da cihaza uygun değilse ses, perde, hız veya kararlılık etkilenebilir.';
 
   @override
-  String get customFormatIsDisabledInBit => 'Bit-perfect (USB DAC) modunda örnekleme hızının tam eşleşmesi gerektiği için özel biçim kullanılamaz. Özel biçim seçmek için bit-perfect\'i kapat.';
+  String get customFormatIsDisabledInBit =>
+      'Bit-perfect (USB DAC) modunda örnekleme hızının tam eşleşmesi gerektiği için özel biçim kullanılamaz. Özel biçim seçmek için bit-perfect\'i kapat.';
 
   @override
-  String get customFormatIsUnavailableBecauseAudio => 'Ayarlar\'da Ses Biçimi kapalı olduğu için özel biçim kullanılamıyor.';
+  String get customFormatIsUnavailableBecauseAudio =>
+      'Ayarlar\'da Ses Biçimi kapalı olduğu için özel biçim kullanılamıyor.';
 
   @override
   String get customWidth => 'Özel genişlik';
 
   @override
-  String get customizeAudioDisplayNavigationAnd => 'Sesi, görünümü, gezinmeyi ve bağlantıları özelleştir.';
+  String get customizeAudioDisplayNavigationAnd =>
+      'Sesi, görünümü, gezinmeyi ve bağlantıları özelleştir.';
 
   @override
   String get customizeBottomBar => 'Alt çubuğu özelleştir';
 
   @override
   String dAgo(Object arg1) {
-    return '' + arg1.toString() + ' gün önce';
+    return '$arg1 gün önce';
   }
 
   @override
   String dAgo2(Object arg1) {
-    return '' + arg1.toString() + ' gün önce';
+    return '$arg1 gün önce';
   }
 
   @override
@@ -1291,7 +1391,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String dacWillBeOfferedAgain(int count) {
-    return (count == 1 ? '' + count.toString() + ' DAC' : '' + count.toString() + ' DAC') + ' yeniden sunulacak.';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count DAC',
+      one: '$count DAC',
+    );
+    return '$_temp0 yeniden sunulacak.';
   }
 
   @override
@@ -1332,42 +1438,48 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String dayUnit(int count) {
-    return (count == 1 ? 'gün' : 'gün');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'gün',
+      one: 'gün',
+    );
+    return '$_temp0';
   }
 
   @override
   String db10(Object arg1) {
-    return '' + arg1.toString() + ' dB';
+    return '$arg1 dB';
   }
 
   @override
   String db13(Object arg1) {
-    return '' + arg1.toString() + ' dB';
+    return '$arg1 dB';
   }
 
   @override
   String db15(Object arg1, Object arg2) {
-    return '%' + '' + arg1.toString() + '  ' + '' + arg2.toString() + ' dB';
+    return '%$arg1  $arg2 dB';
   }
 
   @override
   String db2(Object value) {
-    return '' + value.toString() + ' dB';
+    return '$value dB';
   }
 
   @override
   String db9(Object arg1) {
-    return '' + arg1.toString() + ' dB';
+    return '$arg1 dB';
   }
 
   @override
   String dbCut(Object arg1) {
-    return '' + arg1.toString() + ' dB azaltma';
+    return '$arg1 dB azaltma';
   }
 
   @override
   String dbMax(Object arg1) {
-    return 'en fazla ' + '' + arg1.toString() + ' dB';
+    return 'en fazla $arg1 dB';
   }
 
   @override
@@ -1383,10 +1495,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get deepEarth => 'Yerin Derinlikleri';
 
   @override
-  String get defaultAndroidPlaybackEngineUsedBy => 'Lokal\'in şu anda kullandığı varsayılan Android oynatma motoru.';
+  String get defaultAndroidPlaybackEngineUsedBy =>
+      'Lokal\'in şu anda kullandığı varsayılan Android oynatma motoru.';
 
   @override
-  String get defaultAndroidPlayerPlaysEverything => 'Varsayılan Android oynatıcı — tüm içerikleri güvenilir biçimde çalar. Çoğu kullanıcı için en güvenli seçenek.';
+  String get defaultAndroidPlayerPlaysEverything =>
+      'Varsayılan Android oynatıcı — tüm içerikleri güvenilir biçimde çalar. Çoğu kullanıcı için en güvenli seçenek.';
 
   @override
   String get delays => 'Gecikmeler';
@@ -1396,7 +1510,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String deleteAndAllSongsAndPlaylists(Object arg1) {
-    return '"' + '' + arg1.toString() + '" ve ondan eşitlenen tüm şarkılar ile çalma listeleri silinsin mi? Önbellekteki indirmeler korunur.';
+    return '\"$arg1\" ve ondan eşitlenen tüm şarkılar ile çalma listeleri silinsin mi? Önbellekteki indirmeler korunur.';
   }
 
   @override
@@ -1425,7 +1539,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String deleteSongs(Object arg1) {
-    return '' + arg1.toString() + ' şarkı silinsin mi?';
+    return '$arg1 şarkı silinsin mi?';
   }
 
   @override
@@ -1433,17 +1547,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String deleteThisCannotBeUndone(Object arg1) {
-    return '"' + '' + arg1.toString() + '" silinsin mi? Bu işlem geri alınamaz.';
+    return '\"$arg1\" silinsin mi? Bu işlem geri alınamaz.';
   }
 
   @override
   String deleted(Object arg1) {
-    return '"' + '' + arg1.toString() + '" silindi';
+    return '\"$arg1\" silindi';
   }
 
   @override
   String deletedSongs(Object arg1) {
-    return '' + arg1.toString() + ' şarkı silindi';
+    return '$arg1 şarkı silindi';
   }
 
   @override
@@ -1459,7 +1573,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get developerMode => 'Geliştirici modu';
 
   @override
-  String get developerOptionsIsDisabledEnableIt => 'Geliştirici Seçenekleri kapalı. Ayarlar → Telefon hakkında bölümünde Derleme numarasına 7 kez dokunarak aç, ardından tekrar dene.';
+  String get developerOptionsIsDisabledEnableIt =>
+      'Geliştirici Seçenekleri kapalı. Ayarlar → Telefon hakkında bölümünde Derleme numarasına 7 kez dokunarak aç, ardından tekrar dene.';
 
   @override
   String get device => 'Cihaz';
@@ -1492,16 +1607,19 @@ class AppLocalizationsTr extends AppLocalizations {
   String get direct => 'Doğrudan';
 
   @override
-  String get directAlsaOutputIsActiveAnd => 'Doğrudan ALSA çıkışı etkin; Android ses sunucusu atlanıyor.';
+  String get directAlsaOutputIsActiveAnd =>
+      'Doğrudan ALSA çıkışı etkin; Android ses sunucusu atlanıyor.';
 
   @override
-  String get directLibusbIsochronousUsbEngineBest => 'Doğrudan libusb eşzamanlı USB motoru. Doğrulanmış harici DAC oynatımı için bit-perfect (USB DAC) ile birlikte kullanılması önerilir.';
+  String get directLibusbIsochronousUsbEngineBest =>
+      'Doğrudan libusb eşzamanlı USB motoru. Doğrulanmış harici DAC oynatımı için bit-perfect (USB DAC) ile birlikte kullanılması önerilir.';
 
   @override
   String get directUsb => 'Doğrudan USB';
 
   @override
-  String get directUsbDeviceManaged => 'Cihaz tarafından yönetilen doğrudan USB';
+  String get directUsbDeviceManaged =>
+      'Cihaz tarafından yönetilen doğrudan USB';
 
   @override
   String get directUsbExperimental => 'Deneysel doğrudan USB';
@@ -1510,10 +1628,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get disabled => 'Devre dışı';
 
   @override
-  String get disabledInBitPerfectUsbDac => 'Bit-perfect (USB DAC) modunda devre dışı (tam hız eşleşmesi gerekli)';
+  String get disabledInBitPerfectUsbDac =>
+      'Bit-perfect (USB DAC) modunda devre dışı (tam hız eşleşmesi gerekli)';
 
   @override
-  String get disabledWhileBothBitPerfectOptions => 'Bu DAP\'te her iki bit-perfect seçeneği de kapalıyken devre dışı.';
+  String get disabledWhileBothBitPerfectOptions =>
+      'Bu DAP\'te her iki bit-perfect seçeneği de kapalıyken devre dışı.';
 
   @override
   String get disc => 'Disk';
@@ -1535,7 +1655,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String disconnectFrom(Object arg1) {
-    return '' + arg1.toString() + ' bağlantısını kes';
+    return '$arg1 bağlantısını kes';
   }
 
   @override
@@ -1545,34 +1665,43 @@ class AppLocalizationsTr extends AppLocalizations {
   String get disconnectListenbrainz => 'ListenBrainz bağlantısı kesilsin mi?';
 
   @override
-  String get discoversDlnaUpnpAndChromecastReceivers => 'Ağındaki DLNA, UPnP ve Chromecast alıcılarını bulur';
+  String get discoversDlnaUpnpAndChromecastReceivers =>
+      'Ağındaki DLNA, UPnP ve Chromecast alıcılarını bulur';
 
   @override
   String get dismiss => 'Kapat';
 
   @override
-  String get displayFileFormatAndBitrateIn => 'Sürükleyici modda dosya biçimini ve bit hızını göster';
+  String get displayFileFormatAndBitrateIn =>
+      'Sürükleyici modda dosya biçimini ve bit hızını göster';
 
   @override
-  String get displayFileFormatAndBitrateIn2 => 'Kapak kartı modunda dosya biçimini ve bit hızını göster';
+  String get displayFileFormatAndBitrateIn2 =>
+      'Kapak kartı modunda dosya biçimini ve bit hızını göster';
 
   @override
-  String get displayTheAlbumNameInArtwork => 'Kapak kartı modunda albüm adını göster';
+  String get displayTheAlbumNameInArtwork =>
+      'Kapak kartı modunda albüm adını göster';
 
   @override
-  String get displayTheArtistNameInArtwork => 'Kapak kartı modunda sanatçı adını göster';
+  String get displayTheArtistNameInArtwork =>
+      'Kapak kartı modunda sanatçı adını göster';
 
   @override
-  String get displayTheArtistNameInImmersive => 'Sürükleyici modda sanatçı adını göster';
+  String get displayTheArtistNameInImmersive =>
+      'Sürükleyici modda sanatçı adını göster';
 
   @override
-  String get displayTheTrackTitleInArtwork => 'Kapak kartı modunda şarkı adını göster';
+  String get displayTheTrackTitleInArtwork =>
+      'Kapak kartı modunda şarkı adını göster';
 
   @override
-  String get displayTheTrackTitleInImmersive => 'Sürükleyici modda şarkı adını göster';
+  String get displayTheTrackTitleInImmersive =>
+      'Sürükleyici modda şarkı adını göster';
 
   @override
-  String get dlnaAndUpnpReceiversAreControlled => 'DLNA ve UPnP alıcıları ek bağımlılık olmadan doğrudan Dart üzerinden yönetilir. Chromecast desteği yerel Cast SDK\'sını kullanır. Ağ kaynakları (Subsonic, WebDAV, Jellyfin, UPnP), yerel dosyalar ve önbellekteki şarkılar yayınlanabilir; yerel dosyalar doğrudan bu telefondan sunulur. Yayın sırasında ses tuşları ve sistem ses paneli bağlı cihazın ses düzeyini kontrol eder.';
+  String get dlnaAndUpnpReceiversAreControlled =>
+      'DLNA ve UPnP alıcıları ek bağımlılık olmadan doğrudan Dart üzerinden yönetilir. Chromecast desteği yerel Cast SDK\'sını kullanır. Ağ kaynakları (Subsonic, WebDAV, Jellyfin, UPnP), yerel dosyalar ve önbellekteki şarkılar yayınlanabilir; yerel dosyalar doğrudan bu telefondan sunulur. Yayın sırasında ses tuşları ve sistem ses paneli bağlı cihazın ses düzeyini kontrol eder.';
 
   @override
   String get dlnaUpnp => 'DLNA / UPnP';
@@ -1596,46 +1725,51 @@ class AppLocalizationsTr extends AppLocalizations {
   String get doubleTapToReset => 'Sıfırlamak için iki kez dokun';
 
   @override
-  String get doubleTapToResetThisBand => 'Bu bandı sıfırlamak için iki kez dokun';
+  String get doubleTapToResetThisBand =>
+      'Bu bandı sıfırlamak için iki kez dokun';
 
   @override
   String down(Object arg1) {
-    return '' + arg1.toString() + ' aşağı';
+    return '$arg1 aşağı';
   }
 
   @override
   String dp(Object arg1) {
-    return '' + arg1.toString() + ' dp';
+    return '$arg1 dp';
   }
 
   @override
   String dp2(Object arg1) {
-    return '' + arg1.toString() + ' dp';
+    return '$arg1 dp';
   }
 
   @override
   String dp3(Object arg1) {
-    return '' + arg1.toString() + ' dp';
+    return '$arg1 dp';
   }
 
   @override
-  String get dragABoundaryToStretchOr => 'Önündeki sözcüğü uzatmak veya kısaltmak için sınırı sürükle. Son sınır bir sonraki satırı taşır.';
+  String get dragABoundaryToStretchOr =>
+      'Önündeki sözcüğü uzatmak veya kısaltmak için sınırı sürükle. Son sınır bir sonraki satırı taşır.';
 
   @override
   String get dragBandsUpOrDown => 'Bantları yukarı veya aşağı sürükle';
 
   @override
-  String get dragToChangeFrequencyGain => 'Frekansı ve kazancı değiştirmek için sürükle';
+  String get dragToChangeFrequencyGain =>
+      'Frekansı ve kazancı değiştirmek için sürükle';
 
   @override
-  String get dragToMovePinchToWiden => 'Taşımak için sürükle • Genişletmek veya daraltmak için iki parmağınla sıkıştır';
+  String get dragToMovePinchToWiden =>
+      'Taşımak için sürükle • Genişletmek veya daraltmak için iki parmağınla sıkıştır';
 
   @override
-  String get dragVerticallyToChangeGain => 'Kazancı değiştirmek için dikey sürükle';
+  String get dragVerticallyToChangeGain =>
+      'Kazancı değiştirmek için dikey sürükle';
 
   @override
   String driftMs(Object arg1) {
-    return 'Sapma ' + '' + arg1.toString() + ' ms';
+    return 'Sapma $arg1 ms';
   }
 
   @override
@@ -1651,7 +1785,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get duplicateCleaner => 'Yinelenenleri temizle';
 
   @override
-  String get duplicatesRemovedUsingRecommendedPicks => 'Yinelenen kayıtlar önerilen seçimlere göre kaldırıldı.';
+  String get duplicatesRemovedUsingRecommendedPicks =>
+      'Yinelenen kayıtlar önerilen seçimlere göre kaldırıldı.';
 
   @override
   String get duration => 'Süre';
@@ -1666,7 +1801,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get earlier => 'Daha önce';
 
   @override
-  String get earlierStandoutsPulledBackIntoView => 'Dinleme geçmişinden öne çıkan eski parçalar yeniden karşında.';
+  String get earlierStandoutsPulledBackIntoView =>
+      'Dinleme geçmişinden öne çıkan eski parçalar yeniden karşında.';
 
   @override
   String get editCredentials => 'Kimlik bilgilerini düzenle';
@@ -1718,12 +1854,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String enterAValidNumber(Object label) {
-    return 'Geçerli bir ' + '' + label.toString() + ' sayısı gir';
+    return 'Geçerli bir $label sayısı gir';
   }
 
   @override
   String enterAValueFromTo(Object arg1, Object arg2) {
-    return '%' + '' + arg1.toString() + ' ile %' + '' + arg2.toString() + ' arasında bir değer gir';
+    return '%$arg1 ile %$arg2 arasında bir değer gir';
   }
 
   @override
@@ -1737,7 +1873,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String ep(Object arg1) {
-    return 'EP ' + '' + arg1.toString();
+    return 'EP $arg1';
   }
 
   @override
@@ -1745,12 +1881,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String error(Object error) {
-    return 'Hata: ' + '' + error.toString();
+    return 'Hata: $error';
   }
 
   @override
   String error2(Object arg1) {
-    return 'Hata: ' + '' + arg1.toString();
+    return 'Hata: $arg1';
   }
 
   @override
@@ -1758,7 +1894,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String errorLoadingCapabilities(Object error) {
-    return 'Yetenekler yüklenirken hata: ' + '' + error.toString();
+    return 'Yetenekler yüklenirken hata: $error';
   }
 
   @override
@@ -1766,7 +1902,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String errorLoadingPlaylists2(Object error) {
-    return 'Çalma listeleri yüklenemedi: ' + '' + error.toString();
+    return 'Çalma listeleri yüklenemedi: $error';
   }
 
   @override
@@ -1779,25 +1915,31 @@ class AppLocalizationsTr extends AppLocalizations {
   String get etherealTones => 'Uçuşan Tınılar';
 
   @override
-  String get everyAlbumHasArtistAndAlbum => 'Tüm albümlerde sanatçı ve albüm etiketleri var.';
+  String get everyAlbumHasArtistAndAlbum =>
+      'Tüm albümlerde sanatçı ve albüm etiketleri var.';
 
   @override
   String get exactMatch => 'Tam eşleşme';
 
   @override
-  String get exclusiveDirectPcmIsActiveAnd => 'Özel doğrudan PCM etkin; parçanın özgün hızında Android mikseri atlanıyor.';
+  String get exclusiveDirectPcmIsActiveAnd =>
+      'Özel doğrudan PCM etkin; parçanın özgün hızında Android mikseri atlanıyor.';
 
   @override
-  String get exclusiveUsbBitPerfectReEngaged => 'Özel USB bit-perfect yeniden etkinleştirildi.';
+  String get exclusiveUsbBitPerfectReEngaged =>
+      'Özel USB bit-perfect yeniden etkinleştirildi.';
 
   @override
-  String get exclusiveUsbDroppedToTheAndroid => 'Özel USB, Android mikserine geri döndü. Bit-perfect duraklatıldı.';
+  String get exclusiveUsbDroppedToTheAndroid =>
+      'Özel USB, Android mikserine geri döndü. Bit-perfect duraklatıldı.';
 
   @override
-  String get exclusiveUsbIsActiveAndBypassing => 'Özel USB etkin ve Android mikseri atlanıyor.';
+  String get exclusiveUsbIsActiveAndBypassing =>
+      'Özel USB etkin ve Android mikseri atlanıyor.';
 
   @override
-  String get exclusiveUsbIsStillUnavailableCheck => 'Özel USB hâlâ kullanılamıyor. USB tanılamasını kontrol et.';
+  String get exclusiveUsbIsStillUnavailableCheck =>
+      'Özel USB hâlâ kullanılamıyor. USB tanılamasını kontrol et.';
 
   @override
   String get expanded => 'Genişletilmiş';
@@ -1806,7 +1948,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get experimental => 'Deneysel';
 
   @override
-  String get experimentalDownTunePlaybackBy432 => 'Deneysel — oynatımı 432/440 oranında pesleştirir. Bit-perfect aktarımını devre dışı bırakır ve DSP yolunu kullanır.';
+  String get experimentalDownTunePlaybackBy432 =>
+      'Deneysel — oynatımı 432/440 oranında pesleştirir. Bit-perfect aktarımını devre dışı bırakır ve DSP yolunu kullanır.';
 
   @override
   String get exportAsM3u => '.m3u olarak dışa aktar';
@@ -1825,7 +1968,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String exportFailed(Object e) {
-    return 'Dışa aktarma başarısız: ' + '' + e.toString();
+    return 'Dışa aktarma başarısız: $e';
   }
 
   @override
@@ -1836,17 +1979,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String exportedPresetTo(Object savePath) {
-    return 'Ön ayar ' + '' + savePath.toString() + ' konumuna aktarıldı';
+    return 'Ön ayar $savePath konumuna aktarıldı';
   }
 
   @override
   String exportedPresetTo2(Object fallbackPath) {
-    return 'Ön ayar ' + '' + fallbackPath.toString() + ' konumuna aktarıldı';
+    return 'Ön ayar $fallbackPath konumuna aktarıldı';
   }
 
   @override
   String exportedSongsTo(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' şarkı "' + '' + arg2.toString() + '" konumuna aktarıldı.';
+    return '$arg1 şarkı \"$arg2\" konumuna aktarıldı.';
   }
 
   @override
@@ -1866,18 +2009,19 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String failedToAddToFavorites(Object arg1) {
-    return '"' + '' + arg1.toString() + '" favorilere eklenemedi';
+    return '\"$arg1\" favorilere eklenemedi';
   }
 
   @override
-  String get failedToDeactivateFallback => 'Yedek yöntem devre dışı bırakılamadı';
+  String get failedToDeactivateFallback =>
+      'Yedek yöntem devre dışı bırakılamadı';
 
   @override
   String get failedToImportPresetFile => 'Ön ayar dosyası içe aktarılamadı.';
 
   @override
   String failedToSaveMetadata(Object e) {
-    return 'Üst veriler kaydedilemedi: ' + '' + e.toString();
+    return 'Üst veriler kaydedilemedi: $e';
   }
 
   @override
@@ -1890,7 +2034,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get failedToStopStreaming => 'Akış durdurulamadı';
 
   @override
-  String get faintHueShiftFromAlbumArt => 'Albüm kapağının renklerine göre hafif ton değişimi.';
+  String get faintHueShiftFromAlbumArt =>
+      'Albüm kapağının renklerine göre hafif ton değişimi.';
 
   @override
   String get fallback => 'Yedek yöntem';
@@ -1905,10 +2050,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get fallbackAudioDeactivated => 'Yedek ses devre dışı bırakıldı';
 
   @override
-  String get fallbackAudioWillBeUsedIf => 'UAC2 cihazı başarısız olursa yedek ses kullanılacak';
+  String get fallbackAudioWillBeUsedIf =>
+      'UAC2 cihazı başarısız olursa yedek ses kullanılacak';
 
   @override
-  String get fastDirectTrackingImmediateResponse => 'Hızlı doğrudan izleme — anında tepki';
+  String get fastDirectTrackingImmediateResponse =>
+      'Hızlı doğrudan izleme — anında tepki';
 
   @override
   String get favoriteAll => 'Tümünü favorilere ekle';
@@ -1920,7 +2067,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get favorites => 'Favoriler';
 
   @override
-  String get favoritesYouHaveNotRevisitedLately => 'Bir süredir dinlemediğin favorilerin';
+  String get favoritesYouHaveNotRevisitedLately =>
+      'Bir süredir dinlemediğin favorilerin';
 
   @override
   String get feb => 'Şub';
@@ -1939,7 +2087,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String files2(int count) {
-    return (count == 1 ? '' + count.toString() + ' dosya' : '' + count.toString() + ' dosya');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dosya',
+      one: '$count dosya',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -1952,14 +2106,22 @@ class AppLocalizationsTr extends AppLocalizations {
   String get filterLogs => 'Günlükleri filtrele…';
 
   @override
-  String get findAndCleanUpDuplicateSongs => 'Yinelenen şarkıları bul ve temizle';
+  String get findAndCleanUpDuplicateSongs =>
+      'Yinelenen şarkıları bul ve temizle';
 
   @override
-  String get findSongsArtistsAlbumsFolders => 'Şarkı, sanatçı, albüm, klasör ara…';
+  String get findSongsArtistsAlbumsFolders =>
+      'Şarkı, sanatçı, albüm, klasör ara…';
 
   @override
   String finishingMetadataForSongs(int count) {
-    return (count == 1 ? '' + count.toString() + ' şarkının üst verileri tamamlanıyor…' : '' + count.toString() + ' şarkının üst verileri tamamlanıyor…');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkının üst verileri tamamlanıyor…',
+      one: '$count şarkının üst verileri tamamlanıyor…',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -1976,7 +2138,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String fixedCenterFrequenciesWithADb(Object arg1) {
-    return '' + arg1.toString() + ' dB aralığıyla sabit merkez frekansları. Etkileşim için dokun.';
+    return '$arg1 dB aralığıyla sabit merkez frekansları. Etkileşim için dokun.';
   }
 
   @override
@@ -1989,7 +2151,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get flatResponse => 'Düz frekans yanıtı';
 
   @override
-  String get flickCanAttemptToPreferA => 'Lokal yukarıdan belirli bir kodeği tercih etmeyi deneyebilir, ancak sonuç cihazına, kulaklığına ve Android sürümüne bağlıdır. Kodek zorlaması gizli bir sistem API\'si kullanır ve root erişimi olmayan cihazlarda çalışmayabilir.';
+  String get flickCanAttemptToPreferA =>
+      'Lokal yukarıdan belirli bir kodeği tercih etmeyi deneyebilir, ancak sonuç cihazına, kulaklığına ve Android sürümüne bağlıdır. Kodek zorlaması gizli bir sistem API\'si kullanır ve root erişimi olmayan cihazlarda çalışmayabilir.';
 
   @override
   String get flickPreview => 'Lokal Önizleme';
@@ -1998,7 +2161,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get flickReplay => 'Lokal Yıl Özeti';
 
   @override
-  String get flickWillForceYourChosenCodec => 'Lokal, bağlandığında seçtiğin kodeği zorlayacak';
+  String get flickWillForceYourChosenCodec =>
+      'Lokal, bağlandığında seçtiğin kodeği zorlayacak';
 
   @override
   String get folder => 'Klasör';
@@ -2011,7 +2175,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String folderOf2(Object current, Object total) {
-    return '' + total.toString() + ' klasörün ' + '' + current.toString() + '. klasörü';
+    return '$total klasörün $current. klasörü';
   }
 
   @override
@@ -2033,40 +2197,46 @@ class AppLocalizationsTr extends AppLocalizations {
   String get forceDop => 'DoP\'yi zorla';
 
   @override
-  String get forceDopAlwaysUseDsdOver => 'DoP\'yi zorla — USB DAC\'de her zaman PCM üzerinden DSD kullan';
+  String get forceDopAlwaysUseDsdOver =>
+      'DoP\'yi zorla — USB DAC\'de her zaman PCM üzerinden DSD kullan';
 
   @override
   String get forcePcm => 'PCM\'yi zorla';
 
   @override
-  String get forcePcmAlwaysConvertDsdTo => 'PCM\'yi zorla — DSD\'yi her zaman PCM\'ye dönüştür';
+  String get forcePcmAlwaysConvertDsdTo =>
+      'PCM\'yi zorla — DSD\'yi her zaman PCM\'ye dönüştür';
 
   @override
   String get format => 'Biçim';
 
   @override
-  String get formatControlsAreDisabledTheEngine => 'Biçim denetimleri devre dışı. Motor varsayılan biçimini kullanıyor.';
+  String get formatControlsAreDisabledTheEngine =>
+      'Biçim denetimleri devre dışı. Motor varsayılan biçimini kullanıyor.';
 
   @override
   String get formatStrategy => 'Biçim stratejisi';
 
   @override
-  String get formatStrategyAndCustomFormatControls => 'Biçim stratejisi ve özel biçim denetimleri etkin.';
+  String get formatStrategyAndCustomFormatControls =>
+      'Biçim stratejisi ve özel biçim denetimleri etkin.';
 
   @override
-  String get formatStrategyIsDisabledInBit => 'Örnekleme hızının tam eşleşmesi gerektiği için bit-perfect (USB DAC) modunda biçim stratejisi kullanılamaz. Tercihleri değiştirmek için bit-perfect\'i kapat.';
+  String get formatStrategyIsDisabledInBit =>
+      'Örnekleme hızının tam eşleşmesi gerektiği için bit-perfect (USB DAC) modunda biçim stratejisi kullanılamaz. Tercihleri değiştirmek için bit-perfect\'i kapat.';
 
   @override
-  String get formatStrategyIsUnavailableBecauseAudio => 'Ayarlar\'da Ses Biçimi kapalı olduğu için biçim stratejisi kullanılamıyor.';
+  String get formatStrategyIsUnavailableBecauseAudio =>
+      'Ayarlar\'da Ses Biçimi kapalı olduğu için biçim stratejisi kullanılamıyor.';
 
   @override
   String foundOnline(Object arg1) {
-    return '"' + '' + arg1.toString() + '" çevrimiçi bulundu.';
+    return '\"$arg1\" çevrimiçi bulundu.';
   }
 
   @override
   String frPkt(Object arg1) {
-    return '' + arg1.toString() + ' kare/paket';
+    return '$arg1 kare/paket';
   }
 
   @override
@@ -2083,14 +2253,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String from(Object sourceLabel) {
-    return '' + sourceLabel.toString() + ' kaynağından';
+    return '$sourceLabel kaynağından';
   }
 
   @override
   String get fromSquareCornersToARounded => 'Köşeli görünümden yuvarlak çubuğa';
 
   @override
-  String get fullBleedAlbumArtWithThe => 'Güncel sinematik görünümle ekranı kaplayan albüm kapağı.';
+  String get fullBleedAlbumArtWithThe =>
+      'Güncel sinematik görünümle ekranı kaplayan albüm kapağı.';
 
   @override
   String get fullPlayer => 'Tam oynatıcı';
@@ -2124,11 +2295,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String gb(Object arg1) {
-    return '' + arg1.toString() + ' GB';
+    return '$arg1 GB';
   }
 
   @override
-  String get generatedFromYourListeningHabitsFavorites => 'Dinleme alışkanlıklarına, favorilerine ve yeni eklediklerine göre oluşturuldu.';
+  String get generatedFromYourListeningHabitsFavorites =>
+      'Dinleme alışkanlıklarına, favorilerine ve yeni eklediklerine göre oluşturuldu.';
 
   @override
   String get genre => 'Tür';
@@ -2170,34 +2342,37 @@ class AppLocalizationsTr extends AppLocalizations {
   String get green => 'Yeşil';
 
   @override
-  String get groupingByTitleArtistThisIs => 'Başlık ve sanatçıya göre gruplanıyor — bu genellikle hızlı sürer.';
+  String get groupingByTitleArtistThisIs =>
+      'Başlık ve sanatçıya göre gruplanıyor — bu genellikle hızlı sürer.';
 
   @override
   String get groups => 'Gruplar';
 
   @override
   String groupsToRemove(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' grup • ' + '' + arg2.toString() + ' kaldırılacak';
+    return '$arg1 grup • $arg2 kaldırılacak';
   }
 
   @override
   String groupsToRemove2(Object arg1, Object toRemove) {
-    return '' + arg1.toString() + ' grup • ' + '' + toRemove.toString() + ' kaldırılacak';
+    return '$arg1 grup • $toRemove kaldırılacak';
   }
 
   @override
-  String get growsFurtherIfLargerSystemText => 'Sistem yazı tipi daha büyükse gerektiği kadar genişler';
+  String get growsFurtherIfLargerSystemText =>
+      'Sistem yazı tipi daha büyükse gerektiği kadar genişler';
 
   @override
   String hAgo(Object arg1) {
-    return '' + arg1.toString() + ' saat önce';
+    return '$arg1 saat önce';
   }
 
   @override
   String get hardwareUsbDac => 'Donanım (USB DAC)';
 
   @override
-  String get hardwareVolumeIsDetectedButWrites => 'Donanım ses düzeyi algılandı ancak doğrudan USB oynatımı sürerken değiştirilmesi engelleniyor.';
+  String get hardwareVolumeIsDetectedButWrites =>
+      'Donanım ses düzeyi algılandı ancak doğrudan USB oynatımı sürerken değiştirilmesi engelleniyor.';
 
   @override
   String get hasArtwork => 'Kapak görseli var';
@@ -2236,7 +2411,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get highQualityEngine => 'Yüksek kaliteli ses motoru';
 
   @override
-  String get highQualityWidelySupported => 'Yüksek kaliteli, yaygın desteklenir';
+  String get highQualityWidelySupported =>
+      'Yüksek kaliteli, yaygın desteklenir';
 
   @override
   String get highResolutionAptx => 'Yüksek çözünürlüklü aptX';
@@ -2245,7 +2421,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get highShelf => 'Yüksek raf filtresi';
 
   @override
-  String get highestBitrateUpTo990Kbps => 'En yüksek bit hızı (990 kbps\'ye kadar)';
+  String get highestBitrateUpTo990Kbps =>
+      'En yüksek bit hızı (990 kbps\'ye kadar)';
 
   @override
   String get highestQuality => 'En yüksek kalite';
@@ -2255,20 +2432,27 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String hourUnit(int count) {
-    return (count == 1 ? 'saat' : 'saat');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'saat',
+      one: 'saat',
+    );
+    return '$_temp0';
   }
 
   @override
-  String get httpBasicNeedsItRecoverableStored => 'HTTP Basic için geri alınabilir olması gerekir; kodlanmış biçimde saklanır';
+  String get httpBasicNeedsItRecoverableStored =>
+      'HTTP Basic için geri alınabilir olması gerekir; kodlanmış biçimde saklanır';
 
   @override
   String hz(Object rate) {
-    return '' + rate.toString() + ' Hz';
+    return '$rate Hz';
   }
 
   @override
   String hz3(Object hz) {
-    return '' + hz.toString() + ' Hz';
+    return '$hz Hz';
   }
 
   @override
@@ -2276,7 +2460,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String hz6(Object arg1) {
-    return '' + arg1.toString() + ' Hz';
+    return '$arg1 Hz';
   }
 
   @override
@@ -2284,7 +2468,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String identified(int count, Object note) {
-    return (count == 1 ? '' + count.toString() + ' şarkı tanımlandı' : '' + count.toString() + ' şarkı tanımlandı') + '' + note.toString() + '.';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı tanımlandı',
+      one: '$count şarkı tanımlandı',
+    );
+    return '$_temp0$note.';
   }
 
   @override
@@ -2301,7 +2491,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String importFailed(Object e) {
-    return 'İçe aktarma başarısız: ' + '' + e.toString();
+    return 'İçe aktarma başarısız: $e';
   }
 
   @override
@@ -2312,18 +2502,20 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String imported(Object arg1) {
-    return '"' + '' + arg1.toString() + '" içe aktarıldı';
+    return '\"$arg1\" içe aktarıldı';
   }
 
   @override
-  String get importedArtIsSavedInsideThe => 'İçe aktarılan görsel uygulamada saklanır ve bu albümdeki tüm şarkılarla eşitlenir.';
+  String get importedArtIsSavedInsideThe =>
+      'İçe aktarılan görsel uygulamada saklanır ve bu albümdeki tüm şarkılarla eşitlenir.';
 
   @override
-  String get importedArtIsSavedInsideThe2 => 'İçe aktarılan görsel uygulamada yalnızca bu şarkı için saklanır.';
+  String get importedArtIsSavedInsideThe2 =>
+      'İçe aktarılan görsel uygulamada yalnızca bu şarkı için saklanır.';
 
   @override
   String importedWithSongs(Object arg1, Object arg2, Object unmatchedText) {
-    return '"' + '' + arg1.toString() + '" adlı liste ' + '' + arg2.toString() + ' şarkıyla içe aktarıldı.' + '' + unmatchedText.toString();
+    return '\"$arg1\" adlı liste $arg2 şarkıyla içe aktarıldı.$unmatchedText';
   }
 
   @override
@@ -2331,19 +2523,26 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String inLabel(Object folder) {
-    return '' + folder.toString() + ' içinde';
+    return '$folder içinde';
   }
 
   @override
   String inYourLibrary(int count) {
-    return 'Kitaplığında ' + (count == 1 ? '' + count.toString() + ' şarkı' : '' + count.toString() + ' şarkı');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı',
+      one: '$count şarkı',
+    );
+    return 'Kitaplığında $_temp0';
   }
 
   @override
   String get inactive => 'Etkin değil';
 
   @override
-  String get incredibleOverAMonthOfDaily => 'Harika — bir aydan uzun süredir her gün müzik dinliyorsun.';
+  String get incredibleOverAMonthOfDaily =>
+      'Harika — bir aydan uzun süredir her gün müzik dinliyorsun.';
 
   @override
   String get inputGain => 'Giriş kazancı';
@@ -2368,7 +2567,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String items(Object count) {
-    return '' + count.toString() + ' öğe';
+    return '$count öğe';
   }
 
   @override
@@ -2403,7 +2602,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String kb(Object arg1) {
-    return '' + arg1.toString() + ' KB';
+    return '$arg1 KB';
   }
 
   @override
@@ -2413,67 +2612,72 @@ class AppLocalizationsTr extends AppLocalizations {
   String get keepEditing => 'Düzenlemeye devam et';
 
   @override
-  String get keepItGoingOpenTomorrowTo => 'Devam et. Yarın tekrar açıp serine bir gün daha ekle.';
+  String get keepItGoingOpenTomorrowTo =>
+      'Devam et. Yarın tekrar açıp serine bir gün daha ekle.';
 
   @override
   String get keepListeningWithFlick => 'Lokal ile dinlemeye devam et';
 
   @override
-  String get keepPlaybackPausedWhenADevice => 'Cihaz yeniden bağlandığında oynatma duraklatılmış kalsın';
+  String get keepPlaybackPausedWhenADevice =>
+      'Cihaz yeniden bağlandığında oynatma duraklatılmış kalsın';
 
   @override
-  String get keepTheSessionMovingOrHead => 'Dinlemeye devam et veya doğrudan oynatıcıya dön.';
+  String get keepTheSessionMovingOrHead =>
+      'Dinlemeye devam et veya doğrudan oynatıcıya dön.';
 
   @override
   String get keepYourReplay => 'Yıl özetini sakla.';
 
   @override
   String keeping(Object type, Object br) {
-    return 'Tutuluyor • ' + '' + type.toString() + ' • ' + '' + br.toString();
+    return 'Tutuluyor • $type • $br';
   }
 
   @override
   String keepingOfToRemove(Object keptCount, Object arg1, Object removeCount) {
-    return '' + arg1.toString() + ' sürümün ' + '' + keptCount.toString() + ' tanesi tutulacak • ' + '' + removeCount.toString() + ' kaldırılacak';
+    return '$arg1 sürümün $keptCount tanesi tutulacak • $removeCount kaldırılacak';
   }
 
   @override
   String get keepingThisVersion => 'Bu sürüm tutulacak';
 
   @override
-  String get keepsSoftwareVolumeAndDspActive => 'DAP\'in paylaşımlı yolunda yazılım ses düzeyini ve DSP\'yi etkin tutar.';
+  String get keepsSoftwareVolumeAndDspActive =>
+      'DAP\'in paylaşımlı yolunda yazılım ses düzeyini ve DSP\'yi etkin tutar.';
 
   @override
-  String get keptInSecureStorageToRe => 'Belirteç süresi dolduğunda yeniden oturum açabilmek için güvenli depolamada tutulur.';
+  String get keptInSecureStorageToRe =>
+      'Belirteç süresi dolduğunda yeniden oturum açabilmek için güvenli depolamada tutulur.';
 
   @override
   String keptWillBeRemoved(Object keptCount, Object removeCount) {
-    return '' + keptCount.toString() + ' tutulacak • ' + '' + removeCount.toString() + ' kaldırılacak';
+    return '$keptCount tutulacak • $removeCount kaldırılacak';
   }
 
   @override
   String khz(Object arg1) {
-    return '' + arg1.toString() + 'kHz';
+    return '${arg1}kHz';
   }
 
   @override
   String khz2(Object arg1) {
-    return '' + arg1.toString() + ' kHz';
+    return '$arg1 kHz';
   }
 
   @override
   String khzBit(Object arg1, Object arg2) {
-    return '' + arg1.toString() + 'kHz/' + '' + arg2.toString() + 'bit';
+    return '${arg1}kHz/${arg2}bit';
   }
 
   @override
   String khzBit2(Object arg1, Object arg2) {
-    return '' + arg1.toString() + 'kHz/' + '' + arg2.toString() + 'bit';
+    return '${arg1}kHz/${arg2}bit';
   }
 
   @override
   String khzBitCh(Object arg1, Object arg2, Object arg3) {
-    return '' + arg1.toString() + 'kHz / ' + '' + arg2.toString() + 'bit / ' + '' + arg3.toString() + 'kn';
+    return '${arg1}kHz / ${arg2}bit / ${arg3}kn';
   }
 
   @override
@@ -2528,13 +2732,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get ldacBitsPerSample => 'LDAC örnek başına bit sayısı';
 
   @override
-  String get leLsbLittleEndianSubslotLsb => 'LE-LSB — küçük sonlu alt yuva, önce LSB';
+  String get leLsbLittleEndianSubslotLsb =>
+      'LE-LSB — küçük sonlu alt yuva, önce LSB';
 
   @override
-  String get leMsbLittleEndianSubslotMsb => 'LE-MSB — küçük sonlu alt yuva, önce MSB';
+  String get leMsbLittleEndianSubslotMsb =>
+      'LE-MSB — küçük sonlu alt yuva, önce MSB';
 
   @override
-  String get leaveEmptyToKeepTheCurrent => 'Mevcut kimlik bilgilerini korumak için boş bırak';
+  String get leaveEmptyToKeepTheCurrent =>
+      'Mevcut kimlik bilgilerini korumak için boş bırak';
 
   @override
   String get leftBottom => 'Sol (alt)';
@@ -2553,7 +2760,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String lengthS(Object arg1) {
-    return 'Süre ' + '' + arg1.toString() + ' sn';
+    return 'Süre $arg1 sn';
   }
 
   @override
@@ -2563,10 +2770,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get letAndroidChooseTheOutputDevice => 'Çıkış cihazını Android seçsin';
 
   @override
-  String get letAndroidNegotiateTheCodecAutomatically => 'Kodeği Android otomatik belirlesin';
+  String get letAndroidNegotiateTheCodecAutomatically =>
+      'Kodeği Android otomatik belirlesin';
 
   @override
-  String get letOboePickTheBestApi => 'En iyi API\'yi Oboe seçsin. Önce AAudio, gerekirse OpenSL ES.';
+  String get letOboePickTheBestApi =>
+      'En iyi API\'yi Oboe seçsin. Önce AAudio, gerekirse OpenSL ES.';
 
   @override
   String get letSTakeAQuickTour => 'Yeni müzik oynatıcını hızlıca tanıyalım.';
@@ -2579,14 +2788,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String likedSongs(Object arg1) {
-    return '' + arg1.toString() + ' beğenilen şarkı';
+    return '$arg1 beğenilen şarkı';
   }
 
   @override
   String get likedSongsLiveHere => 'Beğendiğin şarkılar burada';
 
   @override
-  String get likesAndReplaysBlendedTogether => 'Beğendiklerin ve tekrar dinlediklerin bir arada';
+  String get likesAndReplaysBlendedTogether =>
+      'Beğendiklerin ve tekrar dinlediklerin bir arada';
 
   @override
   String get limit => 'Sınır';
@@ -2605,7 +2815,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String lineOf(Object arg1, Object arg2) {
-    return '' + arg2.toString() + ' satırın ' + '' + arg1.toString() + '. satırı';
+    return '$arg2 satırın $arg1. satırı';
   }
 
   @override
@@ -2615,7 +2825,7 @@ class AppLocalizationsTr extends AppLocalizations {
     Object captured,
     Object segmentCount,
   ) {
-    return '' + arg2.toString() + ' satırın ' + '' + arg1.toString() + '. satırı · ' + '' + captured.toString() + '/' + '' + segmentCount.toString() + ' sözcük';
+    return '$arg2 satırın $arg1. satırı · $captured/$segmentCount sözcük';
   }
 
   @override
@@ -2623,7 +2833,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String lines2(Object arg1) {
-    return '' + arg1.toString() + ' satır';
+    return '$arg1 satır';
   }
 
   @override
@@ -2631,14 +2841,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String linkedToThisSong(Object arg1) {
-    return '"' + '' + arg1.toString() + '" bu şarkıyla ilişkilendirildi.';
+    return '\"$arg1\" bu şarkıyla ilişkilendirildi.';
   }
 
   @override
   String get list => 'Liste';
 
   @override
-  String get listAvailableLocalAudioOutputDevices => 'Kullanılabilir yerel ses çıkış cihazlarını listele';
+  String get listAvailableLocalAudioOutputDevices =>
+      'Kullanılabilir yerel ses çıkış cihazlarını listele';
 
   @override
   String get listenbrainz => 'ListenBrainz';
@@ -2654,14 +2865,16 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String listeningToByOnFlick(Object arg1, Object arg2) {
-    return 'Lokal\'de ' + '' + arg2.toString() + ' sanatçısından ' + '' + arg1.toString() + ' dinliyor';
+    return 'Lokal\'de $arg2 sanatçısından $arg1 dinliyor';
   }
 
   @override
-  String get littleEndianSubslotLsbFirstBits => 'Küçük sonlu alt yuva, önce LSB bitleri';
+  String get littleEndianSubslotLsbFirstBits =>
+      'Küçük sonlu alt yuva, önce LSB bitleri';
 
   @override
-  String get littleEndianSubslotMsbFirstBits => 'Küçük sonlu alt yuva, önce MSB bitleri';
+  String get littleEndianSubslotMsbFirstBits =>
+      'Küçük sonlu alt yuva, önce MSB bitleri';
 
   @override
   String get livePreview => 'Canlı önizleme';
@@ -2673,21 +2886,23 @@ class AppLocalizationsTr extends AppLocalizations {
   String get loadAJsonOrTxtPreset => 'JSON veya TXT ön ayarı yükle';
 
   @override
-  String get loadAnImpulseResponseForRoom => 'Oda yankısı, crossfeed, kabin simülasyonu veya düzeltme için bir darbe yanıtı yükle.';
+  String get loadAnImpulseResponseForRoom =>
+      'Oda yankısı, crossfeed, kabin simülasyonu veya düzeltme için bir darbe yanıtı yükle.';
 
   @override
   String get loadIr => 'IR yükle';
 
   @override
   String loadedIr(Object displayName) {
-    return 'IR yüklendi: ' + '' + displayName.toString();
+    return 'IR yüklendi: $displayName';
   }
 
   @override
   String get loadingArtwork2 => 'Kapak görseli yükleniyor…';
 
   @override
-  String get loadingFavoritesRecentSessionsGenerated => 'Favoriler, son dinlemeler, oluşturulan karışımlar ve çalma listeleri yükleniyor.';
+  String get loadingFavoritesRecentSessionsGenerated =>
+      'Favoriler, son dinlemeler, oluşturulan karışımlar ve çalma listeleri yükleniyor.';
 
   @override
   String get loadingReplay => 'Yıl özeti yükleniyor';
@@ -2714,16 +2929,19 @@ class AppLocalizationsTr extends AppLocalizations {
   String get look => 'Görünüm';
 
   @override
-  String get lookingForCoverArtFromMusicbrainz => 'MusicBrainz ve Cover Art Archive\'da kapak görseli aranıyor.';
+  String get lookingForCoverArtFromMusicbrainz =>
+      'MusicBrainz ve Cover Art Archive\'da kapak görseli aranıyor.';
 
   @override
   String get lossless => ' Kayıpsız';
 
   @override
-  String get losslessQualityPreservedDuringConversion => 'Dönüştürme sırasında kayıpsız kalite korundu';
+  String get losslessQualityPreservedDuringConversion =>
+      'Dönüştürme sırasında kayıpsız kalite korundu';
 
   @override
-  String get lowAndHighFrequenciesScoopedMids => 'Alt ve üst frekanslar, geri çekilmiş orta frekanslar';
+  String get lowAndHighFrequenciesScoopedMids =>
+      'Alt ve üst frekanslar, geri çekilmiş orta frekanslar';
 
   @override
   String get lowFrequenciesOnly => 'Yalnızca düşük frekanslar';
@@ -2766,17 +2984,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String m(Object arg1) {
-    return '' + arg1.toString() + ' dk';
+    return '$arg1 dk';
   }
 
   @override
   String m2(Object arg1) {
-    return '' + arg1.toString() + ' dk';
+    return '$arg1 dk';
   }
 
   @override
   String mAgo(Object arg1) {
-    return '' + arg1.toString() + ' dakika önce';
+    return '$arg1 dakika önce';
   }
 
   @override
@@ -2802,11 +3020,18 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String matchByArtistAlbumAndTrack(int count) {
-    return (count == 1 ? '' + count.toString() + ' dosyayı' : '' + count.toString() + ' dosyayı') + ' sanatçı, albüm ve parça süresine göre eşleştir';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dosyayı',
+      one: '$count dosyayı',
+    );
+    return '$_temp0 sanatçı, albüm ve parça süresine göre eşleştir';
   }
 
   @override
-  String get matchEqToYourHeadphoneModel => 'Ekolayzırı kulaklık modeline göre ayarla';
+  String get matchEqToYourHeadphoneModel =>
+      'Ekolayzırı kulaklık modeline göre ayarla';
 
   @override
   String get matchNavigation => 'Gezinmeyle eşleştir';
@@ -2816,7 +3041,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String maxB(Object arg1) {
-    return 'En fazla ' + '' + arg1.toString() + ' B';
+    return 'En fazla $arg1 B';
   }
 
   @override
@@ -2827,7 +3052,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String mb(Object arg1) {
-    return '' + arg1.toString() + ' MB';
+    return '$arg1 MB';
   }
 
   @override
@@ -2841,7 +3066,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String mhz(Object arg1) {
-    return '' + arg1.toString() + ' MHz';
+    return '$arg1 MHz';
   }
 
   @override
@@ -2864,7 +3089,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String min(Object arg1) {
-    return '' + arg1.toString() + ' dk';
+    return '$arg1 dk';
   }
 
   @override
@@ -2874,7 +3099,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get miniPlayerAppearance => 'Mini oynatıcı görünümü';
 
   @override
-  String get miniPlayerDefaultsRestored => 'Mini oynatıcı varsayılanlarına döndürüldü';
+  String get miniPlayerDefaultsRestored =>
+      'Mini oynatıcı varsayılanlarına döndürüldü';
 
   @override
   String get miniPlayerHeight => 'Mini oynatıcı yüksekliği';
@@ -2895,14 +3121,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get mirrored => 'Yansıtılmış';
 
   @override
-  String get mitLicenseCopyrightC2026Flick => '\nMIT License\n\nCopyright (c) 2026 Flick Player Contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the "Software"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n';
+  String get mitLicenseCopyrightC2026Flick =>
+      '\nMIT License\n\nCopyright (c) 2026 Flick Player Contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n';
 
   @override
   String get mix => 'Karışım';
 
   @override
   String mix2(Object arg1) {
-    return 'Karışım ' + '' + arg1.toString();
+    return 'Karışım $arg1';
   }
 
   @override
@@ -2913,7 +3140,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String moAgo(Object arg1) {
-    return '' + arg1.toString() + ' ay önce';
+    return '$arg1 ay önce';
   }
 
   @override
@@ -2930,7 +3157,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String more2(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' + ' + '' + arg2.toString() + ' daha';
+    return '$arg1 + $arg2 daha';
   }
 
   @override
@@ -2947,7 +3174,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String moreFrom(Object arg1) {
-    return '' + arg1.toString() + ' sanatçısından daha fazlası';
+    return '$arg1 sanatçısından daha fazlası';
   }
 
   @override
@@ -2955,57 +3182,59 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String moreTo(Object arg1, Object arg2) {
-    return '' + arg2.toString() + ' için ' + '' + arg1.toString() + ' daha';
+    return '$arg2 için $arg1 daha';
   }
 
   @override
   String moreToUnlock(Object remaining, Object unit) {
-    return 'Kilidi açmak için ' + '' + remaining.toString() + ' ' + '' + unit.toString() + ' daha.';
+    return 'Kilidi açmak için $remaining $unit daha.';
   }
 
   @override
-  String get mostDlnaServersNeedNoPassword => 'Çoğu DLNA sunucusu şifre gerektirmez';
+  String get mostDlnaServersNeedNoPassword =>
+      'Çoğu DLNA sunucusu şifre gerektirmez';
 
   @override
   String get mostPlayed => 'En çok dinlenenler';
 
   @override
   String mostReplayed(Object arg1) {
-    return 'En çok tekrar dinlenen · ' + '' + arg1.toString();
+    return 'En çok tekrar dinlenen · $arg1';
   }
 
   @override
   String get motionArtRefreshed => 'Hareketli kapak görseli yenilendi';
 
   @override
-  String get moveEveryStampedLyricForwardOr => 'Zaman damgalı tüm şarkı sözlerini birlikte ileri veya geri taşı.';
+  String get moveEveryStampedLyricForwardOr =>
+      'Zaman damgalı tüm şarkı sözlerini birlikte ileri veya geri taşı.';
 
   @override
   String get movement => 'Hareket';
 
   @override
   String ms(Object arg1) {
-    return '' + arg1.toString() + ' ms';
+    return '$arg1 ms';
   }
 
   @override
   String ms2(Object arg1) {
-    return '' + arg1.toString() + ' ms';
+    return '$arg1 ms';
   }
 
   @override
   String ms3(Object arg1) {
-    return '' + arg1.toString() + ' ms';
+    return '$arg1 ms';
   }
 
   @override
   String ms4(Object arg1) {
-    return '' + arg1.toString() + ' ms';
+    return '$arg1 ms';
   }
 
   @override
   String ms5(Object arg1) {
-    return '' + arg1.toString() + ' ms';
+    return '$arg1 ms';
   }
 
   @override
@@ -3013,7 +3242,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String musicFolders(Object arg1) {
-    return '' + arg1.toString() + ' müzik klasörü';
+    return '$arg1 müzik klasörü';
   }
 
   @override
@@ -3021,12 +3250,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String my(Object arg1) {
-    return 'Benim ' + '' + arg1.toString();
+    return 'Benim $arg1';
   }
 
   @override
   String nDb(Object arg1, Object arg2) {
-    return '%' + '' + arg1.toString() + '\n' + '' + arg2.toString() + ' dB';
+    return '%$arg1\n$arg2 dB';
   }
 
   @override
@@ -3034,7 +3263,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String narrow(Object amount) {
-    return '%' + '' + amount.toString() + ' dar';
+    return '%$amount dar';
   }
 
   @override
@@ -3044,10 +3273,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get nativeDsdExperimental => 'Yerel DSD (Deneysel)';
 
   @override
-  String get nativeDsdExperimentalMayBeBuggy => 'Yerel DSD — Deneysel (hatalar olabilir)';
+  String get nativeDsdExperimentalMayBeBuggy =>
+      'Yerel DSD — Deneysel (hatalar olabilir)';
 
   @override
-  String get naturalEqualizerFeelResponsiveYetSmooth => 'Doğal ekolayzır hissi — hem duyarlı hem akıcı';
+  String get naturalEqualizerFeelResponsiveYetSmooth =>
+      'Doğal ekolayzır hissi — hem duyarlı hem akıcı';
 
   @override
   String get natureAmbient => 'Doğa Sesleri';
@@ -3063,7 +3294,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String negotiated(Object arg1) {
-    return 'Anlaşılan: ' + '' + arg1.toString();
+    return 'Anlaşılan: $arg1';
   }
 
   @override
@@ -3080,7 +3311,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String neutral(Object amount) {
-    return '%' + '' + amount.toString() + ' nötr';
+    return '%$amount nötr';
   }
 
   @override
@@ -3097,7 +3328,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String nextToGo(Object arg1, Object remaining, Object unit) {
-    return 'Sıradaki: ' + '' + arg1.toString() + ' — ' + '' + remaining.toString() + ' ' + '' + unit.toString() + ' kaldı';
+    return 'Sıradaki: $arg1 — $remaining $unit kaldı';
   }
 
   @override
@@ -3116,24 +3347,27 @@ class AppLocalizationsTr extends AppLocalizations {
   String get noAlbumsFound => 'Albüm bulunamadı';
 
   @override
-  String get noAppleMusicReleaseFoundTry => 'Apple Music\'te yayın bulunamadı. Sanatçı veya albüm adını düzenleyip tekrar aramayı dene.';
+  String get noAppleMusicReleaseFoundTry =>
+      'Apple Music\'te yayın bulunamadı. Sanatçı veya albüm adını düzenleyip tekrar aramayı dene.';
 
   @override
   String get noArtistsFound => 'Sanatçı bulunamadı';
 
   @override
   String noArtistsMatch(Object _searchQuery) {
-    return '"' + '' + _searchQuery.toString() + '" ile eşleşen sanatçı yok';
+    return '\"$_searchQuery\" ile eşleşen sanatçı yok';
   }
 
   @override
-  String get noCastingDevicesFoundMakeSure => 'Yayın yapılabilecek cihaz bulunamadı. Telefonun ve alıcının aynı ağda olduğundan emin ol.';
+  String get noCastingDevicesFoundMakeSure =>
+      'Yayın yapılabilecek cihaz bulunamadı. Telefonun ve alıcının aynı ağda olduğundan emin ol.';
 
   @override
   String get noCategoriesSelected => 'Kategori seçilmedi';
 
   @override
-  String get noChangelogNotesForThisVersion => 'Bu sürümün değişiklik notları henüz yok.';
+  String get noChangelogNotesForThisVersion =>
+      'Bu sürümün değişiklik notları henüz yok.';
 
   @override
   String get noCustomPresetsYet => 'Henüz özel ön ayar yok.';
@@ -3154,13 +3388,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get noHistoryYet => 'Henüz dinleme geçmişin yok';
 
   @override
-  String get noInternetConnectionPleaseCheckYour => 'İnternet bağlantısı yok. Ağını kontrol edip tekrar dene.';
+  String get noInternetConnectionPleaseCheckYour =>
+      'İnternet bağlantısı yok. Ağını kontrol edip tekrar dene.';
 
   @override
   String get noLogsYet => 'Henüz günlük kaydı yok.';
 
   @override
-  String get noLyricsFoundOnlineForThis => 'Bu şarkının sözleri çevrimiçi bulunamadı.';
+  String get noLyricsFoundOnlineForThis =>
+      'Bu şarkının sözleri çevrimiçi bulunamadı.';
 
   @override
   String get noLyricsYet => 'Henüz şarkı sözü yok';
@@ -3173,14 +3409,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String noMatchesFor(Object _query) {
-    return '"' + '' + _query.toString() + '" için eşleşme yok';
+    return '\"$_query\" için eşleşme yok';
   }
 
   @override
   String get noMatchesFound => 'Eşleşme bulunamadı';
 
   @override
-  String get noMatchesTryFewerWordsOr => 'Eşleşme yok. Daha az sözcükle dene veya çevrimiçi ara.';
+  String get noMatchesTryFewerWordsOr =>
+      'Eşleşme yok. Daha az sözcükle dene veya çevrimiçi ara.';
 
   @override
   String get noMusicYet => 'Henüz müzik yok';
@@ -3204,19 +3441,20 @@ class AppLocalizationsTr extends AppLocalizations {
   String get noPlaylistsYet2 => 'Henüz çalma listesi yok';
 
   @override
-  String get noPlaylistsYetNcreateOneIn => 'Henüz çalma listesi yok.\nÇalma Listeleri sekmesinden oluşturabilirsin.';
+  String get noPlaylistsYetNcreateOneIn =>
+      'Henüz çalma listesi yok.\nÇalma Listeleri sekmesinden oluşturabilirsin.';
 
   @override
   String get noRankingDataYet => 'Henüz sıralama verisi yok';
 
   @override
   String noResultsFor(Object query) {
-    return '"' + '' + query.toString() + '" için sonuç yok';
+    return '\"$query\" için sonuç yok';
   }
 
   @override
   String noResultsFoundFor(Object query) {
-    return '"' + '' + query.toString() + '" için sonuç bulunamadı.';
+    return '\"$query\" için sonuç bulunamadı.';
   }
 
   @override
@@ -3250,7 +3488,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get noUsbAudioDevicesFound => 'USB ses cihazı bulunamadı';
 
   @override
-  String get noWordTimingYetAutoFill => 'Henüz sözcük zamanlaması yok. Otomatik doldurma, başlangıç olarak sözcükleri eşit aralıklarla yerleştirir. İstersen Sözcük Eşitleme modunda zamanlamaları kendin kaydedebilirsin.';
+  String get noWordTimingYetAutoFill =>
+      'Henüz sözcük zamanlaması yok. Otomatik doldurma, başlangıç olarak sözcükleri eşit aralıklarla yerleştirir. İstersen Sözcük Eşitleme modunda zamanlamaları kendin kaydedebilirsin.';
 
   @override
   String get none => 'Hiçbiri';
@@ -3259,13 +3498,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get notAnAlacFile => 'Bu bir ALAC dosyası değil';
 
   @override
-  String get notFoundOnlineTryADifferent => 'Çevrimiçi bulunamadı. Farklı bir yazımla dene.';
+  String get notFoundOnlineTryADifferent =>
+      'Çevrimiçi bulunamadı. Farklı bir yazımla dene.';
 
   @override
   String get notHeld => 'Tutulmuyor';
 
   @override
-  String get notRecommendedForNormalUsageDsd => 'Normal kullanım için önerilmez. DSD oynatımı kararsız olabilir ve seste kesintilere yol açabilir.';
+  String get notRecommendedForNormalUsageDsd =>
+      'Normal kullanım için önerilmez. DSD oynatımı kararsız olabilir ve seste kesintilere yol açabilir.';
 
   @override
   String get notRegistered => 'Kayıtlı değil';
@@ -3286,7 +3527,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get notchDepth => 'Çentik derinliği';
 
   @override
-  String get noticeableTintingFromAlbumArt => 'Albüm kapağından belirgin renk tonları.';
+  String get noticeableTintingFromAlbumArt =>
+      'Albüm kapağından belirgin renk tonları.';
 
   @override
   String get nov => 'Kas';
@@ -3304,7 +3546,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get numberOnArt => 'Kapak üzerinde numara';
 
   @override
-  String get oauthSignInNoPasswordStored => 'OAuth ile oturum açılır; burada şifre saklanmaz';
+  String get oauthSignInNoPasswordStored =>
+      'OAuth ile oturum açılır; burada şifre saklanmaz';
 
   @override
   String get oceanWaves => 'Okyanus Dalgaları';
@@ -3316,7 +3559,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get off => 'Kapalı';
 
   @override
-  String get onAndroidTheStandardJustAudio => 'Android\'de standart just_audio oynatma yolu, desteklenen cihazlarda EQ, dinamikler, denge ve uzamsal efektlerin yerel karşılıklarını uygular. Rust motoru bu denetimleri daha hassas işler; bu yüzden bazı Android sonuçları yaklaşık olabilir.';
+  String get onAndroidTheStandardJustAudio =>
+      'Android\'de standart just_audio oynatma yolu, desteklenen cihazlarda EQ, dinamikler, denge ve uzamsal efektlerin yerel karşılıklarını uygular. Rust motoru bu denetimleri daha hassas işler; bu yüzden bazı Android sonuçları yaklaşık olabilir.';
 
   @override
   String get onRepeat => 'Tekrarda';
@@ -3325,7 +3569,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get onlineResults => 'Çevrimiçi sonuçlar';
 
   @override
-  String get onlyLibraryEntriesAreRemovedYour => 'Yalnızca kitaplık kayıtları kaldırılır; ses dosyaların diskte kalır.';
+  String get onlyLibraryEntriesAreRemovedYour =>
+      'Yalnızca kitaplık kayıtları kaldırılır; ses dosyaların diskte kalır.';
 
   @override
   String get open => 'Aç';
@@ -3346,7 +3591,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get openLibrary => 'Kitaplığı aç';
 
   @override
-  String get openListenbrainzOrgSettings => 'listenbrainz.org/settings sayfasını aç';
+  String get openListenbrainzOrgSettings =>
+      'listenbrainz.org/settings sayfasını aç';
 
   @override
   String get openManual => 'Kılavuzu aç';
@@ -3364,7 +3610,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get openslEsLegacy => 'OpenSL ES (eski)';
 
   @override
-  String get orRemoveAllUsingRecommendedPicks => 'Veya önerilen seçimlerle tümünü kaldır';
+  String get orRemoveAllUsingRecommendedPicks =>
+      'Veya önerilen seçimlerle tümünü kaldır';
 
   @override
   String get orbital => 'Yörüngesel';
@@ -3373,10 +3620,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get otherPlaylists => 'Diğer çalma listeleri';
 
   @override
-  String get ourRustPoweredEngineCleanerSound => 'Rust tabanlı ses motorumuz. Daha temiz ses ve akıcı oynatma — günlük dinleme için önerilir.';
+  String get ourRustPoweredEngineCleanerSound =>
+      'Rust tabanlı ses motorumuz. Daha temiz ses ve akıcı oynatma — günlük dinleme için önerilir.';
 
   @override
-  String get outlineTheMiniPlayer => 'Mini oynatıcının kenarlarını belirginleştir';
+  String get outlineTheMiniPlayer =>
+      'Mini oynatıcının kenarlarını belirginleştir';
 
   @override
   String get output => 'Çıkış';
@@ -3391,7 +3640,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get outputRate => 'Çıkış hızı';
 
   @override
-  String get overviewMetricsChooseUpTo3 => 'Genel bakış ölçümleri · en fazla 3 tane seç';
+  String get overviewMetricsChooseUpTo3 =>
+      'Genel bakış ölçümleri · en fazla 3 tane seç';
 
   @override
   String get paired => 'Eşleştirildi';
@@ -3401,7 +3651,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String parametricBandsWithIndependentFrequency(Object arg1) {
-    return 'Bağımsız frekans, kazanç ve Q ayarlarına sahip ' + '' + arg1.toString() + ' parametrik bant. Düzenlemek için dokun.';
+    return 'Bağımsız frekans, kazanç ve Q ayarlarına sahip $arg1 parametrik bant. Düzenlemek için dokun.';
   }
 
   @override
@@ -3414,7 +3664,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get password => 'Şifre';
 
   @override
-  String get pasteOrTypeTheSongLyrics => 'Şarkı sözlerini buraya yapıştır veya yaz — her satıra bir dize';
+  String get pasteOrTypeTheSongLyrics =>
+      'Şarkı sözlerini buraya yapıştır veya yaz — her satıra bir dize';
 
   @override
   String get pasteYourListenbrainzToken => 'ListenBrainz belirtecini yapıştır';
@@ -3450,10 +3701,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get personalPlaylist => 'Kişisel çalma listesi';
 
   @override
-  String get phoneAndHeadsetVolumeAreIndependent => 'Telefonun ve kulaklığın ses düzeyleri bağımsız';
+  String get phoneAndHeadsetVolumeAreIndependent =>
+      'Telefonun ve kulaklığın ses düzeyleri bağımsız';
 
   @override
-  String get phoneAndHeadsetVolumeAreLinked => 'Telefonun ve kulaklığın ses düzeyleri bağlantılı';
+  String get phoneAndHeadsetVolumeAreLinked =>
+      'Telefonun ve kulaklığın ses düzeyleri bağlantılı';
 
   @override
   String get photoFraming => 'Fotoğraf kadrajı';
@@ -3462,7 +3715,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get pickALineWithLyrics => 'Şarkı sözü içeren bir satır seç';
 
   @override
-  String get pickALyricLineIn => '1. Satırlar bölümünden bir şarkı sözü satırı seç, sonra Araçlar\'a geç.\n2. Oynat\'a bas ve her sözcüğü duyduğunda büyük "Sözcüğe Dokun" düğmesine dokun. İlk dokunuş satıra da zaman damgası ekler.\n3. Zamanı düzeltmek, yeniden ayarlamak veya silmek için sözcük etiketine dokun.\n4. Tüm sözcükleri damgalanan satırlar, sözcük başına karaoke zamanlamasıyla kaydedilir.';
+  String get pickALyricLineIn =>
+      '1. Satırlar bölümünden bir şarkı sözü satırı seç, sonra Araçlar\'a geç.\n2. Oynat\'a bas ve her sözcüğü duyduğunda büyük \"Sözcüğe Dokun\" düğmesine dokun. İlk dokunuş satıra da zaman damgası ekler.\n3. Zamanı düzeltmek, yeniden ayarlamak veya silmek için sözcük etiketine dokun.\n4. Tüm sözcükleri damgalanan satırlar, sözcük başına karaoke zamanlamasıyla kaydedilir.';
 
   @override
   String get pickAgain => 'Yeniden seç';
@@ -3474,14 +3728,21 @@ class AppLocalizationsTr extends AppLocalizations {
   String get pickUpExactlyWhereYourLast => 'Son kaldığın yerden devam et.';
 
   @override
-  String get pinchApartNarrowerHigherQNpinch => 'Parmaklarını aç = daha dar (daha yüksek Q)\nParmaklarını birleştir = daha geniş (daha düşük Q)';
+  String get pinchApartNarrowerHigherQNpinch =>
+      'Parmaklarını aç = daha dar (daha yüksek Q)\nParmaklarını birleştir = daha geniş (daha düşük Q)';
 
   @override
   String get pitch => 'Ses perdesi';
 
   @override
   String pitchSemitones(int semitones) {
-    return (semitones == 1 ? '' + semitones.toString() + ' yarım ses' : '' + semitones.toString() + ' yarım ses');
+    String _temp0 = intl.Intl.pluralLogic(
+      semitones,
+      locale: localeName,
+      other: '$semitones yarım ses',
+      one: '$semitones yarım ses',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -3494,10 +3755,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get play => 'Oynat';
 
   @override
-  String get playAFewSongsAndThis => 'Birkaç şarkı çal; bu sayfa karışımlar, sanatçılar ve kısayollarla dolmaya başlayacak.';
+  String get playAFewSongsAndThis =>
+      'Birkaç şarkı çal; bu sayfa karışımlar, sanatçılar ve kısayollarla dolmaya başlayacak.';
 
   @override
-  String get playAFewTracksTodayTo => 'Günlük özetini oluşturmak için bugün birkaç şarkı dinle.';
+  String get playAFewTracksTodayTo =>
+      'Günlük özetini oluşturmak için bugün birkaç şarkı dinle.';
 
   @override
   String get playAgain => 'Tekrar çal';
@@ -3506,7 +3769,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get playBadges => 'Rozetleri oynat';
 
   @override
-  String get playCategoriesInRandomOrderTracks => 'Kategorileri rastgele, şarkıları sırayla çal';
+  String get playCategoriesInRandomOrderTracks =>
+      'Kategorileri rastgele, şarkıları sırayla çal';
 
   @override
   String get playInOrder => 'Sırayla çal';
@@ -3515,53 +3779,71 @@ class AppLocalizationsTr extends AppLocalizations {
   String get playNext => 'Sıradaki çal';
 
   @override
-  String get playbackContinuesWhenABluetoothDevice => 'Bluetooth cihazı bağlandığında oynatma devam eder';
+  String get playbackContinuesWhenABluetoothDevice =>
+      'Bluetooth cihazı bağlandığında oynatma devam eder';
 
   @override
-  String get playbackContinuesWhenAUsbDac => 'USB DAC takıldığında oynatma devam eder';
+  String get playbackContinuesWhenAUsbDac =>
+      'USB DAC takıldığında oynatma devam eder';
 
   @override
-  String get playbackContinuesWhenAUsbDac2 => 'USB DAC çıkarıldığında oynatma devam eder';
+  String get playbackContinuesWhenAUsbDac2 =>
+      'USB DAC çıkarıldığında oynatma devam eder';
 
   @override
-  String get playbackContinuesWhenAudioOutput => 'Ses çıkışı bağlantısı kesildiğinde oynatma devam eder';
+  String get playbackContinuesWhenAudioOutput =>
+      'Ses çıkışı bağlantısı kesildiğinde oynatma devam eder';
 
   @override
   String get playbackEngine => 'Oynatma motoru';
 
   @override
-  String get playbackIsUsingAndroidManagedOutput => 'Ses Android tarafından yönetilen bir çıkıştan çalınıyor ve yeniden örneklenebilir.';
+  String get playbackIsUsingAndroidManagedOutput =>
+      'Ses Android tarafından yönetilen bir çıkıştan çalınıyor ve yeniden örneklenebilir.';
 
   @override
-  String get playbackIsUsingTheStandardAndroid => 'Ses standart Android çıkış yolundan çalınıyor.';
+  String get playbackIsUsingTheStandardAndroid =>
+      'Ses standart Android çıkış yolundan çalınıyor.';
 
   @override
-  String get playbackModeWillUpdateAfterThe => 'Oynatma modu sonraki çıkış veya oynatma yenilemesinde güncellenecek.';
+  String get playbackModeWillUpdateAfterThe =>
+      'Oynatma modu sonraki çıkış veya oynatma yenilemesinde güncellenecek.';
 
   @override
   String get playbackPath => 'Oynatma yolu';
 
   @override
-  String get playbackPausesWhenABluetoothAudio => 'Bluetooth ses cihazı bağlandığında oynatma duraklar';
+  String get playbackPausesWhenABluetoothAudio =>
+      'Bluetooth ses cihazı bağlandığında oynatma duraklar';
 
   @override
-  String get playbackPausesWhenAUsbDac => 'USB DAC takıldığında oynatma duraklar';
+  String get playbackPausesWhenAUsbDac =>
+      'USB DAC takıldığında oynatma duraklar';
 
   @override
-  String get playbackPausesWhenAUsbDac2 => 'USB DAC fiziksel olarak çıkarıldığında oynatma duraklar';
+  String get playbackPausesWhenAUsbDac2 =>
+      'USB DAC fiziksel olarak çıkarıldığında oynatma duraklar';
 
   @override
-  String get playbackPausesWhenBluetoothOrHeadphones => 'Bluetooth veya kulaklık bağlantısı kesildiğinde oynatma duraklar';
+  String get playbackPausesWhenBluetoothOrHeadphones =>
+      'Bluetooth veya kulaklık bağlantısı kesildiğinde oynatma duraklar';
 
   @override
-  String get playbackResumesWhenADeviceReconnects => 'Cihaz 30 saniye içinde yeniden bağlanırsa oynatma sürer';
+  String get playbackResumesWhenADeviceReconnects =>
+      'Cihaz 30 saniye içinde yeniden bağlanırsa oynatma sürer';
 
   @override
   String get playbackSpeed => 'Oynatma hızı';
 
   @override
   String played(int count) {
-    return (count == 1 ? '' + count.toString() + ' şarkı çalındı' : '' + count.toString() + ' şarkı çalındı');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı çalındı',
+      one: '$count şarkı çalındı',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -3569,7 +3851,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String playlist(int count) {
-    return (count == 1 ? '' + count.toString() + ' çalma listesi' : '' + count.toString() + ' çalma listesi');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count çalma listesi',
+      one: '$count çalma listesi',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -3577,7 +3865,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String playlistCreated(Object arg1) {
-    return '"' + '' + arg1.toString() + '" çalma listesi oluşturuldu';
+    return '\"$arg1\" çalma listesi oluşturuldu';
   }
 
   @override
@@ -3588,12 +3876,18 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String plays(Object arg1) {
-    return '' + arg1.toString() + ' dinlenme';
+    return '$arg1 dinlenme';
   }
 
   @override
   String plays2(int count) {
-    return (count == 1 ? '1 dinlenme' : '' + count.toString() + ' dinlenme');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dinlenme',
+      one: '1 dinlenme',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -3603,11 +3897,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get pleaseEnterAPlaylistName => 'Lütfen bir çalma listesi adı gir';
 
   @override
-  String get pleaseEnterYourListenbrainzUserToken => 'Lütfen ListenBrainz kullanıcı belirtecini gir.';
+  String get pleaseEnterYourListenbrainzUserToken =>
+      'Lütfen ListenBrainz kullanıcı belirtecini gir.';
 
   @override
   String posterPreviewPlays(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' afiş önizlemesi. ' + '' + arg2.toString() + ' dinlenme.';
+    return '$arg1 afiş önizlemesi. $arg2 dinlenme.';
   }
 
   @override
@@ -3624,11 +3919,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String preset(Object activePresetName) {
-    return 'Ön ayar: ' + '' + activePresetName.toString();
+    return 'Ön ayar: $activePresetName';
   }
 
   @override
-  String get presetImportedWithAdjustments => 'Ön ayar düzenlemelerle içe aktarıldı';
+  String get presetImportedWithAdjustments =>
+      'Ön ayar düzenlemelerle içe aktarıldı';
 
   @override
   String get presetName => 'Ön ayar adı';
@@ -3652,7 +3948,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get prewarming => 'Önceden hazırlanıyor';
 
   @override
-  String get prioritiseConnectionStability => 'Bağlantı kararlılığına öncelik ver';
+  String get prioritiseConnectionStability =>
+      'Bağlantı kararlılığına öncelik ver';
 
   @override
   String get processingLive => 'Canlı işleniyor';
@@ -3670,7 +3967,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get protocol => 'Protokol';
 
   @override
-  String get pulledFromYourLateSessionPlays => 'Gece geç saatlerdeki dinlemelerinden seçildi';
+  String get pulledFromYourLateSessionPlays =>
+      'Gece geç saatlerdeki dinlemelerinden seçildi';
 
   @override
   String get purple => 'Mor';
@@ -3680,7 +3978,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String queue2(Object count) {
-    return 'Sıra (' + '' + count.toString() + ')';
+    return 'Sıra ($count)';
   }
 
   @override
@@ -3688,17 +3986,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String queued(Object arg1) {
-    return '"' + '' + arg1.toString() + '" sıraya eklendi';
+    return '\"$arg1\" sıraya eklendi';
   }
 
   @override
   String queuedSongs(Object arg1) {
-    return '' + arg1.toString() + ' şarkı sıraya eklendi';
+    return '$arg1 şarkı sıraya eklendi';
   }
 
   @override
   String queuedSongs3(Object arg1) {
-    return '' + arg1.toString() + ' şarkı sıraya eklendi';
+    return '$arg1 şarkı sıraya eklendi';
   }
 
   @override
@@ -3714,7 +4012,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get ratio => 'Oran';
 
   @override
-  String get rawDsdStreamToDacRequires => 'DAC\'e ham DSD akışı gönderir. ENCODING_DSD donanım desteği gerekir; aksi hâlde otomatik olarak DoP veya PCM\'ye geçilir.';
+  String get rawDsdStreamToDacRequires =>
+      'DAC\'e ham DSD akışı gönderir. ENCODING_DSD donanım desteği gerekir; aksi hâlde otomatik olarak DoP veya PCM\'ye geçilir.';
 
   @override
   String get rawPcm => '→ Ham PCM';
@@ -3727,24 +4026,31 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String readyToRemoveSongKeepingIn(int count, Object kept) {
-    return (count == 1 ? '' + count.toString() + ' şarkı' : '' + count.toString() + ' şarkı') + ' kaldırılmaya hazır — toplam ' + '' + kept.toString() + ' şarkı tutulacak.';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı',
+      one: '$count şarkı',
+    );
+    return '$_temp0 kaldırılmaya hazır — toplam $kept şarkı tutulacak.';
   }
 
   @override
   String recapSavedAs(Object format) {
-    return 'Özet ' + '' + format.toString() + ' olarak kaydedildi';
+    return 'Özet $format olarak kaydedildi';
   }
 
   @override
   String recentPicksOnHand(Object arg1) {
-    return '' + arg1.toString() + ' yakın tarihli seçim hazır';
+    return '$arg1 yakın tarihli seçim hazır';
   }
 
   @override
   String get recentlyAdded => 'Son eklenenler';
 
   @override
-  String get recentlyAddedTracksWaitingForMore => 'Daha fazla dinlenmeyi bekleyen yeni şarkılar.';
+  String get recentlyAddedTracksWaitingForMore =>
+      'Daha fazla dinlenmeyi bekleyen yeni şarkılar.';
 
   @override
   String get recentlyPlayed => 'Son dinlenenler';
@@ -3804,19 +4110,20 @@ class AppLocalizationsTr extends AppLocalizations {
   String get removeAll => 'Tümünü kaldır';
 
   @override
-  String get removeAllWithBestPicks => 'En iyi seçimleri kullanarak tümü kaldırılsın mı?';
+  String get removeAllWithBestPicks =>
+      'En iyi seçimleri kullanarak tümü kaldırılsın mı?';
 
   @override
   String get removeCustomArt => 'Özel kapak görselini kaldır';
 
   @override
   String removeDuplicates2(Object toRemove) {
-    return '' + toRemove.toString() + ' yinelenen kayıt kaldırılsın mı?';
+    return '$toRemove yinelenen kayıt kaldırılsın mı?';
   }
 
   @override
   String removeDuplicates3(Object toRemove) {
-    return '' + toRemove.toString() + ' yinelenen kaydı kaldır';
+    return '$toRemove yinelenen kaydı kaldır';
   }
 
   @override
@@ -3841,40 +4148,44 @@ class AppLocalizationsTr extends AppLocalizations {
   String get removeServer2 => 'Sunucuyu kaldır';
 
   @override
-  String get removeTheDatabaseEntriesOrDelete => 'Veritabanı kayıtlarını kaldırabilir veya dosyaları cihazından silebilirsin. Bu işlem geri alınamaz.';
+  String get removeTheDatabaseEntriesOrDelete =>
+      'Veritabanı kayıtlarını kaldırabilir veya dosyaları cihazından silebilirsin. Bu işlem geri alınamaz.';
 
   @override
-  String get removeTheDatabaseEntryOrDelete => 'Veritabanı kaydını kaldırabilir veya dosyayı cihazından silebilirsin. Bu işlem geri alınamaz.';
+  String get removeTheDatabaseEntryOrDelete =>
+      'Veritabanı kaydını kaldırabilir veya dosyayı cihazından silebilirsin. Bu işlem geri alınamaz.';
 
   @override
-  String get removeTheseSongsFromYourLibrary => 'Bu şarkıları kitaplığından kaldır. Cihazındaki dosyalar etkilenmez.';
+  String get removeTheseSongsFromYourLibrary =>
+      'Bu şarkıları kitaplığından kaldır. Cihazındaki dosyalar etkilenmez.';
 
   @override
-  String get removeThisSongFromYourLibrary => 'Bu şarkıyı kitaplığından kaldır. Cihazındaki dosya etkilenmez.';
+  String get removeThisSongFromYourLibrary =>
+      'Bu şarkıyı kitaplığından kaldır. Cihazındaki dosya etkilenmez.';
 
   @override
   String removedCustomAlbumArtFor(Object arg1) {
-    return '"' + '' + arg1.toString() + '" için özel albüm kapağı kaldırıldı.';
+    return '\"$arg1\" için özel albüm kapağı kaldırıldı.';
   }
 
   @override
   String removedCustomAlbumArtFor2(Object arg1) {
-    return '"' + '' + arg1.toString() + '" için özel albüm kapağı kaldırıldı.';
+    return '\"$arg1\" için özel albüm kapağı kaldırıldı.';
   }
 
   @override
   String removedDuplicatesKept(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' yinelenen kayıt kaldırıldı — ' + '' + arg2.toString() + ' korundu.';
+    return '$arg1 yinelenen kayıt kaldırıldı — $arg2 korundu.';
   }
 
   @override
   String removedFromFavorites(Object arg1) {
-    return '"' + '' + arg1.toString() + '" favorilerden kaldırıldı';
+    return '\"$arg1\" favorilerden kaldırıldı';
   }
 
   @override
   String removedFromFavorites2(Object arg1) {
-    return '' + arg1.toString() + ' favorilerden kaldırıldı';
+    return '$arg1 favorilerden kaldırıldı';
   }
 
   @override
@@ -3882,17 +4193,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String removedFromLibrary(Object arg1) {
-    return '"' + '' + arg1.toString() + '" kitaplıktan kaldırıldı';
+    return '\"$arg1\" kitaplıktan kaldırıldı';
   }
 
   @override
   String removedSongsFromFavorites(Object arg1) {
-    return '' + arg1.toString() + ' şarkı favorilerden kaldırıldı';
+    return '$arg1 şarkı favorilerden kaldırıldı';
   }
 
   @override
   String removedSongsFromLibrary(Object arg1) {
-    return '' + arg1.toString() + ' şarkı kitaplıktan kaldırıldı';
+    return '$arg1 şarkı kitaplıktan kaldırıldı';
   }
 
   @override
@@ -3908,11 +4219,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get renamePreset => 'Ön ayarı yeniden adlandır';
 
   @override
-  String get reorderFilterAndShuffleFromThis => 'Buradan sıralamayı değiştir, filtrele veya karıştır.';
+  String get reorderFilterAndShuffleFromThis =>
+      'Buradan sıralamayı değiştir, filtrele veya karıştır.';
 
   @override
   String repeat(Object arg1) {
-    return 'Tekrarla: ' + '' + arg1.toString();
+    return 'Tekrarla: $arg1';
   }
 
   @override
@@ -3922,7 +4234,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get repeatRewind => 'Tekrar başa sar';
 
   @override
-  String get replaceAlbumNameWithAVerified => 'Bit-perfect akışta albüm adı yerine doğrulanmış bit-perfect kapsülünü göster';
+  String get replaceAlbumNameWithAVerified =>
+      'Bit-perfect akışta albüm adı yerine doğrulanmış bit-perfect kapsülünü göster';
 
   @override
   String get replay => 'Yıl Özeti';
@@ -3940,7 +4253,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get requestedOutputRate => 'İstenen çıkış hızı';
 
   @override
-  String get requiredToDetectDevicesCodecsAnd => 'Cihazları, kodekleri ve pil düzeylerini algılamak için gerekli';
+  String get requiredToDetectDevicesCodecsAnd =>
+      'Cihazları, kodekleri ve pil düzeylerini algılamak için gerekli';
 
   @override
   String get resampler => 'Yeniden örnekleyici';
@@ -3952,16 +4266,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get resetArtwork => 'Kapak görselini sıfırla';
 
   @override
-  String get resetArtworkDescription => 'Kapak görseli bu albümün dosyalarından yeniden algılansın mı? Otomatik bulunan kapaklar dosyalardaki görsellerle değiştirilir; özel kapaklar korunur.';
+  String get resetArtworkDescription =>
+      'Kapak görseli bu albümün dosyalarından yeniden algılansın mı? Otomatik bulunan kapaklar dosyalardaki görsellerle değiştirilir; özel kapaklar korunur.';
 
   @override
   String resetArtworkFor(Object arg1) {
-    return '"' + '' + arg1.toString() + '" için kapak görseli sıfırlandı.';
+    return '\"$arg1\" için kapak görseli sıfırlandı.';
   }
 
   @override
   String resetArtworkFor2(Object arg1) {
-    return '"' + '' + arg1.toString() + '" için kapak görseli sıfırlandı.';
+    return '\"$arg1\" için kapak görseli sıfırlandı.';
   }
 
   @override
@@ -3998,21 +4313,24 @@ class AppLocalizationsTr extends AppLocalizations {
   String get restartRequired => 'Yeniden başlatma gerekli';
 
   @override
-  String get restartTheAppToApplyPlayback => 'Oynatma değişikliklerini uygulamak için uygulamayı yeniden başlat.';
+  String get restartTheAppToApplyPlayback =>
+      'Oynatma değişikliklerini uygulamak için uygulamayı yeniden başlat.';
 
   @override
-  String get restartYourDeviceToApplyOutput => 'Çıkış biçimi değişikliklerini uygulamak için cihazını yeniden başlat.';
+  String get restartYourDeviceToApplyOutput =>
+      'Çıkış biçimi değişikliklerini uygulamak için cihazını yeniden başlat.';
 
   @override
   String get restartingFlick => 'Lokal yeniden başlatılıyor';
 
   @override
   String results(Object arg1) {
-    return 'Sonuçlar (' + '' + arg1.toString() + ')';
+    return 'Sonuçlar ($arg1)';
   }
 
   @override
-  String get resumeAFamiliarFavoriteOrShuffle => 'Tanıdık bir favoriden devam et veya dinlemelerine göre hazırlanan karışımlardan birini rastgele çal.';
+  String get resumeAFamiliarFavoriteOrShuffle =>
+      'Tanıdık bir favoriden devam et veya dinlemelerine göre hazırlanan karışımlardan birini rastgele çal.';
 
   @override
   String get resumeOnReconnect => 'Yeniden bağlanınca devam et';
@@ -4051,16 +4369,19 @@ class AppLocalizationsTr extends AppLocalizations {
   String get rotationSeek => 'döndürerek ara';
 
   @override
-  String get roundedAlbumArtCardWithA => 'Bulanık albüm kapağı arka planına sahip yuvarlatılmış kapak kartı.';
+  String get roundedAlbumArtCardWithA =>
+      'Bulanık albüm kapağı arka planına sahip yuvarlatılmış kapak kartı.';
 
   @override
   String get route => 'Çıkış yolu';
 
   @override
-  String get routesBluetoothThroughTheHiRes => 'Bluetooth\'u yüksek çözünürlüklü Rust motorundan geçirir';
+  String get routesBluetoothThroughTheHiRes =>
+      'Bluetooth\'u yüksek çözünürlüklü Rust motorundan geçirir';
 
   @override
-  String get routesBluetoothThroughTheRustEngine => 'Bluetooth\'u Rust motorundan geçirir';
+  String get routesBluetoothThroughTheRustEngine =>
+      'Bluetooth\'u Rust motorundan geçirir';
 
   @override
   String get rustViaOboe => 'Oboe üzerinden Rust';
@@ -4070,12 +4391,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String s(Object arg1) {
-    return '' + arg1.toString() + ' sn';
+    return '$arg1 sn';
   }
 
   @override
   String sAgo(Object arg1) {
-    return '' + arg1.toString() + ' saniye önce';
+    return '$arg1 saniye önce';
   }
 
   @override
@@ -4115,7 +4436,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get saveConnect => 'Kaydet ve bağlan';
 
   @override
-  String get saveCreatesAnLrcFileIf => 'Kaydettiğinde bir `.lrc` dosyası oluşturulur. Henüz zaman damgası eklenmemiş satırların sürelerini Lokal otomatik doldurur; böylece dosya kullanılabilir kalır. Tüm sözcükleri damgalanan satırlar sözcük başına karaoke zamanlamasıyla dışa aktarılır.';
+  String get saveCreatesAnLrcFileIf =>
+      'Kaydettiğinde bir `.lrc` dosyası oluşturulur. Henüz zaman damgası eklenmemiş satırların sürelerini Lokal otomatik doldurur; böylece dosya kullanılabilir kalır. Tüm sözcükleri damgalanan satırlar sözcük başına karaoke zamanlamasıyla dışa aktarılır.';
 
   @override
   String get saveCurrentAsPreset => 'Geçerli ayarları ön ayar olarak kaydet';
@@ -4145,7 +4467,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get savePreset => 'Ön ayarı kaydet';
 
   @override
-  String get saveTheCurrentEqAsJson => 'Geçerli EQ ayarını JSON veya TXT olarak kaydet';
+  String get saveTheCurrentEqAsJson =>
+      'Geçerli EQ ayarını JSON veya TXT olarak kaydet';
 
   @override
   String get saved => 'Kaydedildi';
@@ -4158,32 +4481,36 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String savedCollections(Object playlistCount) {
-    return '' + playlistCount.toString() + ' kayıtlı koleksiyon';
+    return '$playlistCount kayıtlı koleksiyon';
   }
 
   @override
-  String get savedLyricsAndLinkedThemTo => 'Şarkı sözleri kaydedildi ve bu şarkıyla ilişkilendirildi.';
+  String get savedLyricsAndLinkedThemTo =>
+      'Şarkı sözleri kaydedildi ve bu şarkıyla ilişkilendirildi.';
 
   @override
-  String get savedLyricsBesideTheSongAs => 'Şarkı sözleri şarkının yanına `.lrc` dosyası olarak kaydedildi.';
+  String get savedLyricsBesideTheSongAs =>
+      'Şarkı sözleri şarkının yanına `.lrc` dosyası olarak kaydedildi.';
 
   @override
-  String get savedLyricsToTheChosenLocation => 'Şarkı sözleri seçilen konuma kaydedildi.';
+  String get savedLyricsToTheChosenLocation =>
+      'Şarkı sözleri seçilen konuma kaydedildi.';
 
   @override
-  String get savedPlaylistsAndQuickJumpsInto => 'Kayıtlı çalma listelerin ve kitaplığındaki koleksiyonlara hızlı erişim.';
+  String get savedPlaylistsAndQuickJumpsInto =>
+      'Kayıtlı çalma listelerin ve kitaplığındaki koleksiyonlara hızlı erişim.';
 
   @override
   String get savedToGallery => 'Galeriye kaydedildi';
 
   @override
   String savedToNNNshareIt(Object path) {
-    return 'Şuraya kaydedildi:\n' + '' + path.toString() + '\n\nŞimdi paylaşılsın mı?';
+    return 'Şuraya kaydedildi:\n$path\n\nŞimdi paylaşılsın mı?';
   }
 
   @override
   String savedToYourGallery(Object arg1) {
-    return '' + arg1.toString() + ' galerine kaydedildi';
+    return '$arg1 galerine kaydedildi';
   }
 
   @override
@@ -4199,7 +4526,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get scaleTheFullViewAlbumArt => 'Tam görünüm albüm kapağını ölçekle';
 
   @override
-  String get scalesWithWidgetSizeAutomatically => 'Widget boyutuna göre otomatik ölçeklenir';
+  String get scalesWithWidgetSizeAutomatically =>
+      'Widget boyutuna göre otomatik ölçeklenir';
 
   @override
   String get scanAgain => 'Yeniden tara';
@@ -4223,13 +4551,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get scrollForMore => 'Daha fazlası için kaydır';
 
   @override
-  String get scrollingPausesWhenReducedMotionIs => 'Azaltılmış hareket etkinse kaydırma duraklar';
+  String get scrollingPausesWhenReducedMotionIs =>
+      'Azaltılmış hareket etkinse kaydırma duraklar';
 
   @override
   String get search => 'Ara';
 
   @override
-  String get searchAcrossSongsArtistsAndAlbums => 'Şarkılar, sanatçılar ve albümler arasında anında ara.';
+  String get searchAcrossSongsArtistsAndAlbums =>
+      'Şarkılar, sanatçılar ve albümler arasında anında ara.';
 
   @override
   String get searchAgain => 'Yeniden ara';
@@ -4245,7 +4575,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String searchFailed2(Object e) {
-    return 'Arama başarısız: ' + '' + e.toString();
+    return 'Arama başarısız: $e';
   }
 
   @override
@@ -4253,7 +4583,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String searchModelCount(int count) {
-    return (count == 1 ? '' + count.toString() + ' model aranıyor' : '' + count.toString() + ' model aranıyor') + '…';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count model aranıyor',
+      one: '$count model aranıyor',
+    );
+    return '$_temp0…';
   }
 
   @override
@@ -4263,7 +4599,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get searchOnline2 => 'Çevrimiçi ara';
 
   @override
-  String get searchOnlineCreateYourOwnSynced => 'Çevrimiçi şarkı sözü ara, senkronize sözlerini kendin oluştur veya mevcut bir dosyayı içe aktar.';
+  String get searchOnlineCreateYourOwnSynced =>
+      'Çevrimiçi şarkı sözü ara, senkronize sözlerini kendin oluştur veya mevcut bir dosyayı içe aktar.';
 
   @override
   String get searchOnlineLyrics => 'Şarkı sözlerini çevrimiçi ara';
@@ -4294,14 +4631,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String seeAll2(Object count) {
-    return 'Tümünü gör (' + '' + count.toString() + ')';
+    return 'Tümünü gör ($count)';
   }
 
   @override
   String get select => 'Seç';
 
   @override
-  String get selectALineAndEdit => '1. Bir satır seçip zaman damgasını doğrudan düzenle veya "Şimdiki Zamanı Kullan" seçeneğini kullan.\n2. Sözcük zaman çizelgesinde, önündeki bölümü uzatmak veya kısaltmak için sınırı sürükle. Düzenlemeler 10 ms adımlarla hizalanır.\n3. Bir sözcüğü ayrı zamanlanmış hecelere bölmek için inceleme bölümündeki harflere dokun (önce yavaş, sonra hızlı), ardından sınırları sürükle.\n4. Son sınırı sürükleyerek (veya Uzunluk ± ile) sonraki satırın zamanını ayarla. Sözcükleri eşit aralıklarla yerleştirmek için Otomatik Doldur\'u kullan.\n5. Tüm zaman damgalı şarkı sözlerini birlikte kaydırmak için kaydırma denetimlerini kullan.\n6. Son `.lrc` dosyasını oluşturmak için kaydet.';
+  String get selectALineAndEdit =>
+      '1. Bir satır seçip zaman damgasını doğrudan düzenle veya \"Şimdiki Zamanı Kullan\" seçeneğini kullan.\n2. Sözcük zaman çizelgesinde, önündeki bölümü uzatmak veya kısaltmak için sınırı sürükle. Düzenlemeler 10 ms adımlarla hizalanır.\n3. Bir sözcüğü ayrı zamanlanmış hecelere bölmek için inceleme bölümündeki harflere dokun (önce yavaş, sonra hızlı), ardından sınırları sürükle.\n4. Son sınırı sürükleyerek (veya Uzunluk ± ile) sonraki satırın zamanını ayarla. Sözcükleri eşit aralıklarla yerleştirmek için Otomatik Doldur\'u kullan.\n5. Tüm zaman damgalı şarkı sözlerini birlikte kaydırmak için kaydırma denetimlerini kullan.\n6. Son `.lrc` dosyasını oluşturmak için kaydet.';
 
   @override
   String get selectARelease => 'Bir yayın seç';
@@ -4317,12 +4655,18 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String selected(Object count) {
-    return '' + count.toString() + ' seçildi';
+    return '$count seçildi';
   }
 
   @override
   String selectedOfSong(Object selected, int count) {
-    return (count == 1 ? '' + count.toString() + ' şarkının' : '' + count.toString() + ' şarkının') + ' ' + '' + selected.toString() + ' tanesi seçildi';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkının',
+      one: '$count şarkının',
+    );
+    return '$_temp0 $selected tanesi seçildi';
   }
 
   @override
@@ -4332,14 +4676,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get separateFromNavBar => 'Gezinme çubuğundan ayrı';
 
   @override
-  String get separateTheMiniPlayerToCustomize => 'Genişliğini ve boşluğunu özelleştirmek için mini oynatıcıyı ayır. Birleştirdiğinde özel değerlerin saklanır.';
+  String get separateTheMiniPlayerToCustomize =>
+      'Genişliğini ve boşluğunu özelleştirmek için mini oynatıcıyı ayır. Birleştirdiğinde özel değerlerin saklanır.';
 
   @override
   String get serialNumber => 'Seri numarası';
 
   @override
   String serverPlaylistSyncFailed(Object e) {
-    return 'Sunucu çalma listesi eşitlemesi başarısız: ' + '' + e.toString();
+    return 'Sunucu çalma listesi eşitlemesi başarısız: $e';
   }
 
   @override
@@ -4368,23 +4713,27 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String shareFailed(Object e) {
-    return 'Paylaşma başarısız: ' + '' + e.toString();
+    return 'Paylaşma başarısız: $e';
   }
 
   @override
   String get sharedSecret => 'Paylaşılan gizli anahtar';
 
   @override
-  String get shiftMetadataTextUpOrDown => 'Parça bilgisi metnini yukarı veya aşağı kaydır';
+  String get shiftMetadataTextUpOrDown =>
+      'Parça bilgisi metnini yukarı veya aşağı kaydır';
 
   @override
-  String get shiftOnlyTheAlbumArtUp => 'Yalnızca albüm kapağını yukarı veya aşağı kaydır';
+  String get shiftOnlyTheAlbumArtUp =>
+      'Yalnızca albüm kapağını yukarı veya aşağı kaydır';
 
   @override
-  String get shiftOnlyTheSongDetailsUp => 'Yalnızca şarkı ayrıntılarını yukarı veya aşağı kaydır';
+  String get shiftOnlyTheSongDetailsUp =>
+      'Yalnızca şarkı ayrıntılarını yukarı veya aşağı kaydır';
 
   @override
-  String get showAThinPlaybackProgressLine => 'İnce bir oynatma ilerleme çizgisi göster';
+  String get showAThinPlaybackProgressLine =>
+      'İnce bir oynatma ilerleme çizgisi göster';
 
   @override
   String get showAlbum => 'Albümü göster';
@@ -4396,7 +4745,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get showAlbumArtwork => 'Albüm kapağını göster.';
 
   @override
-  String get showAlbumArtworkOnTheMini => 'Mini oynatıcıda albüm kapağını göster';
+  String get showAlbumArtworkOnTheMini =>
+      'Mini oynatıcıda albüm kapağını göster';
 
   @override
   String get showArtist => 'Sanatçıyı göster';
@@ -4405,7 +4755,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get showArtist2 => 'Sanatçıyı göster';
 
   @override
-  String get showArtistBelowSongTitle => 'Şarkı adının altında sanatçıyı göster';
+  String get showArtistBelowSongTitle =>
+      'Şarkı adının altında sanatçıyı göster';
 
   @override
   String get showFileInfo => 'Dosya bilgilerini göster';
@@ -4429,28 +4780,35 @@ class AppLocalizationsTr extends AppLocalizations {
   String get showMore => 'Daha fazla göster';
 
   @override
-  String get showOtherArtistsOnAlbumPages => 'Albüm sayfalarında diğer sanatçıları göster';
+  String get showOtherArtistsOnAlbumPages =>
+      'Albüm sayfalarında diğer sanatçıları göster';
 
   @override
   String get showPassword => 'Şifreyi göster';
 
   @override
-  String get showRelatedAlbumsOnAlbumPages => 'Albüm sayfalarında ilgili albümleri göster';
+  String get showRelatedAlbumsOnAlbumPages =>
+      'Albüm sayfalarında ilgili albümleri göster';
 
   @override
-  String get showTheArtistBelowTheSong => 'Şarkı adının altında sanatçıyı göster';
+  String get showTheArtistBelowTheSong =>
+      'Şarkı adının altında sanatçıyı göster';
 
   @override
-  String get showTheAudioVisualizerOffSaves => 'Ses görselleştiricisini göster (kapalıyken pil tasarrufu sağlar)';
+  String get showTheAudioVisualizerOffSaves =>
+      'Ses görselleştiricisini göster (kapalıyken pil tasarrufu sağlar)';
 
   @override
-  String get showTheGlassFrameAroundAlbum => 'Albüm kapağının etrafındaki cam çerçeveyi göster';
+  String get showTheGlassFrameAroundAlbum =>
+      'Albüm kapağının etrafındaki cam çerçeveyi göster';
 
   @override
-  String get showTheMiniPlayerAsIts => 'Mini oynatıcıyı düğmelerin üzerinde ayrı bir çubuk olarak göster';
+  String get showTheMiniPlayerAsIts =>
+      'Mini oynatıcıyı düğmelerin üzerinde ayrı bir çubuk olarak göster';
 
   @override
-  String get showTheNumberOverBlurredArt => 'Numarayı bulanık kapak görselinin üzerinde göster.';
+  String get showTheNumberOverBlurredArt =>
+      'Numarayı bulanık kapak görselinin üzerinde göster.';
 
   @override
   String get showTheTrackNumber => 'Parça numarasını göster.';
@@ -4462,36 +4820,40 @@ class AppLocalizationsTr extends AppLocalizations {
   String get showTitle2 => 'Başlığı göster';
 
   @override
-  String get showVerboseAudioDiagnosticsAndEngine => 'Ayrıntılı ses tanılamasını ve motor/oturum izleme günlüklerini göster.';
+  String get showVerboseAudioDiagnosticsAndEngine =>
+      'Ayrıntılı ses tanılamasını ve motor/oturum izleme günlüklerini göster.';
 
   @override
   String get showVisualizer => 'Görselleştiriciyi göster';
 
   @override
   String showingAllAlbums(Object totalCount) {
-    return 'Toplam ' + '' + totalCount.toString() + ' albümün tümü gösteriliyor';
+    return 'Toplam $totalCount albümün tümü gösteriliyor';
   }
 
   @override
   String showingOfAlbums(Object visibleCount, Object totalCount) {
-    return '' + totalCount.toString() + ' albümden ' + '' + visibleCount.toString() + ' tanesi gösteriliyor';
+    return '$totalCount albümden $visibleCount tanesi gösteriliyor';
   }
 
   @override
-  String get showingYourLastLoadedReplay => 'Son yüklenen yıl özetin gösteriliyor.';
+  String get showingYourLastLoadedReplay =>
+      'Son yüklenen yıl özetin gösteriliyor.';
 
   @override
-  String get shownWhenThereIsRoomBeside => 'Denetimlerin yanında yer olduğunda görünür';
+  String get shownWhenThereIsRoomBeside =>
+      'Denetimlerin yanında yer olduğunda görünür';
 
   @override
-  String get showsWhatSPlayingTapTo => 'Çalan şarkıyı gösterir. Tam oynatıcıyı açmak için dokun.';
+  String get showsWhatSPlayingTapTo =>
+      'Çalan şarkıyı gösterir. Tam oynatıcıyı açmak için dokun.';
 
   @override
   String get shuffle => 'Karıştır';
 
   @override
   String shuffle2(Object arg1) {
-    return 'Karıştır: ' + '' + arg1.toString();
+    return 'Karıştır: $arg1';
   }
 
   @override
@@ -4501,10 +4863,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get shuffleMode => 'Karıştırma modu';
 
   @override
-  String get shuffleSongsAndJumpBetweenCategories => 'Şarkıları karıştır ve kategoriler arasında geç';
+  String get shuffleSongsAndJumpBetweenCategories =>
+      'Şarkıları karıştır ve kategoriler arasında geç';
 
   @override
-  String get shuffleSongsInCurrentList => 'Geçerli listedeki şarkıları karıştır';
+  String get shuffleSongsInCurrentList =>
+      'Geçerli listedeki şarkıları karıştır';
 
   @override
   String get signInFailedRetry => 'Oturum açma başarısız — yeniden dene';
@@ -4516,7 +4880,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signInWithYourAccountHifi => 'Hesabınla giriş yap · HiFi kayıpsız';
 
   @override
-  String get signInWithYourOwnTidal => 'Kendi Tidal hesabınla oturum aç. HiFi kayıpsız (FLAC/ALAC), bit-perfect motoru üzerinden çalar. HiRes/MQA ve Atmos için Tidal kısıtlamaları geçerlidir; oynatılamazlarsa hata gösterilir.';
+  String get signInWithYourOwnTidal =>
+      'Kendi Tidal hesabınla oturum aç. HiFi kayıpsız (FLAC/ALAC), bit-perfect motoru üzerinden çalar. HiRes/MQA ve Atmos için Tidal kısıtlamaları geçerlidir; oynatılamazlarsa hata gösterilir.';
 
   @override
   String get signal => 'Sinyal';
@@ -4573,7 +4938,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signalMaxPacket => 'En büyük paket';
 
   @override
-  String get signalNoRipDescription => 'Bu parça için CD kopyalama veya doğrulama bilgisi bulunamadı.';
+  String get signalNoRipDescription =>
+      'Bu parça için CD kopyalama veya doğrulama bilgisi bulunamadı.';
 
   @override
   String get signalNotReported => 'Bildirilmedi';
@@ -4585,7 +4951,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signalRecordingUnavailable => 'Kopyalama geçmişine ulaşılamıyor';
 
   @override
-  String get signalRipDescription => 'Kopyalama günlüğünden alınan bilgiler; geçerli oynatma yolunun bir aşaması değil.';
+  String get signalRipDescription =>
+      'Kopyalama günlüğünden alınan bilgiler; geçerli oynatma yolunun bir aşaması değil.';
 
   @override
   String get signalRipProvenance => 'Kopyalama kaynağı';
@@ -4603,7 +4970,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signalSnapshotAtOpen => 'Açılış anlık görüntüsü';
 
   @override
-  String get signalSourceDescription => 'Kaynak dosyanın özellikleri; cihaza gönderilen çıkış değil.';
+  String get signalSourceDescription =>
+      'Kaynak dosyanın özellikleri; cihaza gönderilen çıkış değil.';
 
   @override
   String get signalSourceDetails => 'Kaynak biçimi ayrıntıları';
@@ -4630,10 +4998,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signalUsageType => 'Kullanım türü';
 
   @override
-  String get signalUsbDescription => 'Bu sayfa açıldığında alınabilen aktarım değerleri. Canlı paket dökümü değil.';
+  String get signalUsbDescription =>
+      'Bu sayfa açıldığında alınabilen aktarım değerleri. Canlı paket dökümü değil.';
 
   @override
-  String get signalUsbMissingDescription => 'URB ayrıntıları yalnızca doğrudan USB yolunda bildirilir. Buradan aktarım etkinliği çıkarımı yapılmaz.';
+  String get signalUsbMissingDescription =>
+      'URB ayrıntıları yalnızca doğrudan USB yolunda bildirilir. Buradan aktarım etkinliği çıkarımı yapılmaz.';
 
   @override
   String get signalUsbTransport => 'USB aktarımı';
@@ -4651,7 +5021,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signedIn => 'Oturum açıldı';
 
   @override
-  String get silkySmoothBZierCurvesFluid => 'İpeksi Bézier eğrileri — akıcı ve doğal';
+  String get silkySmoothBZierCurvesFluid =>
+      'İpeksi Bézier eğrileri — akıcı ve doğal';
 
   @override
   String get similarArtists => 'Benzer sanatçılar';
@@ -4673,7 +5044,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String skippedUnmatchedEntr(int count) {
-    return ' Eşleşmeyen ' + (count == 1 ? '' + count.toString() + ' kayıt' : '' + count.toString() + ' kayıt') + ' atlandı.';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count kayıt',
+      one: '$count kayıt',
+    );
+    return ' Eşleşmeyen $_temp0 atlandı.';
   }
 
   @override
@@ -4689,13 +5066,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get slope => 'Eğim';
 
   @override
-  String get smbSharesCanBeAddedNow => 'SMB2/3 paylaşımlarına yerleşik istemciyle bağlanılır. Paylaşım adresini (smb://host/share) gir ve sunucu isterse oturum aç.';
+  String get smbSharesCanBeAddedNow =>
+      'SMB2/3 paylaşımlarına yerleşik istemciyle bağlanılır. Paylaşım adresini (smb://host/share) gir ve sunucu isterse oturum aç.';
 
   @override
   String get smooth => 'Yumuşak';
 
   @override
-  String get smoothsPeaksAndRaisesBodyBefore => 'Sınırlayıcı geçici tepe seviyelerini yakalamadan önce sesin tepe noktalarını yumuşatıp gövdesini güçlendirir.';
+  String get smoothsPeaksAndRaisesBodyBefore =>
+      'Sınırlayıcı geçici tepe seviyelerini yakalamadan önce sesin tepe noktalarını yumuşatıp gövdesini güçlendirir.';
 
   @override
   String get snappy => 'Atik';
@@ -4707,22 +5086,36 @@ class AppLocalizationsTr extends AppLocalizations {
   String get solid => 'Düz renk';
 
   @override
-  String get someOnlineFeaturesMayNotWork => '  ·  Bazı çevrimiçi özellikler çalışmayabilir';
+  String get someOnlineFeaturesMayNotWork =>
+      '  ·  Bazı çevrimiçi özellikler çalışmayabilir';
 
   @override
-  String get someWordsAreStillUntimedFinish => 'Bazı sözcüklerin zamanı henüz ayarlanmadı. Sözcük Eşitleme modunda tamamla.';
+  String get someWordsAreStillUntimedFinish =>
+      'Bazı sözcüklerin zamanı henüz ayarlanmadı. Sözcük Eşitleme modunda tamamla.';
 
   @override
   String get somethingWentWrong => 'Bir sorun oluştu';
 
   @override
   String song2(int count) {
-    return (count == 1 ? '' + count.toString() + ' şarkı' : '' + count.toString() + ' şarkı');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı',
+      one: '$count şarkı',
+    );
+    return '$_temp0';
   }
 
   @override
   String song3(int count, Object server) {
-    return (count == 1 ? '' + count.toString() + ' şarkı' : '' + count.toString() + ' şarkı') + ' · ' + '' + server.toString();
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı',
+      one: '$count şarkı',
+    );
+    return '$_temp0 · $server';
   }
 
   @override
@@ -4745,22 +5138,28 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String songUnit(int count) {
-    return (count == 1 ? 'şarkı' : 'şarkı');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'şarkı',
+      one: 'şarkı',
+    );
+    return '$_temp0';
   }
 
   @override
   String songs(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' • ' + '' + arg2.toString() + ' şarkı';
+    return '$arg1 • $arg2 şarkı';
   }
 
   @override
   String songs12(Object arg1) {
-    return '' + arg1.toString() + ' şarkı';
+    return '$arg1 şarkı';
   }
 
   @override
   String songs13(Object count) {
-    return '' + count.toString() + ' şarkı';
+    return '$count şarkı';
   }
 
   @override
@@ -4768,42 +5167,42 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String songs15(Object arg1) {
-    return '' + arg1.toString() + ' şarkı';
+    return '$arg1 şarkı';
   }
 
   @override
   String songs2(Object songCount) {
-    return '' + songCount.toString() + ' şarkı';
+    return '$songCount şarkı';
   }
 
   @override
   String songs3(Object arg1) {
-    return '' + arg1.toString() + ' şarkı';
+    return '$arg1 şarkı';
   }
 
   @override
   String songs4(Object _totalSongs) {
-    return '' + _totalSongs.toString() + ' şarkı';
+    return '$_totalSongs şarkı';
   }
 
   @override
   String songs5(Object arg1) {
-    return '' + arg1.toString() + ' şarkı';
+    return '$arg1 şarkı';
   }
 
   @override
   String songs9(Object arg1) {
-    return '' + arg1.toString() + ' şarkı';
+    return '$arg1 şarkı';
   }
 
   @override
   String songsAlbums(Object arg1, Object uniqueAlbums) {
-    return '' + arg1.toString() + ' şarkı • ' + '' + uniqueAlbums.toString() + ' albüm';
+    return '$arg1 şarkı • $uniqueAlbums albüm';
   }
 
   @override
   String songsAlbums2(Object arg1, Object albumCount) {
-    return '' + arg1.toString() + ' şarkı · ' + '' + albumCount.toString() + ' albüm';
+    return '$arg1 şarkı · $albumCount albüm';
   }
 
   @override
@@ -4811,22 +5210,46 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String songsCount(int count) {
-    return (count == 1 ? '' + count.toString() + ' şarkı' : '' + count.toString() + ' şarkı');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count şarkı',
+      one: '$count şarkı',
+    );
+    return '$_temp0';
   }
 
   @override
   String songsFound(Object arg1) {
-    return '' + arg1.toString() + ' şarkı bulundu';
+    return '$arg1 şarkı bulundu';
   }
 
   @override
   String songsIn(int songs, int folders) {
-    return (folders == 1 ? '' + folders.toString() + ' klasörde' : '' + folders.toString() + ' klasörde') + ' ' + (songs == 1 ? '' + songs.toString() + ' şarkı' : '' + songs.toString() + ' şarkı');
+    String _temp0 = intl.Intl.pluralLogic(
+      folders,
+      locale: localeName,
+      other: '$folders klasörde',
+      one: '$folders klasörde',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      songs,
+      locale: localeName,
+      other: '$songs şarkı',
+      one: '$songs şarkı',
+    );
+    return '$_temp0 $_temp1';
   }
 
   @override
   String songsInRotation(int count) {
-    return (count == 1 ? 'Sık dinlediklerin arasında ' + '' + count.toString() + ' şarkı var' : 'Sık dinlediklerin arasında ' + '' + count.toString() + ' şarkı var');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sık dinlediklerin arasında $count şarkı var',
+      one: 'Sık dinlediklerin arasında $count şarkı var',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -4834,14 +5257,16 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String songsU2022Albums(Object arg1, Object uniqueAlbums) {
-    return '' + arg1.toString() + ' şarkı • ' + '' + uniqueAlbums.toString() + ' albüm';
+    return '$arg1 şarkı • $uniqueAlbums albüm';
   }
 
   @override
-  String get songsYouPlayWillAppearHere => 'Dinlediğin şarkılar burada görünecek';
+  String get songsYouPlayWillAppearHere =>
+      'Dinlediğin şarkılar burada görünecek';
 
   @override
-  String get songsYouScanIntoYourLibrary => 'Kitaplığına tarayarak eklediğin şarkılar burada görünecek';
+  String get songsYouScanIntoYourLibrary =>
+      'Kitaplığına tarayarak eklediğin şarkılar burada görünecek';
 
   @override
   String get sortBy => 'SIRALA';
@@ -4871,7 +5296,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get speedUp => 'Hızlandır';
 
   @override
-  String get springPhysicsEnergeticAndReactive => 'Yay fiziği — enerjik ve duyarlı';
+  String get springPhysicsEnergeticAndReactive =>
+      'Yay fiziği — enerjik ve duyarlı';
 
   @override
   String get stampNext => 'Zamanı kaydet ve sonrakine geç';
@@ -4880,13 +5306,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get stampNow => 'Şimdi zamanla';
 
   @override
-  String get stampThisLineFirstToEdit => 'Sözcük zaman çizelgesini düzenlemek için önce bu satıra zaman damgası ekle.';
+  String get stampThisLineFirstToEdit =>
+      'Sözcük zaman çizelgesini düzenlemek için önce bu satıra zaman damgası ekle.';
 
   @override
   String get standard => 'Standart';
 
   @override
-  String get standardBluetoothRoutingViaAndroid => 'Android üzerinden standart Bluetooth yönlendirmesi';
+  String get standardBluetoothRoutingViaAndroid =>
+      'Android üzerinden standart Bluetooth yönlendirmesi';
 
   @override
   String get standardEngine => 'Standart motor';
@@ -4904,7 +5332,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get startBuildingYourHome => 'Müzik ana sayfanı oluşturmaya başla';
 
   @override
-  String get startPlayingToPopulateThisSpace => 'Burası dolmaya başlasın diye müzik çal';
+  String get startPlayingToPopulateThisSpace =>
+      'Burası dolmaya başlasın diye müzik çal';
 
   @override
   String get startStreaming => 'Akışı başlat';
@@ -4935,17 +5364,19 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String stoppingIn(Object arg1) {
-    return '' + arg1.toString() + ' sonra duracak';
+    return '$arg1 sonra duracak';
   }
 
   @override
   String get storeOn => 'Şuraya kaydet';
 
   @override
-  String get storedAsASaltedHashNever => 'Düz metin yerine tuzlanmış karma (hash) olarak saklanır';
+  String get storedAsASaltedHashNever =>
+      'Düz metin yerine tuzlanmış karma (hash) olarak saklanır';
 
   @override
-  String get storedEncodedPlaybackUnavailableInThis => 'Base64 kodlu saklanır — NTLM oturumu için gereklidir';
+  String get storedEncodedPlaybackUnavailableInThis =>
+      'Base64 kodlu saklanır — NTLM oturumu için gereklidir';
 
   @override
   String get stormChasers => 'Fırtına Avcıları';
@@ -4957,7 +5388,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get stream => 'Akış';
 
   @override
-  String get streamConfigurationNotAvailable => 'Akış yapılandırması kullanılamıyor';
+  String get streamConfigurationNotAvailable =>
+      'Akış yapılandırması kullanılamıyor';
 
   @override
   String get streamStable => 'Akış kararlı';
@@ -4972,14 +5404,21 @@ class AppLocalizationsTr extends AppLocalizations {
   String get strong => 'Güçlü';
 
   @override
-  String get studioGradeOutputForExternalDacs => 'Harici DAC\'ler ve kulaklık amfileri için stüdyo kalitesinde çıkış. Saf ses için Android\'in ses işlemesini atlar.';
+  String get studioGradeOutputForExternalDacs =>
+      'Harici DAC\'ler ve kulaklık amfileri için stüdyo kalitesinde çıkış. Saf ses için Android\'in ses işlemesini atlar.';
 
   @override
   String get sub => 'Alt';
 
   @override
   String subfolderCount(int count) {
-    return (count == 1 ? '' + count.toString() + ' alt klasör' : '' + count.toString() + ' alt klasör');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alt klasör',
+      one: '$count alt klasör',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -4998,32 +5437,39 @@ class AppLocalizationsTr extends AppLocalizations {
   String get surfaceShading => 'Yüzey gölgelendirmesi';
 
   @override
-  String get swipeHorizontallyToFineTuneEach => 'Her merkez bandı hassas ayarlamak için yatay kaydır.';
+  String get swipeHorizontallyToFineTuneEach =>
+      'Her merkez bandı hassas ayarlamak için yatay kaydır.';
 
   @override
-  String get swipeLeftRightToSkipTracks => 'Şarkı atlamak için sola/sağa kaydır';
+  String get swipeLeftRightToSkipTracks =>
+      'Şarkı atlamak için sola/sağa kaydır';
 
   @override
-  String get swipeToShowOrHideThe => 'Görselleştiriciyi göstermek veya gizlemek için kaydır';
+  String get swipeToShowOrHideThe =>
+      'Görselleştiriciyi göstermek veya gizlemek için kaydır';
 
   @override
   String get switchSongs => 'Şarkı değiştir';
 
   @override
-  String get switchToTheExclusiveUsbPath => 'DAC bağlandığında otomatik olarak özel USB yoluna geç. Reddedilen DAC\'ler hatırlanır.';
+  String get switchToTheExclusiveUsbPath =>
+      'DAC bağlandığında otomatik olarak özel USB yoluna geç. Reddedilen DAC\'ler hatırlanır.';
 
   @override
-  String get switchedBackToTheAutomaticLyrics => 'Otomatik şarkı sözü kaynağına geri dönüldü.';
+  String get switchedBackToTheAutomaticLyrics =>
+      'Otomatik şarkı sözü kaynağına geri dönüldü.';
 
   @override
-  String get syllablesTapALetterToSplit => 'Heceler — bölmek veya birleştirmek için harfe dokun:';
+  String get syllablesTapALetterToSplit =>
+      'Heceler — bölmek veya birleştirmek için harfe dokun:';
 
   @override
-  String get symmetricalBarsMirroredFromTheCenter => 'Merkezden yansıtılan simetrik çubuklar';
+  String get symmetricalBarsMirroredFromTheCenter =>
+      'Merkezden yansıtılan simetrik çubuklar';
 
   @override
   String syncFailed(Object e) {
-    return 'Eşitleme başarısız: ' + '' + e.toString();
+    return 'Eşitleme başarısız: $e';
   }
 
   @override
@@ -5037,7 +5483,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String synced2(Object arg1) {
-    return '' + arg1.toString() + ' eşitlendi';
+    return '$arg1 eşitlendi';
   }
 
   @override
@@ -5045,7 +5491,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String syncedPlaylistFromServers(int count) {
-    return 'Sunuculardan ' + (count == 1 ? '' + count.toString() + ' çalma listesi' : '' + count.toString() + ' çalma listesi') + ' eşitlendi';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count çalma listesi',
+      one: '$count çalma listesi',
+    );
+    return 'Sunuculardan $_temp0 eşitlendi';
   }
 
   @override
@@ -5058,46 +5510,56 @@ class AppLocalizationsTr extends AppLocalizations {
   String get systemAndroidMixer => 'Sistem (Android mikseri)';
 
   @override
-  String get tagsWereWrittenButCouldNot => 'Etiketler yazıldı ancak dosya yeniden okunarak doğrulanamadı. Kitaplığı yeniden taramak olası farkları giderecektir.';
+  String get tagsWereWrittenButCouldNot =>
+      'Etiketler yazıldı ancak dosya yeniden okunarak doğrulanamadı. Kitaplığı yeniden taramak olası farkları giderecektir.';
 
   @override
   String tap(Object label) {
-    return 'Dokun: "' + '' + label.toString() + '"';
+    return 'Dokun: \"$label\"';
   }
 
   @override
-  String get tapABandToExpandDrag => 'Genişletmek için banda dokun. Ayarlamak için düğmeyi sürükle. Değeri doğrudan yazmak için üstüne dokun.';
+  String get tapABandToExpandDrag =>
+      'Genişletmek için banda dokun. Ayarlamak için düğmeyi sürükle. Değeri doğrudan yazmak için üstüne dokun.';
 
   @override
-  String get tapAllOrEnableAChip => 'Sonuçları görmek için Tümü\'ne dokun veya bir filtreyi etkinleştir.';
+  String get tapAllOrEnableAChip =>
+      'Sonuçları görmek için Tümü\'ne dokun veya bir filtreyi etkinleştir.';
 
   @override
-  String get tapChipsToFilterCategories => 'Kategorileri filtrelemek için etiketlere dokun';
+  String get tapChipsToFilterCategories =>
+      'Kategorileri filtrelemek için etiketlere dokun';
 
   @override
-  String get tapEditTextTopRight => '1. Sağ üstteki "Metni Düzenle" seçeneğine dokun ve şarkı sözlerini her satıra bir dize olacak şekilde yapıştır.\n2. Şarkıyı oynat.\n3. Satırlar listesinden geçerli satırı seç.\n4. Satırı duyduğunda "Zamanı Kaydet ve Sonrakine Geç" düğmesine dokun.\n5. Bittiğinde kaydet.';
+  String get tapEditTextTopRight =>
+      '1. Sağ üstteki \"Metni Düzenle\" seçeneğine dokun ve şarkı sözlerini her satıra bir dize olacak şekilde yapıştır.\n2. Şarkıyı oynat.\n3. Satırlar listesinden geçerli satırı seç.\n4. Satırı duyduğunda \"Zamanı Kaydet ve Sonrakine Geç\" düğmesine dokun.\n5. Bittiğinde kaydet.';
 
   @override
-  String get tapIconsToSwitchTabsLong => 'Sekme değiştirmek için simgelere dokun. Çubuğu özelleştirmek için uzun bas.';
+  String get tapIconsToSwitchTabsLong =>
+      'Sekme değiştirmek için simgelere dokun. Çubuğu özelleştirmek için uzun bas.';
 
   @override
-  String get tapTheHeartIconOnAny => 'Herhangi bir şarkıdaki kalp simgesine dokunarak\nfavorilerine ekle.';
+  String get tapTheHeartIconOnAny =>
+      'Herhangi bir şarkıdaki kalp simgesine dokunarak\nfavorilerine ekle.';
 
   @override
-  String get tapTheMiniPlayerForWaveform => 'Dalga biçimli ilerleme çubuğu, EQ, şarkı sözleri ve görselleştirici için mini oynatıcıya dokun.';
+  String get tapTheMiniPlayerForWaveform =>
+      'Dalga biçimli ilerleme çubuğu, EQ, şarkı sözleri ve görselleştirici için mini oynatıcıya dokun.';
 
   @override
-  String get tapToInspect12602280Png => 'İncelemek için dokun · 1260 × 2280 PNG';
+  String get tapToInspect12602280Png =>
+      'İncelemek için dokun · 1260 × 2280 PNG';
 
   @override
-  String get tapToPlayLongPressFor => 'Çalmak için dokun; sıra, sıradaki çalma ve bilgi seçenekleri için basılı tut.';
+  String get tapToPlayLongPressFor =>
+      'Çalmak için dokun; sıra, sıradaki çalma ve bilgi seçenekleri için basılı tut.';
 
   @override
   String get tapToPreview => 'Önizlemek için dokun';
 
   @override
   String targetMs(Object arg1) {
-    return 'hedef ' + '' + arg1.toString() + ' ms';
+    return 'hedef $arg1 ms';
   }
 
   @override
@@ -5105,12 +5567,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String tempoX(Object arg1) {
-    return 'Tempo ' + '' + arg1.toString() + 'x';
+    return 'Tempo ${arg1}x';
   }
 
   @override
   String test(Object arg1) {
-    return 'Test: ' + '' + arg1.toString();
+    return 'Test: $arg1';
   }
 
   @override
@@ -5135,25 +5597,32 @@ class AppLocalizationsTr extends AppLocalizations {
   String get thatSTheTour => 'Tur bitti!';
 
   @override
-  String get theAudioEngineDeterminesHowYour => 'Ses motoru müziğinin nasıl çalınacağını belirler. Her seçenek güvenilirlik, kalite ve uyumluluk arasında farklı bir denge kurar.';
+  String get theAudioEngineDeterminesHowYour =>
+      'Ses motoru müziğinin nasıl çalınacağını belirler. Her seçenek güvenilirlik, kalite ve uyumluluk arasında farklı bir denge kurar.';
 
   @override
-  String get theIsochronousUsbEngineWillBe => 'Uygulamadan çıkıldığında eşzamanlı USB motoru durdurulacak.';
+  String get theIsochronousUsbEngineWillBe =>
+      'Uygulamadan çıkıldığında eşzamanlı USB motoru durdurulacak.';
 
   @override
-  String get theIsochronousUsbEngineWillStay => 'Uygulamadan çıkıldığında eşzamanlı USB motoru çalışmaya devam edecek.';
+  String get theIsochronousUsbEngineWillStay =>
+      'Uygulamadan çıkıldığında eşzamanlı USB motoru çalışmaya devam edecek.';
 
   @override
-  String get theNamesShowingUpAgainAnd => 'Son sıranda tekrar tekrar karşına çıkan isimler.';
+  String get theNamesShowingUpAgainAnd =>
+      'Son sıranda tekrar tekrar karşına çıkan isimler.';
 
   @override
-  String get thePosterIsNotReadyYet => 'Afiş henüz hazır değil. Yeniden kaydetmeyi dene.';
+  String get thePosterIsNotReadyYet =>
+      'Afiş henüz hazır değil. Yeniden kaydetmeyi dene.';
 
   @override
-  String get theTracksDominatingYourWeeklyAnd => 'Haftalık ve aylık özetlerinde en çok dinlediğin parçalar.';
+  String get theTracksDominatingYourWeeklyAnd =>
+      'Haftalık ve aylık özetlerinde en çok dinlediğin parçalar.';
 
   @override
-  String get thisAppIsBuiltByA => 'Bu uygulama, bütçesi olmayan tek bir geliştirici tarafından yapılıyor. Yüksek kaliteli sesi seviyorsan Ko-fi üzerinden geliştirilmesine destek olabilirsin.';
+  String get thisAppIsBuiltByA =>
+      'Bu uygulama, bütçesi olmayan tek bir geliştirici tarafından yapılıyor. Yüksek kaliteli sesi seviyorsan Ko-fi üzerinden geliştirilmesine destek olabilirsin.';
 
   @override
   String get thisDevice => 'Bu cihaz';
@@ -5169,17 +5638,20 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String thisRemovesAllEntriesFromMemory(Object arg1) {
-    return 'Bellekteki ' + '' + arg1.toString() + ' kaydın tümü kaldırılır.';
+    return 'Bellekteki $arg1 kaydın tümü kaldırılır.';
   }
 
   @override
-  String get thisSlowsPlaybackTo432440 => 'Bu ayar oynatımı 432/440 oranında yavaşlatır (ses perdesi ve tempo yaklaşık %1,8 düşer) ve bit-perfect aktarımını kapatır. Müzik biraz daha pes duyulur. Yalnızca özellikle A=432 akort istiyorsan etkinleştir.';
+  String get thisSlowsPlaybackTo432440 =>
+      'Bu ayar oynatımı 432/440 oranında yavaşlatır (ses perdesi ve tempo yaklaşık %1,8 düşer) ve bit-perfect aktarımını kapatır. Müzik biraz daha pes duyulur. Yalnızca özellikle A=432 akort istiyorsan etkinleştir.';
 
   @override
-  String get thisSongHasNoFilePath => 'Bu şarkının dosya yolu yok; düzenlenemez.';
+  String get thisSongHasNoFilePath =>
+      'Bu şarkının dosya yolu yok; düzenlenemez.';
 
   @override
-  String get thisSongIsMissingAlbumMetadata => 'Bu şarkının albüm üst verileri eksik, bu nedenle çevrimiçi eşleştirme sınırlı.';
+  String get thisSongIsMissingAlbumMetadata =>
+      'Bu şarkının albüm üst verileri eksik, bu nedenle çevrimiçi eşleştirme sınırlı.';
 
   @override
   String get thisSongOnly => 'Yalnızca bu şarkı';
@@ -5252,7 +5724,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String track2(Object arg1) {
-    return 'Parça ' + '' + arg1.toString();
+    return 'Parça $arg1';
   }
 
   @override
@@ -5280,46 +5752,47 @@ class AppLocalizationsTr extends AppLocalizations {
   String get trackTime => 'Parça süresi';
 
   @override
-  String get trackTimeSumsTheFullDuration => 'Parça süresi, kaydedilen dinlemelerin toplam süresidir.';
+  String get trackTimeSumsTheFullDuration =>
+      'Parça süresi, kaydedilen dinlemelerin toplam süresidir.';
 
   @override
   String tracks(Object _totalTracks) {
-    return '' + _totalTracks.toString() + ' parça';
+    return '$_totalTracks parça';
   }
 
   @override
   String tracks2(Object arg1) {
-    return '' + arg1.toString() + ' parça';
+    return '$arg1 parça';
   }
 
   @override
   String tracks3(Object arg1) {
-    return '' + arg1.toString() + ' parça';
+    return '$arg1 parça';
   }
 
   @override
   String tracks4(Object arg1) {
-    return '' + arg1.toString() + ' parça';
+    return '$arg1 parça';
   }
 
   @override
   String tracks5(Object arg1, Object arg2) {
-    return '' + arg1.toString() + ' · ' + '' + arg2.toString() + ' parça';
+    return '$arg1 · $arg2 parça';
   }
 
   @override
   String tracks6(Object arg1) {
-    return '' + arg1.toString() + ' parça';
+    return '$arg1 parça';
   }
 
   @override
   String tracks7(Object trackCount, Object arg1) {
-    return '' + trackCount.toString() + ' parça • ' + '' + arg1.toString();
+    return '$trackCount parça • $arg1';
   }
 
   @override
   String tracks8(Object arg1) {
-    return '' + arg1.toString() + ' parça';
+    return '$arg1 parça';
   }
 
   @override
@@ -5328,16 +5801,17 @@ class AppLocalizationsTr extends AppLocalizations {
     Object favoriteCount,
     Object playlistCount,
   ) {
-    return '' + songCount.toString() + ' parça, ' + '' + favoriteCount.toString() + ' beğenilen şarkı, ' + '' + playlistCount.toString() + ' çalma listesi';
+    return '$songCount parça, $favoriteCount beğenilen şarkı, $playlistCount çalma listesi';
   }
 
   @override
   String tracksReadyToRevisit(Object favoritesCount) {
-    return 'Yeniden dinleyebileceğin ' + '' + favoritesCount.toString() + ' parça';
+    return 'Yeniden dinleyebileceğin $favoritesCount parça';
   }
 
   @override
-  String get tracksThatFitTheQuieterSide => 'Daha sakin dinlemelerine uygun parçalar.';
+  String get tracksThatFitTheQuieterSide =>
+      'Daha sakin dinlemelerine uygun parçalar.';
 
   @override
   String get transparent => 'Şeffaf';
@@ -5346,7 +5820,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get treble => 'Tiz';
 
   @override
-  String get trueRandomMayRepeatBeforeList => 'Gerçek rastgele (liste bitmeden tekrar edebilir)';
+  String get trueRandomMayRepeatBeforeList =>
+      'Gerçek rastgele (liste bitmeden tekrar edebilir)';
 
   @override
   String get truncate => 'Kısalt';
@@ -5358,49 +5833,55 @@ class AppLocalizationsTr extends AppLocalizations {
   String get tryAgain => 'Yeniden dene';
 
   @override
-  String get tryAnotherKeywordOrEnableMore => 'Başka bir anahtar sözcük dene veya daha fazla kategori etkinleştir';
+  String get tryAnotherKeywordOrEnableMore =>
+      'Başka bir anahtar sözcük dene veya daha fazla kategori etkinleştir';
 
   @override
   String get tryOriginalSearch => 'İlk aramayı dene';
 
   @override
-  String get tryPickingALocalImageIf => 'Yayının üst verileri yaygın değilse cihazından bir görsel seçmeyi dene.';
+  String get tryPickingALocalImageIf =>
+      'Yayının üst verileri yaygın değilse cihazından bir görsel seçmeyi dene.';
 
   @override
-  String get typeABrandAndModelTo => 'Çevrimiçi aramak için marka ve model yaz.';
+  String get typeABrandAndModelTo =>
+      'Çevrimiçi aramak için marka ve model yaz.';
 
   @override
   String get u162ByteSubslotsLlRr => 'U16 — 2 baytlık alt yuvalar, LL|RR';
 
   @override
   String u2022(Object arg1, Object valueLabel) {
-    return '' + arg1.toString() + '  •  ' + '' + valueLabel.toString();
+    return '$arg1  •  $valueLabel';
   }
 
   @override
   String u20223(Object arg1, Object gainLabel) {
-    return '' + arg1.toString() + '  •  ' + '' + gainLabel.toString();
+    return '$arg1  •  $gainLabel';
   }
 
   @override
   String u2022Bit(Object arg1) {
-    return ' • ' + '' + arg1.toString() + ' bit';
+    return ' • $arg1 bit';
   }
 
   @override
-  String get u324ByteSubslotsLlllRrrr => 'U32 — 4 baytlık alt yuvalar, LLLL|RRRR (eski)';
+  String get u324ByteSubslotsLlllRrrr =>
+      'U32 — 4 baytlık alt yuvalar, LLLL|RRRR (eski)';
 
   @override
   String get u8ByteInterleavedLrlr => 'U8 — bayt iç içe geçirmeli LRLR';
 
   @override
-  String get u8ByteInterleavedRecommendedDefault => 'U8 — bayt iç içe geçirmeli, önerilen varsayılan';
+  String get u8ByteInterleavedRecommendedDefault =>
+      'U8 — bayt iç içe geçirmeli, önerilen varsayılan';
 
   @override
   String get uac2IsNotAvailableOnThis => 'UAC2 bu platformda kullanılamıyor';
 
   @override
-  String get uac2NotAvailableOnThisPlatform => 'UAC2 bu platformda kullanılamıyor';
+  String get uac2NotAvailableOnThisPlatform =>
+      'UAC2 bu platformda kullanılamıyor';
 
   @override
   String get uac2Preferences => 'UAC2 tercihleri';
@@ -5409,11 +5890,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get uac2PreferencesResetSuccessfully => 'UAC2 tercihleri sıfırlandı';
 
   @override
-  String get unableToCheckForUpdatesRight => 'Şu anda güncellemeler kontrol edilemiyor.';
+  String get unableToCheckForUpdatesRight =>
+      'Şu anda güncellemeler kontrol edilemiyor.';
 
   @override
   String unavailable(Object featureName) {
-    return '' + featureName.toString() + ' kullanılamıyor';
+    return '$featureName kullanılamıyor';
   }
 
   @override
@@ -5421,7 +5903,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String underruns(Object arg1) {
-    return '' + arg1.toString() + ' arabellek boşalması';
+    return '$arg1 arabellek boşalması';
   }
 
   @override
@@ -5462,7 +5944,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String unlocked(Object unlocked, Object arg1) {
-    return '' + unlocked.toString() + ' / ' + '' + arg1.toString() + ' kilit açıldı';
+    return '$unlocked / $arg1 kilit açıldı';
   }
 
   @override
@@ -5476,7 +5958,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String up(Object arg1) {
-    return '' + arg1.toString() + ' yukarı';
+    return '$arg1 yukarı';
   }
 
   @override
@@ -5484,7 +5966,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String upcomingSong(int count) {
-    return (count == 1 ? '' + count.toString() + ' sıradaki şarkı' : '' + count.toString() + ' sıradaki şarkı');
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sıradaki şarkı',
+      one: '$count sıradaki şarkı',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -5498,17 +5986,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String updated(Object arg1) {
-    return '' + arg1.toString() + ' güncellendi';
+    return '$arg1 güncellendi';
   }
 
   @override
   String updatedAlbumArtFor(Object arg1) {
-    return '"' + '' + arg1.toString() + '" için albüm kapağı güncellendi.';
+    return '\"$arg1\" için albüm kapağı güncellendi.';
   }
 
   @override
   String updatedAlbumArtFor2(Object arg1) {
-    return '"' + '' + arg1.toString() + '" için albüm kapağı güncellendi.';
+    return '\"$arg1\" için albüm kapağı güncellendi.';
   }
 
   @override
@@ -5516,12 +6004,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String uploadFailed(Object arg1) {
-    return 'Yükleme başarısız (' + '' + arg1.toString() + ').';
+    return 'Yükleme başarısız ($arg1).';
   }
 
   @override
   String uploadFailed2(Object e) {
-    return 'Yükleme başarısız: ' + '' + e.toString();
+    return 'Yükleme başarısız: $e';
   }
 
   @override
@@ -5549,7 +6037,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get usbAudioError => 'USB ses hatası';
 
   @override
-  String get usbDacAutoBitPerfectOffers => 'USB DAC otomatik bit-perfect teklifleri sıfırlandı.';
+  String get usbDacAutoBitPerfectOffers =>
+      'USB DAC otomatik bit-perfect teklifleri sıfırlandı.';
 
   @override
   String get usbNotConnected => 'USB bağlı değil';
@@ -5561,10 +6050,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get usbVolume => 'USB ses düzeyi';
 
   @override
-  String get useAFixed48khz16bitOutput => 'Daha iyi uyumluluk için sabit 48 kHz/16 bit çıkış kullan';
+  String get useAFixed48khz16bitOutput =>
+      'Daha iyi uyumluluk için sabit 48 kHz/16 bit çıkış kullan';
 
   @override
-  String get useAaudioDirectlyLowestLatencyOn => 'AAudio\'yu doğrudan kullan. Android 8.1 ve sonrasında en düşük gecikmeyi sağlar.';
+  String get useAaudioDirectlyLowestLatencyOn =>
+      'AAudio\'yu doğrudan kullan. Android 8.1 ve sonrasında en düşük gecikmeyi sağlar.';
 
   @override
   String get useAlbumArtAsBackground => 'Albüm kapağını arka plan yap';
@@ -5579,22 +6070,27 @@ class AppLocalizationsTr extends AppLocalizations {
   String get useExistingFile => 'Mevcut dosyayı kullan';
 
   @override
-  String get useExistingFileInTheLyrics => '- Şarkı sözleri panelindeki "Mevcut Dosyayı Kullan", bir `.lrc`, `.txt` veya `.xml` dosyasını ilişkilendirir.\n- Bazı satırların zamanı ayarlanmamışsa Lokal bunları otomatik doldurur.\n- Kaydetme mümkünse şarkının yanına yapılır; değilse Lokal ilişkilendirilmiş bir kopya saklar.';
+  String get useExistingFileInTheLyrics =>
+      '- Şarkı sözleri panelindeki \"Mevcut Dosyayı Kullan\", bir `.lrc`, `.txt` veya `.xml` dosyasını ilişkilendirir.\n- Bazı satırların zamanı ayarlanmamışsa Lokal bunları otomatik doldurur.\n- Kaydetme mümkünse şarkının yanına yapılır; değilse Lokal ilişkilendirilmiş bir kopya saklar.';
 
   @override
   String get useMmSsCcEG => 'mm:ss.cc biçimini kullan, ör. 01:23.45';
 
   @override
-  String get useTheDefaultMonochromeTheme => 'Varsayılan tek renkli temayı kullan.';
+  String get useTheDefaultMonochromeTheme =>
+      'Varsayılan tek renkli temayı kullan.';
 
   @override
-  String get useTheHighestFixedOutputRate => 'Kullanılabilir en yüksek sabit çıkış hızını ve bit derinliğini kullan';
+  String get useTheHighestFixedOutputRate =>
+      'Kullanılabilir en yüksek sabit çıkış hızını ve bit derinliğini kullan';
 
   @override
-  String get useTheLegacyOpenslEsBackend => 'Eski OpenSL ES altyapısını kullan. Eski veya sorunlu cihazlar için yedek çözüm.';
+  String get useTheLegacyOpenslEsBackend =>
+      'Eski OpenSL ES altyapısını kullan. Eski veya sorunlu cihazlar için yedek çözüm.';
 
   @override
-  String get useTheVerifiedDirectUsbPath => 'Doğrulanmış doğrudan USB yolunu kullan; harici USB DAC\'de bit-perfect oynatımı bozabilecek yazılım DSP denetimlerini kapat.';
+  String get useTheVerifiedDirectUsbPath =>
+      'Doğrulanmış doğrudan USB yolunu kullan; harici USB DAC\'de bit-perfect oynatımı bozabilecek yazılım DSP denetimlerini kapat.';
 
   @override
   String get userToken => 'Kullanıcı belirteci';
@@ -5615,21 +6111,24 @@ class AppLocalizationsTr extends AppLocalizations {
   String get vendorId => 'Üretici kimliği';
 
   @override
-  String get verboseDartRustAndCrashLogs => 'Ayrıntılı Dart, Rust ve çökme günlükleri';
+  String get verboseDartRustAndCrashLogs =>
+      'Ayrıntılı Dart, Rust ve çökme günlükleri';
 
   @override
   String get verified => 'Doğrulandı';
 
   @override
   String version2(Object arg1) {
-    return 'Sürüm ' + '' + arg1.toString();
+    return 'Sürüm $arg1';
   }
 
   @override
-  String get verticalBarsClassicSpectrumAnalyzer => 'Dikey çubuklar — klasik spektrum çözümleyici';
+  String get verticalBarsClassicSpectrumAnalyzer =>
+      'Dikey çubuklar — klasik spektrum çözümleyici';
 
   @override
-  String get verticalBarsThatAnimateAcrossThe => 'Ekran boyunca hareket eden dikey çubuklar.';
+  String get verticalBarsThatAnimateAcrossThe =>
+      'Ekran boyunca hareket eden dikey çubuklar.';
 
   @override
   String get vibrant => 'Canlı';
@@ -5650,13 +6149,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get visualizer => 'Görselleştirici';
 
   @override
-  String get visualizerAlbumColorsDescription => 'Albüm kapağının renklerini kullan; bulunamazsa tek renkli göster';
+  String get visualizerAlbumColorsDescription =>
+      'Albüm kapağının renklerini kullan; bulunamazsa tek renkli göster';
 
   @override
   String get visualizerBlocks => 'Solan bloklar';
 
   @override
-  String get visualizerBlocksDescription => 'Yumuşakça kaybolan izlere sahip bölümlü çubuklar';
+  String get visualizerBlocksDescription =>
+      'Yumuşakça kaybolan izlere sahip bölümlü çubuklar';
 
   @override
   String get visualizerColors => 'Renkler';
@@ -5665,13 +6166,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get visualizerMonochrome => 'Tek renkli';
 
   @override
-  String get visualizerMonochromeDescription => 'Albüm kapağından bağımsız beyaz ve gri';
+  String get visualizerMonochromeDescription =>
+      'Albüm kapağından bağımsız beyaz ve gri';
 
   @override
   String get visualizerRainbow => 'Gökkuşağı';
 
   @override
-  String get visualizerRainbowDescription => 'Görselleştirici boyunca uzanan renk yelpazesi';
+  String get visualizerRainbowDescription =>
+      'Görselleştirici boyunca uzanan renk yelpazesi';
 
   @override
   String get volume => 'Ses düzeyi';
@@ -5680,14 +6183,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get volumeControl => 'Ses düzeyi denetimi';
 
   @override
-  String get volumeIsFixedWhileBitPerfect => 'Bit-perfect aktarımı etkin ve bu DAC\'de donanım ses denetimi bulunmadığı için ses düzeyi sabit.';
+  String get volumeIsFixedWhileBitPerfect =>
+      'Bit-perfect aktarımı etkin ve bu DAC\'de donanım ses denetimi bulunmadığı için ses düzeyi sabit.';
 
   @override
-  String get volumeIsFixedWhileBitPerfect2 => 'Bit-perfect aktarımı etkin olduğu sürece ses düzeyi sabit: ses akışı değiştirilmeden gönderiliyor ve bu DAC\'de donanım ses denetimi yok.';
+  String get volumeIsFixedWhileBitPerfect2 =>
+      'Bit-perfect aktarımı etkin olduğu sürece ses düzeyi sabit: ses akışı değiştirilmeden gönderiliyor ve bu DAC\'de donanım ses denetimi yok.';
 
   @override
   String wAgo(Object arg1) {
-    return '' + arg1.toString() + ' hafta önce';
+    return '$arg1 hafta önce';
   }
 
   @override
@@ -5697,11 +6202,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get waitingForPlayback => 'Oynatma bekleniyor';
 
   @override
-  String get wantEveryControlDocumentedOpenThe => 'Tüm denetimlerin açıklamasını mı arıyorsun? Ayarlar → Yardım ve Kılavuz bölümünden uygulama içi kılavuzu istediğin zaman açabilirsin.';
+  String get wantEveryControlDocumentedOpenThe =>
+      'Tüm denetimlerin açıklamasını mı arıyorsun? Ayarlar → Yardım ve Kılavuz bölümünden uygulama içi kılavuzu istediğin zaman açabilirsin.';
 
   @override
   String was(Object arg1) {
-    return 'önceki: ' + '' + arg1.toString();
+    return 'önceki: $arg1';
   }
 
   @override
@@ -5712,12 +6218,30 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String weLlKeepTheBestQuality(int count) {
-    return 'Her grupta en kaliteli sürümü tutacağız (önce albüm kapağı, ardından en yüksek bit hızı) ve ' + (count == 1 ? '' + count.toString() + ' kopyayı' : '' + count.toString() + ' kopyayı') + ' kaldıracağız. Diskteki dosyalar silinmez.';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count kopyayı',
+      one: '$count kopyayı',
+    );
+    return 'Her grupta en kaliteli sürümü tutacağız (önce albüm kapağı, ardından en yüksek bit hızı) ve $_temp0 kaldıracağız. Diskteki dosyalar silinmez.';
   }
 
   @override
   String weLlKeepYourCheckedVersion(int kept, int removed) {
-    return 'İşaretlediğin ' + (kept == 1 ? '' + kept.toString() + ' sürümü' : '' + kept.toString() + ' sürümü') + ' tutup diğer ' + (removed == 1 ? '' + removed.toString() + ' kopyayı' : '' + removed.toString() + ' kopyayı') + ' kitaplığından kaldıracağız. Diskteki ses dosyaları silinmez.';
+    String _temp0 = intl.Intl.pluralLogic(
+      kept,
+      locale: localeName,
+      other: '$kept sürümü',
+      one: '$kept sürümü',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      removed,
+      locale: localeName,
+      other: '$removed kopyayı',
+      one: '$removed kopyayı',
+    );
+    return 'İşaretlediğin $_temp0 tutup diğer $_temp1 kitaplığından kaldıracağız. Diskteki ses dosyaları silinmez.';
   }
 
   @override
@@ -5727,7 +6251,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get weekly => 'Haftalık';
 
   @override
-  String get welcomeBackLetSStartA => 'Tekrar hoş geldin — yeni bir seri başlatalım.';
+  String get welcomeBackLetSStartA =>
+      'Tekrar hoş geldin — yeni bir seri başlatalım.';
 
   @override
   String get welcomeToFlick => 'Lokal\'e hoş geldin!';
@@ -5739,7 +6264,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get whatSNew => 'Yenilikler';
 
   @override
-  String get whenYouPlayOverBluetoothAndroid => 'Bluetooth üzerinden çalarken Android, kodeği kulaklığın veya hoparlörünle görüşerek belirler.';
+  String get whenYouPlayOverBluetoothAndroid =>
+      'Bluetooth üzerinden çalarken Android, kodeği kulaklığın veya hoparlörünle görüşerek belirler.';
 
   @override
   String get whereShouldTheLrcFileBe => '.lrc dosyası nereye kaydedilsin?';
@@ -5758,7 +6284,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String wide(Object amount) {
-    return '%' + '' + amount.toString() + ' geniş';
+    return '%$amount geniş';
   }
 
   @override
@@ -5781,12 +6307,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String word(Object arg1, Object arg2) {
-    return 'Sözcük ' + '' + arg1.toString() + ' · "' + '' + arg2.toString() + '"';
+    return 'Sözcük $arg1 · \"$arg2\"';
   }
 
   @override
   String word2(Object arg1, Object token) {
-    return 'Sözcük ' + '' + arg1.toString() + ' · "' + '' + token.toString() + '"';
+    return 'Sözcük $arg1 · \"$token\"';
   }
 
   @override
@@ -5797,7 +6323,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String wordTimelineLine(Object arg1) {
-    return 'Sözcük zaman çizelgesi · Satır ' + '' + arg1.toString();
+    return 'Sözcük zaman çizelgesi · Satır $arg1';
   }
 
   @override
@@ -5805,22 +6331,22 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String x(Object min) {
-    return '' + min.toString() + 'x';
+    return '${min}x';
   }
 
   @override
   String x2(Object max) {
-    return '' + max.toString() + 'x';
+    return '${max}x';
   }
 
   @override
   String x3(Object currentSpeed) {
-    return '' + currentSpeed.toString() + 'x';
+    return '${currentSpeed}x';
   }
 
   @override
   String yAgo(Object arg1) {
-    return '' + arg1.toString() + ' yıl önce';
+    return '$arg1 yıl önce';
   }
 
   @override
@@ -5833,22 +6359,27 @@ class AppLocalizationsTr extends AppLocalizations {
   String get yesterday => 'Dün';
 
   @override
-  String get youCanAlsoChangeTheCodec => 'Kodeği Android Geliştirici Seçenekleri\'ndeki "Bluetooth Ses Kodeği" bölümünden de değiştirebilirsin.';
+  String get youCanAlsoChangeTheCodec =>
+      'Kodeği Android Geliştirici Seçenekleri\'ndeki \"Bluetooth Ses Kodeği\" bölümünden de değiştirebilirsin.';
 
   @override
-  String get youCustomizedWhichVersionsToKeep => 'Hangi sürümlerin tutulacağını kendin belirledin. Seçim sende.';
+  String get youCustomizedWhichVersionsToKeep =>
+      'Hangi sürümlerin tutulacağını kendin belirledin. Seçim sende.';
 
   @override
-  String get youHaveUnsavedChangesAreYou => 'Kaydedilmemiş değişikliklerin var. Vazgeçmek istediğinden emin misin?';
+  String get youHaveUnsavedChangesAreYou =>
+      'Kaydedilmemiş değişikliklerin var. Vazgeçmek istediğinden emin misin?';
 
   @override
-  String get youHaveUnsavedLyricEditsLeave => 'Kaydedilmemiş şarkı sözü düzenlemelerin var. Eşitleme Stüdyosu\'ndan kaydetmeden çıkılsın mı?';
+  String get youHaveUnsavedLyricEditsLeave =>
+      'Kaydedilmemiş şarkı sözü düzenlemelerin var. Eşitleme Stüdyosu\'ndan kaydetmeden çıkılsın mı?';
 
   @override
   String get youReOffline => 'Çevrimdışısın';
 
   @override
-  String get youReOfflineSomeOnlineFeatures => 'Çevrimdışısın. Bazı çevrimiçi özellikler çalışmayabilir.';
+  String get youReOfflineSomeOnlineFeatures =>
+      'Çevrimdışısın. Bazı çevrimiçi özellikler çalışmayabilir.';
 
   @override
   String get youVeHitTheThresholdKeep => 'Hedefe ulaştın — böyle devam!';
@@ -5872,25 +6403,31 @@ class AppLocalizationsTr extends AppLocalizations {
   String get yourLibraryAtAGlance => 'Kitaplığına genel bakış';
 
   @override
-  String get yourLibraryIsTidyWeLl => 'Kitaplığın düzenli. Sonraki taramada yeni yinelenen kayıtlar bulunursa haber vereceğiz.';
+  String get yourLibraryIsTidyWeLl =>
+      'Kitaplığın düzenli. Sonraki taramada yeni yinelenen kayıtlar bulunursa haber vereceğiz.';
 
   @override
-  String get yourListeningHistoryIsStillYours => 'Dinleme geçmişin korunuyor. Yeniden yüklemeyi dene.';
+  String get yourListeningHistoryIsStillYours =>
+      'Dinleme geçmişin korunuyor. Yeniden yüklemeyi dene.';
 
   @override
-  String get yourListensWillRemainOnListenbrainz => 'Dinlemelerin ListenBrainz\'de kalacak, ancak Lokal bunları göndermeyi bırakacak.';
+  String get yourListensWillRemainOnListenbrainz =>
+      'Dinlemelerin ListenBrainz\'de kalacak, ancak Lokal bunları göndermeyi bırakacak.';
 
   @override
-  String get yourLogsAreUploadedToDpaste => 'Günlüklerin, 30 gün sonra süresi dolan liste dışı bir bağlantıyla dpaste.com\'a yüklenir. Bağlantıyı paylaştığın herkes günlükleri okuyabilir; dosya yolları ve cihaz bilgileri içerebilir.';
+  String get yourLogsAreUploadedToDpaste =>
+      'Günlüklerin, 30 gün sonra süresi dolan liste dışı bir bağlantıyla dpaste.com\'a yüklenir. Bağlantıyı paylaştığın herkes günlükleri okuyabilir; dosya yolları ve cihaz bilgileri içerebilir.';
 
   @override
-  String get yourMonthlyRecapNeedsABit => 'Aylık özetinin oluşması için bu ay biraz daha müzik dinlemelisin.';
+  String get yourMonthlyRecapNeedsABit =>
+      'Aylık özetinin oluşması için bu ay biraz daha müzik dinlemelisin.';
 
   @override
   String get yourMostReplayedTrack => 'En çok tekrar dinlediğin parça';
 
   @override
-  String get yourMusicIsBeingScrobbled => 'Müzik dinlemelerin scrobble ediliyor';
+  String get yourMusicIsBeingScrobbled =>
+      'Müzik dinlemelerin scrobble ediliyor';
 
   @override
   String get yourMusicIsBeingSubmitted => 'Müzik dinlemelerin gönderiliyor';
@@ -5899,7 +6436,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get yourMusicOnRepeat => 'Müziğin. Tekrar tekrar.';
 
   @override
-  String get yourNewAudioEngineIsReady => 'Yeni ses motorun hazır. Uygulamak için Lokal\'i yeniden başlat.';
+  String get yourNewAudioEngineIsReady =>
+      'Yeni ses motorun hazır. Uygulamak için Lokal\'i yeniden başlat.';
 
   @override
   String get yourNextFavoriteIsWaiting => 'Yeni favorin seni bekliyor.';
@@ -5911,19 +6449,23 @@ class AppLocalizationsTr extends AppLocalizations {
   String get yourPlaylists => 'Çalma listelerin';
 
   @override
-  String get yourScrobblingHistoryWillRemainOn => 'Scrobble geçmişin Last.fm\'de kalacak, ancak Lokal yeni kayıt göndermeyi bırakacak.';
+  String get yourScrobblingHistoryWillRemainOn =>
+      'Scrobble geçmişin Last.fm\'de kalacak, ancak Lokal yeni kayıt göndermeyi bırakacak.';
 
   @override
   String get yourSessionHistory => 'Oturum geçmişin';
 
   @override
-  String get yourWeeklyRecapAppearsOnceYou => 'Haftalık özetin, bu hafta müzik dinlemeye başladığında görünür.';
+  String get yourWeeklyRecapAppearsOnceYou =>
+      'Haftalık özetin, bu hafta müzik dinlemeye başladığında görünür.';
 
   @override
-  String get yourWholeLibraryLivesHereTap => 'Tüm müzik kitaplığın burada. Çalmak için herhangi bir şarkıya dokun.';
+  String get yourWholeLibraryLivesHereTap =>
+      'Tüm müzik kitaplığın burada. Çalmak için herhangi bir şarkıya dokun.';
 
   @override
-  String get yourYearlyRecapFillsInAs => 'Yıl boyunca müzik dinledikçe yıllık özetin tamamlanır.';
+  String get yourYearlyRecapFillsInAs =>
+      'Yıl boyunca müzik dinledikçe yıllık özetin tamamlanır.';
 
   @override
   String get linkDesktop => 'Masaüstü bağlantısı';
@@ -5935,7 +6477,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get linkConnectDesktop => 'Lokal masaüstüne bağlan';
 
   @override
-  String get linkPairingHint => 'Bilgisayarında Telefon Uzaktan Kumandası\'nı açıp Telefon Eşleştir\'i seç. İki cihaz da aynı Wi-Fi ağına bağlı olsun.';
+  String get linkPairingHint =>
+      'Bilgisayarında Telefon Uzaktan Kumandası\'nı açıp Telefon Eşleştir\'i seç. İki cihaz da aynı Wi-Fi ağına bağlı olsun.';
 
   @override
   String get linkScanQr => 'Eşleştirme QR kodunu tara';
@@ -5944,7 +6487,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get linkInvalidQr => 'Bu geçerli bir Lokal eşleştirme kodu değil.';
 
   @override
-  String get linkCameraUnavailable => 'Kamera erişimi kullanılamıyor. Geri dönüp bilgisayar adresini ve eşleştirme kodunu elle gir.';
+  String get linkCameraUnavailable =>
+      'Kamera erişimi kullanılamıyor. Geri dönüp bilgisayar adresini ve eşleştirme kodunu elle gir.';
 
   @override
   String get linkSearchDesktops => 'Wi-Fi üzerindeki bilgisayarları bul';
@@ -5953,7 +6497,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get linkSearching => 'Bilgisayarlar aranıyor…';
 
   @override
-  String get linkNoDesktopFound => 'Bilgisayar bulunamadı. Adresini elle girebilirsin.';
+  String get linkNoDesktopFound =>
+      'Bilgisayar bulunamadı. Adresini elle girebilirsin.';
 
   @override
   String get linkDesktopAddress => 'Bilgisayar adresi';
@@ -5986,7 +6531,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get linkForget => 'Bilgisayarı unut';
 
   @override
-  String get linkForgetDescription => 'Bu bilgisayarın kayıtlı kimlik bilgileri telefondan silinsin mi? Müziğin ve birleştirilmiş kitaplığın telefonda kalacak.';
+  String get linkForgetDescription =>
+      'Bu bilgisayarın kayıtlı kimlik bilgileri telefondan silinsin mi? Müziğin ve birleştirilmiş kitaplığın telefonda kalacak.';
 
   @override
   String get linkActionFailed => 'Masaüstü bağlantısı bu işlemi tamamlayamadı.';
@@ -5995,7 +6541,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get linkPlayback => 'Oynatma çıkışı';
 
   @override
-  String get linkControlDesktop => 'Şu An Çalıyor ekranından bilgisayarı kontrol et';
+  String get linkControlDesktop =>
+      'Şu An Çalıyor ekranından bilgisayarı kontrol et';
 
   @override
   String get linkPlayOnDesktop => 'Bilgisayarda çal';
@@ -6004,13 +6551,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get linkPlayOnPhone => 'Bu telefonda çal';
 
   @override
-  String get linkUpdateDesktop => 'Bu telefonu bilgisayarından kontrol edebilmek ve kitaplığını eşitlemek için bilgisayarındaki Lokal\'i güncelle.';
+  String get linkUpdateDesktop =>
+      'Bu telefonu bilgisayarından kontrol edebilmek ve kitaplığını eşitlemek için bilgisayarındaki Lokal\'i güncelle.';
 
   @override
   String get linkMergeLibraries => 'Kitaplıklarını birleştir';
 
   @override
-  String get linkMergePreview => 'İki cihazdaki müzikleri, beğenileri ve çalma listelerini koru. Tamamlanan dinlemeler tek sefer birleştirilir. Hiçbir müzik dosyası silinmez. Sonraki düzenlemeler iki yönde de eşitlenir.';
+  String get linkMergePreview =>
+      'İki cihazdaki müzikleri, beğenileri ve çalma listelerini koru. Tamamlanan dinlemeler tek sefer birleştirilir. Hiçbir müzik dosyası silinmez. Sonraki düzenlemeler iki yönde de eşitlenir.';
 
   @override
   String get linkMerge => 'Birleştir';
@@ -6020,14 +6569,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String linkHistoryCount(int count) {
-    return 'Birleştirmeye hazır ' + '' + count.toString() + ' masaüstü dinlemesi';
+    return 'Birleştirmeye hazır $count masaüstü dinlemesi';
   }
 
   @override
   String get linkSendDownloads => 'Telefondaki indirmeleri bilgisayara gönder';
 
   @override
-  String get linkSendDownloadsDescription => 'Telefona yeni indirilenleri ve cihazlar arası aktarımda eksik olan şarkıları eşleştirilmiş bilgisayara kopyala. Özgün dosyalar telefonda kalır.';
+  String get linkSendDownloadsDescription =>
+      'Telefona yeni indirilenleri ve cihazlar arası aktarımda eksik olan şarkıları eşleştirilmiş bilgisayara kopyala. Özgün dosyalar telefonda kalır.';
 
   @override
   String get linkLegacyRemote => 'Eski bir masaüstü sürümüne elle bağlan';
@@ -6040,11 +6590,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String linkOutputName(String name) {
-    return '' + name.toString() + ' cihazında Lokal';
+    return '$name cihazında Lokal';
   }
 
   @override
-  String get linkOnboardingDescription => 'İki cihazı da kontrol et, sıranı aralarında taşı ve beğenilerini, çalma listelerini ve dinleme geçmişini birlikte tut. Bu özellik isteğe bağlıdır; daha sonra da ayarlayabilirsin.';
+  String get linkOnboardingDescription =>
+      'İki cihazı da kontrol et, sıranı aralarında taşı ve beğenilerini, çalma listelerini ve dinleme geçmişini birlikte tut. Bu özellik isteğe bağlıdır; daha sonra da ayarlayabilirsin.';
 
   @override
   String get linkFollowAccent => 'Uygulamanın vurgu rengini kullan';
@@ -6053,7 +6604,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get linkPerformanceTitle => 'Animasyonlar daha akıcı olsun mu?';
 
   @override
-  String get linkPerformanceBody => 'Performans modu temanı korur ve cam efekti yerine düz renkli yüzeyler kullanır.';
+  String get linkPerformanceBody =>
+      'Performans modu temanı korur ve cam efekti yerine düz renkli yüzeyler kullanır.';
 
   @override
   String get linkEnablePerformance => 'Performans modunu kullan';

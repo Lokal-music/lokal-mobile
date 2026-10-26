@@ -12,6 +12,8 @@ import 'widget_recommendation_service.dart';
 import 'package:flick/core/utils/dev_log.dart';
 
 class WidgetSyncService {
+  // Android AppWidget publisher; WidgetKit needs a separate versioned App Group
+  // snapshot. No iPhone widget extension is registered yet.
   WidgetSyncService._();
   static final WidgetSyncService instance = WidgetSyncService._();
 
@@ -102,6 +104,7 @@ class WidgetSyncService {
   }
 
   Future<void> setFlowStatus(String status) async {
+    if (Platform.isIOS) return;
     try {
       await _ensureInit();
       await HomeWidget.saveWidgetData<String>('flick_widget_flow_status', status);
@@ -146,6 +149,7 @@ class WidgetSyncService {
   }
 
   void schedulePush(PlayerState state) {
+    if (Platform.isIOS) return;
     _pendingState = state;
     _lastKnownState = state;
     final song = state.currentSong;
@@ -263,6 +267,7 @@ class WidgetSyncService {
   /// playing when the user returns to the launcher. Never falsify the player
   /// state simply because Flutter's activity lost focus.
   Future<void> pushPaused() async {
+    if (Platform.isIOS) return;
     try {
       final latest = _lastKnownState;
       if (latest != null) {
@@ -277,6 +282,7 @@ class WidgetSyncService {
   }
 
   Future<void> pushKilled() async {
+    if (Platform.isIOS) return;
     _savedData.remove(keyIsPlaying);
     try {
       await _ensureInit();
@@ -288,6 +294,7 @@ class WidgetSyncService {
   }
 
   Future<void> pushCustomization(AppPreferences prefs) async {
+    if (Platform.isIOS) return;
     try {
       await _ensureInit();
       await HomeWidget.saveWidgetData<int>(keyBgOpacity, prefs.widgetBgOpacity);
@@ -351,6 +358,7 @@ class WidgetSyncService {
   }
 
   Future<void> pushInitialCustomization() async {
+    if (Platform.isIOS) return;
     try {
       await _ensureInit();
       final prefs = await _loadPrefsFromAppPrefs();

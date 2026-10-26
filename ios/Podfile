@@ -1,0 +1,55 @@
+platform :ios, '16.0'
+
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  raise "Run flutter pub get before pod install" unless File.exist?(generated_xcode_build_settings_path)
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise 'FLUTTER_ROOT missing from Generated.xcconfig'
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+  # Official 4.8.6 specification, with the verified archive SHA and matching
+  # GTMSessionFetcher pin from the device/simulator SDK proof. Includes resources,
+  # privacy manifest and upstream open-source notices in the application.
+  pod 'google-cast-sdk', :podspec => 'CastSDK.podspec.json'
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    if target.name == 'rive_native'
+      # rive_native 0.1.11 invokes `dart run` from ios/Pods, which has no
+      # pubspec. Adjust only the generated build phase, never Pub-cache source.
+      version = File.read(File.join(__dir__, '.symlinks/plugins/rive_native/pubspec.yaml'))[/^version:\s*(\S+)/, 1]
+      raise "Review Rive iOS build compatibility for #{version}" unless version == '0.1.11'
+      target.shell_script_build_phases.each do |phase|
+        if phase.name.include?('Rive Native Compile')
+          phase.shell_script = "set -e\ncd \"${SRCROOT}/../..\"\n" + phase.shell_script
+        end
+      end
+    end
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)', 'PERMISSION_CAMERA=1', 'PERMISSION_PHOTOS=1', 'PERMISSION_PHOTOS_ADD_ONLY=1']
+    end
+  end
+end

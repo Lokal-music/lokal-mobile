@@ -34,6 +34,9 @@ enum KonnektedTab {
   final String label;
   final IconData icon;
 
+  String get localizedLabel =>
+      this == explore ? l10n.search : lokalText(label);
+
   /// The tabs inside the capsule; [explore] is the separate search circle,
   /// as in Apple Music on iOS 26.
   static const capsule = [listen, library, settings];
@@ -399,7 +402,7 @@ class _TabCapsuleState extends State<_TabCapsule> {
                       button: true,
                       label: lokalText(
                         "Show tabs. {arg0}",
-                        args: {'arg0': shown.label},
+                        args: {'arg0': shown.localizedLabel},
                       ),
                       onTap: widget.onExpand,
                       excludeSemantics: true,
@@ -481,10 +484,10 @@ class _TabButton extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: tab.label,
+      label: tab.localizedLabel,
       onTap: onTap,
       child: Tooltip(
-        message: tab.label,
+        message: tab.localizedLabel,
         excludeFromSemantics: true,
         child: InkWell(
           onTap: onTap,
@@ -497,7 +500,7 @@ class _TabButton extends StatelessWidget {
                 Icon(tab.icon, size: 22, color: color),
                 const SizedBox(height: 2),
                 Text(
-                  tab.label,
+                  tab.localizedLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -529,10 +532,10 @@ class _SearchCircle extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: tab.label,
+      label: tab.localizedLabel,
       onTap: onTap,
       child: Tooltip(
-        message: tab.label,
+        message: tab.localizedLabel,
         excludeFromSemantics: true,
         child: LokalGlass.capsule(
           grouped: true,

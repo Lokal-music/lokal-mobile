@@ -99,6 +99,10 @@ class LokalLinkService {
       ];
     } on MissingPluginException {
       return [];
+    } on PlatformException catch (error) {
+      throw LokalRemoteConfigurationException(
+        error.message ?? 'Local discovery could not start. Enter the desktop address or try again.',
+      );
     }
   }
 
