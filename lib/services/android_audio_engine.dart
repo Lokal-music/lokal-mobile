@@ -904,19 +904,21 @@ class AndroidAudioEngine implements AudioEngine {
     final outgoing = _player;
     final outgoingTrack = _loadedTrack;
     final next = _onNextSong?.call();
-    if (outgoing == null || next == null || next.atmosEncoded ||
-        next.id == outgoingTrack?.id) {
+    if (outgoing == null || outgoingTrack == null ||
+        next == null || next.atmosEncoded ||
+        next.id == outgoingTrack.id) {
       _crossfadeArmed = false;
       return;
     }
     final nextIdentity = androidAudioSourceIdentity(next);
-    bool valid() =>
-        _crossfadeArmed && epoch == _crossfadeEpoch &&
-        identical(_player, outgoing) &&
-        identical(_loadedTrack, outgoingTrack) &&
-        _onNextSong?.call() case final candidate?
-            ? androidAudioSourceIdentity(candidate) == nextIdentity
-            : false;
+    bool valid() {
+      final candidate = _onNextSong?.call();
+      return _crossfadeArmed && epoch == _crossfadeEpoch &&
+          identical(_player, outgoing) &&
+          identical(_loadedTrack, outgoingTrack) &&
+          candidate != null &&
+          androidAudioSourceIdentity(candidate) == nextIdentity;
+    }
 
     unawaited(() async {
       try {
@@ -941,7 +943,7 @@ class AndroidAudioEngine implements AudioEngine {
         // cannot cause a premature transition. The guard also covers manual
         // queue edits that do not trigger a player.load().
         while (valid()) {
-          final remainingMs = ((outgoing.duration ?? outgoingTrack!.duration) -
+          final remainingMs = ((outgoing.duration ?? outgoingTrack.duration) -
                   outgoing.position)
               .inMilliseconds;
           if (outgoing.processingState == just_audio.ProcessingState.completed ||
@@ -955,7 +957,7 @@ class AndroidAudioEngine implements AudioEngine {
         if (!valid()) return;
 
         final remainingMs =
-            ((outgoing.duration ?? outgoingTrack!.duration) - outgoing.position)
+            ((outgoing.duration ?? outgoingTrack.duration) - outgoing.position)
                 .inMilliseconds;
         if (remainingMs <= 0) {
           _crossfadeArmed = false;
