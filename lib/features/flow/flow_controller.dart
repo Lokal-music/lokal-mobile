@@ -213,10 +213,9 @@ class FlowController extends AsyncNotifier<FlowData> {
     );
     await _commit(data);
     await ref.read(flowPlaybackProvider).play(songs, first, data.session.seed);
-    // Start the radio top-up even if the platform player has not published
-    // its first state update yet. It runs after this serialized play action,
-    // so it cannot delay the first note or deadlock the queue transaction.
-    _background(grow(onlyWhenLast: true));
+    // The player-state observation asynchronously tops up at four or fewer
+    // upcoming songs. Never block the initial playback on online lookups;
+    // injected headless adapters may explicitly request grow().
   });
 
   /// Grow when at most four tracks remain; appending to the context tail
