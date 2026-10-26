@@ -3,7 +3,8 @@
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
 Latest integration includes **37 merged PRs through #216**, main
 `63280241a5216ef987111eb8cd17c93e0626f1e4`. Build 27 validates the source through
-#210; the subsequent #211–#216/native WebKit investigation awaits its source run.
+#210; build 29 passes the #216 continuation on iOS 18.6, but its iOS 26 simulator fails
+before app execution. Later Library labels/raw-sample checks await the next run.
 The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
 (merge `b26d8b9e08a8acc4d60b8aa2e2b7e3c4b521fdb1`). All 20 PRs below are
 included by ancestry, including stacked #180/#181; none is copied as a divergent
@@ -386,7 +387,7 @@ merged mobile PRs after #172. #208 is the port's own companion and is not counte
 | #212 | Show Cover only when an enabled source can supply actual motion art/Spotify Canvas; allow re-enabling a disabled song. | Share revision-keyed async lookup and failure-safe availability. The source-order/cache tests pass; a static cover never advertises motion. |
 | #213 | Prefer Last.fm albums and remove redundant provider discovery shelves. | Carry shared recommendation order, deduplication and shelf changes. Discovery tests pass; live account/catalogue availability remains separate. |
 | #214 | Smooth unshaded Space syllables and hide shell footer on video routes. | Keep the standard Lyrics painter, use the root navigator with Lokal's existing full-player route, preserve the keyed embedded player and display captions below it. Provider touches remain reserved for its own controls. |
-| #215 | Add concurrent/overlapping Space lines, Appearance video-quality preference, and separate album-artist targets. | Share concurrent renderer and artist links. Keep native Android height selection/generation guards; iPhone shows translated guidance for YouTube's quality control. A separate video advancing signal freezes Space during buffering. Native harness now checks two actual concurrent generated lines; awaiting its source build. |
+| #215 | Add concurrent/overlapping Space lines, Appearance video-quality preference, and separate album-artist targets. | Share concurrent renderer and artist links. Keep native Android height selection/generation guards; iPhone shows translated guidance for YouTube's quality control. A separate video advancing signal freezes Space during buffering. Build 29 passes two actual concurrent generated lines on iOS 18.6; iOS 26 does not execute because simulator boot fails. |
 | #216 | Recover Android USB DAC registration and protect transfer/feedback lifetime. | Preserve upstream Kotlin/Rust changes. The transport is Android-only, not an iPhone USB feature. Compile verification and actual DAC qualification are separate. |
 
 The current UI/transport/locale selection passes **114** tests; the focused video
@@ -415,3 +416,35 @@ The Android full-debug ARM64 APK also builds on the #216/iPhone-referrer source,
 with the upstream resolver, USB registration and native transfer changes intact.
 Its SHA-256 is `107b3f93afb65d308e6f082b58866f59ae6e30d3b4539fa3b97eec5919abb1f4`.
 This is compile/package evidence, not a DAC, payload-fidelity or phone test.
+
+
+### Build 29: current #216 source, real WebKit observations
+
+[Build 29](https://github.com/lokal-music/lokal-mobile/actions/runs/40315993836)
+packages the iOS 16+ app and passes the **complete iOS 18.6 native suite**, including
+#215's two concurrent generated Space lines and the previous codec/DSP/queue,
+Keychain, scanner, QuickJS, Cast initialization, external ownership, Bonjour,
+remote-artwork and live-locale checks. Its Space screenshot now shows the smooth
+unshaded concurrent presentation over the retained artwork.
+
+Exact source: `f71f7501c5679188dbc99ee9776ea6d0da70d83d`; tree:
+`fbab3adcabefc1806e4c9f2ed6ee777666ea9042`. The preserved unsigned IPA passes
+inspection of all 34 device binaries and Cast resources/notices; SHA-256:
+`d715ad0a46c4efebc82a5f946bd38004fdb966ff7e9ae64bfaa1cc5467294d07`.
+
+The opt-in production WebKit probe reads the actual installed `app.lokal.mobile`
+identity and observes real iframe API readiness. YouTube then returns error 150;
+the screenshot explicitly shows **"Sign in to confirm you're not a bot"**. Position
+advance is zero. The real native WebKit media-suspension acknowledgement succeeds.
+The report correctly marks playback **inconclusive**; neither successful live
+playback/seek nor a generic embedding prohibition is inferred from the error code.
+The challenge is not bypassed, and no account credentials are introduced into CI.
+
+The overall workflow fails because the **iOS 26 simulator does not boot**:
+`simctl bootstatus` times out after 300 seconds and even the simulator screenshot
+fails. Lokal never executes on that runtime. This is not a current iOS 26 app
+pass; build 27 remains the last complete dual-runtime checkpoint. A fresh hosted
+runner must retry the current source without weakening its native gate.
+
+The later Library-label/raw-video-sample follow-ups have their own host checks and
+await a new native source build. This checkpoint does not cover those later changes.

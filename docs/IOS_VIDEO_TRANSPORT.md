@@ -154,3 +154,12 @@ production-JavaScript tests pass, including a monotonic-clock check proving UI
 extrapolation cannot advance the retained transport sample. It also marks a
 native release failure as failed before teardown. These are later harness changes
 than build 29 and require the next native source run.
+
+
+Build 29 observes real production iframe API readiness on iOS 18.6 with installed
+bundle ID `app.lokal.mobile`, plus a successful real native media-suspension reply.
+YouTube presents a sign-in/bot challenge (error 150, screenshot preserved), and no
+playback advance is observed. The outcome is **inconclusive**, not successful
+video playback or proof of a general embedding restriction. No challenge bypass
+or CI account credentials are used. iOS 26 does not boot in that run; the app and
+video probe do not execute there. The raw-source-sample follow-up is subsequent.

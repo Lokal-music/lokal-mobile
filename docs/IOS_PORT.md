@@ -5,7 +5,9 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
-**Build 27 passes the complete native suite on iOS 18.6 and 26.0.** The iOS 16+
+**Build 27 passes the complete native suite on iOS 18.6 and 26.0.** Build 29
+validates the #216 continuation on iOS 18.6; its iOS 26 simulator fails before app
+execution. The iOS 16+
 unsigned engineering IPA passes inspection of 34 device binaries, Cast resources,
 privacy metadata, source/notices and matching symbols. See the exact source,
 checksum and native evidence in the build-27 checkpoint below. Installation still
@@ -766,3 +768,35 @@ The subsequent CI evidence improvement preserves each runtime's report/screensho
 immediately after its pass, as well as the combined diagnostics at the end. This
 lets the first runtime's exact result be inspected while the second boots/tests;
 it does not alter or relax either native gate.
+
+
+### Build 29: current #216 source, real WebKit observations
+
+[Build 29](https://github.com/lokal-music/lokal-mobile/actions/runs/40315993836)
+packages the iOS 16+ app and passes the **complete iOS 18.6 native suite**, including
+#215's two concurrent generated Space lines and the previous codec/DSP/queue,
+Keychain, scanner, QuickJS, Cast initialization, external ownership, Bonjour,
+remote-artwork and live-locale checks. Its Space screenshot now shows the smooth
+unshaded concurrent presentation over the retained artwork.
+
+Exact source: `f71f7501c5679188dbc99ee9776ea6d0da70d83d`; tree:
+`fbab3adcabefc1806e4c9f2ed6ee777666ea9042`. The preserved unsigned IPA passes
+inspection of all 34 device binaries and Cast resources/notices; SHA-256:
+`d715ad0a46c4efebc82a5f946bd38004fdb966ff7e9ae64bfaa1cc5467294d07`.
+
+The opt-in production WebKit probe reads the actual installed `app.lokal.mobile`
+identity and observes real iframe API readiness. YouTube then returns error 150;
+the screenshot explicitly shows **"Sign in to confirm you're not a bot"**. Position
+advance is zero. The real native WebKit media-suspension acknowledgement succeeds.
+The report correctly marks playback **inconclusive**; neither successful live
+playback/seek nor a generic embedding prohibition is inferred from the error code.
+The challenge is not bypassed, and no account credentials are introduced into CI.
+
+The overall workflow fails because the **iOS 26 simulator does not boot**:
+`simctl bootstatus` times out after 300 seconds and even the simulator screenshot
+fails. Lokal never executes on that runtime. This is not a current iOS 26 app
+pass; build 27 remains the last complete dual-runtime checkpoint. A fresh hosted
+runner must retry the current source without weakening its native gate.
+
+The later Library-label/raw-video-sample follow-ups have their own host checks and
+await a new native source build. This checkpoint does not cover those later changes.
