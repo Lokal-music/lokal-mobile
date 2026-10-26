@@ -139,7 +139,7 @@ class FlowController extends AsyncNotifier<FlowData> {
     final session = state.requireValue.session;
     final growthKey = '${session.seed}:${song.id}:${session.trackIds.length}';
     if (!_growthScheduled &&
-        player.upNext.length <= 3 &&
+        player.upNext.length <= 4 &&
         _lastGrowthAttempt != growthKey &&
         playback.ownsSession(session.seed)) {
       _growthScheduled = true;
@@ -197,12 +197,12 @@ class FlowController extends AsyncNotifier<FlowData> {
     final target = songId ?? data.session.currentId;
     final first = available.where((s) => s.id == target).firstOrNull ??
         available.first;
-    // Playback begins immediately with a small local anchor. The online
+    // Playback begins immediately with four tracks ahead. The online
     // radio lookup then fills the queue while the first song is playing.
     // This avoids blocking Play on network/auth and prevents a 24-track
     // downloaded queue from hiding online discoveries for an hour.
     final songs = [first, ...available.where((song) => song.id != first.id)]
-        .take(3).toList();
+        .take(5).toList();
     data = data.copyWith(
       session: FlowSession(
         trackIds: songs.map((s) => s.id),
@@ -217,7 +217,7 @@ class FlowController extends AsyncNotifier<FlowData> {
     // A test adapter without player events may request growth explicitly.
   });
 
-  /// Grow when at most three tracks remain; appending to the context tail
+  /// Grow when at most four tracks remain; appending to the context tail
   /// preserves user-selected songs and gives network streams time to preload.
   Future<void> grow({bool onlyWhenLast = false}) => _serialize(() async {
     final playback = ref.read(flowPlaybackProvider);
@@ -226,10 +226,10 @@ class FlowController extends AsyncNotifier<FlowData> {
     if (onlyWhenLast &&
         (!active ||
             !playback.state.isPlaying ||
-            playback.state.upNext.length > 3)) {
+            playback.state.upNext.length > 4)) {
       return;
     }
-    if (active && playback.state.upNext.length > 3) return;
+    if (active && playback.state.upNext.length > 4) return;
     final library = await ref.read(flowLibraryProvider.future);
     if (data.session.trackIds.isEmpty ||
         (!active && !data.session.isFresh(DateTime.now()))) {
