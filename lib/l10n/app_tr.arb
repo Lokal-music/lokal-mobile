@@ -8310,35 +8310,35 @@
   "@viewQueue": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:265"
   },
-  "visualizer": "Visualizer",
+  "visualizer": "Görselleştirici",
   "@visualizer": {
     "description": "lib/features/settings/screens/bottom_bar_settings_screen.dart:36"
   },
-  "visualizerAlbumColorsDescription": "Follow the album cover colors; monochrome when unavailable",
-  "visualizerBlocks": "Fading Blocks",
-  "visualizerBlocksDescription": "Segmented bars with softly fading trails",
-  "visualizerColors": "Colors",
-  "visualizerMonochrome": "Monochrome",
-  "visualizerMonochromeDescription": "White and gray, independent of the album cover",
-  "visualizerRainbow": "Rainbow",
-  "visualizerRainbowDescription": "A spectrum of colors across the visualizer",
-  "volume": "Volume",
+  "visualizerAlbumColorsDescription": "Albüm kapağının renklerini kullan; bulunamazsa tek renkli göster",
+  "visualizerBlocks": "Solan bloklar",
+  "visualizerBlocksDescription": "Yumuşakça kaybolan izlere sahip bölümlü çubuklar",
+  "visualizerColors": "Renkler",
+  "visualizerMonochrome": "Tek renkli",
+  "visualizerMonochromeDescription": "Albüm kapağından bağımsız beyaz ve gri",
+  "visualizerRainbow": "Gökkuşağı",
+  "visualizerRainbowDescription": "Görselleştirici boyunca uzanan renk yelpazesi",
+  "volume": "Ses düzeyi",
   "@volume": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:646"
   },
-  "volumeControl": "Volume Control",
+  "volumeControl": "Ses düzeyi denetimi",
   "@volumeControl": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:95"
   },
-  "volumeIsFixedWhileBitPerfect": "Volume is fixed while bit-perfect passthrough is active and this DAC has no hardware volume control.",
+  "volumeIsFixedWhileBitPerfect": "Bit-perfect aktarımı etkin ve bu DAC'de donanım ses denetimi bulunmadığı için ses düzeyi sabit.",
   "@volumeIsFixedWhileBitPerfect": {
     "description": "lib/features/player/widgets/volume_bottom_sheet.dart:112"
   },
-  "volumeIsFixedWhileBitPerfect2": "Volume is fixed while bit-perfect passthrough is active: the stream is sent untouched and this DAC has no hardware volume control.",
+  "volumeIsFixedWhileBitPerfect2": "Bit-perfect aktarımı etkin olduğu sürece ses düzeyi sabit: ses akışı değiştirilmeden gönderiliyor ve bu DAC'de donanım ses denetimi yok.",
   "@volumeIsFixedWhileBitPerfect2": {
     "description": "lib/widgets/uac2/uac2_volume_control.dart:236"
   },
-  "wAgo": "{arg1}w ago",
+  "wAgo": "{arg1} hafta önce",
   "@wAgo": {
     "description": "lib/features/menu/screens/menu_screen.dart:3200",
     "placeholders": {
@@ -8347,19 +8347,19 @@
       }
     }
   },
-  "waitingForBrowserAuthorization": "Waiting for browser authorization...",
+  "waitingForBrowserAuthorization": "Tarayıcıda yetki bekleniyor…",
   "@waitingForBrowserAuthorization": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:978"
   },
-  "waitingForPlayback": "Waiting for playback",
+  "waitingForPlayback": "Oynatma bekleniyor",
   "@waitingForPlayback": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1110"
   },
-  "wantEveryControlDocumentedOpenThe": "Want every control documented? Open the in-app Manual anytime from Settings → Help & Manual.",
+  "wantEveryControlDocumentedOpenThe": "Tüm denetimlerin açıklamasını mı arıyorsun? Ayarlar → Yardım ve Kılavuz bölümünden uygulama içi kılavuzu istediğin zaman açabilirsin.",
   "@wantEveryControlDocumentedOpenThe": {
     "description": "lib/providers/tutorial_provider.dart:55"
   },
-  "was": "was: {arg1}",
+  "was": "önceki: {arg1}",
   "@was": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:537",
     "placeholders": {
@@ -8368,15 +8368,15 @@
       }
     }
   },
-  "wave": "Wave",
+  "wave": "Dalga",
   "@wave": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:86"
   },
-  "waveform": "Waveform",
+  "waveform": "Dalga biçimi",
   "@waveform": {
     "description": "lib/models/progress_bar_style.dart:16"
   },
-  "weLlKeepTheBestQuality": "We’ll keep the best-quality version in each group (prefers album art, then highest bitrate) and remove {count, plural, =1{{count} copy} other{{count} copies}}. Files on disk are not deleted.",
+  "weLlKeepTheBestQuality": "Her grupta en kaliteli sürümü tutacağız (önce albüm kapağı, ardından en yüksek bit hızı) ve {count, plural, =1{{count} kopyayı} other{{count} kopyayı}} kaldıracağız. Diskteki dosyalar silinmez.",
   "@weLlKeepTheBestQuality": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:926",
     "placeholders": {
@@ -8385,7 +8385,7 @@
       }
     }
   },
-  "weLlKeepYourCheckedVersion": "We’ll keep your {kept, plural, =1{{kept} checked version} other{{kept} checked versions}} and remove the other {removed, plural, =1{{removed} copy} other{{removed} copies}} from your library. Audio files on disk are not deleted.",
+  "weLlKeepYourCheckedVersion": "İşaretlediğin {kept, plural, =1{{kept} sürümü} other{{kept} sürümü}} tutup diğer {removed, plural, =1{{removed} kopyayı} other{{removed} kopyayı}} kitaplığından kaldıracağız. Diskteki ses dosyaları silinmez.",
   "@weLlKeepYourCheckedVersion": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:878",
     "placeholders": {
@@ -8401,51 +8401,51 @@
   "@webdav": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:73"
   },
-  "weekly": "Weekly",
+  "weekly": "Haftalık",
   "@weekly": {
     "description": "lib/data/repositories/recently_played_repository.dart:15"
   },
-  "welcomeBackLetSStartA": "Welcome back — let's start a streak.",
+  "welcomeBackLetSStartA": "Tekrar hoş geldin — yeni bir seri başlatalım.",
   "@welcomeBackLetSStartA": {
     "description": "lib/features/milestone/widgets/streak_popup.dart:93"
   },
-  "welcomeToFlick": "Welcome to Lokal!",
+  "welcomeToFlick": "Lokal'e hoş geldin!",
   "@welcomeToFlick": {
     "description": "lib/features/menu/screens/menu_screen.dart:305"
   },
-  "welcomeToFlick2": "Welcome to Lokal",
+  "welcomeToFlick2": "Lokal'e hoş geldin",
   "@welcomeToFlick2": {
     "description": "lib/providers/tutorial_provider.dart:7"
   },
-  "whatSNew": "What's New",
+  "whatSNew": "Yenilikler",
   "@whatSNew": {
     "description": "lib/features/whats_new/widgets/whats_new_bottom_sheet.dart:22"
   },
-  "whenYouPlayOverBluetoothAndroid": "When you play over Bluetooth, Android negotiates the codec with your headphones or speaker.",
+  "whenYouPlayOverBluetoothAndroid": "Bluetooth üzerinden çalarken Android, kodeği kulaklığın veya hoparlörünle görüşerek belirler.",
   "@whenYouPlayOverBluetoothAndroid": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:529"
   },
-  "whereShouldTheLrcFileBe": "Where should the .lrc file be saved?",
+  "whereShouldTheLrcFileBe": ".lrc dosyası nereye kaydedilsin?",
   "@whereShouldTheLrcFileBe": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:491"
   },
-  "whisperWorld": "Whisper World",
+  "whisperWorld": "Fısıltı Dünyası",
   "@whisperWorld": {
     "description": "lib/models/song.dart:371"
   },
-  "whisperedSecrets": "Whispered Secrets",
+  "whisperedSecrets": "Fısıldanan Sırlar",
   "@whisperedSecrets": {
     "description": "lib/models/song.dart:366"
   },
-  "white": "White",
+  "white": "Beyaz",
   "@white": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:267"
   },
-  "wholeAlbum": "Whole album",
+  "wholeAlbum": "Tüm albüm",
   "@wholeAlbum": {
     "description": "lib/features/songs/widgets/album_art_picker_bottom_sheet.dart:404"
   },
-  "wide": "{amount}% wide",
+  "wide": "%{amount} geniş",
   "@wide": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3493",
     "placeholders": {
@@ -8454,31 +8454,31 @@
       }
     }
   },
-  "widgets": "Widgets",
+  "widgets": "Widget'lar",
   "@widgets": {
     "description": "lib/features/settings/screens/settings_screen.dart:222"
   },
-  "width": "Width",
+  "width": "Genişlik",
   "@width": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3667"
   },
-  "wildWeather": "Wild Weather",
+  "wildWeather": "Vahşi Hava",
   "@wildWeather": {
     "description": "lib/models/song.dart:380"
   },
-  "willBeRemoved": "Will be removed",
+  "willBeRemoved": "Kaldırılacak",
   "@willBeRemoved": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:1531"
   },
-  "willKeep": "Will keep",
+  "willKeep": "Tutulacak",
   "@willKeep": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:647"
   },
-  "wiredOutput": "Wired output",
+  "wiredOutput": "Kablolu çıkış",
   "@wiredOutput": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:927"
   },
-  "word": "Word {arg1} · \"{arg2}\"",
+  "word": "Sözcük {arg1} · \"{arg2}\"",
   "@word": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1558",
     "placeholders": {
@@ -8490,7 +8490,7 @@
       }
     }
   },
-  "word2": "Word {arg1} · \"{token}\"",
+  "word2": "Sözcük {arg1} · \"{token}\"",
   "@word2": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1788",
     "placeholders": {
@@ -8502,15 +8502,15 @@
       }
     }
   },
-  "wordSync": "Word Sync",
+  "wordSync": "Sözcük eşitleme",
   "@wordSync": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:903"
   },
-  "wordSyncModeKaraoke": "Word Sync mode (karaoke)",
+  "wordSyncModeKaraoke": "Sözcük eşitleme modu (karaoke)",
   "@wordSyncModeKaraoke": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:670"
   },
-  "wordTimelineLine": "Word Timeline · Line {arg1}",
+  "wordTimelineLine": "Sözcük zaman çizelgesi · Satır {arg1}",
   "@wordTimelineLine": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1678",
     "placeholders": {
@@ -8519,7 +8519,7 @@
       }
     }
   },
-  "writeADescription": "Write a description",
+  "writeADescription": "Bir açıklama yaz",
   "@writeADescription": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:314"
   },
@@ -8550,7 +8550,7 @@
       }
     }
   },
-  "yAgo": "{arg1}y ago",
+  "yAgo": "{arg1} yıl önce",
   "@yAgo": {
     "description": "lib/features/menu/screens/menu_screen.dart:3205",
     "placeholders": {
@@ -8559,185 +8559,185 @@
       }
     }
   },
-  "year": "Year",
+  "year": "Yıl",
   "@year": {
     "description": "lib/features/player/widgets/song_metadata_sheet.dart:72"
   },
-  "yearly": "Yearly",
+  "yearly": "Yıllık",
   "@yearly": {
     "description": "lib/data/repositories/recently_played_repository.dart:17"
   },
-  "yesterday": "Yesterday",
+  "yesterday": "Dün",
   "@yesterday": {
     "description": "lib/data/repositories/recently_played_repository.dart:285"
   },
-  "youCanAlsoChangeTheCodec": "You can also change the codec in Android Developer Options under \"Bluetooth Audio Codec\".",
+  "youCanAlsoChangeTheCodec": "Kodeği Android Geliştirici Seçenekleri'ndeki \"Bluetooth Ses Kodeği\" bölümünden de değiştirebilirsin.",
   "@youCanAlsoChangeTheCodec": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:612"
   },
-  "youCustomizedWhichVersionsToKeep": "You customized which versions to keep. Nice — you're in control.",
+  "youCustomizedWhichVersionsToKeep": "Hangi sürümlerin tutulacağını kendin belirledin. Seçim sende.",
   "@youCustomizedWhichVersionsToKeep": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:667"
   },
-  "youHaveUnsavedChangesAreYou": "You have unsaved changes. Are you sure you want to discard them?",
+  "youHaveUnsavedChangesAreYou": "Kaydedilmemiş değişikliklerin var. Vazgeçmek istediğinden emin misin?",
   "@youHaveUnsavedChangesAreYou": {
     "description": "lib/features/songs/screens/metadata_editor_screen.dart:564"
   },
-  "youHaveUnsavedLyricEditsLeave": "You have unsaved lyric edits. Leave the Sync Studio without saving?",
+  "youHaveUnsavedLyricEditsLeave": "Kaydedilmemiş şarkı sözü düzenlemelerin var. Eşitleme Stüdyosu'ndan kaydetmeden çıkılsın mı?",
   "@youHaveUnsavedLyricEditsLeave": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:590"
   },
-  "youReOffline": "You're offline",
+  "youReOffline": "Çevrimdışısın",
   "@youReOffline": {
     "description": "lib/widgets/common/offline_notice.dart:180"
   },
-  "youReOfflineSomeOnlineFeatures": "You're offline. Some online features may not work.",
+  "youReOfflineSomeOnlineFeatures": "Çevrimdışısın. Bazı çevrimiçi özellikler çalışmayabilir.",
   "@youReOfflineSomeOnlineFeatures": {
     "description": "lib/widgets/common/offline_notice.dart:136"
   },
-  "youVeHitTheThresholdKeep": "You've hit the threshold — keep it up!",
+  "youVeHitTheThresholdKeep": "Hedefe ulaştın — böyle devam!",
   "@youVeHitTheThresholdKeep": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:619"
   },
-  "yourCollectionAtAGlance": "Your collection at a glance",
+  "yourCollectionAtAGlance": "Koleksiyonuna genel bakış",
   "@yourCollectionAtAGlance": {
     "description": "lib/features/albums/screens/albums_screen.dart:333"
   },
-  "yourCustomCollections": "Your custom collections",
+  "yourCustomCollections": "Özel koleksiyonların",
   "@yourCustomCollections": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:91"
   },
-  "yourHeaviestRotationRightNow": "Your heaviest rotation right now",
+  "yourHeaviestRotationRightNow": "Şu anda en çok dinlediklerin",
   "@yourHeaviestRotationRightNow": {
     "description": "lib/features/menu/screens/menu_screen.dart:1749"
   },
-  "yourLatestLibraryScans": "Your latest library scans",
+  "yourLatestLibraryScans": "Son kitaplık taramaların",
   "@yourLatestLibraryScans": {
     "description": "lib/features/menu/screens/menu_screen.dart:1429"
   },
-  "yourLibrary": "Your Library",
+  "yourLibrary": "Kitaplığın",
   "@yourLibrary": {
     "description": "lib/features/songs/screens/songs_screen.dart:1883"
   },
-  "yourLibraryAtAGlance": "Your library at a glance",
+  "yourLibraryAtAGlance": "Kitaplığına genel bakış",
   "@yourLibraryAtAGlance": {
     "description": "lib/features/artists/screens/artists_screen.dart:363"
   },
-  "yourLibraryIsTidyWeLl": "Your library is tidy. We’ll let you know if new duplicates appear after the next scan.",
+  "yourLibraryIsTidyWeLl": "Kitaplığın düzenli. Sonraki taramada yeni yinelenen kayıtlar bulunursa haber vereceğiz.",
   "@yourLibraryIsTidyWeLl": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:274"
   },
-  "yourListeningHistoryIsStillYours": "Your listening history is still yours. Try loading it again.",
+  "yourListeningHistoryIsStillYours": "Dinleme geçmişin korunuyor. Yeniden yüklemeyi dene.",
   "@yourListeningHistoryIsStillYours": {
     "description": "lib/features/recap/screens/listening_recap_screen.dart:249"
   },
-  "yourListensWillRemainOnListenbrainz": "Your listens will remain on ListenBrainz, but Lokal will stop submitting them.",
+  "yourListensWillRemainOnListenbrainz": "Dinlemelerin ListenBrainz'de kalacak, ancak Lokal bunları göndermeyi bırakacak.",
   "@yourListensWillRemainOnListenbrainz": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:136"
   },
-  "yourLogsAreUploadedToDpaste": "Your logs are uploaded to dpaste.com as an unlisted link that expires in 30 days. Anyone you share the link with can read them — logs may contain file paths and device details.",
+  "yourLogsAreUploadedToDpaste": "Günlüklerin, 30 gün sonra süresi dolan liste dışı bir bağlantıyla dpaste.com'a yüklenir. Bağlantıyı paylaştığın herkes günlükleri okuyabilir; dosya yolları ve cihaz bilgileri içerebilir.",
   "@yourLogsAreUploadedToDpaste": {
     "description": "lib/features/settings/screens/logs_screen.dart:130"
   },
-  "yourMonthlyRecapNeedsABit": "Your monthly recap needs a bit more listening time this month.",
+  "yourMonthlyRecapNeedsABit": "Aylık özetinin oluşması için bu ay biraz daha müzik dinlemelisin.",
   "@yourMonthlyRecapNeedsABit": {
     "description": "lib/data/repositories/recently_played_repository.dart:37"
   },
-  "yourMostReplayedTrack": "Your most replayed track",
+  "yourMostReplayedTrack": "En çok tekrar dinlediğin parça",
   "@yourMostReplayedTrack": {
     "description": "lib/features/recap/widgets/replay_sections.dart:111"
   },
-  "yourMusicIsBeingScrobbled": "Your music is being scrobbled",
+  "yourMusicIsBeingScrobbled": "Müzik dinlemelerin scrobble ediliyor",
   "@yourMusicIsBeingScrobbled": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:837"
   },
-  "yourMusicIsBeingSubmitted": "Your music is being submitted",
+  "yourMusicIsBeingSubmitted": "Müzik dinlemelerin gönderiliyor",
   "@yourMusicIsBeingSubmitted": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:267"
   },
-  "yourMusicOnRepeat": "Your music. On repeat.",
+  "yourMusicOnRepeat": "Müziğin. Tekrar tekrar.",
   "@yourMusicOnRepeat": {
     "description": "lib/features/recap/widgets/replay_poster.dart:108"
   },
-  "yourNewAudioEngineIsReady": "Your new audio engine is ready. Restart Lokal to apply it.",
+  "yourNewAudioEngineIsReady": "Yeni ses motorun hazır. Uygulamak için Lokal'i yeniden başlat.",
   "@yourNewAudioEngineIsReady": {
     "description": "lib/widgets/common/engine_restart_notice.dart:54"
   },
-  "yourNextFavoriteIsWaiting": "Your next favorite is waiting.",
+  "yourNextFavoriteIsWaiting": "Yeni favorin seni bekliyor.",
   "@yourNextFavoriteIsWaiting": {
     "description": "lib/features/recap/widgets/replay_poster.dart:183"
   },
-  "yourNextFavoriteNisWaiting": "Your next favorite\nis waiting.",
+  "yourNextFavoriteNisWaiting": "Yeni favorin\nseni bekliyor.",
   "@yourNextFavoriteNisWaiting": {
     "description": "lib/features/recap/screens/listening_recap_screen.dart:295"
   },
-  "yourPlaylists": "Your Playlists",
+  "yourPlaylists": "Çalma listelerin",
   "@yourPlaylists": {
     "description": "lib/features/menu/screens/menu_screen.dart:972"
   },
-  "yourScrobblingHistoryWillRemainOn": "Your scrobbling history will remain on Last.fm, but Lokal will stop sending scrobbles.",
+  "yourScrobblingHistoryWillRemainOn": "Scrobble geçmişin Last.fm'de kalacak, ancak Lokal yeni kayıt göndermeyi bırakacak.",
   "@yourScrobblingHistoryWillRemainOn": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:198"
   },
-  "yourSessionHistory": "Your session history",
+  "yourSessionHistory": "Oturum geçmişin",
   "@yourSessionHistory": {
     "description": "lib/features/menu/screens/menu_screen.dart:1420"
   },
-  "yourWeeklyRecapAppearsOnceYou": "Your weekly recap appears once you start listening this week.",
+  "yourWeeklyRecapAppearsOnceYou": "Haftalık özetin, bu hafta müzik dinlemeye başladığında görünür.",
   "@yourWeeklyRecapAppearsOnceYou": {
     "description": "lib/data/repositories/recently_played_repository.dart:35"
   },
-  "yourWholeLibraryLivesHereTap": "Your whole library lives here. Tap any song to play it.",
+  "yourWholeLibraryLivesHereTap": "Tüm müzik kitaplığın burada. Çalmak için herhangi bir şarkıya dokun.",
   "@yourWholeLibraryLivesHereTap": {
     "description": "lib/providers/tutorial_provider.dart:17"
   },
-  "yourYearlyRecapFillsInAs": "Your yearly recap fills in as you keep listening throughout the year.",
+  "yourYearlyRecapFillsInAs": "Yıl boyunca müzik dinledikçe yıllık özetin tamamlanır.",
   "@yourYearlyRecapFillsInAs": {
     "description": "lib/data/repositories/recently_played_repository.dart:39"
   },
-  "linkDesktop": "Desktop link",
-  "linkDevices": "Devices",
-  "linkConnectDesktop": "Connect your Lokal desktop",
-  "linkPairingHint": "On your desktop, open Phone Remote and choose Pair a phone. Keep both devices on the same Wi-Fi.",
-  "linkScanQr": "Scan pairing QR code",
-  "linkInvalidQr": "This is not a valid Lokal pairing code.",
-  "linkCameraUnavailable": "Camera access is unavailable. Go back and enter the desktop address and pairing code instead.",
-  "linkSearchDesktops": "Find desktops on Wi-Fi",
-  "linkSearching": "Looking for desktops…",
-  "linkNoDesktopFound": "No desktop found. You can enter its address manually.",
-  "linkDesktopAddress": "Desktop address",
-  "linkPairingCode": "Six-digit pairing code",
-  "linkPair": "Pair desktop",
-  "linkConnecting": "Connecting…",
-  "linkMatchTheme": "Match desktop theme and accent",
-  "linkConnected": "Connected",
-  "linkOffline": "Offline",
-  "linkReconnect": "Reconnect",
-  "linkDisconnect": "Disconnect",
-  "linkForget": "Forget desktop",
-  "linkForgetDescription": "Remove this desktop’s saved credentials from this phone? Your music and merged library stay on this phone.",
-  "linkActionFailed": "The desktop link could not complete this action.",
-  "linkPlayback": "Playback output",
-  "linkControlDesktop": "Control desktop from Now Playing",
-  "linkPlayOnDesktop": "Play on desktop",
-  "linkPlayOnPhone": "Play on this phone",
-  "linkUpdateDesktop": "Update Lokal on your PC to control this phone from it and sync your library.",
-  "linkMergeLibraries": "Merge your libraries",
-  "linkMergePreview": "Keep music, likes and playlists from both devices. Completed plays are combined once. No music files are deleted. Later edits sync in both directions.",
-  "linkMerge": "Merge",
-  "linkNotNow": "Not now",
-  "linkHistoryCount": "{count} desktop plays ready to merge",
-  "linkSendDownloads": "Send phone downloads to PC",
-  "linkSendDownloadsDescription": "Copy new phone downloads and missing handoff songs to the paired desktop. Original files stay on this phone.",
-  "linkLegacyRemote": "Connect to an older desktop manually",
-  "linkDownloadToPhone": "Download to phone",
-  "linkDownloaded": "Saved on this phone",
-  "linkOutputName": "Lokal on {name}",
-  "linkOnboardingDescription": "Control either device, move your queue between them, and keep likes, playlists and listening history together. This is optional and can be set up later.",
-  "linkFollowAccent": "Follow app accent",
-  "linkPerformanceTitle": "Make animations smoother?",
-  "linkPerformanceBody": "Performance mode keeps your theme and uses solid surfaces instead of glass.",
-  "linkEnablePerformance": "Use Performance mode",
+  "linkDesktop": "Masaüstü bağlantısı",
+  "linkDevices": "Cihazlar",
+  "linkConnectDesktop": "Lokal masaüstüne bağlan",
+  "linkPairingHint": "Bilgisayarında Telefon Uzaktan Kumandası'nı açıp Telefon Eşleştir'i seç. İki cihaz da aynı Wi-Fi ağına bağlı olsun.",
+  "linkScanQr": "Eşleştirme QR kodunu tara",
+  "linkInvalidQr": "Bu geçerli bir Lokal eşleştirme kodu değil.",
+  "linkCameraUnavailable": "Kamera erişimi kullanılamıyor. Geri dönüp bilgisayar adresini ve eşleştirme kodunu elle gir.",
+  "linkSearchDesktops": "Wi-Fi üzerindeki bilgisayarları bul",
+  "linkSearching": "Bilgisayarlar aranıyor…",
+  "linkNoDesktopFound": "Bilgisayar bulunamadı. Adresini elle girebilirsin.",
+  "linkDesktopAddress": "Bilgisayar adresi",
+  "linkPairingCode": "Altı haneli eşleştirme kodu",
+  "linkPair": "Bilgisayarı eşleştir",
+  "linkConnecting": "Bağlanıyor…",
+  "linkMatchTheme": "Masaüstü teması ve vurgu rengiyle eşleştir",
+  "linkConnected": "Bağlandı",
+  "linkOffline": "Çevrimdışı",
+  "linkReconnect": "Yeniden bağlan",
+  "linkDisconnect": "Bağlantıyı kes",
+  "linkForget": "Bilgisayarı unut",
+  "linkForgetDescription": "Bu bilgisayarın kayıtlı kimlik bilgileri telefondan silinsin mi? Müziğin ve birleştirilmiş kitaplığın telefonda kalacak.",
+  "linkActionFailed": "Masaüstü bağlantısı bu işlemi tamamlayamadı.",
+  "linkPlayback": "Oynatma çıkışı",
+  "linkControlDesktop": "Şu An Çalıyor ekranından bilgisayarı kontrol et",
+  "linkPlayOnDesktop": "Bilgisayarda çal",
+  "linkPlayOnPhone": "Bu telefonda çal",
+  "linkUpdateDesktop": "Bu telefonu bilgisayarından kontrol edebilmek ve kitaplığını eşitlemek için bilgisayarındaki Lokal'i güncelle.",
+  "linkMergeLibraries": "Kitaplıklarını birleştir",
+  "linkMergePreview": "İki cihazdaki müzikleri, beğenileri ve çalma listelerini koru. Tamamlanan dinlemeler tek sefer birleştirilir. Hiçbir müzik dosyası silinmez. Sonraki düzenlemeler iki yönde de eşitlenir.",
+  "linkMerge": "Birleştir",
+  "linkNotNow": "Şimdi değil",
+  "linkHistoryCount": "Birleştirmeye hazır {count} masaüstü dinlemesi",
+  "linkSendDownloads": "Telefondaki indirmeleri bilgisayara gönder",
+  "linkSendDownloadsDescription": "Telefona yeni indirilenleri ve cihazlar arası aktarımda eksik olan şarkıları eşleştirilmiş bilgisayara kopyala. Özgün dosyalar telefonda kalır.",
+  "linkLegacyRemote": "Eski bir masaüstü sürümüne elle bağlan",
+  "linkDownloadToPhone": "Telefona indir",
+  "linkDownloaded": "Bu telefona kaydedildi",
+  "linkOutputName": "{name} cihazında Lokal",
+  "linkOnboardingDescription": "İki cihazı da kontrol et, sıranı aralarında taşı ve beğenilerini, çalma listelerini ve dinleme geçmişini birlikte tut. Bu özellik isteğe bağlıdır; daha sonra da ayarlayabilirsin.",
+  "linkFollowAccent": "Uygulamanın vurgu rengini kullan",
+  "linkPerformanceTitle": "Animasyonlar daha akıcı olsun mu?",
+  "linkPerformanceBody": "Performans modu temanı korur ve cam efekti yerine düz renkli yüzeyler kullanır.",
+  "linkEnablePerformance": "Performans modunu kullan",
   "@linkHistoryCount": {
     "placeholders": {
       "count": {
