@@ -58,29 +58,57 @@ String _renderLyrics(LyricsData lyrics) {
   return "${output.join('\n')}\n";
 }
 
-/// Keep valid original LRC/ELRC/XML bytes. Convert desktop JSON lyric payloads
-/// from parsed lines so that the downloaded file works in ordinary players.
-LyricsFileExport prepareLyricsFileExport(Song song, LyricsData lyrics) {
-  if (lyrics.lines.isEmpty) {
+/// A source may contain timestamp-only/blank lines, but those must not
+/// produce a "successful" empty export.
+bool hasUsableLyrics(LyricsData lyrics) => lyrics.lines.any(
+  (line) =>
+      line.text.trim().isNotEmpty ||
+      (line.words?.any((word) => word.text.trim().isNotEmpty) ?? false),
+);
+
+/// Keep valid original LRC/ELRC/XML bytes unless the player is showing a
+/// translation or romanization that is not part of the original document.
+/// In that case export the selected rendered lines, not stale rawContent.
+LyricsFileExport prepareLyricsFileExport(
+  Song song,
+  LyricsData lyrics, {
+  bool includeDisplayedSubline = false,
+}) {
+  if (!hasUsableLyrics(lyrics)) {
     throw ArgumentError('There are no lyrics to save');
   }
 
   final raw = lyrics.rawContent.trim();
-  final xml = raw.startsWith('<') &&
-      (raw.startsWith('<?xml') || RegExp(r'^<(?:[A-Za-z0-9_-]+:)?(?:tt|lyrics|line)\b',
-        caseSensitive: false).hasMatch(raw));
-  final ttml = xml && RegExp(r'<(?:[A-Za-z0-9_-]+:)?tt\b',
-      caseSensitive: false).hasMatch(raw);
+  // The root element may follow XML comments or processing instructions.
+  // Inspect only the prolog; preserving the original bytes keeps TTML
+  // syllable timing and metadata intact.
+  final xmlBody = raw.replaceFirst(
+    RegExp(r'^(?:\s*(?:<!--[\s\S]*?-->|<\?[\s\S]*?\?>))*\s*'),
+    '',
+  );
+  final root = RegExp(
+    r'^<(?:[A-Za-z0-9_.-]+:)?(tt|lyrics|line)\b',
+    caseSensitive: false,
+  ).firstMatch(xmlBody)?.group(1)?.toLowerCase();
+  final xml = root != null;
+  final ttml = root == 'tt';
   final lrc = RegExp(r'\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]').hasMatch(raw);
   final enhanced = lrc &&
       RegExp(r'<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>').hasMatch(raw);
-  final extension = xml
+  final missingSubline = lyrics.lines.any(
+    (line) => line.translation?.trim().isNotEmpty == true &&
+        !raw.contains(line.translation!.trim()),
+  );
+  final preserveOriginal = !includeDisplayedSubline &&
+      !missingSubline && (xml || lrc);
+  final wordTimed = lyrics.lines.any((line) => line.words?.isNotEmpty == true);
+  final extension = preserveOriginal && xml
       ? (ttml ? 'ttml' : 'xml')
       : lyrics.isSynchronized
-          ? ((enhanced || (!lrc && lyrics.lines.any(
-                (line) => line.words?.isNotEmpty == true))) ? 'elrc' : 'lrc')
+          ? ((preserveOriginal && enhanced || !preserveOriginal && wordTimed)
+              ? 'elrc' : 'lrc')
           : 'txt';
-  final content = xml || lrc ? lyrics.rawContent : _renderLyrics(lyrics);
+  final content = preserveOriginal ? lyrics.rawContent : _renderLyrics(lyrics);
   final title = _safeFilePart(song.title);
   final artist = _safeFilePart(song.artist);
   final stem = [
@@ -90,7 +118,7 @@ LyricsFileExport prepareLyricsFileExport(Song song, LyricsData lyrics) {
   return LyricsFileExport(
     fileName: "${stem.isEmpty ? 'Lyrics' : stem}.$extension",
     extension: extension,
-    mimeType: xml ? 'application/xml' : 'text/plain',
+    mimeType: preserveOriginal && xml ? 'application/xml' : 'text/plain',
     content: content,
   );
 }
@@ -102,17 +130,25 @@ typedef LyricsExportPicker = Future<Uri?> Function(LyricsFileExport file);
 Future<bool> saveCurrentLyricsFile({
   required Song song,
   required LyricsData lyrics,
+  bool includeDisplayedSubline = false,
   LyricsExportPicker? picker,
 }) async {
-  final file = prepareLyricsFileExport(song, lyrics);
-  final saved = await (picker?.call(file) ??
-      FilePicker.saveFile(
-        dialogTitle: 'Save lyrics to file',
-        fileName: file.fileName,
-        mimeType: file.mimeType,
-        type: FileType.custom,
-        allowedExtensions: [file.extension],
-        bytes: file.bytes,
-      ));
+  final file = prepareLyricsFileExport(
+    song,
+    lyrics,
+    includeDisplayedSubline: includeDisplayedSubline,
+  );
+  // A cancelled injected picker must not fall through and open a second
+  // platform picker. Both production and test cancellation return false.
+  final saved = picker != null
+      ? await picker(file)
+      : await FilePicker.saveFile(
+          dialogTitle: 'Save lyrics to file',
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+          type: FileType.custom,
+          allowedExtensions: [file.extension],
+          bytes: file.bytes,
+        );
   return saved != null;
 }
