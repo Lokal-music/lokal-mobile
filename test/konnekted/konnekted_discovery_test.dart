@@ -132,6 +132,8 @@ class _ReadyYoutube extends KonnektedDiscoveryNotifier {
       page: 0,
       mixes: [LokalDiscoveryMix(id: 'RDTMAKtest', title: 'Supermix')],
       liked: [LokalDiscoveryTrack(title: 'A liked song', artist: 'Artist')],
+      history: [LokalDiscoveryTrack(title: 'History song', artist: 'Artist')],
+      quickPicks: [LokalDiscoveryTrack(title: 'Quick YT pick', artist: 'Artist')],
     ),
   );
   @override
@@ -240,10 +242,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester.getTopLeft(find.text('Mixed for you')).dy,
-        lessThan(tester.getTopLeft(find.text('Liked Songs')).dy),
-      );
+      expect(find.text('Mixed for you'), findsOneWidget);
+      expect(find.text('Liked Songs'), findsNothing);
+      expect(find.text('Like'), findsNothing);
       expect(
         tester
             .widget<ListView>(find.byKey(const PageStorageKey('spotify-mixes')))
@@ -282,10 +283,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Supermix'), findsOneWidget);
-      expect(
-        tester.getTopLeft(find.text('Mixed for you')).dy,
-        lessThan(tester.getTopLeft(find.text('Your Likes')).dy),
-      );
+      expect(find.text('Mixed for you'), findsOneWidget);
+      expect(find.text('Quick Picks'), findsOneWidget);
+      expect(find.text('Your Likes'), findsNothing);
+      expect(find.text('A liked song'), findsNothing);
+      expect(find.text('History'), findsNothing);
+      expect(find.text('History song'), findsNothing);
       final shelf = tester.widget<ListView>(
         find.byKey(const PageStorageKey('youtube-music-mixes')),
       );
@@ -345,10 +348,19 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Fresh Finds'), findsOneWidget);
-    expect(find.text('Quick Picks'), findsOneWidget);
-    expect(find.text('Scrobble History'), findsOneWidget);
+    expect(find.text('Quick Picks'), findsNothing);
+    expect(find.text('Scrobble History'), findsNothing);
     expect(find.text('Albums For You'), findsOneWidget);
     expect(find.text('Artists For You'), findsOneWidget);
+    // Albums take priority as the first populated Last.fm section.
+    expect(
+      tester.getTopLeft(find.text('Albums For You')).dy,
+      lessThan(tester.getTopLeft(find.text('Fresh Finds')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Albums For You')).dy,
+      lessThan(tester.getTopLeft(find.text('Artists For You')).dy),
+    );
 
     await tester.tap(
       find.bySemanticsLabel('Play American Boy by Estelle, in your library'),
