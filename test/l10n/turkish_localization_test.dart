@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flick/l10n/lokal_ui_translations.dart';
 
 Map<String, String> _strings(String path) {
   final contents = jsonDecode(File(path).readAsStringSync())
@@ -78,6 +79,23 @@ void main() {
       }
     }
     expect(errors, isEmpty, reason: errors.join('\n'));
+  });
+
+  test('all Lokal presentation phrases have Turkish strings and matching arguments', () {
+    final source = lokalUiTranslations['fr']!;
+    final localized = lokalUiTranslations['tr']!;
+    expect(localized.keys.toSet(), source.keys.toSet());
+
+    final errors = <String>[];
+    for (final entry in localized.entries) {
+      if (entry.value.trim().isEmpty) {
+        errors.add('${entry.key}: empty UI translation');
+      }
+      if (!_setEquals(_arguments(entry.key), _arguments(entry.value))) {
+        errors.add('${entry.key}: placeholder mismatch');
+      }
+    }
+    expect(errors, isEmpty, reason: errors.join('\\n'));
   });
 
   test('legal attribution stays unchanged in Turkish locale', () {
