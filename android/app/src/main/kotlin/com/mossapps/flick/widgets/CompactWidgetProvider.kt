@@ -38,8 +38,8 @@ class CompactWidgetProvider : AppWidgetProvider() {
         val showArt = WidgetPrefs.getCompactShowAlbumArt(context)
         val title = if (hasSong) {
             prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
-                .ifBlank { context.getString(R.string.widget_nothing_playing) }
-        } else context.getString(R.string.widget_nothing_playing)
+                .ifBlank { WidgetPrefs.localizedText(context, R.string.widget_nothing_playing) }
+        } else WidgetPrefs.localizedText(context, R.string.widget_nothing_playing)
         val artist = prefs.getString(WidgetPrefs.KEY_ARTIST, "").orEmpty()
         val width = WidgetSize.width(manager, id)
         val scale = WidgetPrefs.getCompactTextScale(context)
@@ -50,6 +50,12 @@ class CompactWidgetProvider : AppWidgetProvider() {
         views.setTextViewTextSize(R.id.compact_title, TypedValue.COMPLEX_UNIT_SP,
             WidgetPrefs.scaledSp(15, width, 200f, scale).toFloat())
         views.setContentDescription(R.id.compact_title, title)
+        views.setContentDescription(R.id.compact_prev,
+            WidgetPrefs.localizedText(context, R.string.widget_previous))
+        views.setContentDescription(R.id.compact_play_pause,
+            WidgetPrefs.localizedText(context, R.string.widget_play_pause))
+        views.setContentDescription(R.id.compact_next,
+            WidgetPrefs.localizedText(context, R.string.widget_next))
         views.setOnClickPendingIntent(R.id.compact_title, WidgetIntents.openApp(context, 50))
 
         if (hasSong && showArtist && artist.isNotBlank()) {
