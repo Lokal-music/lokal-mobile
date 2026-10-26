@@ -30,7 +30,10 @@ void main() {
         {'time': 174000, 'text': 'Outro two'},
       ],
     }, duration: const Duration(minutes: 3));
-    expect(result, isNull);
+    expect(result, isNotNull);
+    final parsed = service.parseLyricsText(result!);
+    expect(parsed.isSynchronized, isFalse);
+    expect(parsed.lines.map((line) => line.text).toList(), ['Outro', 'Outro two']);
   });
 
   test('reject grossly out-of-range or negative timestamps instead of flashing lyrics at wrong time', () {
@@ -40,7 +43,7 @@ void main() {
         {'time': 360000, 'text': 'Wrong recording end'},
         {'time': 13000, 'text': 'Valid but mostly corrupted'},
       ],
-    }, duration: const Duration(minutes: 3)), isNull);
+    }, duration: const Duration(minutes: 3)), isNotNull);
   });
 
   test('reject collapsed timestamps that would jump playback to the last lyric', () {
@@ -52,7 +55,12 @@ void main() {
         {'time': 0, 'text': 'Outro'},
       ],
     }, duration: const Duration(minutes: 3));
-    expect(result, isNull);
+    expect(result, isNotNull);
+    final plain = service.parseLyricsText(result!);
+    expect(plain.isSynchronized, isFalse);
+    expect(plain.lines.map((line) => line.text).toList(), [
+      'Opening', 'Second verse', 'Final chorus', 'Outro',
+    ]);
   });
 
   test('preserve genuine syllabus timings, ignoring background vocals and sorting words', () {
