@@ -312,6 +312,7 @@ class AndroidAudioEngine implements AudioEngine {
   just_audio.AudioPlayer? _secondary;
   Timer? _crossfadeTimer;
   bool _crossfadeArmed = false;
+  bool _crossfadeCommitted = false; // true only after the two players swap
   int _crossfadeEpoch = 0; // invalidates late async decoder preparations
   double _rampUserVolume = 1.0;
   Duration _rampElapsed = Duration.zero;
@@ -542,6 +543,7 @@ class AndroidAudioEngine implements AudioEngine {
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
     final survivor = _secondary;
     _secondary = null;
     _player = null;
@@ -807,8 +809,9 @@ class AndroidAudioEngine implements AudioEngine {
       debugPrintStack(stackTrace: stackTrace);
       rethrow;
     }
-    // Resume a crossfade ramp that was frozen by pause().
-    if (_crossfadeArmed) {
+    // Only a committed ramp needs both decoders resumed. While merely
+    // preloading, the original player owns playback and remains solo.
+    if (_crossfadeCommitted) {
       final outgoing = _secondary;
       if (outgoing != null) {
         try {
@@ -827,8 +830,8 @@ class AndroidAudioEngine implements AudioEngine {
   Future<void> pause() async {
     final player = await _ensurePlayer();
     await player.pause();
-    if (_crossfadeArmed) {
-      // Freeze the ramp where it is; play() resumes from [_rampElapsed].
+    if (_crossfadeCommitted) {
+      // Freeze only a live ramp, never a still-buffering incoming decoder.
       _crossfadeTimer?.cancel();
       _crossfadeTimer = null;
       final outgoing = _secondary;
@@ -900,6 +903,7 @@ class AndroidAudioEngine implements AudioEngine {
     // require several seconds to buffer. Skips/stops/route changes invalidate
     // this attempt and cannot start an obsolete successor after an await.
     _crossfadeArmed = true;
+    _crossfadeCommitted = false;
     final epoch = ++_crossfadeEpoch;
     final outgoing = _player;
     final outgoingTrack = _loadedTrack;
@@ -988,6 +992,7 @@ class AndroidAudioEngine implements AudioEngine {
         // Ping-pong decoders only when the incoming audio is committed.
         _player = incoming;
         _secondary = outgoing;
+        _crossfadeCommitted = true;
         _startRampTimer(outgoing, incoming);
         _emit(
           _state.copyWith(
@@ -1003,6 +1008,7 @@ class AndroidAudioEngine implements AudioEngine {
         devLog('[crossfade] preparation failed: $error');
         debugPrintStack(stackTrace: stackTrace);
         _crossfadeArmed = false;
+        _crossfadeCommitted = false;
         final active = _player;
         if (active != null) {
           try {
@@ -1047,6 +1053,7 @@ class AndroidAudioEngine implements AudioEngine {
       await outgoing.setVolume(_rampUserVolume);
     } catch (_) {}
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
   }
 
   Future<void> _cancelCrossfade() async {
@@ -1055,6 +1062,7 @@ class AndroidAudioEngine implements AudioEngine {
     _crossfadeTimer = null;
     final wasArmed = _crossfadeArmed;
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
     final secondary = _secondary;
     if (secondary != null) {
       try {
@@ -1082,6 +1090,7 @@ class AndroidAudioEngine implements AudioEngine {
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
