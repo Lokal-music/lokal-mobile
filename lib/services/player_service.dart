@@ -2,6 +2,7 @@ import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/morneye/morneye_live_playback.dart';
 import 'package:flick/services/online_radio_recommendations.dart';
+import 'package:flick/services/automix_analysis_cache.dart';
 
 import 'link/link_journal.dart';
 
@@ -2427,6 +2428,7 @@ class PlayerService {
           curve: curve,
         );
       },
+      automixProfileLookup: AutoMixAnalysisCache.instance.read,
       onNextSong: _resolveAndroidCrossfadeNext,
       onTrackAdvanced: _onAndroidTrackAdvanced,
       onTrackError: _onAndroidTrackError,
