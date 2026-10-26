@@ -918,15 +918,20 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                     right: 10,
                     bottom: MediaQuery.paddingOf(context).bottom + 55,
                     child: IgnorePointer(
-                      child: ImmersiveLyricsSubtitle(
-                        key: ValueKey('space-subtitles:${song.id}'),
-                        lyrics: _lyricsForSongId == song.id
-                            ? (_sublineLyrics ?? _lyrics) : null,
-                        position: _videoActive
-                            ? _videoController.positionNotifier
-                            : _player.positionNotifier,
-                        loading: _lyricsLoading || _lyricsForSongId != song.id,
-                      ),
+                      child: _videoActive
+                          ? ValueListenableBuilder<bool>(
+                              valueListenable: _videoController.nativeNotifier,
+                              builder: (context, native, _) => native
+                                  ? _spaceSubtitle(song)
+                                  : const Text(
+                                      'Timed subtitles unavailable in embedded video fallback',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white70, fontSize: 13,
+                                      ),
+                                    ),
+                            )
+                          : _spaceSubtitle(song),
                     ),
                   ),
               ],
@@ -936,6 +941,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       ),
     );
   }
+
+  Widget _spaceSubtitle(Song song) => ImmersiveLyricsSubtitle(
+    key: ValueKey('space-subtitles:${song.id}'),
+    lyrics: _lyricsForSongId == song.id
+        ? (_sublineLyrics ?? _lyrics) : null,
+    position: _videoActive
+        ? _videoController.positionNotifier : _player.positionNotifier,
+    loading: _lyricsLoading || _lyricsForSongId != song.id,
+  );
 
   Widget _spaceHidden(Widget child) => Visibility(
     visible: !_immersiveLyrics,
@@ -1136,6 +1150,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                   key: _videoSurfaceKey,
                                   videoId: _activeVideoId!,
                                   controller: _videoController,
+                onFullscreen: _toggleVideoFullscreen,
                                 ),
                               ),
                               false,
@@ -1428,6 +1443,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 key: _videoSurfaceKey,
                 videoId: _activeVideoId!,
                 controller: _videoController,
+                onFullscreen: _toggleVideoFullscreen,
               ),
             ),
           )
