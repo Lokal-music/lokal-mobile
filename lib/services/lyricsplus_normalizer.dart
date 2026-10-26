@@ -50,12 +50,14 @@ String? normalizeLyricsPlusV2(
     entries.add((time: time, text: text, words: words));
   }
   if (entries.isEmpty) return null;
+  // Provider lines sometimes arrive in reverse order. Keep both synchronized
+  // lyrics and plain fallback in chronological order when times are available.
+  entries.sort((a, b) => a.time.compareTo(b.time));
   // A malformed timed answer can still contain correct words (as for plain
   // LyricsPlus results). Render those words, never fake word-by-word timing.
   String plain() => entries.map((entry) => entry.text)
       .where((text) => text.isNotEmpty).join('\n');
   if (invalid > entries.length ~/ 4) return plain();
-  entries.sort((a, b) => a.time.compareTo(b.time));
 
   // Many identical timestamps mean this is not usable synchronized lyrics:
   // the binary-search player would immediately jump to the final duplicate.
