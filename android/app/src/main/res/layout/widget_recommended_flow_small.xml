@@ -5,7 +5,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
         android:padding="7dp" android:orientation="vertical" android:gravity="center">
         <TextView android:id="@+id/rec_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="COVER FLOW" android:textColor="#FF577D" android:textSize="10sp"
+            android:text="@string/widget_cover_flow_heading" android:textColor="#FF577D" android:textSize="10sp"
             android:singleLine="true" android:fontFamily="@font/product_sans_bold"/>
         <LinearLayout android:id="@+id/rec_art_strip" android:layout_width="match_parent" android:layout_height="0dp"
             android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
@@ -32,7 +32,7 @@
             <TextView android:id="@+id/rec_prev" android:layout_width="32dp" android:layout_height="29dp"
                 android:text="‹" android:background="@drawable/widget_music_action_secondary" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>
             <TextView android:id="@+id/rec_play" android:layout_width="0dp" android:layout_weight="1"
-                android:layout_height="29dp" android:text="Play" android:background="@drawable/widget_music_action_primary" android:textColor="#FFFFFF"
+                android:layout_height="29dp" android:text="@string/widget_action_play" android:background="@drawable/widget_music_action_primary" android:textColor="#FFFFFF"
                 android:textSize="11sp" android:gravity="center"/>
             <TextView android:id="@+id/rec_next" android:layout_width="32dp" android:layout_height="29dp"
                 android:text="›" android:background="@drawable/widget_music_action_secondary" android:textColor="#FFFFFF" android:textSize="21sp" android:gravity="center"/>

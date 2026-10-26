@@ -73,6 +73,37 @@ void main() {
     expect(find.text('Lokal Replay'), findsNothing);
   });
 
+  testWidgets('Turkish follows a live locale switch without stale text', (tester) async {
+    await LocaleController.instance.select(const Locale('en'));
+    await tester.pumpWidget(_app());
+    expect(l10n.flickReplay, 'Lokal Replay');
+
+    await LocaleController.instance.select(const Locale('tr'));
+    await tester.pumpAndSettle();
+
+    expect(l10n.flickReplay, 'Lokal Yıl Özeti');
+    expect(l10n.settings, 'Ayarlar');
+    expect(lokalText('Queue'), 'Sıra');
+    expect(lokalText('The phone’s language, or one Lokal is translated into.'),
+        'Telefonun dili veya Lokal\'in desteklediği dillerden biri.');
+    expect(find.text('Lokal Yıl Özeti'), findsOneWidget);
+    expect(find.text('Lokal Replay'), findsNothing);
+
+    await LocaleController.instance.select(const Locale('en'));
+    await tester.pumpAndSettle();
+    expect(l10n.flickReplay, 'Lokal Replay');
+    expect(lokalText('Queue'), 'Queue');
+  });
+
+  test('Turkish is supported and resolves from regional variants', () {
+    expect(kSupportedLocales, contains(const Locale('tr')));
+    expect(resolveSupportedLocale(const Locale('tr', 'TR')), const Locale('tr'));
+    final translations = lookupAppLocalizations(const Locale('tr'));
+    expect(translations.addedSongsToQueue(1), 'Sıraya eklendi');
+    expect(translations.addedSongsToQueue(4), '4 şarkı sıraya eklendi');
+    expect(translations.songsIn(3, 2), '2 klasörde 3 şarkı');
+  });
+
   testWidgets('a widget reading l10n during build follows the switch', (tester) async {
     // Two switches in a row: a cached value would freeze at the first one.
     await LocaleController.instance.select(const Locale('zh', 'CN'));

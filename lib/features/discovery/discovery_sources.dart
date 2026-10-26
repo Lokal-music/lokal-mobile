@@ -355,6 +355,8 @@ class ResolvedDiscoveryAudio {
     this.headers = const {},
     this.codec,
     this.bitrate,
+    this.quality,
+    this.bitDepth,
     this.sampleRate,
   });
   final Uri url;
@@ -362,6 +364,9 @@ class ResolvedDiscoveryAudio {
   final String? codec;
   /// Bits per second for the exact selected rendition, when the resolver knows it.
   final int? bitrate;
+  /// Resolver-advertised details of the selected rendition (not native-probed).
+  final String? quality;
+  final int? bitDepth;
   final int? sampleRate;
 
   /// The file's size when it must be fetched in parts (YouTube serves big
@@ -384,10 +389,33 @@ int? providerAudioInteger(Map<String, dynamic> row, List<String> keys,
   return null;
 }
 
+/// Sample-rate fields from HTTP providers may use Hz (44100) or kHz
+/// (44.1 / "44.1 kHz"). Integer-only parsing drops CD-rate metadata.
+int? providerAudioSampleRate(Map<String, dynamic> row) {
+  const keys = [
+    'sampleRate', 'sample_rate', 'samplingRate', 'sampling_rate',
+    'audioSampleRate', 'audio_sample_rate',
+  ];
+  for (final key in keys) {
+    final raw = row[key];
+    if (raw == null) continue;
+    final text = raw.toString().trim();
+    final explicitKhz = RegExp(r'k\s*hz$', caseSensitive: false).hasMatch(text);
+    final number = raw is num ? raw.toDouble() : double.tryParse(
+      text.replaceFirst(RegExp(r'\s*(?:k\s*hz|hz)\s*$', caseSensitive: false), '').trim(),
+    );
+    if (number == null || !number.isFinite || number <= 0) continue;
+    final hz = (explicitKhz || number < 1000 ? number * 1000 : number).round();
+    if (hz >= 8000 && hz <= 768000) return hz;
+  }
+  return null;
+}
+
 String? providerAudioCodec(Map<String, dynamic> row) {
   final value = discoveryText(
       row['codec'] ?? row['audioCodec'] ?? row['audio_codec']
-          ?? row['format'] ?? row['mimeType'], maxLength: 40);
+          ?? row['audioFormat'] ?? row['fileType'] ?? row['format']
+          ?? row['mimeType'] ?? row['contentType'], maxLength: 80);
   if (value == null) return null;
   final v = value.toLowerCase();
   if (v.contains('flac')) return 'FLAC';
@@ -545,11 +573,9 @@ class DiscoveryAddon {
               row['audio_quality'] ?? row['quality'], maxLength: 40),
           catalogueCodec: providerAudioCodec(row),
           catalogueBitDepth: providerAudioInteger(
-              row, const ['bitDepth', 'bit_depth', 'bitsPerSample'],
+              row, const ['bitDepth', 'bit_depth', 'bitsPerSample', 'bits_per_sample'],
               min: 8, max: 64),
-          catalogueSampleRate: providerAudioInteger(
-              row, const ['sampleRate', 'sample_rate', 'samplingRate'],
-              min: 8000),
+          catalogueSampleRate: providerAudioSampleRate(row),
           // Retain security-relevant fields with inline URLs, not just the URL.
           inlineStream: row['streamURL'] == null
               ? null
@@ -674,6 +700,18 @@ class DiscoveryAddon {
         );
       }
     }
-    return ResolvedDiscoveryAudio(uri);
+    return ResolvedDiscoveryAudio(
+      uri,
+      codec: providerAudioCodec(json),
+      quality: discoveryText(
+        json['audioQuality'] ?? json['audio_quality'] ?? json['quality'],
+        maxLength: 80,
+      ),
+      bitDepth: providerAudioInteger(
+        json, const ['bitDepth', 'bit_depth', 'bitsPerSample', 'bits_per_sample'],
+        min: 8, max: 64,
+      ),
+      sampleRate: providerAudioSampleRate(json),
+    );
   }
 }

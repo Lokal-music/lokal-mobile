@@ -5,7 +5,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
         android:padding="12dp" android:orientation="vertical" android:gravity="center_vertical">
         <TextView android:id="@+id/rec_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="COVER FLOW" android:textColor="#FF577D"
+            android:text="@string/widget_cover_flow_heading" android:textColor="#FF577D"
             android:textSize="10sp" android:fontFamily="@font/product_sans_bold"/>
         <LinearLayout android:id="@+id/rec_art_strip" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
             android:orientation="horizontal" android:gravity="center"
@@ -20,11 +20,11 @@
                 android:layout_height="match_parent" android:padding="7dp" android:scaleType="fitCenter"
                 android:src="@drawable/widget_art_placeholder" android:background="@drawable/widget_art_background" android:clipToOutline="true" android:alpha="0.75"/>
         </LinearLayout>
-        <TextView android:id="@+id/rec_title" android:text="Your next favourite" android:layout_width="match_parent" android:layout_height="wrap_content"
+        <TextView android:id="@+id/rec_title" android:text="@string/widget_cover_flow_next_favourite" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:gravity="center" android:textColor="#FFFFFF"
             android:textSize="15sp" android:singleLine="true" android:ellipsize="end"
             android:fontFamily="@font/product_sans_bold"/>
-        <TextView android:id="@+id/rec_artist" android:text="Discover music with Lokal" android:layout_width="match_parent" android:layout_height="wrap_content"
+        <TextView android:id="@+id/rec_artist" android:text="@string/widget_cover_flow_description" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:gravity="center" android:textColor="#CCFFFFFF"
             android:textSize="12sp" android:singleLine="true" android:ellipsize="end"/>
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -33,7 +33,7 @@
                 android:text="‹" android:textColor="#FFFFFF" android:textSize="23sp"
                 android:gravity="center" android:background="@drawable/widget_music_action_secondary"/>
             <TextView android:id="@+id/rec_play" android:layout_width="100dp" android:layout_height="32dp"
-                android:layout_marginHorizontal="8dp" android:text="Play pick" android:textColor="#FFFFFF"
+                android:layout_marginHorizontal="8dp" android:text="@string/widget_cover_flow_play_pick" android:textColor="#FFFFFF"
                 android:textSize="12sp" android:gravity="center" android:background="@drawable/widget_music_action_primary"/>
             <TextView android:id="@+id/rec_next" android:layout_width="48dp" android:layout_height="32dp"
                 android:text="›" android:textColor="#FFFFFF" android:textSize="23sp"

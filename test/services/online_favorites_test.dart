@@ -117,6 +117,52 @@ void main() {
     expect(likes.single.id, song.id);
   });
 
+  test('newest heart tap outranks library import date and survives restart', () async {
+    SharedPreferences.setMockInitialValues({
+      'favorite_song_ids': ['old-liked-a', 'old-liked-b'],
+    });
+    final service = FavoritesService(songRepository: _Songs([]));
+    final legacy = await service.getFavoriteRanks();
+    expect(legacy['old-liked-a'], 1);
+    expect(legacy['old-liked-b'], 2);
+    await service.addFavorite('new-like');
+    final after = await FavoritesService(songRepository: _Songs([]))
+        .getFavoriteRanks();
+    expect(after['new-like']!, greaterThan(after['old-liked-b']!));
+
+    await service.removeFavorite('old-liked-a');
+    await service.addFavorite('old-liked-a'); // re-like is a new heart event.
+    final reopened = await FavoritesService(songRepository: _Songs([]))
+        .getFavoriteRanks();
+    expect(reopened['old-liked-a']!, greaterThan(reopened['new-like']!));
+    expect(reopened['old-liked-b'], 2);
+    expect(reopened.keys.toSet(), {'old-liked-a', 'old-liked-b', 'new-like'});
+  });
+
+  test('re-adding an already liked ID does not falsely bump its rank', () async {
+    final service = FavoritesService(songRepository: _Songs([]));
+    await service.addFavorite('first');
+    await service.addFavorite('second');
+    final prior = await service.getFavoriteRanks();
+    await service.addFavorite('first');
+    final after = await service.getFavoriteRanks();
+    expect(after['first'], prior['first']);
+    expect(after['second']!, greaterThan(after['first']!));
+  });
+
+  test('remote additions get a heart chronology; removal and clear prune it', () async {
+    final service = FavoritesService(songRepository: _Songs([]));
+    await service.addFavorite('local');
+    await service.setManyFromLink({'remote': true});
+    final ranks = await service.getFavoriteRanks();
+    expect(ranks['remote']!, greaterThan(ranks['local']!));
+
+    await service.setFromLink('local', false);
+    expect((await service.getFavoriteRanks()).containsKey('local'), isFalse);
+    await service.clearFavorites();
+    expect(await service.getFavoriteRanks(), isEmpty);
+  });
+
   test('old liked IDs remain liked even when no metadata was persisted', () async {
     SharedPreferences.setMockInitialValues({
       'favorite_song_ids': ['older-external-id'],

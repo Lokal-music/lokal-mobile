@@ -5,11 +5,29 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.Configuration
+import androidx.annotation.StringRes
+import java.util.Locale
 import com.mossapps.flick.R
 import kotlin.math.roundToInt
 
 internal object WidgetPrefs {
     private const val PREFS_NAME = "HomeWidgetPreferences"
+
+    // The selected Flutter locale is mirrored to HomeWidgetPreferences when
+    // changed. "system" means the widget should follow Android's own locale.
+    private const val KEY_APP_LOCALE = "flick_widget_locale"
+
+    fun localizedText(context: Context, @StringRes id: Int): String {
+        val choice = get(context).getString(KEY_APP_LOCALE, "system").orEmpty()
+        if (choice.isBlank() || choice == "system") return context.getString(id)
+        val language = choice.substringBefore('_').substringBefore('-')
+        if (language.isBlank()) return context.getString(id)
+        val configuration = Configuration(context.resources.configuration).apply {
+            setLocale(Locale.forLanguageTag(language))
+        }
+        return context.createConfigurationContext(configuration).getString(id)
+    }
 
     const val KEY_SONG_ID = "flick_widget_song_id"
     const val KEY_TITLE = "flick_widget_title"

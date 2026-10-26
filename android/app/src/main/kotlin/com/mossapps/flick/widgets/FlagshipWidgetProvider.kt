@@ -40,8 +40,8 @@ class FlagshipWidgetProvider : AppWidgetProvider() {
         val artist = prefs.getString(WidgetPrefs.KEY_ARTIST, "").orEmpty()
         val title = if (hasSong) {
             prefs.getString(WidgetPrefs.KEY_TITLE, "").orEmpty()
-                .ifBlank { context.getString(R.string.widget_nothing_playing) }
-        } else context.getString(R.string.widget_nothing_playing)
+                .ifBlank { WidgetPrefs.localizedText(context, R.string.widget_nothing_playing) }
+        } else WidgetPrefs.localizedText(context, R.string.widget_nothing_playing)
         val width = WidgetSize.width(manager, id)
         val scale = WidgetPrefs.getFlagshipTextScale(context)
         val views = RemoteViews(context.packageName, R.layout.widget_flagship_art)
@@ -72,6 +72,16 @@ class FlagshipWidgetProvider : AppWidgetProvider() {
         views.setTextViewTextSize(R.id.flagship_title, TypedValue.COMPLEX_UNIT_SP,
             WidgetPrefs.scaledSp(15, width, 400f, scale).toFloat())
         views.setContentDescription(R.id.flagship_title, title)
+        views.setContentDescription(R.id.flagship_prev,
+            WidgetPrefs.localizedText(context, R.string.widget_previous))
+        views.setContentDescription(R.id.flagship_play_pause,
+            WidgetPrefs.localizedText(context, R.string.widget_play_pause))
+        views.setContentDescription(R.id.flagship_next,
+            WidgetPrefs.localizedText(context, R.string.widget_next))
+        views.setContentDescription(R.id.flagship_shuffle,
+            WidgetPrefs.localizedText(context, R.string.widget_shuffle))
+        views.setContentDescription(R.id.flagship_repeat,
+            WidgetPrefs.localizedText(context, R.string.widget_repeat))
         views.setOnClickPendingIntent(R.id.flagship_title, WidgetIntents.openApp(context, 31))
 
         if (hasSong && WidgetPrefs.getFlagshipShowArtist(context) && artist.isNotBlank()) {

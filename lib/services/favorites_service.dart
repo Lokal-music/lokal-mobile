@@ -17,6 +17,7 @@ class FavoritesService {
   static RemoteFavoritesDelegate? remoteDelegate;
   static const String _favoritesKey = 'favorite_song_ids';
   static const String _onlineMetadataKey = 'favorite_online_song_metadata_v1';
+  static const String _likedOrderKey = 'favorite_song_liked_order_v1';
 
   static bool _onlineSong(Song song) => song.isPending ||
       song.isExternal || song.isNetworkSource || (song.sourcePackage?.startsWith('konnekted.') ?? false);
@@ -110,6 +111,54 @@ class FavoritesService {
   /// The saved IDs (including old online likes without recoverable metadata).
   Future<Set<String>> getFavoriteIds() => _readIds();
 
+  /// Stable like chronology, **not** the song's library import date.
+  /// Existing installs never recorded the time of the heart tap. Keep their
+  /// persisted favorite-ID insertion order (positive ranks starting at 1),
+  /// then place all newly liked songs after them using UTC microsecond stamps.
+  /// Do not backdate old likes to now, which would move them above new likes.
+  Future<Map<String, int>> getFavoriteRanks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final orderedIds = prefs.getStringList(_favoritesKey) ?? const <String>[];
+    Map<String, dynamic> saved = {};
+    try {
+      final raw = jsonDecode(prefs.getString(_likedOrderKey) ?? '{}');
+      if (raw is Map<String, dynamic>) saved = raw;
+    } catch (_) {
+      // Broken/stale chronology must not hide any liked songs.
+    }
+    return {
+      for (var index = 0; index < orderedIds.length; index++)
+        orderedIds[index]: (saved[orderedIds[index]] is num &&
+                (saved[orderedIds[index]] as num) > 0)
+            ? (saved[orderedIds[index]] as num).toInt()
+            : index + 1,
+    };
+  }
+
+  Future<void> _saveLikeRanks({
+    required Set<String> before,
+    required Set<String> after,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = await getFavoriteRanks();
+    // Re-read persisted IDs before _saveFavorites overwrites the list so
+    // legacy IDs keep their historical ordinal ranks.
+    final ordered = after.toList(growable: false);
+    final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+    // Even multiple likes inside one clock tick must remain ordered.
+    var next = existing.values.fold<int>(
+      now, (highest, rank) => rank > highest ? rank : highest,
+    );
+    for (final id in ordered) {
+      if (!before.contains(id)) {
+        next++;
+        existing[id] = next;
+      }
+    }
+    existing.removeWhere((id, _) => !after.contains(id));
+    await prefs.setString(_likedOrderKey, jsonEncode(existing));
+  }
+
   /// Get all favorite songs.
   Future<List<Song>> getFavorites() async {
     final ids = await _readIds();
@@ -157,7 +206,9 @@ class FavoritesService {
     }
     await _mutate(() async {
       if (song != null) await _rememberOnline(song);
+      final before = Set<String>.of(_favoriteIds);
       _favoriteIds.add(songId);
+      await _saveLikeRanks(before: before, after: _favoriteIds);
       await _saveFavorites();
     });
   }
@@ -170,8 +221,10 @@ class FavoritesService {
       return;
     }
     await _mutate(() async {
+      final before = Set<String>.of(_favoriteIds);
       _favoriteIds.remove(songId);
       await _forgetOnline(songId);
+      await _saveLikeRanks(before: before, after: _favoriteIds);
       await _saveFavorites();
     });
   }
@@ -186,13 +239,17 @@ class FavoritesService {
     }
     return _mutate(() async {
       if (_favoriteIds.contains(songId)) {
+        final before = Set<String>.of(_favoriteIds);
         _favoriteIds.remove(songId);
         await _forgetOnline(songId);
+        await _saveLikeRanks(before: before, after: _favoriteIds);
         await _saveFavorites();
         return false;
       }
       if (song != null) await _rememberOnline(song);
+      final before = Set<String>.of(_favoriteIds);
       _favoriteIds.add(songId);
+      await _saveLikeRanks(before: before, after: _favoriteIds);
       await _saveFavorites();
       return true;
     });
@@ -214,12 +271,14 @@ class FavoritesService {
 
   Future<void> setManyFromLink(Map<String, bool> changes) async {
     await _mutate(() async {
+      final before = Set<String>.of(_favoriteIds);
       for (final entry in changes.entries) {
         entry.value
             ? _favoriteIds.add(entry.key)
             : _favoriteIds.remove(entry.key);
         if (!entry.value) await _forgetOnline(entry.key);
       }
+      await _saveLikeRanks(before: before, after: _favoriteIds);
       await _saveFavorites(captureLink: false);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(
@@ -235,6 +294,7 @@ class FavoritesService {
       _favoriteIds.clear();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_onlineMetadataKey);
+      await prefs.remove(_likedOrderKey);
       await _saveFavorites();
     });
   }

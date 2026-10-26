@@ -223,6 +223,7 @@ List<LokalSettingsSection> appearanceSettings(
                   value: 'sv',
                   child: Text(lokalText('Svenska')),
                 ),
+                DropdownMenuItem(value: 'tr', child: Text('Türkçe')),
                 DropdownMenuItem(value: 'zh', child: Text('简体中文')),
               ],
               onChanged: (code) =>

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flick/services/android_auto_catalog.dart';
+import 'package:flick/services/notification_artwork_resolver.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flick/models/song.dart';
@@ -41,6 +42,36 @@ class NotificationService {
 
   static const _channel = MethodChannel('com.mossapps.flick/player');
 
+  final NotificationArtworkResolver _artwork = NotificationArtworkResolver();
+
+  String? _artworkPath(Song song, {MediaNotificationOwner? owner}) {
+    final identity = (owner == null ? 'library' : 'owner:' + identityHashCode(owner).toString()) +
+        ':' + song.id + ':' + song.title + ':' + song.artist;
+    return _artwork.pathFor(
+      identity: identity,
+      artwork: song.albumArt,
+      onResolved: (path) {
+        // A delayed cover request must not overwrite the next track, a radio
+        // takeover, or a notification that has already been dismissed.
+        if (owner == null ? _owner != null : !identical(_owner, owner)) return;
+        unawaited(_publishResolvedArtwork(path));
+      },
+    );
+  }
+
+  Future<void> _publishResolvedArtwork(String path) async {
+    try {
+      // Metadata-only update: preserve the current play state and position.
+      await _channel.invokeMethod('updateNotification', {
+        'albumArtPath': path,
+      });
+    } on PlatformException {
+      // A subsequent metadata update can still publish the cached path.
+    } on MissingPluginException {
+      // Non-Android host.
+    }
+  }
+
   int? _accentColor;
   Future<void> setLokalAccent(int color) async {
     if (_accentColor == color) return;
@@ -77,12 +108,13 @@ class NotificationService {
     Duration position = Duration.zero,
   }) async {
     _owner = owner;
+    final artworkPath = _artworkPath(song, owner: owner);
     try {
       await _channel.invokeMethod('showNotification', <String, dynamic>{
         'title': song.title,
         'outputName': outputName,
         'artist': song.artist,
-        'albumArtPath': song.albumArt,
+        'albumArtPath': artworkPath,
         'isPlaying': isPlaying,
         'duration': isLive ? 0 : song.duration.inMilliseconds,
         'position': position.inMilliseconds,
@@ -122,12 +154,16 @@ class NotificationService {
   void stopCurrentOwner() {
     final owner = _owner;
     _owner = null;
+    _artwork.invalidate();
     owner?.onStop();
   }
 
   /// Hands the notification back to the library player.
   void release(MediaNotificationOwner owner) {
-    if (identical(_owner, owner)) _owner = null;
+    if (identical(_owner, owner)) {
+      _owner = null;
+      _artwork.invalidate();
+    }
   }
 
   /// Initialize the notification service and set up method call handler
@@ -267,12 +303,13 @@ class NotificationService {
     int? castVolumePercent,
   }) async {
     if (_owner != null) return;
+    final artworkPath = _artworkPath(song);
     try {
       final args = <String, dynamic>{
         'title': song.title,
         'outputName': null,
         'artist': song.artist,
-        'albumArtPath': song.albumArt,
+        'albumArtPath': artworkPath,
         'isPlaying': isPlaying,
         'duration': duration?.inMilliseconds ?? 0,
         'position': position?.inMilliseconds ?? 0,
@@ -326,12 +363,13 @@ class NotificationService {
     int? castVolumePercent,
   }) async {
     if (_owner != null) return;
+    final artworkPath = _artworkPath(song);
     try {
       final args = <String, dynamic>{
         'title': song.title,
         'outputName': null,
         'artist': song.artist,
-        'albumArtPath': song.albumArt,
+        'albumArtPath': artworkPath,
         'isPlaying': isPlaying,
         'duration': duration?.inMilliseconds ?? 0,
         'position': position?.inMilliseconds ?? 0,
@@ -378,6 +416,7 @@ class NotificationService {
 
   /// Hide the notification and stop the foreground service.
   Future<void> hideNotification() async {
+    _artwork.invalidate();
     try {
       await _channel.invokeMethod('hideNotification');
       _isNotificationVisible = false;
