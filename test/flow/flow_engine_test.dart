@@ -159,6 +159,40 @@ void main() {
     },
   );
 
+  test('spaces artists by three tracks when alternatives are available', () {
+    final songs = List.generate(
+      36,
+      (i) => track(i, artist: 'Artist ${i % 6}', genre: i.isEven ? 'Rock' : 'Jazz'),
+    );
+    final result = engine.recommend(
+      library: songs,
+      favoriteIds: {for (var i = 0; i < 16; i++) '$i'},
+      data: FlowData(),
+      limit: 30,
+    );
+    for (var i = 0; i < result.length; i++) {
+      for (var back = 1; back <= 3 && i - back >= 0; back++) {
+        expect(result[i].artistKey, isNot(result[i - back].artistKey));
+      }
+    }
+  });
+
+  test('top-up spacing respects artists already at the queue tail', () {
+    final songs = List.generate(
+      40,
+      (i) => track(i, artist: 'Artist ${i % 8}'),
+    );
+    final tail = ['Artist 0', 'Artist 1', 'Artist 2'];
+    final result = engine.recommend(
+      library: songs,
+      favoriteIds: {for (var i = 0; i < 16; i++) '$i'},
+      data: FlowData(),
+      previousArtists: tail,
+      limit: 6,
+    );
+    expect(result.first.artistKey, isNot(anyOf(tail.map(normalizeFlowText))));
+  });
+
   test('top-ups exclude previous IDs and duplicate recordings', () {
     final initial = mix(FlowData(), limit: 24);
     final extra = engine.recommend(
