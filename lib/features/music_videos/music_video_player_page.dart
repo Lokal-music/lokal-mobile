@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flick/features/internet_radio/radio_providers.dart';
-import 'package:flick/features/konnekted/library/lokal_library_kit.dart';
 import 'package:flick/features/player/screens/full_player_screen.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/player_provider.dart';
@@ -25,12 +24,16 @@ Future<void> openMusicVideo(
     await container.read(radioPlayerProvider.notifier).stop();
   }
   if (!context.mounted) return;
-  await pushLokal(
-    context,
-    FullPlayerScreen(
-      heroTag: 'music-video:${song.id}',
-      videoSong: song,
-      videoId: videoId,
+  // Video is a full-screen player route, not a child of the current
+  // Videos tab Navigator. Pushing on the root ensures the shell's persistent
+  // mini-player/footer cannot remain *inside* the video player.
+  await Navigator.of(context, rootNavigator: true).push<void>(
+    MaterialPageRoute(
+      builder: (_) => FullPlayerScreen(
+        heroTag: 'music-video:${song.id}',
+        videoSong: song,
+        videoId: videoId,
+      ),
     ),
   );
 }
