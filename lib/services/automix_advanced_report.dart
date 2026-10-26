@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 /// Read-only CUE-DETR report produced by the desktop/offline importer.
 /// No Python, ML model weights, or untrusted remote URLs are executed here.
 class AutoMixAdvancedReport {
@@ -23,6 +25,7 @@ class AutoMixAdvancedReport {
     required int sourceSize,
     required int sourceModifiedMs,
     required double expectedDuration,
+    bool verifiedContentHash = false,
   }) {
     if (raw is! Map<String, dynamic> ||
         raw['schema'] != 'lokal-automix-advanced-v1') return null;
@@ -32,7 +35,8 @@ class AutoMixAdvancedReport {
     if (source is! Map || analyzer is! Map || cueRoot is! Map ||
         source['size'] != sourceSize ||
         source['mtimeMs'] is! num ||
-        ((source['mtimeMs'] as num).toDouble() - sourceModifiedMs).abs() > 2 ||
+        (!verifiedContentHash &&
+         ((source['mtimeMs'] as num).toDouble() - sourceModifiedMs).abs() > 2) ||
         source['sha256'] is! String ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(source['sha256'] as String) ||
         analyzer['id'] != 'disco-eth/cue-detr' ||
@@ -81,10 +85,27 @@ class AutoMixAdvancedReport {
       final stat = await file.stat();
       if (stat.type != FileSystemEntityType.file ||
           stat.size <= 0 || stat.size > maxBytes) return null;
-      return parse(jsonDecode(await file.readAsString()),
+      final raw = jsonDecode(await file.readAsString());
+      final duration = expectedDuration.inMilliseconds / 1000;
+      final timestampMatch = parse(raw,
         sourceSize: audioStamp.size,
         sourceModifiedMs: audioStamp.modified.millisecondsSinceEpoch,
-        expectedDuration: expectedDuration.inMilliseconds / 1000);
+        expectedDuration: duration);
+      if (timestampMatch != null) return timestampMatch;
+      // A copied file may have the same exact bytes but a different mtime.
+      // Only explicitly prepared, structurally valid sidecars can trigger
+      // content verification. Hashing is asynchronous and restricted to the
+      // local file; ordinary playback never downloads or decodes anything.
+      final portable = parse(raw,
+        sourceSize: audioStamp.size,
+        sourceModifiedMs: audioStamp.modified.millisecondsSinceEpoch,
+        expectedDuration: duration,
+        verifiedContentHash: true);
+      if (portable == null || raw is! Map) return null;
+      final source = raw['source'];
+      if (source is! Map || source['sha256'] is! String) return null;
+      final hash = await sha256.bind(File(audioPath).openRead()).first;
+      return hash.toString() == source['sha256'] ? portable : null;
     } catch (_) {
       return null;
     }
