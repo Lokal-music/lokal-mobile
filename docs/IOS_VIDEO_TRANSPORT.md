@@ -1,6 +1,6 @@
 # iPhone music-video transport
 
-PR #210 keeps Video in the artwork slot and Space over the same cover/video.
+PR #210 keeps Video in the artwork slot and Space on the same live player.
 The iPhone adapter uses YouTube's official iframe player with its documented
 [IFrame API](https://developers.google.com/youtube/iframe_api_reference).
 It does not extract media URLs or proxy video streams. Android retains Media3
@@ -14,6 +14,30 @@ The shared controller keeps `nativeNotifier` false for an embed, with a distinct
 `timingAvailableNotifier` for an observed usable clock. A monotonic stopwatch
 interpolates only while playing and not buffering; no ticker runs while paused.
 Expired surfaces cannot overwrite or detach a replacement controller lease.
+
+## Unobstructed official player
+
+YouTube's [required minimum functionality](https://developers.google.com/youtube/terms/required-minimum-functionality)
+prohibits overlays in front of any part of the embedded player and using its touch
+events for other actions. The embed therefore keeps provider controls/branding
+visible, puts loading/error UI below the WebView, disables Lokal artwork gestures
+and like-burst overlays for embeds, and uses the provider's fullscreen control.
+Lokal's fullscreen-cover chrome is not drawn over the embed.
+
+For embedded video, Space reparents the same keyed player into a dedicated layout:
+video above, timed captions below, explicit Exit Space and lyrics options beneath.
+Album artwork and native Android video retain their existing Space presentation.
+The embed stays at least 200 logical pixels high; short windows scroll and long
+captions scroll within their own area. Tests cover a 320×280 short window and
+393×852/430×932 phones with 200% text scaling, player tap ownership, no caption
+intersection, explicit exit, and preservation of the original player State.
+
+```mermaid
+flowchart TB
+  Video[Official live player · controls and branding unobstructed]
+  Video --- Captions[Timed captions · independent video clock]
+  Captions --- Footer[Exit Space · lyrics options]
+```
 
 ## One audio owner
 
@@ -68,9 +92,11 @@ CI requires Node for this selection; other developer hosts explicitly skip just
 that JavaScript contract if Node is unavailable.
 
 The iPhone harness adds controlled external-owner acknowledgements around actual
-PlayerService/AVPlayer resume and a stale exit/manual-pause race. These new native
-checks are pending their source build. Existing Space checks now assert that the
+PlayerService/AVPlayer resume and a stale exit/manual-pause race. These native
+checks pass on both iOS 18.6 and 26.0 in build 27. Its Space checks confirm the
 actual player artwork elements survive overlay entry and use the real song clock.
+That checkpoint precedes the unobstructed embedded-video layout; no live iframe
+acceptance is inferred from the controlled owner test.
 
 Still required: observed iframe API readiness and origin/referrer behavior in real
 WKWebView, playback and seek accuracy, error/age/region restrictions, background
@@ -86,3 +112,8 @@ lossless/Atmos claims. Its options show device-volume guidance and the displayed
 video's heart instead of controls belonging to the paused album engine. The new
 presentation phrases are translated across the existing ten non-English Lokal
 maps. Live video format/DSP behavior is not inferred from the album metadata.
+
+The subsequent layout/iframe/Space/real HTTP selection passes **24** host tests.
+The real HTTP tests include suffix and oversized ranges, clamped endpoints,
+unsatisfiable and empty files, malformed/multipart fallback, HEAD, method rejection
+and raw AAC MIME. These prove HTTP byte/framing behavior, not receiver support.

@@ -106,19 +106,27 @@ actual URL MIME selection. Integrated native validation follows these checks.
 
 The native application harness checks the real registered bridge returns typed
 disconnected errors and remains uninitialized before/after non-discovery commands.
-This new check is pending the integrated hosted build. It does not prompt for LAN
+This check passes in build 27 on both iOS 18.6 and 26.0, including explicit real
+SDK context initialization with no discovery. It does not prompt for LAN
 permission or establish discovery acceptance.
 
-Still required: integrated release/simulator compilation and resource inspection;
-actual Cast receiver discovery, denied/restored LAN access, connect/cancel/failure;
+Still required: actual Cast receiver discovery, denied/restored LAN access, connect/cancel/failure;
 local/network/header-protected formats; play/pause/seek/volume/queue; unexpected
 disconnect and receiver-side changes; foreground/background restoration; and
 physical iPhone plus Windows sign/install/update testing. No receiver acceptance
 or qualified public release is claimed.
 
 
-The integrated build-26 iPhone package passes resource/notice/privacy inspection,
-and its full iOS 18.6 native suite passes. Cast bridge startup behavior is tested
-without starting discovery; actual SDK context initialization without scanning is
-added to the next DEBUG harness. iOS 26 fails at a later Rust Opus pause race; see
-the port's evidence ledger. Actual receiver acceptance remains pending.
+The integrated build-27 iPhone package passes resource/notice/privacy inspection,
+and its complete native suite passes on iOS 18.6 and 26.0. Both real Rust target
+probes and the production Swift device/simulator linkage (including DEBUG helpers)
+also pass. See the port's exact source/checksum ledger. Actual receiver acceptance
+remains pending.
+
+The phone's content server supports exact single byte ranges, including suffixes,
+clamped endpoints and arbitrarily large numerals without integer wrapping. Valid
+unsatisfiable ranges return an empty 416 with file size. Unsupported/malformed or
+multipart ranges fall back to a full response. HEAD returns full metadata without
+file bytes; other methods return 405. Raw AAC uses audio/aac. Eight real loopback
+HTTP tests cover framing and these cases. These changes do not grant background
+execution or establish any receiver's format support.

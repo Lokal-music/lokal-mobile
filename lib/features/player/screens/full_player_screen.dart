@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flick/core/theme/lokal_performance_scope.dart';
 import 'package:flick/features/music_videos/media3_music_video_surface.dart';
 import 'package:flick/features/music_videos/music_video_providers.dart';
@@ -22,6 +24,7 @@ import '../widgets/artwork_gradient_backdrop.dart';
 import '../widgets/artwork_mesh_blur_backdrop.dart';
 import '../widgets/lyric_motion_line.dart';
 import '../widgets/immersive_lyrics_stage.dart';
+import '../widgets/video_space_layout.dart';
 import '../widgets/material_player_thumb.dart';
 
 import 'dart:async';
@@ -114,6 +117,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   ExternalPlaybackLease? _videoOutputLease;
   String? get _activeVideoId => _videoYielded ? null : (_videoOverrideId ?? widget.videoId);
   bool get _videoActive => _activeVideoId != null;
+  bool get _usesEmbeddedVideo => _videoActive &&
+      (!Platform.isAndroid || !_videoController.nativeNotifier.value);
   Song? get _displayedSong => _videoActive
       ? (_videoOverrideSong ?? widget.videoSong) : _player.currentSongNotifier.value;
   bool get _displayedFavorite => _favForSongId == _displayedSong?.id && _isFav;
@@ -235,6 +240,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   @override
   void initState() {
     super.initState();
+    _videoController.nativeNotifier.addListener(_onVideoBackendChanged);
     if (widget.videoId != null) unawaited(_prepareInitialVideo());
     LokalPerformanceAdvisor.enterPlayerSurface('modern-full-player');
     _volumeControl = PlayerVolumeControl(_player);
@@ -270,10 +276,29 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _canvasChrome.dispose();
     final videoLease = _videoOutputLease;
     if (videoLease != null) unawaited(videoLease.release().catchError((Object _) {}));
+    _videoController.nativeNotifier.removeListener(_onVideoBackendChanged);
     _videoController.dispose();
     _player.currentSongNotifier.removeListener(_onSongChanged);
     _player.favoriteNotificationToggleNotifier.removeListener(_refreshFavorite);
     super.dispose();
+  }
+
+  void _onVideoBackendChanged() {
+    void refresh() {
+      if (!mounted) return;
+      if (_usesEmbeddedVideo && _videoFullscreen) {
+        _toggleVideoFullscreen();
+      } else {
+        setState(() {});
+      }
+    }
+
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => refresh());
+    } else {
+      refresh();
+    }
   }
 
   void _onSongChanged() {
@@ -642,6 +667,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   }
 
   void _toggleVideoFullscreen() {
+    if (!_videoFullscreen && _usesEmbeddedVideo) return;
     setState(() => _videoFullscreen = !_videoFullscreen);
     unawaited(SystemChrome.setPreferredOrientations(
       _videoFullscreen
@@ -916,12 +942,14 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     if (_videoFullscreen && videoSong != null && videoId != null) {
       return _videoScaffold(videoSong, videoId);
     }
-    final fullCover = ref.watch(
+    final fullCover = !_usesEmbeddedVideo && ref.watch(
       lokalAppearanceProvider.select((look) => look.fullscreenCover),
     );
     return Scaffold(
       backgroundColor: Colors.black,
-      body: ValueListenableBuilder<Song?>(
+      body: _immersiveLyrics && _usesEmbeddedVideo && videoSong != null && videoId != null
+          ? _embeddedVideoSpace(videoSong, videoId)
+          : ValueListenableBuilder<Song?>(
         valueListenable: _player.currentSongNotifier,
         builder: (context, playingSong, _) {
           final song = videoSong ?? playingSong;
@@ -1114,6 +1142,26 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     );
   }
 
+  Widget _embeddedVideoSpace(Song song, String videoId) => VideoSpaceLayout(
+    player: Media3MusicVideoSurface(
+      key: _videoSurfaceKey,
+      videoId: videoId,
+      controller: _videoController,
+      showControls: false,
+    ),
+    subtitles: ValueListenableBuilder<bool>(
+      valueListenable: _videoController.timingAvailableNotifier,
+      builder: (_, available, __) => available
+          ? _spaceSubtitle(song)
+          : Text(
+              lokalText('Waiting for video timing'),
+              style: const TextStyle(color: FullPlayerVisuals.secondaryText),
+            ),
+    ),
+    onExit: _toggleImmersiveLyrics,
+    onOptions: _showSpaceOptions,
+  );
+
   Widget _spaceSubtitle(Song song) => ImmersiveLyricsSubtitle(
     key: ValueKey('space-subtitles:${song.id}'),
     lyrics: _lyricsForSongId == song.id
@@ -1279,7 +1327,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                     currentSong: song,
                     nextSong: _player.peekNext,
                     prevSong: _player.peekPrevious,
-                    enabled: progress == 0 && !_showLyrics && !_queue.isOpen && !_immersiveLyrics,
+                    enabled: progress == 0 && !_showLyrics && !_queue.isOpen && !_immersiveLyrics && !_usesEmbeddedVideo,
                     onDragStateChanged: (value) {
                       _carouselDragging = value;
                       if (value) _restoreCanvasControls();
@@ -1350,7 +1398,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                           : frame(still, false);
                       final shownBurst = _burst;
                       return GestureDetector(
-                        onDoubleTap: current ? _likeFromArtwork : null,
+                        onDoubleTap: current && !_usesEmbeddedVideo ? _likeFromArtwork : null,
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
@@ -1370,7 +1418,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                 child: content,
                               ),
                             ),
-                            if (current && _burstVisible)
+                            if (current && _burstVisible && !_usesEmbeddedVideo)
                               Center(
                                 child: LokalLikeBurst(
                                   key: ValueKey(_burst),
@@ -1615,7 +1663,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
         song.id == (_videoOverrideSong ?? widget.videoSong)?.id;
     final art = showVideo
         ? ClipRRect(
-            borderRadius: radius,
+            borderRadius: _usesEmbeddedVideo ? BorderRadius.zero : radius,
             child: ColoredBox(
               color: Colors.black,
               child: Media3MusicVideoSurface(
@@ -1646,9 +1694,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     );
     final shown = _burst;
     return GestureDetector(
-      onDoubleTap: current && progress == 0 ? _likeFromArtwork : null,
+      onDoubleTap: current && progress == 0 && !_usesEmbeddedVideo ? _likeFromArtwork : null,
       child: LokalPlayerArtwork(
-        enabled: current,
+        enabled: current && !_usesEmbeddedVideo,
         child: SizedBox(
           width: side,
           height: side,
@@ -1672,7 +1720,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                         ) => AnimatedBuilder(
                           animation: animation,
                           builder: (context, child) => ClipRRect(
-                            borderRadius: BorderRadius.circular(
+                            borderRadius: _usesEmbeddedVideo ? BorderRadius.zero : BorderRadius.circular(
                               lerpDouble(
                                 21,
                                 28,
@@ -1689,7 +1737,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   ),
                 ),
               ),
-              if (current && _burstVisible)
+              if (current && _burstVisible && !_usesEmbeddedVideo)
                 LokalLikeBurst(
                   key: ValueKey(_burst),
                   color: context.lokal.accent,

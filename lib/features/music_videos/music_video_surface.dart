@@ -307,85 +307,81 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
       );
     }
     final generation = _generation;
-    return Stack(
-      fit: StackFit.expand,
+    return Column(
       children: [
-        InAppWebView(
-          key: ValueKey(widget.videoId),
-          onWebViewCreated: (view) {
-            if (generation != _generation) return;
-            _webView = view;
-            view.addJavaScriptHandler(
-              handlerName: 'LokalVideo',
-              callback: (arguments) {
-                if (arguments.isNotEmpty) {
-                  _snapshot(arguments.first, generation);
-                }
-                return null;
-              },
-            );
-            if (_released && Platform.isIOS) {
-              unawaited(
-                view
-                    .setAllMediaPlaybackSuspended(suspended: true)
-                    .catchError((Object _) {}),
+        Expanded(
+          child: InAppWebView(
+            key: ValueKey(widget.videoId),
+            onWebViewCreated: (view) {
+              if (generation != _generation) return;
+              _webView = view;
+              view.addJavaScriptHandler(
+                handlerName: 'LokalVideo',
+                callback: (arguments) {
+                  if (arguments.isNotEmpty) {
+                    _snapshot(arguments.first, generation);
+                  }
+                  return null;
+                },
               );
-            }
-          },
-          initialData: InAppWebViewInitialData(
-            data: musicVideoEmbedHtml(widget.videoId),
-            baseUrl: WebUri('$musicVideoAppOrigin/'),
-            historyUrl: WebUri('$musicVideoAppOrigin/'),
-          ),
-          initialSettings: InAppWebViewSettings(
-            javaScriptEnabled: true,
-            javaScriptHandlersForMainFrameOnly: true,
-            javaScriptBridgeForMainFrameOnly: true,
-            javaScriptHandlersOriginAllowList: {
-              r'^https://com\.lokalkonnekt\.konnekted2(?::443)?$',
+              if (_released && Platform.isIOS) {
+                unawaited(
+                  view
+                      .setAllMediaPlaybackSuspended(suspended: true)
+                      .catchError((Object _) {}),
+                );
+              }
             },
-            javaScriptBridgeOriginAllowList: {
-              r'^https://com\.lokalkonnekt\.konnekted2(?::443)?$',
-            },
-            mediaPlaybackRequiresUserGesture: false,
-            allowsInlineMediaPlayback: true,
-            incognito: true,
-            thirdPartyCookiesEnabled: false,
-            useShouldOverrideUrlLoading: true,
-            supportMultipleWindows: false,
-            useHybridComposition: false,
-          ),
-          onLoadStop: (_, __) {
-            if (mounted && generation == _generation)
-              setState(() => _loading = false);
-          },
-          onReceivedError: (_, request, __) {
-            if (!mounted || generation != _generation) return;
-            final url = request.url;
-            final embedFailed =
-                request.isForMainFrame == false &&
-                url.host == 'www.youtube.com' &&
-                url.path == '/embed/${widget.videoId}';
-            if (mounted && (request.isForMainFrame == true || embedFailed)) {
-              setState(() {
-                _failed = true;
-                _loading = false;
-                _ready = false;
-              });
-              widget.controller?.fallback();
-            }
-          },
-          shouldOverrideUrlLoading: _navigate,
-        ),
-        if (_loading)
-          const IgnorePointer(
-            child: Center(
-              child: CircularProgressIndicator(color: Colors.white),
+            initialData: InAppWebViewInitialData(
+              data: musicVideoEmbedHtml(widget.videoId),
+              baseUrl: WebUri('$musicVideoAppOrigin/'),
+              historyUrl: WebUri('$musicVideoAppOrigin/'),
             ),
+            initialSettings: InAppWebViewSettings(
+              javaScriptEnabled: true,
+              javaScriptHandlersForMainFrameOnly: true,
+              javaScriptBridgeForMainFrameOnly: true,
+              javaScriptHandlersOriginAllowList: {
+                r'^https://com\.lokalkonnekt\.konnekted2(?::443)?$',
+              },
+              javaScriptBridgeOriginAllowList: {
+                r'^https://com\.lokalkonnekt\.konnekted2(?::443)?$',
+              },
+              mediaPlaybackRequiresUserGesture: false,
+              allowsInlineMediaPlayback: true,
+              incognito: true,
+              thirdPartyCookiesEnabled: false,
+              useShouldOverrideUrlLoading: true,
+              supportMultipleWindows: false,
+              useHybridComposition: false,
+            ),
+            onLoadStop: (_, __) {
+              if (mounted && generation == _generation)
+                setState(() => _loading = false);
+            },
+            onReceivedError: (_, request, __) {
+              if (!mounted || generation != _generation) return;
+              final url = request.url;
+              final embedFailed =
+                  request.isForMainFrame == false &&
+                  url.host == 'www.youtube.com' &&
+                  url.path == '/embed/${widget.videoId}';
+              if (mounted && (request.isForMainFrame == true || embedFailed)) {
+                setState(() {
+                  _failed = true;
+                  _loading = false;
+                  _ready = false;
+                });
+                widget.controller?.fallback();
+              }
+            },
+            shouldOverrideUrlLoading: _navigate,
           ),
+        ),
+        if (_loading) const LinearProgressIndicator(minHeight: 3),
         if (_failed)
-          ColoredBox(
-            color: Colors.black,
+          SizedBox(
+            height: 48,
             child: Center(
               child: TextButton.icon(
                 onPressed: () => launchUrl(

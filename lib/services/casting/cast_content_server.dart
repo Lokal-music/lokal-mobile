@@ -70,6 +70,14 @@ class CastContentServer {
   }
 
   Future<void> _handle(HttpRequest req) async {
+    final head = req.method == 'HEAD';
+    if (req.method != 'GET' && !head) {
+      req.response.statusCode = HttpStatus.methodNotAllowed;
+      req.response.headers.set(HttpHeaders.allowHeader, 'GET, HEAD');
+      req.response.contentLength = 0;
+      await req.response.close();
+      return;
+    }
     final token = req.uri.pathSegments.isNotEmpty
         ? req.uri.pathSegments.first
         : '';
@@ -87,26 +95,47 @@ class CastContentServer {
       return;
     }
     final total = await file.length();
-    final range = req.headers.value(HttpHeaders.rangeHeader);
+    // Range only applies to GET. Ignore unsupported/malformed/multipart ranges
+    // rather than returning a partial body with incorrect framing (RFC 9110).
+    final range = head ? null : req.headers.value(HttpHeaders.rangeHeader);
 
     var start = 0;
     var end = total - 1;
     var status = HttpStatus.ok;
     if (range != null) {
-      final m = RegExp(r'bytes=(\d*)-(\d*)').firstMatch(range);
-      if (m != null) {
-        if (m.group(1)!.isNotEmpty) start = int.parse(m.group(1)!);
-        if (m.group(2)!.isNotEmpty) end = int.parse(m.group(2)!);
-        if (start >= total) {
+      final m = RegExp(r'^bytes=(\d*)-(\d*)$').firstMatch(range.trim());
+      if (m != null && (m.group(1)!.isNotEmpty || m.group(2)!.isNotEmpty)) {
+        final first = m.group(1)!;
+        final last = m.group(2)!;
+        final size = BigInt.from(total);
+        final requestedStart = first.isEmpty ? null : BigInt.parse(first);
+        final requestedEnd = last.isEmpty ? null : BigInt.parse(last);
+        final unsatisfiable =
+            total == 0 ||
+            (requestedStart == null && requestedEnd == BigInt.zero) ||
+            (requestedStart != null &&
+                (requestedStart >= size ||
+                    (requestedEnd != null && requestedEnd < requestedStart)));
+        if (unsatisfiable) {
           req.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
           req.response.headers.set(
             HttpHeaders.contentRangeHeader,
             'bytes */$total',
           );
+          req.response.contentLength = 0;
           await req.response.close();
           return;
         }
-        if (m.group(2)!.isEmpty) end = total - 1;
+        if (requestedStart == null) {
+          // Suffix range: bytes=-10 is the last ten bytes, including a suffix
+          // larger than the file. BigInt prevents oversized headers wrapping.
+          start = requestedEnd! >= size ? 0 : (size - requestedEnd).toInt();
+        } else {
+          start = requestedStart.toInt();
+          if (requestedEnd != null && requestedEnd < size) {
+            end = requestedEnd.toInt();
+          }
+        }
         status = HttpStatus.partialContent;
       }
     }
@@ -121,6 +150,11 @@ class CastContentServer {
         HttpHeaders.contentRangeHeader,
         'bytes $start-$end/$total',
       );
+    }
+
+    if (head || length == 0) {
+      await req.response.close();
+      return;
     }
 
     // ponytail: chunked manual copy; StreamedResponse plumbing adds nothing
@@ -153,7 +187,8 @@ ContentType _contentTypeFor(String path) {
     'flac' => ContentType.parse('audio/flac'),
     'wav' => ContentType.parse('audio/wav'),
     'ogg' || 'oga' || 'opus' => ContentType.parse('audio/ogg'),
-    'm4a' || 'mp4' || 'aac' => ContentType.parse('audio/mp4'),
+    'm4a' || 'mp4' => ContentType.parse('audio/mp4'),
+    'aac' => ContentType.parse('audio/aac'),
     'aiff' || 'aif' => ContentType.parse('audio/aiff'),
     'wv' => ContentType.parse('audio/x-wavpack'),
     'dsf' || 'dff' => ContentType.parse('audio/dsd'),

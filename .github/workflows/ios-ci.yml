@@ -68,7 +68,7 @@ jobs:
       - name: Verify playback ownership and transport contracts
         run: |
           node --version
-          flutter test --no-pub test/services/casting/cast_handoff_test.dart test/services/casting/chromecast_backend_test.dart test/services/casting/cast_source_test.dart test/services/external_playback_owner_test.dart test/services/rust_audio_engine_pause_test.dart test/features/music_videos test/features/player/space_video_overlay_test.dart test/features/player/immersive_lyrics_stage_test.dart
+          flutter test --no-pub test/services/casting/cast_handoff_test.dart test/services/casting/chromecast_backend_test.dart test/services/casting/cast_source_test.dart test/services/external_playback_owner_test.dart test/services/rust_audio_engine_pause_test.dart test/features/music_videos test/features/player/space_video_overlay_test.dart test/features/player/video_space_layout_test.dart test/features/player/immersive_lyrics_stage_test.dart test/services/casting/cast_content_server_test.dart
       - name: Check the native build helper before Xcode
         working-directory: rust_builder/cargokit/build_tool
         run: |

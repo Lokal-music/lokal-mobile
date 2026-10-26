@@ -5,45 +5,18 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
-The unsigned engineering IPA passes package inspection (33 Mach-O binaries,
-iPhone arm64 platform, minimum OS, metadata and checksum). Native Rust probes
-pass for device and Apple Silicon simulator with raw USB excluded.
+**Build 27 passes the complete native suite on iOS 18.6 and 26.0.** The iOS 16+
+unsigned engineering IPA passes inspection of 34 device binaries, Cast resources,
+privacy metadata, source/notices and matching symbols. See the exact source,
+checksum and native evidence in the build-27 checkpoint below. Installation still
+requires local signing; physical-device and Windows install/update acceptance
+remain open.
 
-**The complete iOS workflow passes on build 17 on iOS 18.6 and 26.0.**
-Lokal reaches its actual app shell, Library, You and Settings. Native startup,
-Keychain migration, tag editing/scanning with distinct album-artist tags, QuickJS,
-system WAV play/pause/seek, Rust/Core Audio DSP, independent pitch and positive
-ReplayGain route changes, WavPack conversion/playback, and the mixed WAV-to-Opus
-queue handoff pass without native mocks.
-
-The generated codec corpus also passes MP3 VBR, AAC/M4A, ALAC, 96 kHz stereo FLAC,
-AIFF, Vorbis and Opus through their intended production backends, using Unicode
-filenames and measured advancing playback position. Reports and native screenshots
-are preserved for both runtimes in
-[build 17](https://github.com/lokal-music/lokal-mobile/actions/runs/40220505558).
-The unsigned release IPA SHA-256 is
-`873d09b46110e497ac71f59c1d5a0808e357703ffbf4d59ce4f22a85b4bcd8c4`.
-Its matching symbols cover 25 native binaries, including Rust, plus Dart AOT.
-Other prebuilt framework symbols depend on upstream availability.
-
-The actual packaged/tested source commit is
-`ae0f8a8701ea552f981d4376c21b667721f561ee` (the PR merge checkout; the PR head is
-`fbf431c2008e7bccc902c25c35639f687e64730e`). Reports record run 40220505558,
-attempt 1, and the exact runtime. System WAV / Rust DSP / WavPack advances are
-401 / 554 / 597 ms on iOS 18.6 and 484 / 544 / 555 ms on iOS 26.0; every playback
-check requires more than 300 ms beyond a settled baseline. The queue handoff
-advances 544 / 555 ms respectively. These are native execution measurements,
-not output-fidelity or physical-accessory certification.
-
-Build 18 additionally passes real Bonjour discovery, protocol filtering and an
-advertised HTTP endpoint on iOS 18.6. Its iOS 26 simulator failed to boot before
-app execution, so that newer suite has no iOS 26 result. No signed installation
-or physical iPhone behavior is validated.
-
-The branch now integrates every merged mobile PR after #172 through #207 (29 PRs). See
+The branch integrates **31 merged mobile PRs after #172 through #210**, including
+Likes stream revalidation, retained-artwork Space, separate video timing, search,
+profile, notification artwork, playlists and locale updates. See
 [the PR-by-PR UI/behavior review and revised WidgetKit design](IOS_POST172_REVIEW.md)
-and [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md)
-for applied shared changes, test scope and remaining native acceptance.
+and [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md).
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
@@ -90,8 +63,8 @@ flowchart LR
 
 The [Cast sender transport](IOS_CAST_TRANSPORT.md) now has a pinned real SDK,
 native channel adapter, confirmed commands and a guarded local/remote handoff.
-Its standalone native device/simulator linkage passes; full application and
-receiver acceptance are still pending. WidgetKit, Discord feasibility and resumable
+Its standalone native device/simulator linkage and integrated application tests
+pass; actual receiver acceptance remains pending. WidgetKit, Discord feasibility and resumable
 background transfers remain open work. Native desktop Bonjour discovery
 passes its controlled service/HTTP checks on build 18 / iOS 18.6. Live add-on stream handles currently
 retain the system streaming adapter and explicitly report Rust DSP bypass;
@@ -685,7 +658,7 @@ Current upstream review extends through merged **#209 and #210**, main
 revalidates expired stream sources while preserving identity. Space now overlays
 the existing player artwork rather than opening a separate stage; the native
 harness has been updated to check the retained artwork elements and actual song
-clock. Its new native result is pending. See the audit for focused test evidence.
+clock. These assertions pass on both native runtimes in build 27. See the audit for focused test evidence.
 
 
 ### Build 26: Cast-integrated application and pause acknowledgement
@@ -726,3 +699,33 @@ player/Likes/locale selection passes **123** (overlap). New iPhone-native result
 remain pending the next source build. Google Cast's real context initialization
 without automatic discovery is also added as a DEBUG-only acceptance check;
 receiver behavior remains unqualified.
+
+
+### Build 27: complete native checkpoint on both runtimes
+
+[Build 27](https://github.com/lokal-music/lokal-mobile/actions/runs/40305306973)
+passes the complete native suite on **iOS 18.6 and 26.0**, plus release/AOT
+compilation and inspection of all **34** iPhone binaries, iOS 16 minimum, Cast
+resources/privacy/notices, source and symbols. Exact tested merge source:
+`659140532c300887de408a362377f6a6779916bb`; tree:
+`ecaf093a021db35bf75bb66d521656f147dbb2bb`. The matching unsigned IPA SHA-256 is
+`61fd97565f0b64168e3b16e347c7496cf0e28b84c5d15e017eabd935776faaf8`.
+
+Both runtimes pass startup/Keychain, updated search/profile/panels, scanner/tag
+album-artist, QuickJS, AVPlayer transport, native EQ/pitch/ReplayGain, WavPack,
+MP3/AAC/ALAC/96 kHz FLAC/AIFF/Vorbis/Opus, system-to-Rust queue handoff, real
+Bonjour filtering/HTTP, remote artwork into Now Playing and live Turkish switching.
+The #210 Space screenshot and element-identity assertions confirm the existing
+artwork survives entry while generated captions follow the actual song clock.
+The suite also confirms an external-owner acknowledgement gates actual AVPlayer
+resume, a newer manual Pause defeats a stale video-exit resume, real Cast context
+initialization starts no discovery, and repeated Opus resume/pause reaches Rust's
+actual paused state. The original pause failure is resolved without weakening
+its assertion. Independent [Rust device/simulator probes](https://github.com/lokal-music/lokal-mobile/actions/runs/40305307004)
+and [Cast SDK probe 4](https://github.com/lokal-music/lokal-mobile/actions/runs/40305307048)
+also pass on this source.
+
+These are simulator and package results, not physical iPhone, iOS 16 runtime,
+actual Cast receiver or live YouTube acceptance. The subsequent unobstructed
+embedded-video Space layout and HTTP range fixes require their own source build.
+The preceding build-24/build-26 sections are historical checkpoints.

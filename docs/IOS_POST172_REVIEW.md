@@ -280,7 +280,7 @@ unmerged iPhone Cast implementation, not an upstream main feature.
 | PR | Shared behavior carried into iPhone | Adaptation / validation |
 | --- | --- | --- |
 | #209 | Liked rows remain mounted during heart updates; expired add-on sessions become fresh registered lookups at playback/queue time; stable liked IDs, source/Atmos identity, local files and configured network libraries are retained. Large queues use a separate resolver registry. | No Android-only bridge is required by this repair. Host tests cover restored streams, retained live handles/downloaded/local/Subsonic sources, 650-track queues, source-specific resolvers, provider stability and Atmos preservation. Actual live add-on availability remains separate. |
-| #210 | Space is a subtitle overlay over the existing artwork/full cover/Canvas/video, with chrome hidden and carousel gestures disabled; tap exits and long press shows options. Video occupies the artwork slot; its controls and subtitles use its own clock. Syllable layout is cached. | Fix the upstream missing `ValueListenable` foundation import. Add an accessible Space exit surface. Native harness now asserts the actual artwork elements survive entry and the current generated lyric follows the retained song clock. The prior build-24 screenshot validates the older Space stage only; new overlay screenshots require the next source build. iPhone uses the official embed with a dedicated API clock/transport and serialized output ownership; live WebKit/video acceptance remains pending. |
+| #210 | Space is a subtitle overlay over the existing artwork/full cover/Canvas/video, with chrome hidden and carousel gestures disabled; tap exits and long press shows options. Video occupies the artwork slot; its controls and subtitles use its own clock. Syllable layout is cached. | Fix the upstream missing `ValueListenable` foundation import. Add an accessible Space exit surface. Native harness now asserts the actual artwork elements survive entry and the current generated lyric follows the retained song clock. Build 27 passes the retained-artwork/clock assertions and preserves the current overlay screenshot on both runtimes. Official embedded video uses captions below the unobstructed provider player, with explicit Space exit. iPhone uses the official embed with a dedicated API clock/transport and serialized output ownership; live WebKit/video acceptance remains pending. |
 
 After the import correction, eight focused files pass **31 tests**, including
 both new PRs, timed subtitle eligibility/clock/rewind, artwork layout/morph and
@@ -340,3 +340,33 @@ player/Likes/locale selection passes **123** (overlap). New iPhone-native result
 remain pending the next source build. Google Cast's real context initialization
 without automatic discovery is also added as a DEBUG-only acceptance check;
 receiver behavior remains unqualified.
+
+
+### Build 27: complete native checkpoint on both runtimes
+
+[Build 27](https://github.com/lokal-music/lokal-mobile/actions/runs/40305306973)
+passes the complete native suite on **iOS 18.6 and 26.0**, plus release/AOT
+compilation and inspection of all **34** iPhone binaries, iOS 16 minimum, Cast
+resources/privacy/notices, source and symbols. Exact tested merge source:
+`659140532c300887de408a362377f6a6779916bb`; tree:
+`ecaf093a021db35bf75bb66d521656f147dbb2bb`. The matching unsigned IPA SHA-256 is
+`61fd97565f0b64168e3b16e347c7496cf0e28b84c5d15e017eabd935776faaf8`.
+
+Both runtimes pass startup/Keychain, updated search/profile/panels, scanner/tag
+album-artist, QuickJS, AVPlayer transport, native EQ/pitch/ReplayGain, WavPack,
+MP3/AAC/ALAC/96 kHz FLAC/AIFF/Vorbis/Opus, system-to-Rust queue handoff, real
+Bonjour filtering/HTTP, remote artwork into Now Playing and live Turkish switching.
+The #210 Space screenshot and element-identity assertions confirm the existing
+artwork survives entry while generated captions follow the actual song clock.
+The suite also confirms an external-owner acknowledgement gates actual AVPlayer
+resume, a newer manual Pause defeats a stale video-exit resume, real Cast context
+initialization starts no discovery, and repeated Opus resume/pause reaches Rust's
+actual paused state. The original pause failure is resolved without weakening
+its assertion. Independent [Rust device/simulator probes](https://github.com/lokal-music/lokal-mobile/actions/runs/40305307004)
+and [Cast SDK probe 4](https://github.com/lokal-music/lokal-mobile/actions/runs/40305307048)
+also pass on this source.
+
+These are simulator and package results, not physical iPhone, iOS 16 runtime,
+actual Cast receiver or live YouTube acceptance. The subsequent unobstructed
+embedded-video Space layout and HTTP range fixes require their own source build.
+The preceding build-24/build-26 sections are historical checkpoints.
