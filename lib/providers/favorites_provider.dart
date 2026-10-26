@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'lokal_remote_provider.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -74,9 +75,36 @@ class FavoritesNotifier extends AsyncNotifier<FavoritesState> {
   /// Keep the last snapshot on screen until the committed new one is ready.
   Future<void> _refreshAfterLike() async {
     final generation = ++_refreshGeneration;
-    final updated = await _loadState();
-    if (generation == _refreshGeneration && ref.mounted) {
-      state = AsyncData(updated);
+    try {
+      final updated = await _loadState();
+      if (generation == _refreshGeneration && ref.mounted) {
+        state = AsyncData(updated);
+      }
+    } catch (_) {
+      // The heart write already succeeded. A transient DB/read error must
+      // neither turn that into a reported write failure nor remove the rows
+      // the user can still play. Retry with the last snapshot still visible.
+      if (generation == _refreshGeneration && ref.mounted) {
+        unawaited(_retryRefresh(generation));
+      }
+    }
+  }
+
+  Future<void> _retryRefresh(int generation) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await Future<void>.delayed(
+        Duration(milliseconds: 200 * (attempt + 1)),
+      );
+      if (!ref.mounted || generation != _refreshGeneration) return;
+      try {
+        final updated = await _loadState();
+        if (ref.mounted && generation == _refreshGeneration) {
+          state = AsyncData(updated);
+        }
+        return;
+      } catch (_) {
+        // A later Like starts a new snapshot generation and supersedes us.
+      }
     }
   }
 
