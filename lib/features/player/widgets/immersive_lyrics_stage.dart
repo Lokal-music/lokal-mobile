@@ -15,6 +15,31 @@ int immersiveLyricsLineIndex(LyricsData lyrics, Duration position) {
   return LyricsService().findCurrentLineIndex(lyrics, position);
 }
 
+/// All lines sharing a timestamp are concurrent; individually timed word
+/// windows may also overlap a newer line. Never collapse these lyrics to the
+/// single last line returned by the binary search.
+List<int> immersiveActiveLineIndices(
+  LyricsData lyrics,
+  Duration position, {
+  List<LyricsLine>? playbackLines,
+}) {
+  final latest = immersiveLyricsLineIndex(lyrics, position);
+  if (latest < 0) return const [];
+  final lines = playbackLines ?? lyrics.lines;
+  final latestTimestamp = lyrics.lines[latest].timestamp;
+  final active = <int>[];
+  for (var i = 0; i <= latest && i < lines.length; i++) {
+    final line = lines[i];
+    final overlappingWords = line.words?.any(
+      (word) => word.start <= position && word.end > position,
+    ) ?? false;
+    if (line.timestamp == latestTimestamp || overlappingWords) {
+      active.add(i);
+    }
+  }
+  return active;
+}
+
 /// Space is a transparent subtitle layer above the currently selected visual
 /// (still art, fullscreen cover, Canvas or native Media3 video), not a player.
 ///
@@ -207,42 +232,19 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
                 )
               : const SizedBox.shrink();
         }
-        final index = immersiveLyricsLineIndex(lyrics, position);
-        if (index < 0 || index >= _preparedLines.length) {
-          return const SizedBox.shrink();
-        }
-        final current = _preparedLines[index];
+        final indices = immersiveActiveLineIndices(
+          lyrics, position, playbackLines: _preparedLines,
+        );
+        if (indices.isEmpty) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Exactly the same full lyric painter (including its smooth
-              // syllable sweep) as Lyrics mode. No pill, shade or text shadow.
-              RepaintBoundary(
-                child: LyricMotionLine(
-                  key: ValueKey('space-line:${current.timestamp.inMilliseconds}'),
-                  line: current,
-                  position: position,
-                  textAlign: TextAlign.center,
-                  style: _lyricStyle,
-                ),
-              ),
-              if (current.translation?.trim().isNotEmpty == true) ...[
-                const SizedBox(height: 5),
-                Text(
-                  current.translation!.trim(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: _font,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    height: 1.25,
-                    color: Colors.white,
-                  ),
-                ),
+              for (final index in indices) ...[
+                if (index != indices.first)
+                  const SizedBox(height: 5),
+                _subtitleLine(_preparedLines[index], index, position),
               ],
             ],
           ),
@@ -250,4 +252,39 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
       },
     ),
   );
+
+  Widget _subtitleLine(LyricsLine line, int index, Duration position) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RepaintBoundary(
+          child: LyricMotionLine(
+            // Timestamp alone is not unique: two concurrent lyrics can have
+            // the exact same millisecond timestamp.
+            key: ValueKey('space-line:${line.timestamp.inMilliseconds}:$index'),
+            line: line,
+            position: position,
+            textAlign: TextAlign.center,
+            style: _lyricStyle,
+          ),
+        ),
+        if (line.translation?.trim().isNotEmpty == true) ...[
+          const SizedBox(height: 5),
+          Text(
+            line.translation!.trim(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: _font,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              height: 1.25,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
