@@ -31,6 +31,9 @@ bool _balancedBraces(String message) {
 void main() {
   final english = _strings('lib/l10n/app_en.arb');
   final turkish = _strings('lib/l10n/app_tr.arb');
+  final sourceWithMetadata = jsonDecode(
+    File('lib/l10n/app_en.arb').readAsStringSync(),
+  ) as Map<String, dynamic>;
 
   test('Turkish ARB covers every source key, without extra keys', () {
     expect(turkish.keys.toSet(), english.keys.toSet());
@@ -50,7 +53,21 @@ void main() {
       if (!_balancedBraces(translated)) {
         errors.add('${entry.key}: unbalanced braces');
       }
-      if (!_setEquals(_arguments(entry.value), _arguments(translated))) {
+      // Plural branches can contain ordinary words in braces, so validate
+      // ICU selectors against the template's declared placeholder metadata.
+      if (entry.value.contains(', plural,')) {
+        final metadata = sourceWithMetadata['@${entry.key}']
+            as Map<String, dynamic>? ?? const <String, dynamic>{};
+        final declared =
+            (metadata['placeholders'] as Map<String, dynamic>? ??
+                const <String, dynamic>{}).keys.toSet();
+        for (final argument in declared) {
+          if (!translated.contains('{$argument}') &&
+              !translated.contains('{$argument, plural,')) {
+            errors.add('${entry.key}: missing argument $argument');
+          }
+        }
+      } else if (!_setEquals(_arguments(entry.value), _arguments(translated))) {
         errors.add('${entry.key}: source ${_arguments(entry.value)} vs '
             'Turkish ${_arguments(translated)}');
       }
