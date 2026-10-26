@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:flick/models/song.dart';
 import 'package:flick/services/android_audio_engine.dart';
+import 'package:flick/services/automix_analysis_cache.dart';
 
 class _Player implements ja.AudioPlayer {
   _Player() {
@@ -297,6 +298,56 @@ void main() {
     outgoing.positions.add(const Duration(minutes: 2, seconds: 58));
     await tester.pump(const Duration(milliseconds: 180));
     expect(incoming.playCalls, 1, reason: 'mix commits only in the fade window');
+  });
+
+  testWidgets('cached lead-in is used for a prepared local crossfade', (tester) async {
+    final outgoing = _Player();
+    final incoming = _Player();
+    final songs = [
+      const Song(id: 'first', title: 'First', artist: 'Artist',
+          duration: Duration(minutes: 3), fileType: 'FLAC',
+          filePath: '/first.flac'),
+      const Song(id: 'second', title: 'Second', artist: 'Artist',
+          duration: Duration(minutes: 3), fileType: 'FLAC',
+          filePath: '/second.flac'),
+    ];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => outgoing,
+      secondaryPlayerProvider: () async => incoming,
+      sourcesBuilder: () async => ja.AudioSource.uri(Uri.parse('file:///first.flac')),
+      sourceBuilder: (_) async => ja.AudioSource.uri(Uri.parse('file:///second.flac')),
+      playlistProvider: () => songs,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+      crossfadeConfigProvider: () => const AndroidCrossfadeConfig(
+        enabled: true, durationSecs: 3, curve: AndroidCrossfadeCurve.equalPower,
+      ),
+      automixProfileLookup: (song) async => song.id == 'second'
+          ? const AutoMixProfile(
+              durationSeconds: 180, leadInSeconds: 2,
+              audibleEndSeconds: 180, fadeOutStartSeconds: 177,
+              entrances: [], exits: [],
+            )
+          : null,
+      onNextSong: () => songs.last,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await outgoing.positions.close();
+      await incoming.positions.close();
+      await outgoing.errors.close();
+      await incoming.errors.close();
+    });
+    await engine.load(songs.first);
+    await engine.play();
+    outgoing.positions.add(const Duration(minutes: 2, seconds: 58));
+    for (var i = 0; i < 6; i++) await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(incoming.playCalls, 1);
+    expect(incoming.currentPosition, const Duration(seconds: 2));
   });
 
   testWidgets('a stalled source is discarded and the next tap uses a fresh player', (
