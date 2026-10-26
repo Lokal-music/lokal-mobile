@@ -425,7 +425,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     });
     // Resuming song playback is explicit after returning to the player.
     // The album version's clock cannot be equated with the music-video clock.
-    if (resume) unawaited(_player.play());
+    if (resume) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _videoOverrideId == null) unawaited(_player.resume());
+      });
+    }
   }
 
   void _toggleVideoFullscreen() {
