@@ -13,15 +13,15 @@
       <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
           android:layout_marginStart="7dp" android:orientation="vertical">
         <TextView android:id="@+id/flow_heading" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="FLOW"
+            android:layout_height="wrap_content" android:text="@string/widget_flow_heading_small"
             android:textColor="#FF577D" android:fontFamily="@font/product_sans_bold"
             android:textSize="10sp" android:singleLine="true"/>
         <TextView android:id="@+id/flow_title" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="Your Flow"
+            android:layout_height="wrap_content" android:text="@string/widget_flow_title"
             android:textColor="#FFFFFF" android:fontFamily="@font/product_sans_bold"
             android:textSize="12sp" android:singleLine="true" android:ellipsize="end"/>
         <TextView android:id="@+id/flow_status" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="Curated for you"
+            android:layout_height="wrap_content" android:text="@string/widget_flow_status_small"
             android:textColor="#C7FFFFFF" android:textSize="10sp"
             android:singleLine="true" android:ellipsize="end"/>
       </LinearLayout>
@@ -29,15 +29,15 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:layout_marginTop="5dp">
       <TextView android:id="@+id/flow_action" android:layout_width="0dp" android:layout_weight="1"
-          android:layout_height="29dp" android:text="Play" android:gravity="center"
+          android:layout_height="29dp" android:text="@string/widget_action_play" android:gravity="center"
           android:textSize="10sp" android:textColor="#FFFFFF"
           android:background="@drawable/widget_music_action_primary" />
       <TextView android:id="@+id/flow_shuffle" android:layout_width="0dp" android:layout_weight="1"
-          android:layout_height="29dp" android:layout_marginStart="3dp" android:text="Mix"
+          android:layout_height="29dp" android:layout_marginStart="3dp" android:text="@string/widget_action_mix"
           android:gravity="center" android:textSize="10sp" android:textColor="#FFFFFF"
           android:background="@drawable/widget_music_action_secondary" />
       <TextView android:id="@+id/flow_radio" android:layout_width="0dp" android:layout_weight="1"
-          android:layout_height="29dp" android:layout_marginStart="3dp" android:text="Radio"
+          android:layout_height="29dp" android:layout_marginStart="3dp" android:text="@string/widget_action_radio"
           android:gravity="center" android:textSize="10sp" android:textColor="#FFFFFF"
           android:background="@drawable/widget_music_action_secondary" />
     </LinearLayout>
