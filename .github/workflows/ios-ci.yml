@@ -271,7 +271,6 @@ jobs:
       LOKAL_IOS_DISCOVERY_FIXTURE: ${{ needs.iphone.outputs.integration_fixture }}
       IOS_SIMULATOR_RUNTIME_VERSION: '26.0'
       IOS_SIMULATOR_DEVICE_TYPE: com.apple.CoreSimulator.SimDeviceType.iPhone-16
-      LOKAL_IOS_RUNTIME_EVIDENCE_DIR: ${{ runner.temp }}/ios-runtime-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -283,6 +282,7 @@ jobs:
           cache: true
       - name: Configure the isolated runtime host
         run: |
+          printf 'LOKAL_IOS_RUNTIME_EVIDENCE_DIR=%s/ios-runtime-26\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           xcodebuild -version
           flutter config --no-enable-swift-package-manager
           flutter pub get --enforce-lockfile

@@ -514,3 +514,8 @@ to one column as text grows. All six Turkish labels fit the bundled app font at
 200% on 320/393/430px screens; navigation/import and component/dock selection
 passes **18** host tests. The native harness now checks rendered labels for actual
 truncation; that added assertion still requires the next hosted run.
+
+Build 33 was rejected during workflow validation before any runner or app test:
+a runner-specific path was placed in job-level environment configuration. The
+path now uses the step runtime environment. Local `actionlint` supplements YAML
+and shell parsing to validate GitHub Actions expression context availability.
