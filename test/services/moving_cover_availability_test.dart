@@ -27,7 +27,7 @@ void main() {
     var called = 0;
     final result = await hasAvailableMovingCover(
       song: _song,
-      settings: const MovingCoverSettings(sources: {}),
+      settings: const MovingCoverSettings(sources: <String>{}),
       lookup: ({required title, required artist, album, duration, settings}) async {
         called++;
         return _motion('apple');
@@ -125,7 +125,7 @@ void main() {
         song: _song,
         settings: const MovingCoverSettings(sources: {'spotify'}),
         lookup: ({required title, required artist, album, duration, settings}) =>
-            Future.error(StateError('Spotify session expired')),
+            Future<MotionArtLookup>.error(StateError('Spotify session expired')),
       ),
       isFalse,
     );
