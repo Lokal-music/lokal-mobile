@@ -498,27 +498,27 @@
   "@androidBlockedWritingToThisFile": {
     "description": "lib/services/metadata_editor_service.dart:184"
   },
-  "androidDeveloperOptionsTheReliableWay": "Android Developer Options — the reliable way to switch codec (in-app forcing uses a hidden system API that is blocked on stock Android)",
+  "androidDeveloperOptionsTheReliableWay": "Android Geliştirici Seçenekleri — kodek değiştirmek için güvenilir yöntem (uygulama içinden zorlamak, standart Android'de engellenen gizli bir sistem API'sini kullanır)",
   "@androidDeveloperOptionsTheReliableWay": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:352"
   },
-  "androidDockRoute": "Android dock route",
+  "androidDockRoute": "Android bağlantı istasyonu çıkışı",
   "@androidDockRoute": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:931"
   },
-  "androidManagedRustPlaybackPathUsing": "Android-managed Rust playback path using the native Oboe backend.",
+  "androidManagedRustPlaybackPathUsing": "Yerel Oboe altyapısını kullanan, Android tarafından yönetilen Rust oynatma yolu.",
   "@androidManagedRustPlaybackPathUsing": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:797"
   },
-  "androidUsbRoute": "Android USB route",
+  "androidUsbRoute": "Android USB çıkışı",
   "@androidUsbRoute": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:925"
   },
-  "animationStyle": "Animation Style",
+  "animationStyle": "Animasyon stili",
   "@animationStyle": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:65"
   },
-  "apiKey": "API Key",
+  "apiKey": "API anahtarı",
   "@apiKey": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:447"
   },
@@ -526,23 +526,23 @@
   "@appTitle": {
     "description": "Application name. Used by MaterialApp.onGenerateTitle and shown in the Android task switcher."
   },
-  "appearance": "Appearance",
+  "appearance": "Görünüm",
   "@appearance": {
     "description": "lib/features/settings/screens/bottom_bar_settings_screen.dart:253"
   },
-  "appleMusicDataUnavailable": "Apple Music data unavailable",
+  "appleMusicDataUnavailable": "Apple Music verilerine ulaşılamıyor",
   "@appleMusicDataUnavailable": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:417"
   },
-  "appleMusicDataUpdated": "Apple Music data updated",
+  "appleMusicDataUpdated": "Apple Music verileri güncellendi",
   "@appleMusicDataUpdated": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:416"
   },
-  "appleMusicLookupFailedCheckYour": "Apple Music lookup failed. Check your connection.",
+  "appleMusicLookupFailedCheckYour": "Apple Music araması başarısız oldu. Bağlantını kontrol et.",
   "@appleMusicLookupFailedCheckYour": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:141"
   },
-  "appliedAutoeqFor": "Applied AutoEQ for {arg1}",
+  "appliedAutoeqFor": "{arg1} için AutoEQ uygulandı",
   "@appliedAutoeqFor": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:497",
     "placeholders": {
@@ -551,11 +551,11 @@
       }
     }
   },
-  "apply": "Apply",
+  "apply": "Uygula",
   "@apply": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1073"
   },
-  "apply2": "Apply {arg1}",
+  "apply2": "{arg1} uygula",
   "@apply2": {
     "description": "lib/features/settings/screens/widgets/autoeq_search_sheet.dart:433",
     "placeholders": {
@@ -564,11 +564,11 @@
       }
     }
   },
-  "applySelected": "Apply Selected",
+  "applySelected": "Seçilenleri uygula",
   "@applySelected": {
     "description": "lib/features/songs/widgets/album_art_picker_bottom_sheet.dart:351"
   },
-  "applyTo": "Apply to {count, plural, =1{{count} song} other{{count} songs}}",
+  "applyTo": "{count, plural, =1{{count} şarkıya uygula} other{{count} şarkıya uygula}}",
   "@applyTo": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:581",
     "placeholders": {
@@ -577,11 +577,11 @@
       }
     }
   },
-  "applyingNewAudioEngine": "Applying new audio engine…",
+  "applyingNewAudioEngine": "Yeni ses motoru uygulanıyor…",
   "@applyingNewAudioEngine": {
     "description": "lib/features/menu/screens/restarting_screen.dart:11"
   },
-  "apr": "Apr",
+  "apr": "Nis",
   "@apr": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:505"
   },
@@ -593,31 +593,31 @@
   "@aptxHd": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:595"
   },
-  "areYouSureYouWantTo": "Are you sure you want to delete this playlist?",
+  "areYouSureYouWantTo": "Bu çalma listesini silmek istediğinden emin misin?",
   "@areYouSureYouWantTo": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:329"
   },
-  "areYouSureYouWantTo2": "Are you sure you want to clear your entire listening history? This cannot be undone.",
+  "areYouSureYouWantTo2": "Tüm dinleme geçmişini silmek istediğinden emin misin? Bu işlem geri alınamaz.",
   "@areYouSureYouWantTo2": {
     "description": "lib/features/recently_played/screens/recently_played_screen.dart:198"
   },
-  "areYouSureYouWantTo3": "Are you sure you want to reset all UAC2 preferences? This action cannot be undone.",
+  "areYouSureYouWantTo3": "Tüm UAC2 tercihlerini sıfırlamak istediğinden emin misin? Bu işlem geri alınamaz.",
   "@areYouSureYouWantTo3": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1440"
   },
-  "artist": "Artist",
+  "artist": "Sanatçı",
   "@artist": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:254"
   },
-  "artistIsNotAvailableForThis": "Artist is not available for this song",
+  "artistIsNotAvailableForThis": "Bu şarkının sanatçı bilgisi yok",
   "@artistIsNotAvailableForThis": {
     "description": "lib/features/player/widgets/player_navigation.dart:45"
   },
-  "artistName": "Artist Name",
+  "artistName": "Sanatçı adı",
   "@artistName": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:215"
   },
-  "artistUnit": "{count, plural, =1{artist} other{artists}}",
+  "artistUnit": "{count, plural, =1{sanatçı} other{sanatçı}}",
   "@artistUnit": {
     "description": "lib/services/milestone_service.dart:226",
     "placeholders": {
@@ -626,11 +626,11 @@
       }
     }
   },
-  "artists": "Artists",
+  "artists": "Sanatçılar",
   "@artists": {
     "description": "lib/features/artists/screens/artists_screen.dart:253"
   },
-  "artists2": "{arg1} artists",
+  "artists2": "{arg1} sanatçı",
   "@artists2": {
     "description": "lib/features/artists/screens/artists_screen.dart:261",
     "placeholders": {
@@ -639,39 +639,39 @@
       }
     }
   },
-  "artistsInRotation": "Artists In Rotation",
+  "artistsInRotation": "Sık Dinlenen Sanatçılar",
   "@artistsInRotation": {
     "description": "lib/features/menu/screens/menu_screen.dart:887"
   },
-  "artwork": "Artwork",
+  "artwork": "Kapak görseli",
   "@artwork": {
     "description": "lib/features/recap/widgets/replay_card_options.dart:12"
   },
-  "artworkCard": "Artwork Card",
+  "artworkCard": "Kapak kartı",
   "@artworkCard": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:203"
   },
-  "artworkPlacement": "Artwork placement",
+  "artworkPlacement": "Kapak yerleşimi",
   "@artworkPlacement": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:239"
   },
-  "artworkPlacement2": "Artwork Placement",
+  "artworkPlacement2": "Kapak yerleşimi",
   "@artworkPlacement2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:288"
   },
-  "artworkSize": "Artwork size",
+  "artworkSize": "Kapak boyutu",
   "@artworkSize": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:208"
   },
-  "artworkSize2": "Artwork Size",
+  "artworkSize2": "Kapak boyutu",
   "@artworkSize2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:239"
   },
-  "asmrDreams": "ASMR Dreams",
+  "asmrDreams": "ASMR Rüyaları",
   "@asmrDreams": {
     "description": "lib/models/song.dart:367"
   },
-  "atKhzBit": " at {arg1}kHz/{arg2}bit",
+  "atKhzBit": " {arg1} kHz/{arg2} bit hızında",
   "@atKhzBit": {
     "description": "lib/widgets/uac2/uac2_connection_manager.dart:88",
     "placeholders": {
@@ -683,91 +683,91 @@
       }
     }
   },
-  "atLeastOneVersionMustStay": "At least one version must stay.",
+  "atLeastOneVersionMustStay": "En az bir sürüm kalmalı.",
   "@atLeastOneVersionMustStay": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:1322"
   },
-  "attack": "Attack",
+  "attack": "Atak",
   "@attack": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3345"
   },
-  "audioFocus": "Audio Focus",
+  "audioFocus": "Ses odağı",
   "@audioFocus": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:714"
   },
-  "audioFormat": "Audio Format",
+  "audioFormat": "Ses biçimi",
   "@audioFormat": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:215"
   },
-  "audioFormatIsDisabled": "Audio Format is disabled",
+  "audioFormatIsDisabled": "Ses biçimi devre dışı",
   "@audioFormatIsDisabled": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:237"
   },
-  "audioSignalPath": "Audio Signal Path",
+  "audioSignalPath": "Ses sinyal yolu",
   "@audioSignalPath": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:480"
   },
-  "aug": "Aug",
+  "aug": "Ağu",
   "@aug": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:509"
   },
-  "auto": "Auto",
+  "auto": "Otomatik",
   "@auto": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1224"
   },
-  "autoAdvance": "Auto Advance",
+  "autoAdvance": "Otomatik ilerleme",
   "@autoAdvance": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1427"
   },
-  "autoBeMsbDefaultOnlyChange": "Auto — BE-MSB default; only change if native DSD hisses",
+  "autoBeMsbDefaultOnlyChange": "Otomatik — varsayılan BE-MSB; yalnızca yerel DSD'de cızırtı varsa değiştir",
   "@autoBeMsbDefaultOnlyChange": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1716"
   },
-  "autoBitPerfectForUsbDacs": "Auto Bit-perfect for USB DACs",
+  "autoBitPerfectForUsbDacs": "USB DAC'ler için otomatik bit-perfect",
   "@autoBitPerfectForUsbDacs": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:491"
   },
-  "autoFill": "Auto-fill",
+  "autoFill": "Otomatik doldur",
   "@autoFill": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1689"
   },
-  "autoFullView": "Auto Full View",
+  "autoFullView": "Otomatik tam görünüm",
   "@autoFullView": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:216"
   },
-  "autoIdentifyUntaggedAlbums": "Auto-identify untagged albums",
+  "autoIdentifyUntaggedAlbums": "Etiketsiz albümleri otomatik tanı",
   "@autoIdentifyUntaggedAlbums": {
     "description": "lib/features/settings/widgets/apple_music_settings_tile.dart:38"
   },
-  "autoNativeDsdOnDapsDop": "Auto — Native DSD on DAPs, DoP for USB DACs, PCM otherwise",
+  "autoNativeDsdOnDapsDop": "Otomatik — DAP'lerde yerel DSD, USB DAC'lerde DoP, diğer durumlarda PCM",
   "@autoNativeDsdOnDapsDop": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1637"
   },
-  "autoReconnect": "Auto-Reconnect",
+  "autoReconnect": "Otomatik yeniden bağlan",
   "@autoReconnect": {
     "description": "lib/widgets/uac2/uac2_connection_manager.dart:183"
   },
-  "autoShowFullViewAfterInactivity": "Auto-show full view after inactivity",
+  "autoShowFullViewAfterInactivity": "Hareketsizlikten sonra tam görünümü otomatik göster",
   "@autoShowFullViewAfterInactivity": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:217"
   },
-  "autoU8ByteInterleavedRecommended": "Auto — U8 byte-interleaved (recommended)",
+  "autoU8ByteInterleavedRecommended": "Otomatik — U8 bayt iç içe geçirme (önerilen)",
   "@autoU8ByteInterleavedRecommended": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1731"
   },
-  "autoeqHeadphones": "AutoEQ headphones",
+  "autoeqHeadphones": "AutoEQ kulaklıklar",
   "@autoeqHeadphones": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:758"
   },
-  "autoeqHeadphones2": "AutoEQ Headphones",
+  "autoeqHeadphones2": "AutoEQ kulaklıklar",
   "@autoeqHeadphones2": {
     "description": "lib/features/settings/screens/widgets/autoeq_search_sheet.dart:188"
   },
-  "automatic": "Automatic",
+  "automatic": "Otomatik",
   "@automatic": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:311"
   },
-  "availableDevices": "Available Devices",
+  "availableDevices": "Kullanılabilir cihazlar",
   "@availableDevices": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:70"
   },
@@ -780,39 +780,39 @@
       }
     }
   },
-  "back": "Back",
+  "back": "Geri",
   "@back": {
     "description": "lib/features/onboarding/widgets/tutorial_overlay.dart:338"
   },
-  "backOnline": "Back online",
+  "backOnline": "Tekrar çevrimiçi",
   "@backOnline": {
     "description": "lib/widgets/common/offline_notice.dart:137"
   },
-  "backToLocker": "Back to Locker",
+  "backToLocker": "Arşive dön",
   "@backToLocker": {
     "description": "lib/features/player/screens/full_player_screen.dart:731"
   },
-  "backToReplay": "Back to Replay",
+  "backToReplay": "Yıl Özetine dön",
   "@backToReplay": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:298"
   },
-  "backend": "Backend",
+  "backend": "Arka uç",
   "@backend": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:632"
   },
-  "background": "Background",
+  "background": "Arka plan",
   "@background": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:155"
   },
-  "backgroundOpacity": "Background Opacity",
+  "backgroundOpacity": "Arka plan opaklığı",
   "@backgroundOpacity": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:197"
   },
-  "balance": "Balance",
+  "balance": "Denge",
   "@balance": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3563"
   },
-  "balance2": "Balance {arg1}",
+  "balance2": "Denge {arg1}",
   "@balance2": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3515",
     "placeholders": {
@@ -821,31 +821,31 @@
       }
     }
   },
-  "balanceTempoDampFilterDelaysSize": "Balance, tempo, damp, filter, delays, size, mix, and extra spread controls.",
+  "balanceTempoDampFilterDelaysSize": "Denge, tempo, sönümleme, filtre, gecikmeler, boyut, karışım ve ek genişlik ayarları.",
   "@balanceTempoDampFilterDelaysSize": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3550"
   },
-  "balancedQualityAndStability": "Balanced quality and stability",
+  "balancedQualityAndStability": "Dengeli kalite ve kararlılık",
   "@balancedQualityAndStability": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:505"
   },
-  "band": "Band",
+  "band": "Bant",
   "@band": {
     "description": "lib/widgets/equalizer/interactive_eq_graph.dart:211"
   },
-  "bandControls": "Band Controls",
+  "bandControls": "Bant denetimleri",
   "@bandControls": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1822"
   },
-  "bandEditors": "Band Editors",
+  "bandEditors": "Bant düzenleyicileri",
   "@bandEditors": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:2240"
   },
-  "bandPass": "Band Pass",
+  "bandPass": "Bant geçiren",
   "@bandPass": {
     "description": "lib/providers/equalizer_provider.dart:37"
   },
-  "bandU2022": "Band {arg1}  •  {arg2}",
+  "bandU2022": "Bant {arg1}  •  {arg2}",
   "@bandU2022": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:2578",
     "placeholders": {
@@ -857,7 +857,7 @@
       }
     }
   },
-  "bands": "{arg1}/31 bands",
+  "bands": "{arg1}/31 bant",
   "@bands": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:2178",
     "placeholders": {
@@ -866,7 +866,7 @@
       }
     }
   },
-  "bandsActive": "{activeCount}/{arg1} bands active",
+  "bandsActive": "{activeCount}/{arg1} bant etkin",
   "@bandsActive": {
     "description": "lib/widgets/equalizer/interactive_eq_graph.dart:294",
     "placeholders": {
@@ -878,7 +878,7 @@
       }
     }
   },
-  "bandsAdjusted": "{adjustedBands} bands adjusted",
+  "bandsAdjusted": "{adjustedBands} bant ayarlandı",
   "@bandsAdjusted": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1749",
     "placeholders": {
@@ -887,7 +887,7 @@
       }
     }
   },
-  "bandsAdjusted2": "{adjustedCount}/{arg1} bands adjusted",
+  "bandsAdjusted2": "{adjustedCount}/{arg1} bant ayarlandı",
   "@bandsAdjusted2": {
     "description": "lib/widgets/equalizer/interactive_eq_graph.dart:291",
     "placeholders": {
@@ -899,7 +899,7 @@
       }
     }
   },
-  "bandsPreampDb": "{arg1} bands · preamp {arg2} dB · {arg3}",
+  "bandsPreampDb": "{arg1} bant · ön yükseltme {arg2} dB · {arg3}",
   "@bandsPreampDb": {
     "description": "lib/features/settings/screens/widgets/autoeq_search_sheet.dart:366",
     "placeholders": {
@@ -914,23 +914,23 @@
       }
     }
   },
-  "bars": "Bars",
+  "bars": "Çubuklar",
   "@bars": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:70"
   },
-  "bass": "Bass",
+  "bass": "Bas",
   "@bass": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1665"
   },
-  "bassMidTreble": "Bass, Mid & Treble",
+  "bassMidTreble": "Bas, orta ve tiz",
   "@bassMidTreble": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1639"
   },
-  "bassTreble": "Bass + Treble",
+  "bassTreble": "Bas + tiz",
   "@bassTreble": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:156"
   },
-  "battery": "{battery}% battery",
+  "battery": "Pil %{battery}",
   "@battery": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:117",
     "placeholders": {
@@ -939,27 +939,27 @@
       }
     }
   },
-  "beLsbBigEndianSubslotLsb": "BE-LSB — big-endian subslot, LSB first",
+  "beLsbBigEndianSubslotLsb": "BE-LSB — büyük sonlu alt yuva, önce LSB",
   "@beLsbBigEndianSubslotLsb": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1722"
   },
-  "beMsbBigEndianSubslotMsb": "BE-MSB — big-endian subslot, MSB first (default)",
+  "beMsbBigEndianSubslotMsb": "BE-MSB — büyük sonlu alt yuva, önce MSB (varsayılan)",
   "@beMsbBigEndianSubslotMsb": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1718"
   },
-  "beMsbPackingTheDefaultWire": "BE-MSB packing — the default wire convention",
+  "beMsbPackingTheDefaultWire": "BE-MSB paketleme — varsayılan aktarım düzeni",
   "@beMsbPackingTheDefaultWire": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1827"
   },
-  "besideTheSong": "Beside the song",
+  "besideTheSong": "Şarkının yanında",
   "@besideTheSong": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:499"
   },
-  "bigEndian32BitSubslotMsb": "Big-endian 32-bit subslot, MSB-first bits",
+  "bigEndian32BitSubslotMsb": "Büyük sonlu 32 bit alt yuva, önce MSB bitleri",
   "@bigEndian32BitSubslotMsb": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1832"
   },
-  "bigEndianSubslotLsbFirstBit": "Big-endian subslot, LSB-first (bit-reversed) bits",
+  "bigEndianSubslotLsbFirstBit": "Büyük sonlu alt yuva, önce LSB (ters çevrilmiş) bitleri",
   "@bigEndianSubslotLsbFirstBit": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1842"
   },
@@ -972,15 +972,15 @@
       }
     }
   },
-  "bitDepth": "Bit depth",
+  "bitDepth": "Bit derinliği",
   "@bitDepth": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:612"
   },
-  "bitDepth2": "Bit Depth",
+  "bitDepth2": "Bit derinliği",
   "@bitDepth2": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1350"
   },
-  "bitDepths": "Bit Depths",
+  "bitDepths": "Bit derinlikleri",
   "@bitDepths": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:569"
   },
@@ -992,7 +992,7 @@
   "@bitPerfect2": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:420"
   },
-  "bitPerfectCapsule": "Bit-Perfect Capsule",
+  "bitPerfectCapsule": "Bit-perfect kapsülü",
   "@bitPerfectCapsule": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:366"
   },
