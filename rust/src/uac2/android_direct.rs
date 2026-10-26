@@ -3636,6 +3636,29 @@ fn ensure_android_usb_idle_lock() -> Result<(), String> {
     Ok(())
 }
 
+// Compare-exchange is the only supported acquisition path. Unlike a swap
+// plus force-release, failure does not mutate a live session's guard.
+fn try_acquire_usb_session_guard(guard: &AtomicBool) -> bool {
+    guard
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+}
+
+#[cfg(test)]
+mod usb_session_guard_tests {
+    use super::*;
+
+    #[test]
+    fn refuses_overlapping_sessions_without_unlocking_the_owner() {
+        let guard = AtomicBool::new(false);
+        assert!(try_acquire_usb_session_guard(&guard));
+        assert!(!try_acquire_usb_session_guard(&guard));
+        assert!(guard.load(Ordering::SeqCst));
+        guard.store(false, Ordering::SeqCst);
+        assert!(try_acquire_usb_session_guard(&guard));
+    }
+}
+
 pub fn create_android_usb_backend(
     callback_data: Arc<AudioCallbackData>,
     event_tx: Sender<AudioEvent>,
@@ -3662,14 +3685,26 @@ pub fn create_android_usb_backend(
         thread::sleep(Duration::from_millis(100));
     }
 
-    // Fresh session: clear any stop signal left by a prior teardown.
-    USB_STOP_REQUESTED.store(false, Ordering::SeqCst);
-
-    if USB_SESSION_ACTIVE.swap(true, Ordering::SeqCst) {
-        dev_eprintln!("Android USB direct: force-releasing stale USB session guard");
-        force_release_usb_session();
-        USB_SESSION_ACTIVE.store(true, Ordering::SeqCst);
+    // Never force-release another session's guard: it can still have live
+    // libusb URBs and a claimed interface. The old code reset STOP_REQUESTED
+    // and ran a second backend against the same fd after only 1.5 seconds.
+    if USB_SESSION_CLEAR_PENDING.load(Ordering::SeqCst) {
+        return Ok(None);
     }
+    if !try_acquire_usb_session_guard(&USB_SESSION_ACTIVE) {
+        return Err(
+            "Android direct USB session still active after cleanup timeout; refusing overlapping playback"
+                .to_string(),
+        );
+    }
+    if USB_SESSION_CLEAR_PENDING.load(Ordering::SeqCst) {
+        USB_SESSION_ACTIVE.store(false, Ordering::SeqCst);
+        complete_pending_android_usb_clear_if_idle();
+        return Ok(None);
+    }
+
+    // Only the successfully acquired new owner may reset the stop flag.
+    USB_STOP_REQUESTED.store(false, Ordering::SeqCst);
 
     match create_android_usb_backend_inner(callback_data, event_tx, preferred_sample_rate) {
         Ok(Some(backend)) => Ok(Some(backend)),
@@ -5571,7 +5606,7 @@ fn run_usb_output_loop(
                 LIBUSB_TRANSFER_COMPLETED => slot.validate_packets(),
                 LIBUSB_TRANSFER_TIMED_OUT => Err("isochronous transfer timed out".to_string()),
                 LIBUSB_TRANSFER_STALL => Err("isochronous transfer stalled".to_string()),
-                LIBUSB_TRANSFER_NO_DEVICE => Err("USB DAC disconnected".to_string()),
+                LIBUSB_TRANSFER_NO_DEVICE => Err("USB direct host handle lost (LIBUSB_NO_DEVICE; check device attachment and USB ownership)".to_string()),
                 LIBUSB_TRANSFER_OVERFLOW => Err("isochronous transfer overflow".to_string()),
                 LIBUSB_TRANSFER_CANCELLED => Err("isochronous transfer cancelled".to_string()),
                 LIBUSB_TRANSFER_ERROR => Err("isochronous transfer failed".to_string()),
@@ -7765,12 +7800,47 @@ fn submit_iso_transfer(
         LIBUSB_TRANSFER_COMPLETED => packet_validation,
         LIBUSB_TRANSFER_TIMED_OUT => Err("isochronous transfer timed out".to_string()),
         LIBUSB_TRANSFER_STALL => Err("isochronous transfer stalled".to_string()),
-        LIBUSB_TRANSFER_NO_DEVICE => Err("USB DAC disconnected".to_string()),
+        LIBUSB_TRANSFER_NO_DEVICE => Err("USB direct host handle lost (LIBUSB_NO_DEVICE; check device attachment and USB ownership)".to_string()),
         LIBUSB_TRANSFER_OVERFLOW => Err("isochronous transfer overflow".to_string()),
         LIBUSB_TRANSFER_CANCELLED => Err("isochronous transfer cancelled".to_string()),
         LIBUSB_TRANSFER_ERROR => Err("isochronous transfer failed".to_string()),
         other => Err(format!("isochronous transfer returned status {}", other)),
     }
+}
+
+/// A cancelled libusb transfer is *still owned by libusb* until its callback
+/// has been dispatched. Freeing the transfer/buffer after a fixed timeout
+/// causes a native use-after-free on slower Android USB host controllers.
+/// Leak only in the exceptional undrainable case; never free a live URB.
+fn cancel_and_drain_iso_feedback(
+    context: &Context,
+    transfer: std::ptr::NonNull<libusb_transfer>,
+    user_data: *mut IsoTransferUserData,
+) {
+    let cancel_result = unsafe { libusb_cancel_transfer(transfer.as_ptr()) };
+    if cancel_result != 0 {
+        dev_eprintln!("[USB] Feedback cancellation returned {}", cancel_result);
+    }
+    for _ in 0..20 {
+        let completed = unsafe { &(*user_data).completion }
+            .status.lock()
+            .map(|status| status.is_some())
+            .unwrap_or_else(|poisoned| poisoned.into_inner().is_some());
+        if completed {
+            unsafe {
+                libusb_free_transfer(transfer.as_ptr());
+                drop(Box::from_raw(user_data));
+            }
+            return;
+        }
+        if let Err(error) = context.handle_events(Some(Duration::from_millis(10))) {
+            dev_eprintln!("[USB] Feedback cancellation event pump failed: {}", error);
+        }
+    }
+    // Deliberately retain transfer and callback data: libusb may still invoke
+    // the callback after this function returns. In particular do not drop
+    // Box::from_raw(user_data) while the transfer is outstanding.
+    dev_eprintln!("[USB] Feedback URB undrained; preserving transfer memory");
 }
 
 fn read_iso_feedback_packet(
@@ -7831,23 +7901,16 @@ fn read_iso_feedback_packet(
                 break status;
             }
             if iterations >= MAX_FEEDBACK_POLL_ITERATIONS {
-                unsafe { libusb_cancel_transfer(transfer_ptr.as_ptr()) };
-                for _ in 0..MAX_FEEDBACK_POLL_ITERATIONS {
-                    if (*completion.status.lock().unwrap()).is_some() {
-                        break;
-                    }
-                    let _ = context.handle_events(Some(Duration::from_millis(10)));
-                }
-                unsafe {
-                    libusb_free_transfer(transfer_ptr.as_ptr());
-                    drop(Box::from_raw(user_data_ptr));
-                }
+                cancel_and_drain_iso_feedback(context, transfer_ptr, user_data_ptr);
                 return Ok(None);
             }
             iterations += 1;
-            context
-                .handle_events(Some(Duration::from_millis(10)))
-                .map_err(|error| format!("libusb_handle_events failed: {}", error))?;
+            if let Err(error) = context.handle_events(Some(Duration::from_millis(10))) {
+                // An event-loop error does not mean the kernel cancelled the
+                // transfer. The callback may still arrive: drain before return.
+                cancel_and_drain_iso_feedback(context, transfer_ptr, user_data_ptr);
+                return Err(format!("libusb_handle_events failed: {}", error));
+            }
         }
     };
 
@@ -7870,7 +7933,7 @@ fn read_iso_feedback_packet(
         LIBUSB_TRANSFER_TIMED_OUT => Ok(None),
         LIBUSB_TRANSFER_CANCELLED => Ok(None),
         LIBUSB_TRANSFER_STALL => Err("isochronous feedback transfer stalled".to_string()),
-        LIBUSB_TRANSFER_NO_DEVICE => Err("USB DAC disconnected".to_string()),
+        LIBUSB_TRANSFER_NO_DEVICE => Err("USB direct host handle lost (LIBUSB_NO_DEVICE; check device attachment and USB ownership)".to_string()),
         LIBUSB_TRANSFER_OVERFLOW => Err("isochronous feedback transfer overflow".to_string()),
         LIBUSB_TRANSFER_ERROR => Err("isochronous feedback transfer failed".to_string()),
         other => Err(format!(
