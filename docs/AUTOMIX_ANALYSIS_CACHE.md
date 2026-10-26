@@ -39,6 +39,33 @@ as proven phrase or vocal boundaries.
   playback failure. Cache exhaustion and storage errors fall back to ordinary
   crossfade instead of holding up playback.
 
+## Optional offline CUE-DETR tier (imported sidecars)
+
+Lokal Mobile now accepts the same `<audio-filename>.lokal-automix.json`
+sidecar exported by the desktop
+`scripts/automix-import-cues.mjs` helper. The helper can run a separately
+installed CUE-DETR detector, validate original MP3 SHA-256 content and publish
+model-selected overlap start positions. The Android process does **not**
+execute Python models or embed PyTorch/Demucs.
+
+When a source-matched sidecar exists, the player combines model entrances
+and exits with the cached waveform profile. If the audio was copied from a
+desktop computer and its modification timestamp changed, Android performs
+asynchronous SHA-256 validation of the local file **only for that sidecar**.
+The next-track lookup is capped by a short deadline; an unavailable report
+never blocks an otherwise playable stream.
+
+When both roles have usable model cues, Android may move its usual fade to a
+source-validated structural overlap, capped to the last 30 seconds. This
+still uses the existing two-decoder crossfader; it is **not stem mixing** and
+does not pitch-preserve independent stems. Files with missing or invalid cues
+use the previous crossfade behavior.
+
+The optional upstream Demucs `--prepare-only` step can cache stem windows
+outside the app. Those windows cannot be rendered by the current Android or
+desktop player yet and must not be represented as active stem-based AutoMix.
+See the desktop guide `docs/AUTOMIX_MODEL_PREPARATION.md`.
+
 ## Future high-quality pipeline
 
 Integrating the upstream `VertexSelection/automix-engine` would introduce a
