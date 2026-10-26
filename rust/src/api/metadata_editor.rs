@@ -21,6 +21,7 @@ pub struct TagReadResult {
     pub album: Option<String>,
     pub album_artist: Option<String>,
     pub genre: Option<String>,
+    pub lyrics: Option<String>,
     pub year: Option<u32>,
     pub track_number: Option<u32>,
     pub disc_number: Option<u32>,
@@ -377,6 +378,17 @@ fn apply_tag_fields(
             if let Some(ref v) = fields.genre {
                 t.set_genre(v.clone());
             }
+            if let Some(ref v) = fields.lyrics {
+                // Lofty's generic Lyrics key is not writable for ID3v2.
+                // Its USLT frame is exposed as UnsyncLyrics; on FLAC/Vorbis
+                // and MP4 the Lyrics key stores portable LRC/plain text.
+                let key = if t.tag_type() == lofty::tag::TagType::Id3v2 {
+                    ItemKey::UnsyncLyrics
+                } else {
+                    ItemKey::Lyrics
+                };
+                t.insert_text(key, v.clone());
+            }
             if let Some(v) = fields.year {
                 t.set_date(Timestamp {
                     year: v as u16,
@@ -481,6 +493,7 @@ mod tests {
                 album: Some("Identified Album".into()),
                 album_artist: Some("Identified Artist".into()),
                 genre: Some("Electronic".into()),
+                lyrics: Some("[00:01.20] A test line".into()),
                 year: Some(1994),
                 track_number: Some(3),
                 disc_number: Some(1),
