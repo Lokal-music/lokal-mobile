@@ -4,7 +4,7 @@ Reference: [Yigder/Prism](https://github.com/Yigder/Prism), especially its `Imme
 
 ## User experience
 
-- Enter with **Immersive** in the full-player horizontal action strip, or the expand icon in the regular Lyrics header.
+- Enter with the **Space** action in the full-player footer, or the expand icon in the regular Lyrics header. Both are shown **only** when the current song has actual synchronized line/word/syllable lyrics; plain, missing, and still-loading lyrics never claim a subtitle mode.
 - Full-screen cover backdrop plus a clearly visible cover; ordinary player chrome and metadata are replaced with **one active line and the upcoming line**, styled as subtitles.
 - Accurate line timing from `PlayerService.positionNotifier`; existing `LyricMotionLine` preserves word timings. Seeking, pausing and next/previous use the same queue/clock as the regular player.
 - Tap the cover to reveal short-lived controls (close, lyrics source, translation, romanization, transport).
@@ -14,7 +14,7 @@ Reference: [Yigder/Prism](https://github.com/Yigder/Prism), especially its `Imme
 
 ## Merge ordering
 
-This is a stacked PR based on the companion music-video full-player PR. Merge music video first, then retarget this PR to `main` and merge immersive lyrics. Video and immersive lyrics are independent presentations; immersive mode does not overlay the separately timed YouTube video, so no false sync is implied.
+This is a stacked PR based on the companion native Media3 music-video full-player PR. That PR introduces a separate contextual **Video** footer action when an official music-video match is known. Merge music video first, then retarget this PR to `main` and merge immersive lyrics. Video and immersive lyrics are independent presentations; immersive mode does not overlay the separately timed YouTube video, so no false sync is implied.
 
 ## Manual QA
 
