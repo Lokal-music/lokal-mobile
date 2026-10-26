@@ -6,6 +6,14 @@ import 'package:flick/models/song.dart';
 import 'package:flick/services/android_audio_engine.dart';
 
 class _Player implements ja.AudioPlayer {
+  _Player() {
+    // The mock's synchronous position stream and position getter must agree:
+    // the transition planner now waits on the real media clock, not a timer.
+    positions.stream.listen((value) => currentPosition = value);
+  }
+  Duration currentPosition = Duration.zero;
+  bool currentPlaying = false;
+  int playCalls = 0;
   final errors = StreamController<ja.PlayerException>.broadcast(sync: true);
   List<ja.IndexedAudioSource> sources = [];
   final positions = StreamController<Duration>.broadcast(sync: true);
@@ -19,9 +27,9 @@ class _Player implements ja.AudioPlayer {
   @override
   int? get currentIndex => 0;
   @override
-  bool get playing => false;
+  bool get playing => currentPlaying;
   @override
-  Duration get position => Duration.zero;
+  Duration get position => currentPosition;
   @override
   Duration get bufferedPosition => Duration.zero;
   @override
@@ -55,6 +63,7 @@ class _Player implements ja.AudioPlayer {
     if (failLoad) throw ja.PlayerException(0, 'Source error', 0);
     if (hungLoad != null) return await hungLoad!.future;
     sources = [ja.AudioSource.uri(Uri.parse('file:///song.flac'))];
+    currentPosition = Duration.zero;
     return duration;
   }
 
@@ -62,6 +71,7 @@ class _Player implements ja.AudioPlayer {
   Future<void> seek(Duration? position, {int? index}) async {
     seeks++;
     await hungSeek?.future;
+    if (position != null) currentPosition = position;
   }
 
   @override
@@ -75,9 +85,11 @@ class _Player implements ja.AudioPlayer {
   @override
   Future<void> setLoopMode(ja.LoopMode mode) async {}
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async { currentPlaying = false; }
   @override
-  Future<void> play() async {}
+  Future<void> play() async { currentPlaying = true; playCalls++; }
+  @override
+  Future<void> pause() async { currentPlaying = false; }
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -199,6 +211,7 @@ void main() {
       await nextFade.errors.close();
     });
     await engine.load(first);
+    await engine.play();
     primary.positions.add(const Duration(minutes: 2, seconds: 58));
     for (var i = 0; i < 6; i++) {
       await tester.pump();
@@ -219,6 +232,7 @@ void main() {
     // The surviving provider player is reused as the sole active player,
     // never simultaneously in the secondary slot.
     await engine.load(second);
+    await engine.play();
     expect(primary.loads, 2);
     nextSong = first;
     primary.positions.add(const Duration(minutes: 2, seconds: 58));
