@@ -69,6 +69,15 @@ widget with one emergency layout. Never put credentials or transient stream URLs
 in the App Group. Extension code reads snapshots and owned artwork; it must not
 start a second Flutter/Rust audio engine or download arbitrary art at render time.
 
+Apple's current [supported-capabilities table](https://developer.apple.com/help/account/reference/supported-capabilities-ios)
+includes App Groups for the free Apple Developer account column as well as paid
+memberships (checked 26 October 2026; the HTML table uses checkmark figures).
+Do not assume a paid membership is necessary from older guidance. The actual
+provisioning profile, matching host/extension group and Windows re-signing behavior
+still require a signed-device test. [WidgetKit updates](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date)
+are scheduled by the system; use timeline entries and system progress rather
+than periodic app wakeups.
+
 The base app retains its iOS 15 floor. Gate AppIntent interactive controls at iOS
 17 and later; older widgets use deep links. WidgetKit schedules updates; do not
 promise an unrestricted live refresh loop. Test stale timelines, artwork churn,
@@ -80,10 +89,34 @@ availability explanation. Native widgets are not yet implemented or accepted.
 
 ## Validation record
 
-The post-merge pass runs every changed Dart test file (41), the native Android
-widget preference regression, static analysis and the existing real iPhone smoke
-suite. Newly added native UI interactions require the next hosted run; recording
-them here is not a passing claim. The native Android widget regression passes all five cases (including the real
+All 20 PR merge commits are reachable from the integrated iPhone branch.
+The pass enumerated 41 changed Dart test files. **All 248 cases in the 40
+completable files now pass**, including search, lyrics-card layouts, catalogue
+settings, Flow/autoplay, artwork/Canvas, profile editing, route motion, streaming,
+playlist references and Android widget contracts.
+
+The initial pass found seven failures. Two visual-test failures were resolved
+by the compositing/harness fixes below. The other five search/Cover Flow failures
+reproduced on untouched main `b705c10` before their fixtures were reconciled:
+UI tests now override the current global catalogue interface instead of the
+retired Apple-only provider; the narrow filter test scrolls and lays out Lyrics
+before tapping it; Cover Flow expects the intended middle initial item. Stale
+query protection, entity isolation, no library work in Online scope and the real
+queued recommendation order remain asserted. The three corrected fixture files
+also pass static analysis without findings.
+
+The remaining failed-source fixture stalls on untouched main under an external
+45-second bound. Its unresolved-source Repeat All case passes independently; its
+asynchronous-retirement assertion also fails on both branches. This file is
+excluded from the 248-pass selection, and decoder retirement is not claimed green.
+
+A separate post-merge iPhone regression selection passes all 41 cases, including
+the actual host Rust metadata/QuickJS bridge (with `LOKAL_NATIVE_LIBRARY` set),
+iOS storage/document handling, processing selection, codec routing, ReplayGain
+and Desktop Link errors. These host checks do not replace the hosted iOS run.
+Build 19 compiled/packaged the updated release IPA, but attempt 1 failed the
+minimal Flutter control-app VM gate before Lokal could execute. Attempt 2 retries
+on a fresh hosted Mac. The newly added native UI interactions are still pending. The native Android widget regression passes all five cases (including the real
 SharedPreferences numeric boundary), and application/integration analysis finds
 no errors (555 existing warning/info findings). Six focused player tests pass.
 
@@ -98,6 +131,15 @@ Build 17 passed the complete native suite on iOS 18.6 and 26.0, but its merge
 checkout only included upstream PRs through #186. Build 18 passed the native suite
 and real Bonjour/HTTP discovery on iOS 18.6 at source
 `d345edb3dae4b3a41c4524d163d44bdb83fd5309`, with main parent
-`63bba250dcfd67d97d3165cf61cecbe7fb6a8431`. Its iOS 26 simulator failed to boot,
+`63bba250dcfd67d97d3165cf61cecbe7fb6a8431` (through #194). Its iOS 26 simulator failed to boot,
 so that runtime did not execute the newer suite. Neither run establishes complete
 #196 UI coverage, physical iPhone acceptance or signed installation.
+
+
+Build 19 / attempt 1 package metadata identifies source
+`e66c0dfaf079f21954d67536643c080278258106`, tree
+`3bc937d41e6ed94e55e3aaf2d65b4718d0fee7d2`, and SHA-256
+`6092b2d934cc6f9d26f012aa5cdc8ae0bf2457b89639a086e28208a0c7c62550`.
+All 33 device binaries passed CI inspection; the downloaded IPA and checksum
+were verified locally. This package has the updated UI, but its new simulator
+acceptance remains pending, and it has no physical-device qualification.
