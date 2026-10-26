@@ -319,10 +319,10 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
         if (parentId == CAR_ROOT_ID) {
             result.sendResult(
                 listOf(
-                    carFolder("lokal/songs", "Songs"),
-                    carFolder("lokal/likes", "Liked Songs"),
-                    carFolder("lokal/playlists", "Playlists"),
-                    carFolder("lokal/albums", "Albums")
+                    carFolder("lokal/songs", WidgetPrefs.localizedText(this, R.string.native_car_songs)),
+                    carFolder("lokal/likes", WidgetPrefs.localizedText(this, R.string.native_car_liked_songs)),
+                    carFolder("lokal/playlists", WidgetPrefs.localizedText(this, R.string.native_car_playlists)),
+                    carFolder("lokal/albums", WidgetPrefs.localizedText(this, R.string.native_car_albums))
                 )
             )
             return
@@ -637,10 +637,10 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Music Playback",
+                WidgetPrefs.localizedText(this, R.string.native_music_playback_channel),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows currently playing song with playback controls"
+                description = WidgetPrefs.localizedText(this, R.string.native_music_playback_description)
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
@@ -869,7 +869,10 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
             .setContentText(currentArtist)
             .setSubText(
                 if (!currentOutputName.isNullOrBlank()) currentOutputName
-                else if (isCasting) "Casting to ${castDeviceName ?: "device"}"
+                else if (isCasting) String.format(
+                    WidgetPrefs.localizedText(this, R.string.native_music_casting_to),
+                    castDeviceName ?: WidgetPrefs.localizedText(this, R.string.native_music_device),
+                )
                 else "${formatTime(currentPosition)} / ${formatTime(currentDuration)}"
             )
             .setSmallIcon(R.drawable.ic_notification)
@@ -890,7 +893,8 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
             // A live station: play/pause only, no next/previous.
             val playPauseIntent = pendingBroadcast(100, ACTION_PLAY_PAUSE)
             val playPauseIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-            val playPauseText = if (isPlaying) "Pause" else "Play"
+            val playPauseText = WidgetPrefs.localizedText(this, if (isPlaying)
+                R.string.native_music_action_pause else R.string.native_music_action_play)
             builder
                 .setSubText(null)
                 .addAction(playPauseIcon, playPauseText, playPauseIntent)
@@ -906,14 +910,17 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
             val nextIntent = pendingBroadcast(102, ACTION_NEXT)
 
             val playPauseIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-            val playPauseText = if (isPlaying) "Pause" else "Play"
+            val playPauseText = WidgetPrefs.localizedText(this, if (isPlaying)
+                R.string.native_music_action_pause else R.string.native_music_action_play)
 
             if (isCasting) {
                 val disconnectIntent = pendingBroadcast(105, ACTION_DISCONNECT_CAST)
                 builder
-                    .addAction(R.drawable.ic_previous, "Previous", prevIntent)
+                    .addAction(R.drawable.ic_previous,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_previous), prevIntent)
                     .addAction(playPauseIcon, playPauseText, playPauseIntent)
-                    .addAction(R.drawable.ic_cast, "Disconnect", disconnectIntent)
+                    .addAction(R.drawable.ic_cast,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_disconnect), disconnectIntent)
                     .setStyle(
                         MediaNotificationCompat.MediaStyle()
                             .setMediaSession(mediaSession.sessionToken)
@@ -922,9 +929,11 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
                     )
             } else {
                 builder
-                    .addAction(R.drawable.ic_previous, "Previous", prevIntent)
+                    .addAction(R.drawable.ic_previous,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_previous), prevIntent)
                     .addAction(playPauseIcon, playPauseText, playPauseIntent)
-                    .addAction(R.drawable.ic_next, "Next", nextIntent)
+                    .addAction(R.drawable.ic_next,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_next), nextIntent)
                     .setStyle(
                         MediaNotificationCompat.MediaStyle()
                             .setMediaSession(mediaSession.sessionToken)
@@ -940,19 +949,25 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
             val shuffleIntent = pendingBroadcast(104, ACTION_SHUFFLE)
 
             val playPauseIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-            val playPauseText = if (isPlaying) "Pause" else "Play"
+            val playPauseText = WidgetPrefs.localizedText(this, if (isPlaying)
+                R.string.native_music_action_pause else R.string.native_music_action_play)
             val favoriteIcon = if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
-            val favoriteText = if (isFavorite) "Unfavorite" else "Favorite"
+            val favoriteText = WidgetPrefs.localizedText(this, if (isFavorite)
+                R.string.native_music_action_unfavorite else R.string.native_music_action_favorite)
             val shuffleIcon = if (isShuffleMode) R.drawable.ic_shuffle_on else R.drawable.ic_shuffle
-            val shuffleText = if (isShuffleMode) "Shuffle On" else "Shuffle Off"
+            val shuffleText = WidgetPrefs.localizedText(this, if (isShuffleMode)
+                R.string.native_music_action_shuffle_on else R.string.native_music_action_shuffle_off)
 
             if (isCasting) {
                 val disconnectIntent = pendingBroadcast(105, ACTION_DISCONNECT_CAST)
                 builder
-                    .addAction(R.drawable.ic_previous, "Previous", prevIntent)
+                    .addAction(R.drawable.ic_previous,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_previous), prevIntent)
                     .addAction(playPauseIcon, playPauseText, playPauseIntent)
-                    .addAction(R.drawable.ic_next, "Next", nextIntent)
-                    .addAction(R.drawable.ic_cast, "Disconnect", disconnectIntent)
+                    .addAction(R.drawable.ic_next,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_next), nextIntent)
+                    .addAction(R.drawable.ic_cast,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_disconnect), disconnectIntent)
                     .setStyle(
                         MediaNotificationCompat.MediaStyle()
                             .setMediaSession(mediaSession.sessionToken)
@@ -961,9 +976,11 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
                     )
             } else {
                 builder
-                    .addAction(R.drawable.ic_previous, "Previous", prevIntent)
+                    .addAction(R.drawable.ic_previous,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_previous), prevIntent)
                     .addAction(playPauseIcon, playPauseText, playPauseIntent)
-                    .addAction(R.drawable.ic_next, "Next", nextIntent)
+                    .addAction(R.drawable.ic_next,
+                        WidgetPrefs.localizedText(this, R.string.native_music_action_next), nextIntent)
                     .addAction(shuffleIcon, shuffleText, shuffleIntent)
                     .addAction(favoriteIcon, favoriteText, favoriteIntent)
                     .setStyle(
