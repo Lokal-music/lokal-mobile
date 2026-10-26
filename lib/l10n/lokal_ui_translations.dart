@@ -1,5 +1,6 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Add a music folder": "Ajouter un dossier de musique",
   "Adjust video quality in the YouTube player.": "La qualité vidéo se règle dans le lecteur YouTube.",
   "Exit Space": "Quitter Space",
   "Use device volume buttons": "Utilisez les boutons de volume",
@@ -528,6 +529,7 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Add a music folder": "Musikordner hinzufügen",
   "Adjust video quality in the YouTube player.": "Die Videoqualität wird im YouTube-Player eingestellt.",
   "Exit Space": "Space verlassen",
   "Use device volume buttons": "Lautstärketasten verwenden",
@@ -1049,6 +1051,7 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Add a music folder": "Añadir una carpeta de música",
   "Adjust video quality in the YouTube player.": "La calidad del vídeo se ajusta en el reproductor de YouTube.",
   "Exit Space": "Salir de Space",
   "Use device volume buttons": "Usa los botones de volumen",
@@ -1578,6 +1581,7 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Add a music folder": "Aggiungi una cartella di musica",
   "Adjust video quality in the YouTube player.": "La qualità video si regola nel player di YouTube.",
   "Exit Space": "Esci da Space",
   "Use device volume buttons": "Usa i pulsanti del volume",
@@ -2109,6 +2113,7 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Add a music folder": "Adicionar uma pasta de música",
   "Adjust video quality in the YouTube player.": "A qualidade do vídeo é ajustada no player do YouTube.",
   "Exit Space": "Sair do Space",
   "Use device volume buttons": "Use os botões de volume",
@@ -2635,6 +2640,7 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Add a music folder": "Een muziekmap toevoegen",
   "Adjust video quality in the YouTube player.": "De videokwaliteit stel je in de YouTube-speler in.",
   "Exit Space": "Space verlaten",
   "Use device volume buttons": "Gebruik de volumeknoppen",
@@ -3173,6 +3179,7 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Add a music folder": "Dodaj folder z muzyką",
   "Adjust video quality in the YouTube player.": "Jakość wideo ustawia się w odtwarzaczu YouTube.",
   "Exit Space": "Wyjdź z Space",
   "Use device volume buttons": "Użyj przycisków głośności",
@@ -3701,6 +3708,7 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Add a music folder": "Lägg till en musikmapp",
   "Adjust video quality in the YouTube player.": "Videokvaliteten ställs in i YouTube-spelaren.",
   "Exit Space": "Lämna Space",
   "Use device volume buttons": "Använd volymknapparna",
@@ -4235,6 +4243,7 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Add a music folder": "添加音乐文件夹",
   "Adjust video quality in the YouTube player.": "请在 YouTube 播放器中调整视频画质。",
   "Exit Space": "退出 Space",
   "Use device volume buttons": "使用设备音量按钮",
@@ -4768,6 +4777,7 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Add a music folder": "Müzik klasörü ekle",
   "Adjust video quality in the YouTube player.": "Video kalitesi YouTube oynatıcısında ayarlanır.",
   "Exit Space": "Space’ten çık",
   "Use device volume buttons": "Cihazın ses düğmelerini kullanın",

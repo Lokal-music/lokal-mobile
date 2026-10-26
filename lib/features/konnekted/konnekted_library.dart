@@ -74,7 +74,7 @@ class KonnektedLibrary extends ConsumerWidget {
             row(Icons.playlist_add_rounded, 'Import M3U', 'm3u'),
             row(
               Icons.create_new_folder_rounded,
-              'Add a music folder',
+              lokalText('Add a music folder'),
               'folder',
             ),
           ],
@@ -137,7 +137,7 @@ class KonnektedLibrary extends ConsumerWidget {
               child: KonnektedMessage(
                 title: lokalText('Couldn’t open your collection'),
                 message: lokalText('Try again or manage your music folders.'),
-                actionLabel: 'Try again',
+                actionLabel: lokalText('Try again'),
                 onAction: () => ref.invalidate(songsProvider),
               ),
             )
@@ -149,7 +149,7 @@ class KonnektedLibrary extends ConsumerWidget {
                   'Choose a folder and let your collection take shape.',
                 ),
                 icon: Icons.library_music_rounded,
-                actionLabel: 'Add a music folder',
+                actionLabel: lokalText('Add a music folder'),
                 onAction: () => _addFolder(context),
               ),
             ),
@@ -226,7 +226,7 @@ class _Tiles extends ConsumerWidget {
                   width: width,
                   height: 58 * scale,
                   child: _Tile(
-                    label: label,
+                    label: lokalText(label),
                     icon: icon,
                     onTap: () => onNavigate(destination),
                   ),

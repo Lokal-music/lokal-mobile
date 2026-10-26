@@ -119,6 +119,10 @@ Future<void> probeLiveIosVideo(
       await video.releaseAudio().timeout(const Duration(seconds: 5));
       evidence['native_webkit_release_acknowledged'] = hadWebView;
       evidence['provider_error'] = video.embedErrorNotifier.value;
+    } catch (_) {
+      evidence['outcome'] = 'failed';
+      evidence['reason'] = 'Native WebKit release acknowledgement failed.';
+      rethrow;
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
       video.dispose();

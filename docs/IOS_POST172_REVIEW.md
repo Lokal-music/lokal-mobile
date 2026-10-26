@@ -395,3 +395,23 @@ warning/info findings and the historical unused-ARB-key failure remain. Native
 build 27 does not cover these subsequent changes. An opt-in live WebKit fixture
 records observable readiness/playback/seek/Space and release, or a clearly
 inconclusive provider/network result. See the current port continuation for scope.
+
+### Screenshot-driven Library localization follow-up
+
+The build-27 Turkish screenshot exposed six still-English Library shortcuts and
+an English empty-library import action. The translations already existed for the
+shortcuts, but the tile builder did not call the presentation lookup. The follow-up
+now localizes those six labels and import/retry actions while preserving navigation
+IDs. The import phrase is translated in all ten non-English Lokal maps.
+
+The affected Library/components/dock/live-locale selection passes **24** tests,
+including all six Turkish navigation targets and import at 320×568 with 200% text,
+then a return to English. The native harness also adds explicit assertions for the
+six translated labels. This follow-up is later than build 29's source and does not
+borrow its native acceptance. The existing historical ARB unused-key failure is
+unaffected.
+
+The Android full-debug ARM64 APK also builds on the #216/iPhone-referrer source,
+with the upstream resolver, USB registration and native transfer changes intact.
+Its SHA-256 is `107b3f93afb65d308e6f082b58866f59ae6e30d3b4539fa3b97eec5919abb1f4`.
+This is compile/package evidence, not a DAC, payload-fidelity or phone test.

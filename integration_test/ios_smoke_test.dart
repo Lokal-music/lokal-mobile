@@ -776,6 +776,10 @@ void main() {
       await tester.tap(find.byTooltip(lokalText('Library')));
       await tester.pump(const Duration(milliseconds: 750));
       expect(find.byType(KonnektedLibrary), findsOneWidget);
+      for (final label in ['Beğenildi', 'Çalma listeleri', 'Albümler',
+        'Sanatçılar', 'Türler', 'İndirilenler']) {
+        expect(find.text(label), findsOneWidget);
+      }
       expect(tester.takeException(), isNull, reason: startupErrors.join('\n'));
       await binding.takeScreenshot('ios-turkish-library');
       binding.reportData!['post201_live_turkish_locale'] = 'passed';
