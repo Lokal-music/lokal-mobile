@@ -74,6 +74,13 @@ class LyricsData {
   });
 }
 
+/// Last checked availability for an individual lyric provider on one song.
+class LyricsSourceHit {
+  final String status; // 'checking', 'hit', or 'miss'
+  final String? timing; // 'Syllable', 'Line', or 'Plain'
+  const LyricsSourceHit(this.status, [this.timing]);
+}
+
 class LyricsSaveResult {
   final LyricsData data;
   final String path;
@@ -101,6 +108,81 @@ class LyricsService {
   /// Where lyrics are looked up online (LRCLIB unless given).
   final OnlineLyricsService? online;
   final Map<String, LyricsData?> _cache = {};
+  // Shared across the player and the prefetcher's LyricsService instance.
+  // A source receives a green check only after usable lyrics were actually
+  // parsed for this recording; stale hits never carry over to another song.
+  static final ValueNotifier<int> sourceHitsRevision = ValueNotifier<int>(0);
+  static final Map<String, Map<String, LyricsSourceHit>> _sourceHits = {};
+  static final Map<String, DateTime> _sourceHitChecks = {};
+  static final Map<String, Future<void>> _sourceProbes = {};
+  static const _sourceHitTtl = Duration(minutes: 10);
+
+  static String _hitKey(Song song) =>
+      '${song.id}|${song.title}|${song.artist}|${song.duration.inMilliseconds}';
+
+  static LyricsSourceHit? sourceHitFor(Song song, String provider) =>
+      _sourceHits[_hitKey(song)]?[provider];
+
+  static void _setSourceHit(
+    Song song, String provider, LyricsSourceHit value,
+  ) {
+    final key = _hitKey(song);
+    if (!_sourceHits.containsKey(key) && _sourceHits.length >= 24) {
+      final oldest = _sourceHits.keys.first;
+      _sourceHits.remove(oldest);
+      _sourceHitChecks.remove(oldest);
+    }
+    final byProvider = _sourceHits.putIfAbsent(key, () => {});
+    byProvider[provider] = value;
+    sourceHitsRevision.value++;
+  }
+
+  /// Probe only when the chooser is opened. Three bounded workers, 10-minute
+  /// result reuse, no automatic network fanout for ordinary playback.
+  Future<void> probeSourceHits(Song song) {
+    final key = _hitKey(song);
+    final running = _sourceProbes[key];
+    if (running != null) return running;
+    final checked = _sourceHitChecks[key];
+    if (checked != null &&
+        DateTime.now().difference(checked) < _sourceHitTtl) {
+      return Future.value();
+    }
+    final ids = <String>['local', ...lyricsSources.keys];
+    for (final id in ids) {
+      _setSourceHit(song, id, const LyricsSourceHit('checking'));
+    }
+    final future = _probeSourceHits(song, ids);
+    _sourceProbes[key] = future;
+    return future.whenComplete(() { _sourceProbes.remove(key); });
+  }
+
+  Future<void> _probeSourceHits(Song song, List<String> ids) async {
+    var index = 0;
+    Future<void> worker() async {
+      while (index < ids.length) {
+        final id = ids[index++];
+        LyricsData? result;
+        try {
+          result = await (id == 'local'
+              ? loadLyricsForSong(song, source: 'local')
+              : fetchOnlineLyrics(song, source: id))
+              .timeout(const Duration(seconds: 20), onTimeout: () => null);
+        } catch (_) {}
+        _setSourceHit(song, id, result != null && result.lines.isNotEmpty
+            ? LyricsSourceHit(
+                'hit',
+                result.lines.any((l) => l.words?.isNotEmpty == true)
+                    ? 'Syllable'
+                    : result.isSynchronized ? 'Line' : 'Plain',
+              )
+            : const LyricsSourceHit('miss'));
+      }
+    }
+    await Future.wait(List.generate(3, (_) => worker()));
+    _sourceHitChecks[_hitKey(song)] = DateTime.now();
+  }
+
   static int _desktopRevision = 0;
   int _seenDesktopRevision = 0;
 
