@@ -125,6 +125,10 @@ class QueuePreResolver {
   final status = ValueNotifier<String?>(null);
 
   final _registered = <String, PendingResolve>{};
+  // Durable liked-song IDs may exceed the 500-entry discovery prefetch LRU.
+  // Keep their resolvers separate so a large Likes queue cannot invalidate
+  // the first song simply by registering its later entries.
+  final _savedSongResolvers = <String, PendingResolve>{};
   final _recent = <String, ({Song song, DateTime at})>{};
   final _running = <String, _Lookup>{};
   // Each stagger timer belongs to a specific upcoming song. Repeated queue
@@ -153,6 +157,11 @@ class QueuePreResolver {
     final path = song.filePath;
     return path != null && File(path).existsSync();
   }
+
+  /// Whether an already-pending track has a live registered lookup.
+  /// Search and Discovery pending tracks must keep their exact source choice.
+  bool hasResolver(String id) =>
+      _registered.containsKey(id) || _savedSongResolvers.containsKey(id);
 
   /// Placeholder ids being looked up right now (tests, diagnostics).
   Set<String> get running => Set.unmodifiable(_running.keys);
@@ -202,6 +211,9 @@ class QueuePreResolver {
   /// A placeholder for a song still to be found; [resolve] finds it.
   Song pending({
     required String key,
+    /// Preserve the durable song ID for saved Likes, so the heart status
+    /// remains attached to the same track after the source is re-resolved.
+    String? stableId,
     required String title,
     required String artist,
     String? album,
@@ -209,11 +221,15 @@ class QueuePreResolver {
     String? artwork,
     required PendingResolve resolve,
   }) {
-    final id = 'pending:$key';
-    _registered.remove(id);
-    _registered[id] = resolve;
-    while (_registered.length > _maxRegistered) {
-      _registered.remove(_registered.keys.first);
+    final id = stableId ?? 'pending:$key';
+    if (stableId != null) {
+      _savedSongResolvers[id] = resolve;
+    } else {
+      _registered.remove(id);
+      _registered[id] = resolve;
+      while (_registered.length > _maxRegistered) {
+        _registered.remove(_registered.keys.first);
+      }
     }
     return Song(
       id: id,
@@ -318,7 +334,8 @@ class QueuePreResolver {
         host.replacePending(id, ready);
         continue;
       }
-      if (!_registered.containsKey(id)) continue;
+      if (!_registered.containsKey(id) &&
+          !_savedSongResolvers.containsKey(id)) continue;
       if (_running.containsKey(id) || _timers.containsKey(id)) {
         // Respect its existing slot in the two-second stagger instead of
         // starting a newly revealed fourth track immediately alongside it.
@@ -413,7 +430,7 @@ class QueuePreResolver {
   }
 
   _Lookup? _start(String id, {required bool onDemand}) {
-    final resolve = _registered[id];
+    final resolve = _savedSongResolvers[id] ?? _registered[id];
     if (resolve == null) return null;
     final lookup = _Lookup(onDemand: onDemand);
     _running[id] = lookup;

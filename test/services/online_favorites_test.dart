@@ -54,6 +54,29 @@ void main() {
         isEmpty);
   });
 
+  test('liked online source and Atmos identity survive provider refresh', () async {
+    const streamed = Song(
+      id: 'tidal-atmos:1234', title: 'Spatial track', artist: 'Artist',
+      duration: Duration(minutes: 4), fileType: 'EAC3',
+      filePath: 'lokal-morneye-live://audio/dead-session',
+      sourcePackage: 'konnekted.morneye-live',
+      sourceDisplayName: 'Tidal',
+      atmosAvailable: true,
+      atmosEncoded: true,
+      isExternal: true,
+    );
+    final service = FavoritesService(songRepository: _Songs([]));
+    await service.addFavorite(streamed.id, song: streamed);
+    await service.addFavorite('another-id');
+    final reloaded = await FavoritesService(songRepository: _Songs([]))
+        .getFavorites();
+    final liked = reloaded.singleWhere((s) => s.id == streamed.id);
+    expect(liked.sourceDisplayName, 'Tidal');
+    expect(liked.atmosAvailable, isTrue);
+    expect(liked.atmosEncoded, isTrue);
+    expect(liked.filePath, contains('dead-session'));
+  });
+
   test('online metadata supplements but does not duplicate local liked songs', () async {
     const local = Song(
       id: 'local-1', title: 'Library song', artist: 'Artist',

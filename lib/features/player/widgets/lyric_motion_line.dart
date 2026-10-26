@@ -17,6 +17,7 @@ class LyricMotionLine extends StatefulWidget {
     this.unsung = const Color(0x6BFFFFFF),
     this.textAlign = TextAlign.start,
     this.timing = true,
+    this.lightweight = false,
   });
   final LyricsLine line;
   final Duration position;
@@ -24,6 +25,8 @@ class LyricMotionLine extends StatefulWidget {
   final Color sung, unsung;
   final TextAlign textAlign;
   final bool timing;
+  /// Fast subtitle path: clip timed syllables without GPU saveLayer/blur passes.
+  final bool lightweight;
   static TextPainter layout(
     BuildContext context,
     String text,
@@ -171,6 +174,7 @@ class _LyricMotionLineState extends State<LyricMotionLine> {
               MediaQuery.disableAnimationsOf(context) ||
                   LokalPerformanceScope.of(context),
               widget.style.fontSize ?? 24,
+              widget.lightweight,
             ),
           ),
         ),
@@ -187,12 +191,14 @@ class _LyricPainter extends CustomPainter {
     this.position,
     this.reduced,
     this.fontSize,
+    this.lightweight,
   );
   final TextPainter lit, dim;
   final List<_Run> runs;
   final Duration position;
   final bool reduced;
   final double fontSize;
+  final bool lightweight;
   static double smooth(double x) {
     final v = x.clamp(0.0, 1.0);
     return v * v * (3 - 2 * v);
@@ -216,13 +222,13 @@ class _LyricPainter extends CustomPainter {
           ? -1
           : (position - word.start).inMilliseconds;
       var p = (elapsed / span).clamp(0.0, 1.0);
-      var lift = word == null || reduced
+      var lift = word == null || reduced || lightweight
           ? 0.0
           : .06 * smooth(math.min(elapsed / 700, 1 - (elapsed - span) / 700));
       var scale = 1.0;
       if (run.letters > 0) {
         p = (p * run.letters - run.letter).clamp(0.0, 1.0);
-        if (!reduced) {
+        if (!reduced && !lightweight) {
           final phase = ((elapsed - run.letter * span * .09) / (span * 1.5))
               .clamp(0.0, 1.0);
           final k = phase < .25
@@ -252,7 +258,7 @@ class _LyricPainter extends CustomPainter {
         if (word != null && p > 0) {
           if (p >= 1) {
             lit.paint(canvas, Offset.zero);
-          } else if (reduced) {
+          } else if (reduced || lightweight) {
             final width = rect.width * p;
             canvas.clipRect(
               Rect.fromLTRB(
@@ -304,5 +310,6 @@ class _LyricPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LyricPainter old) =>
-      old.position != position || old.lit != lit || old.reduced != reduced;
+      old.position != position || old.lit != lit ||
+      old.reduced != reduced || old.lightweight != lightweight;
 }

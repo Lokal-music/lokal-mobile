@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'lokal_remote_provider.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,18 +48,13 @@ class FavoritesState {
 
 /// AsyncNotifier for favorites with autoDispose.
 class FavoritesNotifier extends AsyncNotifier<FavoritesState> {
-  @override
-  Future<FavoritesState> build() async {
-    // Keep the notification listener alive for every displayed favorite state.
-    // Attach it to the consumer, not to the service: the service must not
-    // rebuild just because a notification toggled a favorite.
-    ref.watch(favoriteNotificationSyncProvider);
-    final service = ref.watch(favoritesServiceProvider);
+  int _refreshGeneration = 0;
 
+  Future<FavoritesState> _loadState() async {
+    final service = ref.read(favoritesServiceProvider);
     final songs = await service.getFavorites();
     final ids = await service.getFavoriteIds();
     final likedRanks = await service.getFavoriteRanks();
-
     return FavoritesState(
       favoriteIds: ids,
       favoriteSongs: songs,
@@ -67,13 +63,57 @@ class FavoritesNotifier extends AsyncNotifier<FavoritesState> {
     );
   }
 
+  @override
+  Future<FavoritesState> build() async {
+    ref.watch(favoriteNotificationSyncProvider);
+    ref.watch(favoritesServiceProvider);
+    return _loadState();
+  }
+
+  /// A heart tap must not invalidate/unmount the entire Liked list while
+  /// its other playable rows and their queue callbacks are still visible.
+  /// Keep the last snapshot on screen until the committed new one is ready.
+  Future<void> _refreshAfterLike() async {
+    final generation = ++_refreshGeneration;
+    try {
+      final updated = await _loadState();
+      if (generation == _refreshGeneration && ref.mounted) {
+        state = AsyncData(updated);
+      }
+    } catch (_) {
+      // The heart write already succeeded. A transient DB/read error must
+      // neither turn that into a reported write failure nor remove the rows
+      // the user can still play. Retry with the last snapshot still visible.
+      if (generation == _refreshGeneration && ref.mounted) {
+        unawaited(_retryRefresh(generation));
+      }
+    }
+  }
+
+  Future<void> _retryRefresh(int generation) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await Future<void>.delayed(
+        Duration(milliseconds: 200 * (attempt + 1)),
+      );
+      if (!ref.mounted || generation != _refreshGeneration) return;
+      try {
+        final updated = await _loadState();
+        if (ref.mounted && generation == _refreshGeneration) {
+          state = AsyncData(updated);
+        }
+        return;
+      } catch (_) {
+        // A later Like starts a new snapshot generation and supersedes us.
+      }
+    }
+  }
+
   /// Toggle favorite status for a song.
   Future<bool> toggleFavorite(String songId, {Song? song}) async {
     final service = ref.read(favoritesServiceProvider);
     final isFavorite = await service.toggleFavorite(songId, song: song);
 
-    // Refresh state
-    ref.invalidateSelf();
+    await _refreshAfterLike();
 
     return isFavorite;
   }
@@ -82,21 +122,21 @@ class FavoritesNotifier extends AsyncNotifier<FavoritesState> {
   Future<void> addFavorite(String songId, {Song? song}) async {
     final service = ref.read(favoritesServiceProvider);
     await service.addFavorite(songId, song: song);
-    ref.invalidateSelf();
+    await _refreshAfterLike();
   }
 
   /// Remove a song from favorites.
   Future<void> removeFavorite(String songId) async {
     final service = ref.read(favoritesServiceProvider);
     await service.removeFavorite(songId);
-    ref.invalidateSelf();
+    await _refreshAfterLike();
   }
 
   /// Clear all favorites.
   Future<void> clearFavorites() async {
     final service = ref.read(favoritesServiceProvider);
     await service.clearFavorites();
-    ref.invalidateSelf();
+    await _refreshAfterLike();
   }
 }
 
