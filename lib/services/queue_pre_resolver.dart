@@ -202,6 +202,9 @@ class QueuePreResolver {
   /// A placeholder for a song still to be found; [resolve] finds it.
   Song pending({
     required String key,
+    /// Preserve the durable song ID for saved Likes, so the heart status
+    /// remains attached to the same track after the source is re-resolved.
+    String? stableId,
     required String title,
     required String artist,
     String? album,
@@ -209,7 +212,7 @@ class QueuePreResolver {
     String? artwork,
     required PendingResolve resolve,
   }) {
-    final id = 'pending:$key';
+    final id = stableId ?? 'pending:$key';
     _registered.remove(id);
     _registered[id] = resolve;
     while (_registered.length > _maxRegistered) {
