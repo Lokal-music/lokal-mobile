@@ -96,3 +96,10 @@ clock; unsynchronized lyrics must not acquire invented timestamps. The native
 harness now supplies local generated LRC lyrics and checks entering/leaving Space
 with the real player paused at a known position. That check passes on iOS 18.6 in build 24, with an actual screenshot; iOS 26
 and physical-device qualification remain pending.
+
+
+The current player follow-up includes PR #210's preserved artwork/Space overlay
+and a [controlled official-embed transport](IOS_VIDEO_TRANSPORT.md). The dedicated
+video clock and native WebKit release path are implemented with host/JavaScript
+contracts; live WebKit/video qualification is still pending. The earlier
+asynchronous-exit handoff is superseded by serialized external-output leases.

@@ -1,95 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flick/features/discovery/youtube_music_store.dart';
 import 'music_video_surface.dart';
 
-/// One clock and transport interface for the native video and the regular
-/// Full Player chrome/Space subtitles. Album playback has a separate clock.
-class Media3MusicVideoController {
-  final positionNotifier = ValueNotifier<Duration>(Duration.zero);
-  final durationNotifier = ValueNotifier<Duration>(Duration.zero);
-  final playingNotifier = ValueNotifier<bool>(false);
-  final nativeNotifier = ValueNotifier<bool>(true);
-  Future<void> Function(String, Map<String, Object?>)? _send;
-  Timer? _ticker;
-  DateTime? _sampleTime;
-  Duration _samplePosition = Duration.zero;
-  bool _buffering = true;
-
-  void attach(Future<void> Function(String, Map<String, Object?>) command) {
-    _send = command;
-  }
-
-  void detach() {
-    _send = null;
-    _ticker?.cancel();
-    _ticker = null;
-    playingNotifier.value = false;
-  }
-
-  void update({
-    required int positionMs,
-    required int durationMs,
-    required bool playing,
-    required bool buffering,
-  }) {
-    _sampleTime = DateTime.now();
-    _samplePosition = Duration(milliseconds: positionMs);
-    _buffering = buffering;
-    durationNotifier.value = Duration(milliseconds: durationMs);
-    playingNotifier.value = playing;
-    positionNotifier.value = _samplePosition;
-    _ticker ??= Timer.periodic(const Duration(milliseconds: 33), (_) {
-      if (!playingNotifier.value || _buffering || _sampleTime == null) return;
-      final projected = _samplePosition + DateTime.now().difference(_sampleTime!);
-      final duration = durationNotifier.value;
-      final capped = duration > Duration.zero && projected > duration
-          ? duration : projected;
-      positionNotifier.value = capped;
-    });
-  }
-
-  void fallback() {
-    nativeNotifier.value = false;
-    playingNotifier.value = false;
-    _ticker?.cancel();
-    _ticker = null;
-  }
-
-  void reset() {
-    _ticker?.cancel();
-    _ticker = null;
-    positionNotifier.value = Duration.zero;
-    durationNotifier.value = Duration.zero;
-    playingNotifier.value = false;
-    nativeNotifier.value = true;
-    _sampleTime = null;
-    _samplePosition = Duration.zero;
-    _buffering = true;
-  }
-
-  Future<void> command(String method, [Map<String, Object?> args = const {}]) async {
-    await _send?.call(method, args);
-  }
-
-  Future<void> togglePlayPause() => command(
-    playingNotifier.value ? 'pause' : 'play');
-  Future<void> seek(Duration position) => command(
-    'seek', {'positionMs': position.inMilliseconds});
-
-  void dispose() {
-    detach();
-    positionNotifier.dispose();
-    durationNotifier.dispose();
-    playingNotifier.dispose();
-    nativeNotifier.dispose();
-  }
-}
+import 'music_video_controller.dart';
+export 'music_video_controller.dart';
 
 /// Android's native Media3 player runs two tracks of this very same music
 /// video (audio-only + video-only), not Lokal's unrelated album recording.
@@ -125,12 +44,15 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
   double? _dragPosition;
   int _position = 0;
   int _duration = 0;
+  int? _controllerLease;
+  bool _releaseRequested = false;
+  Completer<void> _nativeCreated = Completer<void>();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    widget.controller?.attach(_command);
+    _controllerLease = widget.controller?.attach(_command);
     unawaited(_resolve());
   }
 
@@ -138,10 +60,13 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
   void didUpdateWidget(covariant Media3MusicVideoSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller?.detach();
-      widget.controller?.attach(_command);
+      oldWidget.controller?.detach(_controllerLease);
+      _controllerLease = widget.controller?.attach(_command);
     }
     if (oldWidget.videoId != widget.videoId) {
+      _controllerLease = widget.controller?.attach(_command);
+      _releaseRequested = false;
+      _nativeCreated = Completer<void>();
       widget.controller?.reset();
       _poller?.cancel();
       _watchdog?.cancel();
@@ -168,7 +93,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       final session = await YoutubeMusicSessionStore().read().catchError(
         (Object _) => null,
       );
-      if (!mounted || videoId != widget.videoId) return;
+      if (!mounted || _releaseRequested || videoId != widget.videoId) return;
       final result = await _resolver.invokeMapMethod<String, dynamic>(
         'resolveVideo', {
           'videoId': videoId,
@@ -178,7 +103,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
           },
         },
       ).timeout(const Duration(seconds: 55));
-      if (!mounted || videoId != widget.videoId) return;
+      if (!mounted || _releaseRequested || videoId != widget.videoId) return;
       final audio = Uri.tryParse(result?['audioUrl'] as String? ?? '');
       final video = Uri.tryParse(result?['videoUrl'] as String? ?? '');
       bool allowed(Uri? uri) => uri?.scheme == 'https' &&
@@ -206,6 +131,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
 
   void _created(int id) {
     _player = MethodChannel('lokal/media3_video/$id');
+    if (!_nativeCreated.isCompleted) _nativeCreated.complete();
     _poller?.cancel();
     unawaited(_refresh());
     _poller = Timer.periodic(const Duration(milliseconds: 400), (_) {
@@ -218,7 +144,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
     if (player == null || _fallback) return;
     try {
       final status = await player.invokeMapMethod<String, dynamic>('snapshot');
-      if (!mounted || player != _player) return;
+      if (!mounted || _fallback || _releaseRequested || player != _player) return;
       if (status?['error'] != null) {
         _poller?.cancel();
         setState(() => _fallback = true);
@@ -233,6 +159,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
         _position = (status?['positionMs'] as num?)?.toInt() ?? 0;
         _duration = (status?['durationMs'] as num?)?.toInt() ?? 0;
       });
+      if (widget.controller?.owns(_controllerLease) == false) return;
       widget.controller?.update(
         positionMs: _position,
         durationMs: _duration,
@@ -246,6 +173,16 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
   }
 
   Future<void> _command(String method, [Map<String, Object?> args = const {}]) async {
+    if (method == 'release') {
+      _releaseRequested = true;
+      // Await a native view already being created before acknowledging that its
+      // audio has yielded. Pending resolution cannot create a view after this.
+      if (_media != null && _player == null && !_fallback) {
+        await _nativeCreated.future.timeout(const Duration(seconds: 3));
+      }
+      await _player?.invokeMethod<Object?>('pause');
+      return;
+    }
     try {
       await _player?.invokeMethod<Object?>(method, args);
       if (mounted) unawaited(_refresh());
@@ -269,7 +206,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.controller?.detach();
+    widget.controller?.detach(_controllerLease);
     _poller?.cancel();
     _watchdog?.cancel();
     // Pause the native audio owner before Lokal optionally resumes song audio.
@@ -289,7 +226,7 @@ class _Media3MusicVideoSurfaceState extends State<Media3MusicVideoSurface>
       // An unavailable or expired native stream must remain watchable via
       // the official embed, rather than crash or leave a black stage.
       return MusicVideoSurface(key: ValueKey('youtube:${widget.videoId}'),
-          videoId: widget.videoId);
+          videoId: widget.videoId, controller: widget.controller);
     }
     if (_loading || _media == null) {
       return const ColoredBox(

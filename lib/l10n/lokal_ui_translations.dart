@@ -1,5 +1,9 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Exit Space": "Quitter Space",
+  "Use device volume buttons": "Utilisez les boutons de volume",
+  "Waiting for video timing": "En attente de la synchronisation vidéo",
+  "Video": "Vidéo",
   "Home": "Accueil",
   "All sources": "Toutes les sources",
   "Online": "En ligne",
@@ -519,6 +523,10 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Exit Space": "Space verlassen",
+  "Use device volume buttons": "Lautstärketasten verwenden",
+  "Waiting for video timing": "Warten auf die Videozeit",
+  "Video": "Video",
   "Home": "Startseite",
   "All sources": "Alle Quellen",
   "Online": "Online",
@@ -1031,6 +1039,10 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Exit Space": "Salir de Space",
+  "Use device volume buttons": "Usa los botones de volumen",
+  "Waiting for video timing": "Esperando la sincronización del vídeo",
+  "Video": "Vídeo",
   "Home": "Inicio",
   "All sources": "Todas las fuentes",
   "Online": "En línea",
@@ -1551,6 +1563,10 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Exit Space": "Esci da Space",
+  "Use device volume buttons": "Usa i pulsanti del volume",
+  "Waiting for video timing": "In attesa della sincronizzazione video",
+  "Video": "Video",
   "Home": "Home",
   "All sources": "Tutte le fonti",
   "Online": "Online",
@@ -2073,6 +2089,10 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Exit Space": "Sair do Space",
+  "Use device volume buttons": "Use os botões de volume",
+  "Waiting for video timing": "Aguardando a sincronização do vídeo",
+  "Video": "Vídeo",
   "Home": "Início",
   "All sources": "Todas as fontes",
   "Online": "Online",
@@ -2590,6 +2610,10 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Exit Space": "Space verlaten",
+  "Use device volume buttons": "Gebruik de volumeknoppen",
+  "Waiting for video timing": "Wachten op de videotiming",
+  "Video": "Video",
   "Home": "Start",
   "All sources": "Alle bronnen",
   "Online": "Online",
@@ -3119,6 +3143,10 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Exit Space": "Wyjdź z Space",
+  "Use device volume buttons": "Użyj przycisków głośności",
+  "Waiting for video timing": "Oczekiwanie na synchronizację wideo",
+  "Video": "Wideo",
   "Home": "Start",
   "All sources": "Wszystkie źródła",
   "Online": "Online",
@@ -3638,6 +3666,10 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Exit Space": "Lämna Space",
+  "Use device volume buttons": "Använd volymknapparna",
+  "Waiting for video timing": "Väntar på videons tidsinformation",
+  "Video": "Video",
   "Home": "Hem",
   "All sources": "Alla källor",
   "Online": "Online",
@@ -4163,6 +4195,10 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Exit Space": "退出 Space",
+  "Use device volume buttons": "使用设备音量按钮",
+  "Waiting for video timing": "正在等待视频时间信息",
+  "Video": "视频",
   "Home": "首页",
   "All sources": "所有来源",
   "Online": "在线",
@@ -4687,6 +4723,10 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Exit Space": "Space’ten çık",
+  "Use device volume buttons": "Cihazın ses düğmelerini kullanın",
+  "Waiting for video timing": "Video zamanlaması bekleniyor",
+  "Video": "Video",
   "Home": "Ana sayfa",
   "All sources": "Tüm kaynaklar",
   "Online": "Çevrimiçi",

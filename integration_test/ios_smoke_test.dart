@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -316,6 +317,39 @@ void main() {
     await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
+
+    // Controlled external-owner acknowledgements exercise the actual player
+    // queue and AVPlayer. This is ownership coverage, not YouTube acceptance.
+    final release = Completer<void>();
+    final lease = await player.acquireExternalPlayback(() => release.future);
+    final pendingResume = player.resume();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(player.isPlayingNotifier.value, false);
+    expect(lease.isReleased, false);
+    release.complete();
+    await pendingResume;
+    expect(lease.isReleased, true);
+    binding.reportData!['external_owner_ack_gates_actual_avplayer_resume_ms'] =
+        await _expectPlaybackProgress(tester, player);
+    await player.pause();
+
+    final delayedRelease = Completer<void>();
+    final pausedLease = await player.acquireExternalPlayback(
+      () => delayedRelease.future,
+    );
+    final beforeManualPause = player.playbackIntentRevision;
+    final releasing = pausedLease.release();
+    final manualPause = player.pause();
+    final staleAutoResume = player.resumeAfterExternalPlayback(
+      pausedLease,
+      song,
+      intentRevision: beforeManualPause,
+    );
+    delayedRelease.complete();
+    await Future.wait([releasing, manualPause, staleAutoResume]);
+    expect(player.isPlayingNotifier.value, false);
+    binding.reportData!['manual_pause_wins_over_stale_video_exit_resume'] =
+        'passed';
 
     // Repeat the queue/lyrics visit before dismissing: stale artwork anchors
     // after these temporary covers were the regression addressed by PR #174.

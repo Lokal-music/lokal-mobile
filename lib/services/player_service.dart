@@ -56,6 +56,7 @@ import 'package:flick/services/remote_source_service.dart';
 import 'package:flick/services/wav_stream_audio_source.dart';
 import 'package:flick/services/casting/casting_service.dart';
 import 'package:flick/services/playback_output_transition.dart';
+import 'package:flick/services/external_playback_owner.dart';
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/core/utils/dev_log.dart';
 
@@ -541,6 +542,8 @@ class PlayerService {
   final RustAudioService _rustAudioService = RustAudioService();
   final Uac2Service _uac2Service = Uac2Service.instance;
   final CastingService _castingService = CastingService.instance;
+  final ExternalPlaybackOwner _externalPlaybackOwner = ExternalPlaybackOwner();
+  int get playbackIntentRevision => _pendingPlaybackGeneration;
   bool get isCasting => _castingService.isActive;
   final ColorExtractionService _colorExtractionService =
       ColorExtractionService();
@@ -5510,6 +5513,12 @@ class PlayerService {
   ) {
     final result = Completer<T>();
     unawaited(_enqueuePlaybackRequest(() async {
+      try {
+        await _externalPlaybackOwner.releaseCurrent();
+      } catch (error, stack) {
+        result.completeError(error, stack);
+        return;
+      }
       final generation = _pendingPlaybackGeneration;
       final local = PlaybackOutputTransition(
         song: currentSongNotifier.value,
@@ -5535,6 +5544,39 @@ class PlayerService {
     return result.future;
   }
 
+  /// Claim video only after the previous output and local/Cast audio have
+  /// yielded. A newer user selection cancels the pending video acquisition.
+  Future<ExternalPlaybackLease> acquireExternalPlayback(
+    Future<void> Function() release,
+  ) {
+    final generation = _pendingPlaybackGeneration;
+    return runOutputTransition((local) async {
+      if (generation != _pendingPlaybackGeneration) {
+        throw StateError('Playback changed before video could take ownership.');
+      }
+      if (_castingService.isActive) {
+        await _castingService.delegatePause();
+      } else {
+        await local.pauseLocal();
+      }
+      if (generation != _pendingPlaybackGeneration) {
+        throw StateError('Playback changed before video could take ownership.');
+      }
+      return _externalPlaybackOwner.claim(release);
+    });
+  }
+
+  Future<void> resumeAfterExternalPlayback(
+    ExternalPlaybackLease lease, Song? expectedSong, {required int intentRevision}
+  ) {
+    return _enqueuePlaybackRequest(() async {
+      if (!lease.isReleased || !lease.isLatest ||
+          intentRevision != _pendingPlaybackGeneration ||
+          !identical(currentSongNotifier.value, expectedSong)) return;
+      await _resumeInternal(intentRevision: intentRevision);
+    });
+  }
+
   List<Song> _wrapAroundPlaylist(List<Song> songs, Song current) {
     final start = songs.indexWhere((s) => s.id == current.id);
     if (start <= 0) return songs;
@@ -5542,6 +5584,9 @@ class PlayerService {
   }
 
   Future<void> _playInternal(Song song, {List<Song>? playlist}) async {
+    final intent = _pendingPlaybackGeneration;
+    await _externalPlaybackOwner.releaseCurrent();
+    if (intent != _pendingPlaybackGeneration) return;
     await initAudio();
     final loadingGen = ++_networkLoadingGen;
     _markOnlinePreparation(song);
@@ -5996,6 +6041,7 @@ class PlayerService {
   }
 
   Future<void> _pauseInternal() async {
+    await _externalPlaybackOwner.releaseCurrent();
     if (_castingService.isActive) {
       await _castingService.delegatePause();
       return;
@@ -6027,10 +6073,14 @@ class PlayerService {
   }
 
   Future<void> resume() {
-    return _enqueuePlaybackRequest(_resumeInternal);
+    final intent = _pendingPlaybackGeneration;
+    return _enqueuePlaybackRequest(() => _resumeInternal(intentRevision: intent));
   }
 
-  Future<void> _resumeInternal() async {
+  Future<void> _resumeInternal({int? intentRevision}) async {
+    final intent = intentRevision ?? _pendingPlaybackGeneration;
+    await _externalPlaybackOwner.releaseCurrent();
+    if (intent != _pendingPlaybackGeneration) return;
     if (_castingService.isActive) {
       await _castingService.delegateResume();
       return;

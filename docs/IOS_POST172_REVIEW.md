@@ -280,7 +280,7 @@ unmerged iPhone Cast implementation, not an upstream main feature.
 | PR | Shared behavior carried into iPhone | Adaptation / validation |
 | --- | --- | --- |
 | #209 | Liked rows remain mounted during heart updates; expired add-on sessions become fresh registered lookups at playback/queue time; stable liked IDs, source/Atmos identity, local files and configured network libraries are retained. Large queues use a separate resolver registry. | No Android-only bridge is required by this repair. Host tests cover restored streams, retained live handles/downloaded/local/Subsonic sources, 650-track queues, source-specific resolvers, provider stability and Atmos preservation. Actual live add-on availability remains separate. |
-| #210 | Space is a subtitle overlay over the existing artwork/full cover/Canvas/video, with chrome hidden and carousel gestures disabled; tap exits and long press shows options. Video occupies the artwork slot; its controls and subtitles use its own clock. Syllable layout is cached. | Fix the upstream missing `ValueListenable` foundation import. Add an accessible Space exit surface. Native harness now asserts the actual artwork elements survive entry and the current generated lyric follows the retained song clock. The prior build-24 screenshot validates the older Space stage only; new overlay screenshots require the next source build. iPhone still uses the official embed fallback, whose outer transport/timing integration is follow-up work. |
+| #210 | Space is a subtitle overlay over the existing artwork/full cover/Canvas/video, with chrome hidden and carousel gestures disabled; tap exits and long press shows options. Video occupies the artwork slot; its controls and subtitles use its own clock. Syllable layout is cached. | Fix the upstream missing `ValueListenable` foundation import. Add an accessible Space exit surface. Native harness now asserts the actual artwork elements survive entry and the current generated lyric follows the retained song clock. The prior build-24 screenshot validates the older Space stage only; new overlay screenshots require the next source build. iPhone uses the official embed with a dedicated API clock/transport and serialized output ownership; live WebKit/video acceptance remains pending. |
 
 After the import correction, eight focused files pass **31 tests**, including
 both new PRs, timed subtitle eligibility/clock/rewind, artwork layout/morph and
@@ -288,3 +288,15 @@ video route/embed contracts. The native fixture retains its queue/lyrics,
 paused playback, artwork identity, current line and dismissal assertions.
 No Android native source changes in these two PRs supersede the recorded
 post-#207 Kotlin compilation; current shared Dart behavior is checked separately.
+
+
+The video follow-up now drives the official iframe through its own clock and
+transport, with an external-output lease serialized by PlayerService. Video uses
+a generic localized Video badge, not the album's FLAC/Atmos quality claim; volume
+instructions replace inactive album-only software-volume/shuffle/repeat controls,
+and the heart addresses the displayed video's song. Space exit, video timing,
+volume guidance and Video labels are supplied in all ten non-English Lokal maps.
+The expanded player/ownership/Cast/Likes/locale selection passes **123 tests**;
+the focused transport selection passes **41** (overlap). Node executes the actual
+production iframe bridge against a controlled API contract. Native WebKit/live
+YouTube checks remain separate; see `IOS_VIDEO_TRANSPORT.md`.
