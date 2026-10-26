@@ -148,7 +148,9 @@ class LyricsService {
         DateTime.now().difference(checked) < _sourceHitTtl) {
       return Future.value();
     }
-    final ids = <String>['local', ...lyricsSources.keys];
+    final ids = <String>['local', ...lyricsSources.keys]
+        .where((id) => _sourceHits[key]?[id]?.status != 'hit')
+        .toList();
     for (final id in ids) {
       _setSourceHit(song, id, const LyricsSourceHit('checking'));
     }
@@ -288,6 +290,13 @@ class LyricsService {
           return null;
         final parsed = _parseLyrics(text, source: lyricsSources[id] ?? id);
         if (parsed.lines.isEmpty) return null;
+        // Populate the chooser from lyrics the ordinary auto-lookup already
+        // found. Opening it should not re-fetch known successful providers.
+        _setSourceHit(song, id, LyricsSourceHit(
+          'hit',
+          parsed.lines.any((line) => line.words?.isNotEmpty == true)
+              ? 'Syllable' : parsed.isSynchronized ? 'Line' : 'Plain',
+        ));
         return parsed;
       } catch (_) {
         return null;
