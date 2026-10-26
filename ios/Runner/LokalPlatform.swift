@@ -117,6 +117,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
       case "libraryRoot": result(try? self?.libraryRoot().path)
       #if DEBUG
       case "castSenderState": result(self?.cast?.diagnosticState)
+      case "initializeCastSenderForAcceptance": result(self?.cast?.initializeForAcceptance())
       case "nowPlayingMetadataState":
         // Native acceptance probe only; no song names, paths or credentials.
         let metadata = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]

@@ -686,3 +686,43 @@ revalidates expired stream sources while preserving identity. Space now overlays
 the existing player artwork rather than opening a separate stage; the native
 harness has been updated to check the retained artwork elements and actual song
 clock. Its new native result is pending. See the audit for focused test evidence.
+
+
+### Build 26: Cast-integrated application and pause acknowledgement
+
+[Build 26](https://github.com/lokal-music/lokal-mobile/actions/runs/40286173853)
+compiles the Cast-integrated iOS 16 app, inspects all **34** device binaries and
+requires Cast core resources, privacy metadata and notice bundles. Its preserved
+IPA SHA-256 is `10cbfbbe68a851cca91529c842d6bc0d6c3152f0a61b21ea3fa39612b7de138d`.
+Exact source is `9c230b90f80e9536dd08b6d794a6485b057c0c44`, tree
+`c61258b7559dc23008008883dfa7e08d8d5fb959`.
+
+**The complete iOS 18.6 native suite passes**, including the actual registered
+Cast bridge with no startup discovery, remote HTTP artwork into native Now
+Playing, live Turkish switching, the full playback/DSP/codec corpus, source
+handoff, updated search/profile/panels and Bonjour. This source still contains
+the older pre-#210 Space stage; the current overlay is a subsequent change.
+
+The iOS 26 run passes startup/search/profile/Keychain, scanner/QuickJS, Space,
+EQ/pitch/ReplayGain, WavPack, MP3/AAC/ALAC/96 kHz FLAC/AIFF/Vorbis, then fails its
+Opus Pause assertion (UI remains playing after awaited Pause). Later checks are
+not reached. This is an application transport race, not a simulator boot failure,
+and the test assertion is retained.
+
+The native pause API previously returned on command enqueue. The iPhone path now
+waits up to two seconds for the command worker to apply pause; it releases the
+global engine mutex before waiting so synchronous UI queries remain available.
+The worker reply is bounded/non-blocking, and a timeout does not claim cancellation.
+Android's existing Pause path and all PCM/DSD/USB rendering logic remain unchanged.
+The iPhone Rust adapter suppresses stale playing/buffering notifications until a
+new explicit Play; failed pause restores actual backend state. The native harness
+also checks Rust's actual paused state and repeats Opus resume/pause.
+
+All **307 Rust tests pass**, including real command-worker acknowledgement and
+paused render silence, no-source completion, delayed reply and timeout behavior.
+Three targeted Dart tests pass for stale events, explicit resume and failure.
+The latest affected Dart selection passes **90** checks; the earlier broader
+player/Likes/locale selection passes **123** (overlap). New iPhone-native results
+remain pending the next source build. Google Cast's real context initialization
+without automatic discovery is also added as a DEBUG-only acceptance check;
+receiver behavior remains unqualified.

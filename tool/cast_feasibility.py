@@ -87,6 +87,7 @@ def main():
         'deployment_target': '16.0',
         'adapter_sha256': hashlib.sha256(adapter.read_bytes()).hexdigest(),
         'adapter_scope': 'Production sender transport compiled; not invoked by this probe',
+        'debug_acceptance_probes_compiled': True,
         'source_commit': os.environ.get('GITHUB_SHA'),
         'run_id': os.environ.get('GITHUB_RUN_ID'),
         'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
@@ -103,6 +104,7 @@ def main():
              '-sdk', sdk, '-destination', destination,
              '-derivedDataPath', str(derived), '-clonedSourcePackagesDirPath', str(root / 'packages'),
              'CODE_SIGNING_ALLOWED=NO', 'IPHONEOS_DEPLOYMENT_TARGET=16.0',
+             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG',
              'ONLY_ACTIVE_ARCH=YES', 'ARCHS=arm64', 'build'],
             cwd=root, log=root / f'build-{sdk}.log')
         products = derived / 'Build/Products'

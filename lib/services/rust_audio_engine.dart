@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flick/models/audio_engine_type.dart';
@@ -10,8 +11,8 @@ import 'package:flick/services/rust_audio_service.dart';
 typedef RustEngineInitializer = Future<void> Function();
 typedef RustEngineDisposer = Future<void> Function();
 typedef RustPlaybackPathResolver = Future<String?> Function(Song track);
-typedef RustHttpSourceResolver
-    = Future<({String url, Map<String, String> headers})?> Function(Song track);
+typedef RustHttpSourceResolver =
+    Future<({String url, Map<String, String> headers})?> Function(Song track);
 
 class RustAudioEngine implements AudioEngine {
   RustAudioEngine({
@@ -21,12 +22,14 @@ class RustAudioEngine implements AudioEngine {
     required RustPlaybackPathResolver resolvePlaybackPath,
     required RustEngineDisposer disposeEngine,
     RustHttpSourceResolver? resolveHttpSource,
-  })  : _playbackMode = playbackMode,
-        _rustAudioService = rustAudioService,
-        _ensureInitialized = ensureInitialized,
-        _resolvePlaybackPath = resolvePlaybackPath,
-        _disposeEngine = disposeEngine,
-        _resolveHttpSource = resolveHttpSource;
+    bool? guardPausedState,
+  }) : _playbackMode = playbackMode,
+       _rustAudioService = rustAudioService,
+       _ensureInitialized = ensureInitialized,
+       _resolvePlaybackPath = resolvePlaybackPath,
+       _disposeEngine = disposeEngine,
+       _resolveHttpSource = resolveHttpSource,
+       _guardPausedState = guardPausedState ?? Platform.isIOS;
 
   final AudioEngineType _playbackMode;
   final RustAudioService _rustAudioService;
@@ -34,6 +37,8 @@ class RustAudioEngine implements AudioEngine {
   final RustPlaybackPathResolver _resolvePlaybackPath;
   final RustEngineDisposer _disposeEngine;
   final RustHttpSourceResolver? _resolveHttpSource;
+  final bool _guardPausedState;
+  bool _pauseRequested = false;
 
   final StreamController<PlaybackState> _controller =
       StreamController<PlaybackState>.broadcast();
@@ -78,9 +83,10 @@ class RustAudioEngine implements AudioEngine {
     addListener(_rustAudioService.stateNotifier, () {
       final rustState = _rustAudioService.stateNotifier.value;
       final isPlaying =
-          rustState == RustPlaybackState.playing ||
-          rustState == RustPlaybackState.crossfading ||
-          rustState == RustPlaybackState.buffering;
+          !_pauseRequested &&
+          (rustState == RustPlaybackState.playing ||
+              rustState == RustPlaybackState.crossfading ||
+              rustState == RustPlaybackState.buffering);
       _emit(_state.copyWith(isPlaying: isPlaying));
     });
 
@@ -137,6 +143,7 @@ class RustAudioEngine implements AudioEngine {
 
   @override
   Future<void> play() async {
+    _pauseRequested = false;
     await _safeEnsureInitialized();
     _attachListeners();
     final track = _loadedTrack;
@@ -225,7 +232,26 @@ class RustAudioEngine implements AudioEngine {
   Future<void> pause() async {
     await _safeEnsureInitialized();
     _attachListeners();
-    await _rustAudioService.pause();
+    if (_guardPausedState) {
+      _pauseRequested = true;
+      _emit(_state.copyWith(isPlaying: false));
+    }
+    try {
+      await _rustAudioService.pause();
+      if (_guardPausedState) _emit(_state.copyWith(isPlaying: false));
+    } catch (_) {
+      _pauseRequested = false;
+      final state = _rustAudioService.stateNotifier.value;
+      _emit(
+        _state.copyWith(
+          isPlaying:
+              state == RustPlaybackState.playing ||
+              state == RustPlaybackState.crossfading ||
+              state == RustPlaybackState.buffering,
+        ),
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -259,12 +285,7 @@ class RustAudioEngine implements AudioEngine {
   @override
   void updateTrack(Song track) {
     _loadedTrack = track;
-    _emit(
-      _state.copyWith(
-        currentTrack: track,
-        duration: track.duration,
-      ),
-    );
+    _emit(_state.copyWith(currentTrack: track, duration: track.duration));
   }
 
   @override

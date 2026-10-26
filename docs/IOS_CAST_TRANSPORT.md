@@ -115,3 +115,10 @@ local/network/header-protected formats; play/pause/seek/volume/queue; unexpected
 disconnect and receiver-side changes; foreground/background restoration; and
 physical iPhone plus Windows sign/install/update testing. No receiver acceptance
 or qualified public release is claimed.
+
+
+The integrated build-26 iPhone package passes resource/notice/privacy inspection,
+and its full iOS 18.6 native suite passes. Cast bridge startup behavior is tested
+without starting discovery; actual SDK context initialization without scanning is
+added to the next DEBUG harness. iOS 26 fails at a later Rust Opus pause race; see
+the port's evidence ledger. Actual receiver acceptance remains pending.

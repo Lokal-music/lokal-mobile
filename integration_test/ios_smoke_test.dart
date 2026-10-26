@@ -32,6 +32,7 @@ import 'package:flick/features/morneye/morneye_bootstrap.dart';
 import 'package:flick/src/rust/api/morneye_api.dart';
 import 'package:flick/src/rust/api/scanner.dart' as scanner;
 import 'package:flick/src/rust/api/metadata_editor.dart' as tags;
+import 'package:flick/src/rust/api/audio_api.dart' as native_audio;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -133,6 +134,10 @@ void main() {
         .invokeMapMethod<String, dynamic>('castSenderState');
     expect(castAfter?['sdkInitialized'], false);
     expect(castAfter?['pendingRequests'], 0);
+    final castInitialized = await const MethodChannel('lokal/ios')
+        .invokeMapMethod<String, dynamic>('initializeCastSenderForAcceptance');
+    expect(castInitialized?['sdkInitialized'], true);
+    expect(castInitialized?['discoveryActive'], false);
 
     for (final destination in [
       (label: 'Library', type: KonnektedLibrary, screenshot: 'ios-library'),
@@ -214,6 +219,7 @@ void main() {
     binding.reportData = {
       ...?binding.reportData,
       'keychain_legacy_migration': 'passed',
+      'cast_lazy_startup_and_explicit_sdk_initialization': 'passed',
       'library_you_settings_navigation': 'passed',
       'post172_search_scopes_and_four_exclusive_filters': 'passed',
       'post172_profile_editor_above_dock': 'passed',
@@ -641,12 +647,35 @@ void main() {
       expect(player.currentEngineType, fixture.engine, reason: fixture.name);
       await player.pause();
       expect(player.isPlayingNotifier.value, false, reason: fixture.name);
+      if (fixture.engine == AudioEngineType.iosRust) {
+        expect(
+          native_audio.audioGetState(),
+          'paused',
+          reason: '${fixture.name} native pause acknowledgement',
+        );
+      }
       codecResults[fixture.name] = {
         'engine': player.currentEngineType.name,
         'source_sample_rate': metadata.newOrModified.single.sampleRate,
         'progress_ms': progress,
       };
     }
+    for (var cycle = 0; cycle < 2; cycle++) {
+      await player.resume();
+      await _expectPlaybackProgress(tester, player);
+      await player.pause();
+      expect(
+        player.isPlayingNotifier.value,
+        false,
+        reason: 'Opus pause cycle $cycle',
+      );
+      expect(
+        native_audio.audioGetState(),
+        'paused',
+        reason: 'Opus acknowledged pause $cycle',
+      );
+    }
+    binding.reportData!['opus_repeated_acknowledged_pause_resume'] = 'passed';
     // A system player's internal playlist can reach an unsupported codec
     // without calling PlayerService.play. Check the real auto-advance/error
     // handoff, rather than only explicitly selecting a Rust-only track.

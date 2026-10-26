@@ -9,6 +9,7 @@ final class LokalCastBridge: NSObject, FlutterStreamHandler {
 
   #if DEBUG
   var diagnosticState: [String: Any] { controller.diagnosticState }
+  func initializeForAcceptance() -> [String: Any] { controller.initializeForAcceptance() }
   #endif
 
   init(messenger: FlutterBinaryMessenger) {

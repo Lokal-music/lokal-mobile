@@ -27,8 +27,14 @@ final class LokalCastController: NSObject, GCKSessionManagerListener,
   private var requests: [UUID: LokalCastRequest] = [:]
 
   #if DEBUG
+  func initializeForAcceptance() -> [String: Any] {
+    _ = prepare()
+    return diagnosticState
+  }
+
   var diagnosticState: [String: Any] {
     ["sdkInitialized": context != nil, "pendingRequests": requests.count,
+     "discoveryActive": context?.discoveryManager.discoveryActive ?? false,
      "discoveryPending": discoveryReply != nil, "connectionPending": connectionReply != nil]
   }
   #endif

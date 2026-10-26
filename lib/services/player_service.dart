@@ -6061,15 +6061,21 @@ class PlayerService {
       );
       return;
     }
+    var pauseConfirmed = false;
     try {
       await _playbackManager.pause();
+      pauseConfirmed = true;
     } catch (e) {
       _debugLog('Pause failed: $e');
+      if (Platform.isIOS) {
+        onlinePlaybackError.value = 'Audio did not confirm Pause. Try again.';
+      }
     }
     await _refreshAudioOutputDiagnostics(
       reason: 'playback paused',
       activeSong: currentSongNotifier.value,
     );
+    if (Platform.isIOS && pauseConfirmed) isPlayingNotifier.value = false;
   }
 
   Future<void> resume() {
