@@ -277,7 +277,11 @@ class MainActivity: FlutterActivity() {
                             try {
                                 val stream = withContext(Dispatchers.IO) {
                                     if (call.method == "resolveVideo") {
-                                        YoutubeNativeResolver.resolveVideo(videoId, cookie, visitorData)
+                                        YoutubeNativeResolver.resolveVideo(
+                                            videoId, cookie, visitorData,
+                                            maxVideoHeight = (call.argument<Number>("maxVideoHeight")?.toInt()
+                                                ?: 1080).coerceIn(144, 2160),
+                                        )
                                     } else {
                                         YoutubeNativeResolver.resolveStream(videoId, cookie, visitorData)
                                     }
