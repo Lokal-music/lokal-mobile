@@ -1022,24 +1022,33 @@ class AndroidAudioEngine implements AudioEngine {
         // queue edits that do not trigger a player.load().
         while (valid()) {
           final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
-          if (outgoing.processingState == just_audio.ProcessingState.completed ||
-              remainingMs <= 0) {
+          if (outgoing.processingState == just_audio.ProcessingState.completed) {
             _crossfadeArmed = false; // normal end-of-track takes over
             return;
           }
+          // A slow add-on may become ready after the *analysed* audible end
+          // while the media element is still playing its silent tail. Start
+          // immediately in that case, but never start while paused.
           if (outgoing.playing && remainingMs <= fadeMs) break;
           await Future<void>.delayed(const Duration(milliseconds: 80));
         }
         if (!valid()) { releaseIfOwned(); return; }
 
-        final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
-        if (remainingMs <= 0) {
+        final physicalRemainingMs =
+            ((outgoing.duration ?? outgoingTrack.duration) - outgoing.position)
+                .inMilliseconds;
+        if (physicalRemainingMs <= 0) {
           _crossfadeArmed = false;
           return;
         }
-        // A slow remote prepare can shrink the usable overlap; never run a
-        // ramp longer than the audio left in the outgoing song.
-        final activeFadeMs = math.min(fadeMs, remainingMs);
+        final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
+        // When the cached audible endpoint has already passed, use the
+        // physically available silence rather than abandon the transition.
+        // Never schedule a ramp past the actual decoder's end.
+        final activeFadeMs = math.min(
+          fadeMs, remainingMs > 0 ? math.min(remainingMs, physicalRemainingMs)
+                                 : physicalRemainingMs,
+        );
         unawaited(
           incoming.play().catchError((Object error, StackTrace stackTrace) {
             devLog('[crossfade] incoming play() failed: $error');
