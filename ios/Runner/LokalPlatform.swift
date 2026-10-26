@@ -117,6 +117,11 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
         }
       case "libraryRoot": result(try? self?.libraryRoot().path)
       #if DEBUG
+      case "invalidateLocalAudioRequestsForIntegrationTest":
+        // Destructive final harness check, not a system media-daemon reset.
+        let previous = lokal_audio_local_request_epoch()
+        let epoch = lokal_audio_invalidate_local_requests()
+        result(["previous": String(previous), "epoch": String(epoch)])
       case "castSenderState": result(self?.cast?.diagnosticState)
       case "initializeCastSenderForAcceptance": result(self?.cast?.initializeForAcceptance())
       case "nowPlayingMetadataState":

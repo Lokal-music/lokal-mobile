@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A60000000000000000000001 /* LokalAudioLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000002 /* LokalAudioLifecycle.swift */; };
 		A50000000000000000000001 /* LokalCastBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000002 /* LokalCastBridge.swift */; };
 		A40000000000000000000001 /* LokalCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000002 /* LokalCastController.swift */; };
 		A30000000000000000000001 /* LokalDesktopDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000002 /* LokalDesktopDiscovery.swift */; };
@@ -47,6 +48,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A60000000000000000000002 /* LokalAudioLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokalAudioLifecycle.swift; sourceTree = "<group>"; };
 		A50000000000000000000002 /* LokalCastBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokalCastBridge.swift; sourceTree = "<group>"; };
 		A40000000000000000000002 /* LokalCastController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokalCastController.swift; sourceTree = "<group>"; };
 		A30000000000000000000002 /* LokalDesktopDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokalDesktopDiscovery.swift; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				A10000000000000000000002 /* LokalPlatform.swift */,
+				A60000000000000000000002 /* LokalAudioLifecycle.swift */,
 				A20000000000000000000002 /* LokalSpotifySession.swift */,
 				A40000000000000000000002 /* LokalCastController.swift */,
 				A50000000000000000000002 /* LokalCastBridge.swift */,
@@ -298,6 +301,7 @@
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				A10000000000000000000001 /* LokalPlatform.swift in Sources */,
+				A60000000000000000000001 /* LokalAudioLifecycle.swift in Sources */,
 				A20000000000000000000001 /* LokalSpotifySession.swift in Sources */,
 				A40000000000000000000001 /* LokalCastController.swift in Sources */,
 				A50000000000000000000001 /* LokalCastBridge.swift in Sources */,

@@ -217,21 +217,29 @@ Future<bool> audioIsDacAvailable({int? preferredSampleRate}) =>
     );
 
 /// Prepare the Rust audio engine for the requested output rate before playback starts.
-Future<void> audioPrepareEngine({int? preferredSampleRate}) =>
-    RustLib.instance.api.crateApiAudioApiAudioPrepareEngine(
-      preferredSampleRate: preferredSampleRate,
-    );
+Future<void> audioPrepareEngine({
+  int? preferredSampleRate,
+  BigInt? requestEpoch,
+}) => RustLib.instance.api.crateApiAudioApiAudioPrepareEngine(
+  preferredSampleRate: preferredSampleRate,
+  requestEpoch: requestEpoch,
+);
 
 Future<AudioProbeFormat> audioProbeFormat({required String path}) =>
     RustLib.instance.api.crateApiAudioApiAudioProbeFormat(path: path);
 
 /// Play an audio file.
-Future<void> audioPlay({required String path}) =>
-    RustLib.instance.api.crateApiAudioApiAudioPlay(path: path);
+Future<void> audioPlay({required String path, BigInt? requestEpoch}) => RustLib
+    .instance
+    .api
+    .crateApiAudioApiAudioPlay(path: path, requestEpoch: requestEpoch);
 
 /// Queue the next track for gapless playback.
-Future<void> audioQueueNext({required String path}) =>
-    RustLib.instance.api.crateApiAudioApiAudioQueueNext(path: path);
+Future<void> audioQueueNext({required String path, BigInt? requestEpoch}) =>
+    RustLib.instance.api.crateApiAudioApiAudioQueueNext(
+      path: path,
+      requestEpoch: requestEpoch,
+    );
 
 /// Play a remote audio stream over HTTP. Range-support is assumed (caller
 /// verifies `Accept-Ranges: bytes`); PCM only, no DSD/WavPack over HTTP.
@@ -240,37 +248,49 @@ Future<void> audioQueueNext({required String path}) =>
 Future<void> audioPlayFromHttp({
   required String url,
   required Map<String, String> headers,
+  BigInt? requestEpoch,
 }) => RustLib.instance.api.crateApiAudioApiAudioPlayFromHttp(
   url: url,
   headers: headers,
+  requestEpoch: requestEpoch,
 );
 
 /// Queue a remote HTTP stream as the next track for gapless playback.
 Future<void> audioQueueNextFromHttp({
   required String url,
   required Map<String, String> headers,
+  BigInt? requestEpoch,
 }) => RustLib.instance.api.crateApiAudioApiAudioQueueNextFromHttp(
   url: url,
   headers: headers,
+  requestEpoch: requestEpoch,
 );
 
 /// Pause playback.
-Future<void> audioPause() => RustLib.instance.api.crateApiAudioApiAudioPause();
+Future<void> audioPause({BigInt? requestEpoch}) =>
+    RustLib.instance.api.crateApiAudioApiAudioPause(requestEpoch: requestEpoch);
 
 /// Resume playback after pause.
-Future<void> audioResume() =>
-    RustLib.instance.api.crateApiAudioApiAudioResume();
+Future<void> audioResume({BigInt? requestEpoch}) => RustLib.instance.api
+    .crateApiAudioApiAudioResume(requestEpoch: requestEpoch);
 
 /// Stop playback completely.
-Future<void> audioStop() => RustLib.instance.api.crateApiAudioApiAudioStop();
+Future<void> audioStop({BigInt? requestEpoch}) =>
+    RustLib.instance.api.crateApiAudioApiAudioStop(requestEpoch: requestEpoch);
 
 /// Seek to a position in the current track.
-Future<void> audioSeek({required double positionSecs}) =>
-    RustLib.instance.api.crateApiAudioApiAudioSeek(positionSecs: positionSecs);
+Future<void> audioSeek({required double positionSecs, BigInt? requestEpoch}) =>
+    RustLib.instance.api.crateApiAudioApiAudioSeek(
+      positionSecs: positionSecs,
+      requestEpoch: requestEpoch,
+    );
 
 /// Set the playback volume.
-Future<void> audioSetVolume({required double volume}) =>
-    RustLib.instance.api.crateApiAudioApiAudioSetVolume(volume: volume);
+Future<void> audioSetVolume({required double volume, BigInt? requestEpoch}) =>
+    RustLib.instance.api.crateApiAudioApiAudioSetVolume(
+      volume: volume,
+      requestEpoch: requestEpoch,
+    );
 
 /// Set the effective ReplayGain (dB) for the current track and as the default
 /// for subsequently spawned sources (next track, seek re-spawn). 0.0 = off.
@@ -278,16 +298,24 @@ Future<void> audioSetVolume({required double volume}) =>
 /// Callers compute the final value — mode gain (track/album) + preamp +
 /// clipping-prevention reduction — before calling. The engine applies it as a
 /// per-source linear gain; a non-zero value forces the DSP path.
-Future<void> audioSetReplaygain({required double gainDb}) =>
-    RustLib.instance.api.crateApiAudioApiAudioSetReplaygain(gainDb: gainDb);
+Future<void> audioSetReplaygain({
+  required double gainDb,
+  BigInt? requestEpoch,
+}) => RustLib.instance.api.crateApiAudioApiAudioSetReplaygain(
+  gainDb: gainDb,
+  requestEpoch: requestEpoch,
+);
 
 /// Set only the spawn-time default ReplayGain (dB): the running source keeps
 /// its own gain while currently-playing. Used when pre-queueing the next
 /// gapless track, whose gain is stamped on the newly spawned source.
-Future<void> audioSetReplaygainDefault({required double gainDb}) => RustLib
-    .instance
-    .api
-    .crateApiAudioApiAudioSetReplaygainDefault(gainDb: gainDb);
+Future<void> audioSetReplaygainDefault({
+  required double gainDb,
+  BigInt? requestEpoch,
+}) => RustLib.instance.api.crateApiAudioApiAudioSetReplaygainDefault(
+  gainDb: gainDb,
+  requestEpoch: requestEpoch,
+);
 
 /// Set EQ: enabled, broadband preamp (dB) and a variable list of band specs
 /// (real per-type biquads, up to 31 bands). Graphic mode is expressed as 10
@@ -296,24 +324,32 @@ Future<void> audioSetEqualizer({
   required bool enabled,
   required double preampDb,
   required List<EqBandSpec> specs,
+  BigInt? requestEpoch,
 }) => RustLib.instance.api.crateApiAudioApiAudioSetEqualizer(
   enabled: enabled,
   preampDb: preampDb,
   specs: specs,
+  requestEpoch: requestEpoch,
 );
 
 /// Set BS2B crossfeed level for the native audio engine.
 /// 0 = Off, 1 = Default (BS2B middle preset), 2 = Crossfeed (high),
 /// 3 = Crossfeed easy (gentle). 0 fully bypasses processing.
-Future<void> audioSetCrossfeed({required int level}) =>
-    RustLib.instance.api.crateApiAudioApiAudioSetCrossfeed(level: level);
+Future<void> audioSetCrossfeed({required int level, BigInt? requestEpoch}) =>
+    RustLib.instance.api.crateApiAudioApiAudioSetCrossfeed(
+      level: level,
+      requestEpoch: requestEpoch,
+    );
 
 /// Set pitch shift in semitones for the native audio engine (tempo preserved).
 /// 0 = bypass. Range is clamped internally to ±12 semitones.
-Future<void> audioSetPitchShiftSemitones({required double semitones}) => RustLib
-    .instance
-    .api
-    .crateApiAudioApiAudioSetPitchShiftSemitones(semitones: semitones);
+Future<void> audioSetPitchShiftSemitones({
+  required double semitones,
+  BigInt? requestEpoch,
+}) => RustLib.instance.api.crateApiAudioApiAudioSetPitchShiftSemitones(
+  semitones: semitones,
+  requestEpoch: requestEpoch,
+);
 
 /// Configure compressor settings for the native audio engine.
 Future<void> audioSetCompressor({
@@ -323,6 +359,7 @@ Future<void> audioSetCompressor({
   required double attackMs,
   required double releaseMs,
   required double makeupGainDb,
+  BigInt? requestEpoch,
 }) => RustLib.instance.api.crateApiAudioApiAudioSetCompressor(
   enabled: enabled,
   thresholdDb: thresholdDb,
@@ -330,6 +367,7 @@ Future<void> audioSetCompressor({
   attackMs: attackMs,
   releaseMs: releaseMs,
   makeupGainDb: makeupGainDb,
+  requestEpoch: requestEpoch,
 );
 
 /// Configure limiter settings for the native audio engine.
@@ -338,11 +376,13 @@ Future<void> audioSetLimiter({
   required double inputGainDb,
   required double ceilingDb,
   required double releaseMs,
+  BigInt? requestEpoch,
 }) => RustLib.instance.api.crateApiAudioApiAudioSetLimiter(
   enabled: enabled,
   inputGainDb: inputGainDb,
   ceilingDb: ceilingDb,
   releaseMs: releaseMs,
+  requestEpoch: requestEpoch,
 );
 
 /// Configure spatial/time FX settings for the native audio engine.
@@ -357,6 +397,7 @@ Future<void> audioSetFx({
   required double mix,
   required double feedback,
   required double width,
+  BigInt? requestEpoch,
 }) => RustLib.instance.api.crateApiAudioApiAudioSetFx(
   enabled: enabled,
   balance: balance,
@@ -368,25 +409,33 @@ Future<void> audioSetFx({
   mix: mix,
   feedback: feedback,
   width: width,
+  requestEpoch: requestEpoch,
 );
 
 /// Enable/disable the impulse-response convolver and set its wet/dry mix
 /// (0.0 = dry, 1.0 = full IR).
-Future<void> audioSetConvolver({required bool enabled, required double mix}) =>
-    RustLib.instance.api.crateApiAudioApiAudioSetConvolver(
-      enabled: enabled,
-      mix: mix,
-    );
+Future<void> audioSetConvolver({
+  required bool enabled,
+  required double mix,
+  BigInt? requestEpoch,
+}) => RustLib.instance.api.crateApiAudioApiAudioSetConvolver(
+  enabled: enabled,
+  mix: mix,
+  requestEpoch: requestEpoch,
+);
 
 /// Decode an impulse-response file, resample it to the engine rate and load it
 /// into the convolver. Decoding runs on this thread (not the audio callback);
 /// a failure leaves the previously-loaded IR untouched.
-Future<void> audioLoadIr({required String path}) =>
-    RustLib.instance.api.crateApiAudioApiAudioLoadIr(path: path);
+Future<void> audioLoadIr({required String path, BigInt? requestEpoch}) =>
+    RustLib.instance.api.crateApiAudioApiAudioLoadIr(
+      path: path,
+      requestEpoch: requestEpoch,
+    );
 
 /// Drop any loaded IR and disable the convolver.
-Future<void> audioClearIr() =>
-    RustLib.instance.api.crateApiAudioApiAudioClearIr();
+Future<void> audioClearIr({BigInt? requestEpoch}) => RustLib.instance.api
+    .crateApiAudioApiAudioClearIr(requestEpoch: requestEpoch);
 
 /// Configure crossfade settings.
 ///
@@ -397,18 +446,25 @@ Future<void> audioClearIr() =>
 Future<void> audioSetCrossfade({
   required bool enabled,
   required double durationSecs,
+  BigInt? requestEpoch,
 }) => RustLib.instance.api.crateApiAudioApiAudioSetCrossfade(
   enabled: enabled,
   durationSecs: durationSecs,
+  requestEpoch: requestEpoch,
 );
 
 /// Skip to the next queued track.
-Future<void> audioSkipToNext() =>
-    RustLib.instance.api.crateApiAudioApiAudioSkipToNext();
+Future<void> audioSkipToNext({BigInt? requestEpoch}) => RustLib.instance.api
+    .crateApiAudioApiAudioSkipToNext(requestEpoch: requestEpoch);
 
 /// Set the playback speed.
-Future<void> audioSetPlaybackSpeed({required double speed}) =>
-    RustLib.instance.api.crateApiAudioApiAudioSetPlaybackSpeed(speed: speed);
+Future<void> audioSetPlaybackSpeed({
+  required double speed,
+  BigInt? requestEpoch,
+}) => RustLib.instance.api.crateApiAudioApiAudioSetPlaybackSpeed(
+  speed: speed,
+  requestEpoch: requestEpoch,
+);
 
 /// Get the current playback speed.
 double? audioGetPlaybackSpeed() =>
@@ -426,8 +482,13 @@ AudioEventType? audioPollEvent() =>
     RustLib.instance.api.crateApiAudioApiAudioPollEvent();
 
 /// Set the crossfade curve type.
-Future<void> audioSetCrossfadeCurve({required CrossfadeCurveType curve}) =>
-    RustLib.instance.api.crateApiAudioApiAudioSetCrossfadeCurve(curve: curve);
+Future<void> audioSetCrossfadeCurve({
+  required CrossfadeCurveType curve,
+  BigInt? requestEpoch,
+}) => RustLib.instance.api.crateApiAudioApiAudioSetCrossfadeCurve(
+  curve: curve,
+  requestEpoch: requestEpoch,
+);
 
 /// Get the audio engine's sample rate.
 int? audioGetSampleRate() =>
@@ -444,6 +505,11 @@ BigInt? audioGetChannels() =>
 /// Shutdown the audio engine.
 Future<void> audioShutdown() =>
     RustLib.instance.api.crateApiAudioApiAudioShutdown();
+
+/// Snapshot the iPhone native generation BEFORE submitting asynchronous work.
+/// The native lifecycle observer invalidates it before the event reaches Dart.
+BigInt audioLocalRequestEpoch() =>
+    RustLib.instance.api.crateApiAudioApiAudioLocalRequestEpoch();
 
 class AudioCapabilityInfo {
   final List<AudioCapabilityType> capabilities;

@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1051665677;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -2140998145;
 
 // Section: executor
 
@@ -796,10 +796,11 @@ fn wire__crate__api__audio_api__audio_clear_ir_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_clear_ir()?;
+                    let output_ok = crate::api::audio_api::audio_clear_ir(api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1283,13 +1284,44 @@ fn wire__crate__api__audio_api__audio_load_ir_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_path = <String>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_load_ir(api_path)?;
+                    let output_ok =
+                        crate::api::audio_api::audio_load_ir(api_path, api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
+        },
+    )
+}
+fn wire__crate__api__audio_api__audio_local_request_epoch_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "audio_local_request_epoch",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::audio_api::audio_local_request_epoch()?;
+                std::result::Result::Ok(output_ok)
+            })())
         },
     )
 }
@@ -1315,10 +1347,11 @@ fn wire__crate__api__audio_api__audio_pause_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_pause()?;
+                    let output_ok = crate::api::audio_api::audio_pause(api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1348,10 +1381,11 @@ fn wire__crate__api__audio_api__audio_play_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_path = <String>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_play(api_path)?;
+                    let output_ok = crate::api::audio_api::audio_play(api_path, api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1383,11 +1417,15 @@ fn wire__crate__api__audio_api__audio_play_from_http_impl(
             let api_url = <String>::sse_decode(&mut deserializer);
             let api_headers =
                 <std::collections::HashMap<String, String>>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::audio_api::audio_play_from_http(api_url, api_headers)?;
+                    let output_ok = crate::api::audio_api::audio_play_from_http(
+                        api_url,
+                        api_headers,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1446,11 +1484,14 @@ fn wire__crate__api__audio_api__audio_prepare_engine_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_preferred_sample_rate = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::audio_api::audio_prepare_engine(api_preferred_sample_rate)?;
+                    let output_ok = crate::api::audio_api::audio_prepare_engine(
+                        api_preferred_sample_rate,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1513,10 +1554,12 @@ fn wire__crate__api__audio_api__audio_queue_next_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_path = <String>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_queue_next(api_path)?;
+                    let output_ok =
+                        crate::api::audio_api::audio_queue_next(api_path, api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1548,11 +1591,15 @@ fn wire__crate__api__audio_api__audio_queue_next_from_http_impl(
             let api_url = <String>::sse_decode(&mut deserializer);
             let api_headers =
                 <std::collections::HashMap<String, String>>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::audio_api::audio_queue_next_from_http(api_url, api_headers)?;
+                    let output_ok = crate::api::audio_api::audio_queue_next_from_http(
+                        api_url,
+                        api_headers,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1581,10 +1628,11 @@ fn wire__crate__api__audio_api__audio_resume_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_resume()?;
+                    let output_ok = crate::api::audio_api::audio_resume(api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1614,10 +1662,12 @@ fn wire__crate__api__audio_api__audio_seek_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_position_secs = <f64>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_seek(api_position_secs)?;
+                    let output_ok =
+                        crate::api::audio_api::audio_seek(api_position_secs, api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1750,6 +1800,7 @@ fn wire__crate__api__audio_api__audio_set_compressor_impl(
             let api_attack_ms = <f32>::sse_decode(&mut deserializer);
             let api_release_ms = <f32>::sse_decode(&mut deserializer);
             let api_makeup_gain_db = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -1760,6 +1811,7 @@ fn wire__crate__api__audio_api__audio_set_compressor_impl(
                         api_attack_ms,
                         api_release_ms,
                         api_makeup_gain_db,
+                        api_request_epoch,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1791,11 +1843,15 @@ fn wire__crate__api__audio_api__audio_set_convolver_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_enabled = <bool>::sse_decode(&mut deserializer);
             let api_mix = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::audio_api::audio_set_convolver(api_enabled, api_mix)?;
+                    let output_ok = crate::api::audio_api::audio_set_convolver(
+                        api_enabled,
+                        api_mix,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1826,11 +1882,15 @@ fn wire__crate__api__audio_api__audio_set_crossfade_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_enabled = <bool>::sse_decode(&mut deserializer);
             let api_duration_secs = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::audio_api::audio_set_crossfade(api_enabled, api_duration_secs)?;
+                    let output_ok = crate::api::audio_api::audio_set_crossfade(
+                        api_enabled,
+                        api_duration_secs,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1861,10 +1921,14 @@ fn wire__crate__api__audio_api__audio_set_crossfade_curve_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_curve =
                 <crate::api::audio_api::CrossfadeCurveType>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_set_crossfade_curve(api_curve)?;
+                    let output_ok = crate::api::audio_api::audio_set_crossfade_curve(
+                        api_curve,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1894,10 +1958,12 @@ fn wire__crate__api__audio_api__audio_set_crossfeed_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_level = <u8>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_set_crossfeed(api_level)?;
+                    let output_ok =
+                        crate::api::audio_api::audio_set_crossfeed(api_level, api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2090,6 +2156,7 @@ fn wire__crate__api__audio_api__audio_set_equalizer_impl(
             let api_preamp_db = <f32>::sse_decode(&mut deserializer);
             let api_specs =
                 <Vec<crate::audio::equalizer::EqBandSpec>>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -2097,6 +2164,7 @@ fn wire__crate__api__audio_api__audio_set_equalizer_impl(
                         api_enabled,
                         api_preamp_db,
                         api_specs,
+                        api_request_epoch,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2136,6 +2204,7 @@ fn wire__crate__api__audio_api__audio_set_fx_impl(
             let api_mix = <f32>::sse_decode(&mut deserializer);
             let api_feedback = <f32>::sse_decode(&mut deserializer);
             let api_width = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -2150,6 +2219,7 @@ fn wire__crate__api__audio_api__audio_set_fx_impl(
                         api_mix,
                         api_feedback,
                         api_width,
+                        api_request_epoch,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2215,6 +2285,7 @@ fn wire__crate__api__audio_api__audio_set_limiter_impl(
             let api_input_gain_db = <f32>::sse_decode(&mut deserializer);
             let api_ceiling_db = <f32>::sse_decode(&mut deserializer);
             let api_release_ms = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -2223,6 +2294,7 @@ fn wire__crate__api__audio_api__audio_set_limiter_impl(
                         api_input_gain_db,
                         api_ceiling_db,
                         api_release_ms,
+                        api_request_epoch,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2284,11 +2356,14 @@ fn wire__crate__api__audio_api__audio_set_pitch_shift_semitones_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_semitones = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::audio_api::audio_set_pitch_shift_semitones(api_semitones)?;
+                    let output_ok = crate::api::audio_api::audio_set_pitch_shift_semitones(
+                        api_semitones,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2318,10 +2393,14 @@ fn wire__crate__api__audio_api__audio_set_playback_speed_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_speed = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_set_playback_speed(api_speed)?;
+                    let output_ok = crate::api::audio_api::audio_set_playback_speed(
+                        api_speed,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2351,10 +2430,14 @@ fn wire__crate__api__audio_api__audio_set_replaygain_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_gain_db = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_set_replaygain(api_gain_db)?;
+                    let output_ok = crate::api::audio_api::audio_set_replaygain(
+                        api_gain_db,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2384,11 +2467,14 @@ fn wire__crate__api__audio_api__audio_set_replaygain_default_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_gain_db = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::audio_api::audio_set_replaygain_default(api_gain_db)?;
+                    let output_ok = crate::api::audio_api::audio_set_replaygain_default(
+                        api_gain_db,
+                        api_request_epoch,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2482,10 +2568,12 @@ fn wire__crate__api__audio_api__audio_set_volume_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_volume = <f32>::sse_decode(&mut deserializer);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_set_volume(api_volume)?;
+                    let output_ok =
+                        crate::api::audio_api::audio_set_volume(api_volume, api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2546,10 +2634,11 @@ fn wire__crate__api__audio_api__audio_skip_to_next_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_skip_to_next()?;
+                    let output_ok = crate::api::audio_api::audio_skip_to_next(api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2578,10 +2667,11 @@ fn wire__crate__api__audio_api__audio_stop_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_request_epoch = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio_api::audio_stop()?;
+                    let output_ok = crate::api::audio_api::audio_stop(api_request_epoch)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -6191,311 +6281,311 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         35 => wire__crate__api__audio_api__audio_load_ir_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__audio_api__audio_pause_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__audio_api__audio_play_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__audio_api__audio_play_from_http_impl(
+        37 => wire__crate__api__audio_api__audio_pause_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__audio_api__audio_play_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__audio_api__audio_play_from_http_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__audio_api__audio_prepare_engine_impl(
+        41 => wire__crate__api__audio_api__audio_prepare_engine_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => {
+        42 => {
             wire__crate__api__audio_api__audio_probe_format_impl(port, ptr, rust_vec_len, data_len)
         }
-        42 => wire__crate__api__audio_api__audio_queue_next_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__audio_api__audio_queue_next_from_http_impl(
+        43 => wire__crate__api__audio_api__audio_queue_next_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__audio_api__audio_queue_next_from_http_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__audio_api__audio_resume_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__audio_api__audio_seek_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__audio_api__audio_set_compressor_impl(
+        45 => wire__crate__api__audio_api__audio_resume_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__audio_api__audio_seek_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__audio_api__audio_set_compressor_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => {
+        51 => {
             wire__crate__api__audio_api__audio_set_convolver_impl(port, ptr, rust_vec_len, data_len)
         }
-        51 => {
+        52 => {
             wire__crate__api__audio_api__audio_set_crossfade_impl(port, ptr, rust_vec_len, data_len)
         }
-        52 => wire__crate__api__audio_api__audio_set_crossfade_curve_impl(
+        53 => wire__crate__api__audio_api__audio_set_crossfade_curve_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => {
+        54 => {
             wire__crate__api__audio_api__audio_set_crossfeed_impl(port, ptr, rust_vec_len, data_len)
         }
-        59 => {
+        60 => {
             wire__crate__api__audio_api__audio_set_equalizer_impl(port, ptr, rust_vec_len, data_len)
         }
-        60 => wire__crate__api__audio_api__audio_set_fx_impl(port, ptr, rust_vec_len, data_len),
-        62 => {
+        61 => wire__crate__api__audio_api__audio_set_fx_impl(port, ptr, rust_vec_len, data_len),
+        63 => {
             wire__crate__api__audio_api__audio_set_limiter_impl(port, ptr, rust_vec_len, data_len)
         }
-        64 => wire__crate__api__audio_api__audio_set_pitch_shift_semitones_impl(
+        65 => wire__crate__api__audio_api__audio_set_pitch_shift_semitones_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__audio_api__audio_set_playback_speed_impl(
+        66 => wire__crate__api__audio_api__audio_set_playback_speed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__api__audio_api__audio_set_replaygain_impl(
+        67 => wire__crate__api__audio_api__audio_set_replaygain_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => wire__crate__api__audio_api__audio_set_replaygain_default_impl(
+        68 => wire__crate__api__audio_api__audio_set_replaygain_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => wire__crate__api__audio_api__audio_set_volume_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__audio_api__audio_shutdown_impl(port, ptr, rust_vec_len, data_len),
-        72 => {
+        71 => wire__crate__api__audio_api__audio_set_volume_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__audio_api__audio_shutdown_impl(port, ptr, rust_vec_len, data_len),
+        73 => {
             wire__crate__api__audio_api__audio_skip_to_next_impl(port, ptr, rust_vec_len, data_len)
         }
-        73 => wire__crate__api__audio_api__audio_stop_impl(port, ptr, rust_vec_len, data_len),
-        74 => {
+        74 => wire__crate__api__audio_api__audio_stop_impl(port, ptr, rust_vec_len, data_len),
+        75 => {
             wire__crate__api__scanner__check_deleted_paths_impl(port, ptr, rust_vec_len, data_len)
         }
-        75 => wire__crate__api__audio_api__clear_dsd_native_failure_impl(
+        76 => wire__crate__api__audio_api__clear_dsd_native_failure_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__api__audio_api__clear_dsd_track_rate_impl(
+        77 => wire__crate__api__audio_api__clear_dsd_track_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__audio_api__current_dsd_output_mode_impl(
+        78 => wire__crate__api__audio_api__current_dsd_output_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        78 => wire__crate__api__audio_api__current_dsd_source_channels_impl(
+        79 => wire__crate__api__audio_api__current_dsd_source_channels_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        79 => wire__crate__api__audio_api__current_dsd_track_rate_impl(
+        80 => wire__crate__api__audio_api__current_dsd_track_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__scanner__discover_playlist_files_impl(
+        81 => wire__crate__api__scanner__discover_playlist_files_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__api__audio_api__effective_dsd_output_mode_impl(
+        82 => wire__crate__api__audio_api__effective_dsd_output_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__crate__api__audio_api__effective_dsd_output_mode_for_rate_impl(
+        83 => wire__crate__api__audio_api__effective_dsd_output_mode_for_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__scanner__extract_embedded_artwork_impl(
+        84 => wire__crate__api__scanner__extract_embedded_artwork_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        84 => {
+        85 => {
             wire__crate__api__scanner__extract_file_metadata_impl(port, ptr, rust_vec_len, data_len)
         }
-        86 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__audio_api__last_dsd_native_failure_impl(
+        87 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__audio_api__last_dsd_native_failure_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__api__audio_api__last_volume_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__morneye_api__morneye_media_info_impl(
+        89 => wire__crate__api__audio_api__last_volume_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__morneye_api__morneye_media_info_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__replaygain__read_replaygain_tags_impl(
+        94 => wire__crate__api__replaygain__read_replaygain_tags_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__metadata_editor__read_tags_impl(port, ptr, rust_vec_len, data_len),
-        95 => wire__crate__api__logging__register_log_sink_impl(port, ptr, rust_vec_len, data_len),
-        96 => wire__crate__api__scanner__scan_music_library_impl(port, ptr, rust_vec_len, data_len),
-        97 => wire__crate__api__scanner__scan_root_dir_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__api__audio_api__set_dsd_source_channels_impl(
+        95 => wire__crate__api__metadata_editor__read_tags_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__logging__register_log_sink_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__scanner__scan_music_library_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__scanner__scan_root_dir_impl(port, ptr, rust_vec_len, data_len),
+        99 => wire__crate__api__audio_api__set_dsd_source_channels_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => {
+        100 => {
             wire__crate__api__audio_api__set_dsd_track_rate_impl(port, ptr, rust_vec_len, data_len)
         }
-        100 => wire__crate__api__audio_api__set_pending_crossfade_impl(
+        101 => wire__crate__api__audio_api__set_pending_crossfade_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__api__audio_api__set_pending_crossfade_curve_impl(
+        102 => wire__crate__api__audio_api__set_pending_crossfade_curve_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        102 => wire__crate__api__audio_api__set_pending_crossfeed_impl(
+        103 => wire__crate__api__audio_api__set_pending_crossfeed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__api__audio_api__set_pending_equalizer_impl(
+        104 => wire__crate__api__audio_api__set_pending_equalizer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => {
+        105 => {
             wire__crate__api__audio_api__set_pending_volume_impl(port, ptr, rust_vec_len, data_len)
         }
-        105 => wire__crate__api__smb_api__smb_download_file_impl(port, ptr, rust_vec_len, data_len),
-        106 => wire__crate__api__smb_api__smb_list_share_impl(port, ptr, rust_vec_len, data_len),
-        107 => wire__crate__api__smb_api__smb_ping_impl(port, ptr, rust_vec_len, data_len),
-        108 => wire__crate__api__smb_api__smb_read_file_impl(port, ptr, rust_vec_len, data_len),
-        109 => wire__crate__api__audio_api__take_pending_crossfade_impl(
+        106 => wire__crate__api__smb_api__smb_download_file_impl(port, ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__smb_api__smb_list_share_impl(port, ptr, rust_vec_len, data_len),
+        108 => wire__crate__api__smb_api__smb_ping_impl(port, ptr, rust_vec_len, data_len),
+        109 => wire__crate__api__smb_api__smb_read_file_impl(port, ptr, rust_vec_len, data_len),
+        110 => wire__crate__api__audio_api__take_pending_crossfade_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        110 => wire__crate__api__audio_api__take_pending_crossfeed_impl(
+        111 => wire__crate__api__audio_api__take_pending_crossfeed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => wire__crate__api__audio_api__take_pending_equalizer_impl(
+        112 => wire__crate__api__audio_api__take_pending_equalizer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        112 => {
+        113 => {
             wire__crate__api__audio_api__take_pending_volume_impl(port, ptr, rust_vec_len, data_len)
         }
-        113 => wire__crate__api__uac2_api__uac2_activate_fallback_impl(
+        114 => wire__crate__api__uac2_api__uac2_activate_fallback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        114 => wire__crate__api__uac2_api__uac2_attempt_reconnect_impl(
+        115 => wire__crate__api__uac2_api__uac2_attempt_reconnect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        115 => wire__crate__api__uac2_api__uac2_deactivate_fallback_impl(
+        116 => wire__crate__api__uac2_api__uac2_deactivate_fallback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        116 => wire__crate__api__uac2_api__uac2_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        119 => wire__crate__api__uac2_api__uac2_get_device_capabilities_impl(
+        117 => wire__crate__api__uac2_api__uac2_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        120 => wire__crate__api__uac2_api__uac2_get_device_capabilities_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        124 => wire__crate__api__uac2_api__uac2_get_volume_range_impl(
+        125 => wire__crate__api__uac2_api__uac2_get_volume_range_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        128 => {
+        129 => {
             wire__crate__api__uac2_api__uac2_select_device_impl(port, ptr, rust_vec_len, data_len)
         }
-        129 => wire__crate__api__uac2_api__uac2_set_auto_reconnect_impl(
+        130 => wire__crate__api__uac2_api__uac2_set_auto_reconnect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        130 => wire__crate__api__uac2_api__uac2_set_mute_impl(port, ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__uac2_api__uac2_set_sampling_frequency_impl(
+        131 => wire__crate__api__uac2_api__uac2_set_mute_impl(port, ptr, rust_vec_len, data_len),
+        132 => wire__crate__api__uac2_api__uac2_set_sampling_frequency_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        132 => wire__crate__api__uac2_api__uac2_set_volume_impl(port, ptr, rust_vec_len, data_len),
-        133 => {
+        133 => wire__crate__api__uac2_api__uac2_set_volume_impl(port, ptr, rust_vec_len, data_len),
+        134 => {
             wire__crate__api__uac2_api__uac2_start_streaming_impl(port, ptr, rust_vec_len, data_len)
         }
-        134 => {
+        135 => {
             wire__crate__api__uac2_api__uac2_stop_streaming_impl(port, ptr, rust_vec_len, data_len)
         }
-        135 => wire__crate__api__metadata_editor__write_cover_art_impl(
+        136 => wire__crate__api__metadata_editor__write_cover_art_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        136 => wire__crate__api__metadata_editor__write_cover_art_to_temp_impl(
+        137 => wire__crate__api__metadata_editor__write_cover_art_to_temp_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        137 => wire__crate__api__replaygain__write_replaygain_tags_impl(
+        138 => wire__crate__api__replaygain__write_replaygain_tags_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        138 => {
+        139 => {
             wire__crate__api__metadata_editor__write_tags_impl(port, ptr, rust_vec_len, data_len)
         }
-        139 => wire__crate__api__metadata_editor__write_tags_to_temp_impl(
+        140 => wire__crate__api__metadata_editor__write_tags_to_temp_impl(
             port,
             ptr,
             rust_vec_len,
@@ -6580,82 +6670,85 @@ fn pde_ffi_dispatcher_sync_impl(
         34 => {
             wire__crate__api__audio_api__audio_is_native_available_impl(ptr, rust_vec_len, data_len)
         }
-        39 => wire__crate__api__audio_api__audio_poll_event_impl(ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__audio_api__audio_set_432hz_tuning_enabled_impl(
+        36 => {
+            wire__crate__api__audio_api__audio_local_request_epoch_impl(ptr, rust_vec_len, data_len)
+        }
+        40 => wire__crate__api__audio_api__audio_poll_event_impl(ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__audio_api__audio_set_432hz_tuning_enabled_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__audio_api__audio_set_audio_api_impl(ptr, rust_vec_len, data_len),
-        48 => {
+        48 => wire__crate__api__audio_api__audio_set_audio_api_impl(ptr, rust_vec_len, data_len),
+        49 => {
             wire__crate__api__audio_api__audio_set_capability_info_impl(ptr, rust_vec_len, data_len)
         }
-        54 => wire__crate__api__audio_api__audio_set_dap_bit_perfect_enabled_impl(
+        55 => wire__crate__api__audio_api__audio_set_dap_bit_perfect_enabled_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__audio_api__audio_set_dsd_big_endian_override_impl(
+        56 => wire__crate__api__audio_api__audio_set_dsd_big_endian_override_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__audio_api__audio_set_dsd_bit_reverse_override_impl(
+        57 => wire__crate__api__audio_api__audio_set_dsd_bit_reverse_override_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => {
+        58 => {
             wire__crate__api__audio_api__audio_set_dsd_output_mode_impl(ptr, rust_vec_len, data_len)
         }
-        58 => wire__crate__api__audio_api__audio_set_dsd_subslot_override_impl(
+        59 => wire__crate__api__audio_api__audio_set_dsd_subslot_override_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => {
+        62 => {
             wire__crate__api__audio_api__audio_set_high_res_mode_impl(ptr, rust_vec_len, data_len)
         }
-        63 => wire__crate__api__audio_api__audio_set_pipeline_mode_passthrough_impl(
+        64 => wire__crate__api__audio_api__audio_set_pipeline_mode_passthrough_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__audio_api__audio_set_sas_wire_grouping_impl(
+        69 => wire__crate__api__audio_api__audio_set_sas_wire_grouping_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__api__audio_api__audio_set_sas_wire_variant_impl(
+        70 => wire__crate__api__audio_api__audio_set_sas_wire_variant_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__morneye_api__morneye_cipher_impl(ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__morneye_api__morneye_open_impl(ptr, rust_vec_len, data_len),
-        92 => wire__crate__api__morneye_api__morneye_seal_impl(ptr, rust_vec_len, data_len),
-        117 => wire__crate__api__uac2_api__uac2_force_release_usb_session_impl(
+        86 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__morneye_api__morneye_cipher_impl(ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__morneye_api__morneye_open_impl(ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__morneye_api__morneye_seal_impl(ptr, rust_vec_len, data_len),
+        118 => wire__crate__api__uac2_api__uac2_force_release_usb_session_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        118 => {
+        119 => {
             wire__crate__api__uac2_api__uac2_get_connection_state_impl(ptr, rust_vec_len, data_len)
         }
-        120 => wire__crate__api__uac2_api__uac2_get_fallback_info_impl(ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__uac2_api__uac2_get_mute_impl(ptr, rust_vec_len, data_len),
-        122 => wire__crate__api__uac2_api__uac2_get_sampling_frequency_impl(
+        121 => wire__crate__api__uac2_api__uac2_get_fallback_info_impl(ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__uac2_api__uac2_get_mute_impl(ptr, rust_vec_len, data_len),
+        123 => wire__crate__api__uac2_api__uac2_get_sampling_frequency_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        123 => wire__crate__api__uac2_api__uac2_get_volume_impl(ptr, rust_vec_len, data_len),
-        125 => wire__crate__api__uac2_api__uac2_is_available_impl(ptr, rust_vec_len, data_len),
-        126 => {
+        124 => wire__crate__api__uac2_api__uac2_get_volume_impl(ptr, rust_vec_len, data_len),
+        126 => wire__crate__api__uac2_api__uac2_is_available_impl(ptr, rust_vec_len, data_len),
+        127 => {
             wire__crate__api__uac2_api__uac2_is_usb_session_active_impl(ptr, rust_vec_len, data_len)
         }
-        127 => wire__crate__api__uac2_api__uac2_list_devices_impl(ptr, rust_vec_len, data_len),
+        128 => wire__crate__api__uac2_api__uac2_list_devices_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

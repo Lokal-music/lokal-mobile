@@ -796,6 +796,23 @@ void main() {
     if (const bool.fromEnvironment('LOKAL_IOS_VIDEO_PROBE')) {
       await probeLiveIosVideo(tester, binding);
     }
+    // Final destructive fence check: Swift's direct C ABI and Dart's FRB API
+    // must share the same counter. This is not full media-reset recovery.
+    await player.pause();
+    final previousEpoch = native_audio.audioLocalRequestEpoch();
+    final fence = await const MethodChannel('lokal/ios')
+        .invokeMapMethod<String, dynamic>('invalidateLocalAudioRequestsForIntegrationTest');
+    final advancedEpoch = BigInt.parse(fence!['epoch'] as String);
+    expect(BigInt.parse(fence['previous'] as String), previousEpoch);
+    expect(advancedEpoch, previousEpoch + BigInt.one);
+    expect(native_audio.audioLocalRequestEpoch(), advancedEpoch);
+    await expectLater(
+      native_audio.audioResume(requestEpoch: previousEpoch),
+      throwsA(predicate((Object error) =>
+          error.toString().contains('AUDIO_LOCAL_REQUEST_RETIRED'))),
+    );
+    await native_audio.audioShutdown();
+    binding.reportData!['native_swift_frb_request_fence'] = 'passed';
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();
   }, timeout: const Timeout(Duration(minutes:

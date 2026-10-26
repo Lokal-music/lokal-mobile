@@ -1,9 +1,11 @@
 # iPhone media-services reset recovery
 
-Status: researched architecture, 26 October 2026 (Europe/Paris). **Not implemented
-or qualified.** Ordinary interruption and build-27 playback tests do not establish
-reset recovery. This design is the next local-playback lifecycle task; it must not
-be described as a current app feature.
+Status: implementation in progress, 26 October 2026 (Europe/Paris). **Not enabled
+or qualified.** The request fence, scoped Rust/DSP callers, retirement coordinator,
+pending-attachment guards and deferred Swift observer now exist in the recovery
+candidate. The observer is deliberately not instantiated until PlayerService,
+radio, video and session/UI cleanup are connected. Ordinary interruption and
+build-27 playback tests do not establish reset recovery.
 
 Apple's [media-services reset contract](https://developer.apple.com/documentation/avfaudio/avaudiosession/mediaserviceswereresetnotification)
 requires orphaned audio objects and session configuration to be recreated, without
@@ -33,7 +35,7 @@ stateDiagram-v2
   Paused --> Ready: explicit Play / new selection recreates the intended backend
   Paused --> Recovering: another reset
   Recovering --> Recovering: coalesce a newer reset generation
-  Blocked --> Recovering: safe retry with retained cleanup ownership
+  Blocked --> Ready: app restart / fresh native process
 ```
 
 Lost blocks new phone output immediately and clears interruption auto-resume,
@@ -60,9 +62,12 @@ that does no I/O and does not wait on the global engine mutex. Each iOS request
 that can create or resume local output must carry its expected generation,
 captured **in Dart before submitting the FFI call**. Capturing it only at the start
 of the Rust worker misses requests queued before Reset but executed afterwards.
-A new bridge entrypoint and affected optional request parameters will require
-pinned FRB regeneration and Android compilation; do not edit generated bindings
-manually or hide a token in an unrelated argument.
+The candidate adds a synchronous epoch getter and optional generation parameters
+to 25 asynchronous mutators; pinned FRB 2.13.0 regeneration produces 140
+entrypoints. iOS rejects missing generations; Android's existing unscoped callers
+retain their behavior. Generator-owned bindings are not edited manually. FRB's
+unneeded build_runner phase is disabled so it cannot remove the unrelated tracked
+Isar/Riverpod outputs.
 
 Validate that generation before and after expensive probes, inside engine
 creation/attachment critical sections, and before enqueueing playback or queue
@@ -136,3 +141,28 @@ Do not open a replacement output because a Dart timeout expired.
    playing and paused system/Rust/radio/video, repeated resets and denied cleanup.
 
 Until those gates pass, retain the honest unimplemented status in the port plan.
+
+## Current candidate evidence
+
+- **314 Rust tests pass**, including delayed/queued requests, mutation-drain
+  races, generation exhaustion, nested fallback and unconfirmed-cleanup fencing.
+- **21 focused Flutter tests pass**, including the eight lifecycle scenarios,
+  five pending-attachment/cleanup cases, failed source replacement, Rust paused
+  state, retired HTTP resolution and pending initialization, and iOS DSP choice.
+- Whole `lib`/integration analysis reports **no errors**, with the existing 562
+  warnings/information items. This is not a complete-Flutter-suite-green claim.
+- Swift calls the atomic functions through C declarations in the Runner bridging
+  header. The next native acceptance run must prove actual Swift/FRB counter
+  agreement and rejection of an old generation through a DEBUG-only final probe.
+  That destructive fence probe is not a posted notification or daemon reset.
+- Native notification subscription and full owner reconstruction are still
+  pending. No hosted build or physical reset pass is claimed for this candidate.
+
+The changed native library also compiles for Android ARM64 using the real pinned
+NDK through Cargokit (`BUILD SUCCESSFUL`). Android CI remains manually disabled;
+this is compilation evidence, not a USB/DAC or physical-device acceptance pass.
+
+A broader **30-test** selection also passes lifecycle retirement, player output
+transitions, Android session fallback and Rust paused/retired wrappers (overlaps
+the 21 above). Re-running pinned bridge generation leaves all three generated
+audio/bridge files byte-for-byte identical.

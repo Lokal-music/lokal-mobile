@@ -1,4 +1,7 @@
+import 'package:flick/services/ios_local_audio_requests.dart';
+
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flick/src/rust/api/audio_api.dart' as rust_audio;
 import 'package:flick/src/rust/audio/engine.dart' show AudioApiPreference;
@@ -68,7 +71,7 @@ class RustAudioService {
   /// Initialize the Rust audio engine.
   /// This only boots the manager and event bridge. The heavy native engine is
   /// created lazily on first Rust playback request.
-  Future<bool> init() async {
+  Future<bool> init() => IosLocalAudioRequests.run(() async {
     if (_initialized) return true;
 
     // Check if native audio is available on this platform
@@ -85,20 +88,33 @@ class RustAudioService {
       // Restore the persisted Android audio-API preference so the Rust engine
       // manager picks it up before the first engine init (survives app restarts).
       try {
-        final pref = await Uac2PreferencesService().getAndroidAudioApi();
+        final pref = await IosLocalAudioRequests.wait(
+          Uac2PreferencesService().getAndroidAudioApi(),
+        );
         rust_audio.audioSetAudioApi(preference: pref);
         devLog('Restored Android audio API preference: ${pref.name}');
       } catch (e) {
+        if (IosLocalAudioRequests.isRetired(e)) rethrow;
         devLog('Failed to restore Android audio API preference: $e');
       }
       // Restore DSD output mode + transport overrides before the first play;
       // this also loads the pref notifiers (else a user-set mode is ignored).
       try {
-        await Uac2PreferencesService().getDsdOutputMode();
-        await Uac2PreferencesService().getDsdByteOrderOverride();
-        await Uac2PreferencesService().getDsdSubslotOverride();
-        await Uac2PreferencesService().getDsdWireVariant();
-        await Uac2PreferencesService().getDsdWireGrouping();
+        await IosLocalAudioRequests.wait(
+          Uac2PreferencesService().getDsdOutputMode(),
+        );
+        await IosLocalAudioRequests.wait(
+          Uac2PreferencesService().getDsdByteOrderOverride(),
+        );
+        await IosLocalAudioRequests.wait(
+          Uac2PreferencesService().getDsdSubslotOverride(),
+        );
+        await IosLocalAudioRequests.wait(
+          Uac2PreferencesService().getDsdWireVariant(),
+        );
+        await IosLocalAudioRequests.wait(
+          Uac2PreferencesService().getDsdWireGrouping(),
+        );
         _syncDsdOutputMode();
         _syncDsdTransportOverrides();
         devLog(
@@ -106,6 +122,7 @@ class RustAudioService {
           '${Uac2PreferencesService.dsdOutputModeSync.name}',
         );
       } catch (e) {
+        if (IosLocalAudioRequests.isRetired(e)) rethrow;
         devLog('Failed to restore DSD output mode: $e');
       }
       _initialized = true;
@@ -115,10 +132,11 @@ class RustAudioService {
       _startEventPolling();
       return true;
     } catch (e) {
+      if (IosLocalAudioRequests.isRetired(e)) rethrow;
       devLog('Failed to initialize Rust audio engine: $e');
       return false;
     }
-  }
+  });
 
   /// Check if the engine is initialized.
   bool get isInitialized => _initialized;
@@ -152,8 +170,10 @@ class RustAudioService {
     if (!isNativeAvailable) return false;
 
     try {
-      return await rust_audio.audioIsDacAvailable(
-        preferredSampleRate: preferredSampleRate,
+      return await IosLocalAudioRequests.wait(
+        rust_audio.audioIsDacAvailable(
+          preferredSampleRate: preferredSampleRate,
+        ),
       );
     } catch (e) {
       devLog('Error detecting DAC availability: $e');
@@ -186,8 +206,10 @@ class RustAudioService {
     }
 
     try {
-      return await rust_audio.audioGetCapabilityInfo(
-        preferredSampleRate: preferredSampleRate,
+      return await IosLocalAudioRequests.wait(
+        rust_audio.audioGetCapabilityInfo(
+          preferredSampleRate: preferredSampleRate,
+        ),
       );
     } catch (e) {
       devLog('Error reading audio capability info: $e');
@@ -209,27 +231,31 @@ class RustAudioService {
 
   /// Resolve whether the native Rust backend should be preferred for playback.
   Future<bool> shouldPreferRustEngine({int? preferredSampleRate}) async {
-    final info = await getCapabilityInfo(
-      preferredSampleRate: preferredSampleRate,
+    final info = await IosLocalAudioRequests.wait(
+      getCapabilityInfo(preferredSampleRate: preferredSampleRate),
     );
     return capabilityInfoPrefersRust(info);
   }
 
   /// Ensure the native engine is fully created for the requested output rate.
-  Future<void> prepareEngine({int? preferredSampleRate}) async {
-    if (!_initialized) {
-      throw StateError('Rust audio engine manager is not initialized');
-    }
+  Future<void> prepareEngine({int? preferredSampleRate}) =>
+      IosLocalAudioRequests.run(() async {
+        if (!_initialized) {
+          throw StateError('Rust audio engine manager is not initialized');
+        }
 
-    try {
-      await rust_audio.audioPrepareEngine(
-        preferredSampleRate: preferredSampleRate,
-      );
-    } catch (e) {
-      devLog('Error preparing Rust audio engine: $e');
-      rethrow;
-    }
-  }
+        try {
+          await IosLocalAudioRequests.wait(
+            rust_audio.audioPrepareEngine(
+              requestEpoch: IosLocalAudioRequests.epoch,
+              preferredSampleRate: preferredSampleRate,
+            ),
+          );
+        } catch (e) {
+          devLog('Error preparing Rust audio engine: $e');
+          rethrow;
+        }
+      });
 
   /// A failed command carrying "disconnected channel" means the Rust audio
   /// thread died — it owns the command receiver, so its death breaks every
@@ -240,12 +266,14 @@ class RustAudioService {
 
   Future<T> _reviveAndRetry<T>(Future<T> Function() call) async {
     try {
-      return await call();
+      return await IosLocalAudioRequests.wait(call());
     } catch (e) {
       if (!_isDeadEngineError(e)) rethrow;
-      devLog('[RustAudio] Command channel dead; respawning engine and retrying');
-      await prepareEngine();
-      return await call();
+      devLog(
+        '[RustAudio] Command channel dead; respawning engine and retrying',
+      );
+      await IosLocalAudioRequests.wait(prepareEngine());
+      return await IosLocalAudioRequests.wait(call());
     }
   }
 
@@ -272,19 +300,26 @@ class RustAudioService {
   bool get hasQueuedNext => _nextPath != null;
 
   /// Play an audio file.
-  Future<void> play(String path) async {
+  Future<void> play(String path) => IosLocalAudioRequests.run(() async {
     if (!_initialized) {
       throw StateError('Rust audio engine not initialized');
     }
 
     _syncDsdOutputMode();
     _syncDsdTransportOverrides();
-    await _reviveAndRetry(() => rust_audio.audioPlay(path: path));
+    await IosLocalAudioRequests.wait(
+      _reviveAndRetry(
+        () => rust_audio.audioPlay(
+          requestEpoch: IosLocalAudioRequests.epoch,
+          path: path,
+        ),
+      ),
+    );
     _currentPath = path;
     // Also sync from Rust engine to ensure accuracy
     _currentPath = rust_audio.audioGetCurrentPath() ?? path;
     _startProgressUpdates(fast: true);
-  }
+  });
 
   /// Play a remote audio stream directly over HTTP (range-based, no cache
   /// download before play). Auth is carried via [headers] (e.g. WebDAV Basic);
@@ -292,22 +327,28 @@ class RustAudioService {
   Future<void> playHttp({
     required String url,
     Map<String, String> headers = const {},
-  }) async {
+  }) => IosLocalAudioRequests.run(() async {
     if (!_initialized) {
       throw StateError('Rust audio engine not initialized');
     }
     _syncDsdOutputMode();
     _syncDsdTransportOverrides();
-    await _reviveAndRetry(
-      () => rust_audio.audioPlayFromHttp(url: url, headers: headers),
+    await IosLocalAudioRequests.wait(
+      _reviveAndRetry(
+        () => rust_audio.audioPlayFromHttp(
+          requestEpoch: IosLocalAudioRequests.epoch,
+          url: url,
+          headers: headers,
+        ),
+      ),
     );
     _currentPath = rust_audio.audioGetCurrentPath() ?? url;
     _startProgressUpdates(fast: true);
-  }
+  });
 
   /// Queue the next track for gapless playback.
   /// The next track will automatically start when the current one ends.
-  Future<void> queueNext(String path) async {
+  Future<void> queueNext(String path) => IosLocalAudioRequests.run(() async {
     if (!_initialized) {
       throw StateError('Rust audio engine not initialized');
     }
@@ -315,24 +356,37 @@ class RustAudioService {
     _nextPath = path;
     _syncDsdOutputMode();
     _syncDsdTransportOverrides();
-    await _reviveAndRetry(() => rust_audio.audioQueueNext(path: path));
-  }
+    await IosLocalAudioRequests.wait(
+      _reviveAndRetry(
+        () => rust_audio.audioQueueNext(
+          requestEpoch: IosLocalAudioRequests.epoch,
+          path: path,
+        ),
+      ),
+    );
+  });
 
   /// Queue a remote HTTP stream as the next track for gapless playback.
   Future<void> queueNextHttp({
     required String url,
     Map<String, String> headers = const {},
-  }) async {
+  }) => IosLocalAudioRequests.run(() async {
     if (!_initialized) {
       throw StateError('Rust audio engine not initialized');
     }
     _nextPath = url;
     _syncDsdOutputMode();
     _syncDsdTransportOverrides();
-    await _reviveAndRetry(
-      () => rust_audio.audioQueueNextFromHttp(url: url, headers: headers),
+    await IosLocalAudioRequests.wait(
+      _reviveAndRetry(
+        () => rust_audio.audioQueueNextFromHttp(
+          requestEpoch: IosLocalAudioRequests.epoch,
+          url: url,
+          headers: headers,
+        ),
+      ),
     );
-  }
+  });
 
   void _syncDsdOutputMode() {
     final mode = Uac2PreferencesService.dsdOutputModeSync;
@@ -382,62 +436,90 @@ class RustAudioService {
   }
 
   /// Pause playback.
-  Future<void> pause() async {
+  Future<void> pause() => IosLocalAudioRequests.run(() async {
     if (!_initialized) return;
-    await rust_audio.audioPause();
+    await IosLocalAudioRequests.wait(
+      rust_audio.audioPause(requestEpoch: IosLocalAudioRequests.epoch),
+    );
     // Switch to slower updates when paused to reduce CPU usage while keeping UI synced
     _startProgressUpdates(fast: false);
     // Force immediate state update for responsive UI
     _updateState();
-  }
+  });
 
   /// Resume playback.
-  Future<void> resume() async {
+  Future<void> resume() => IosLocalAudioRequests.run(() async {
     if (!_initialized) return;
-    await rust_audio.audioResume();
+    await IosLocalAudioRequests.wait(
+      rust_audio.audioResume(requestEpoch: IosLocalAudioRequests.epoch),
+    );
     // Resume fast updates for smooth progress bar
     _startProgressUpdates(fast: true);
     // Force immediate state update
     _updateState();
-  }
+  });
 
   /// Stop playback completely.
-  Future<void> stop() async {
+  Future<void> stop() => IosLocalAudioRequests.run(() async {
     if (!_initialized) return;
-    await rust_audio.audioStop();
+    await IosLocalAudioRequests.wait(
+      rust_audio.audioStop(requestEpoch: IosLocalAudioRequests.epoch),
+    );
     _stopProgressUpdates();
     _currentPath = null;
     _nextPath = null;
-  }
+  });
 
   /// Seek to a position in seconds.
-  Future<void> seek(Duration position) async {
+  Future<void> seek(Duration position) => IosLocalAudioRequests.run(() async {
     if (!_initialized) return;
-    await rust_audio.audioSeek(positionSecs: position.inMilliseconds / 1000.0);
-  }
+    await IosLocalAudioRequests.wait(
+      rust_audio.audioSeek(
+        requestEpoch: IosLocalAudioRequests.epoch,
+        positionSecs: position.inMilliseconds / 1000.0,
+      ),
+    );
+  });
 
   /// Set the volume (0.0 to 2.0; values >1.0 apply extended gain).
-  Future<void> setVolume(double volume) async {
+  Future<void> setVolume(double volume) => IosLocalAudioRequests.run(() async {
     if (!_initialized) return;
     final clampedVolume = volume.clamp(0.0, 2.0);
     volumeNotifier.value = clampedVolume;
-    await rust_audio.audioSetVolume(volume: clampedVolume);
-  }
+    await IosLocalAudioRequests.wait(
+      rust_audio.audioSetVolume(
+        requestEpoch: IosLocalAudioRequests.epoch,
+        volume: clampedVolume,
+      ),
+    );
+  });
 
   /// Set the effective ReplayGain (dB) for the current track and as the
   /// default for subsequently spawned sources. Call before [play]/[queueNext]
   /// so the next track picks it up.
-  Future<void> setReplayGain(double gainDb) async {
-    if (!_initialized) return;
-    await rust_audio.audioSetReplaygain(gainDb: gainDb.clamp(-60.0, 30.0));
-  }
+  Future<void> setReplayGain(double gainDb) =>
+      IosLocalAudioRequests.run(() async {
+        if (!_initialized) return;
+        await IosLocalAudioRequests.wait(
+          rust_audio.audioSetReplaygain(
+            requestEpoch: IosLocalAudioRequests.epoch,
+            gainDb: gainDb.clamp(-60.0, 30.0),
+          ),
+        );
+      });
 
   /// Set only the spawn-time default ReplayGain (dB); the currently-running
   /// source keeps its own gain. Used when pre-queueing the next gapless track.
-  Future<void> setReplayGainDefault(double gainDb) async {
-    if (!_initialized) return;
-    await rust_audio.audioSetReplaygainDefault(gainDb: gainDb.clamp(-60.0, 30.0));
-  }
+  Future<void> setReplayGainDefault(double gainDb) =>
+      IosLocalAudioRequests.run(() async {
+        if (!_initialized) return;
+        await IosLocalAudioRequests.wait(
+          rust_audio.audioSetReplaygainDefault(
+            requestEpoch: IosLocalAudioRequests.epoch,
+            gainDb: gainDb.clamp(-60.0, 30.0),
+          ),
+        );
+      });
 
   /// Select the callback's base pipeline mode.
   Future<void> setPipelineModePassthrough(bool enabled) async {
@@ -450,64 +532,90 @@ class RustAudioService {
   }
 
   /// Apply effective crossfade policy without changing the user's preference.
-  Future<void> setCrossfade({
-    required bool enabled,
-    double? durationSecs,
-  }) async {
-    if (!_initialized) return;
+  Future<void> setCrossfade({required bool enabled, double? durationSecs}) =>
+      IosLocalAudioRequests.run(() async {
+        if (!_initialized) return;
 
-    if (durationSecs != null) {
-      crossfadeDurationNotifier.value = durationSecs;
-    }
+        if (durationSecs != null) {
+          crossfadeDurationNotifier.value = durationSecs;
+        }
 
-    await rust_audio.audioSetCrossfade(
-      enabled: enabled,
-      durationSecs: crossfadeDurationNotifier.value,
-    );
-    devLog(
-      '[crossfade] applied: effective=$enabled, '
-      'preference=${crossfadeEnabledNotifier.value}, '
-      'duration=${crossfadeDurationNotifier.value}s',
-    );
-  }
+        await IosLocalAudioRequests.wait(
+          rust_audio.audioSetCrossfade(
+            requestEpoch: IosLocalAudioRequests.epoch,
+            enabled: enabled,
+            durationSecs: crossfadeDurationNotifier.value,
+          ),
+        );
+        devLog(
+          '[crossfade] applied: effective=$enabled, '
+          'preference=${crossfadeEnabledNotifier.value}, '
+          'duration=${crossfadeDurationNotifier.value}s',
+        );
+      });
 
   /// Set the crossfade curve type.
-  Future<void> setCrossfadeCurve(rust_audio.CrossfadeCurveType curve) async {
-    if (!_initialized) return;
-    await rust_audio.audioSetCrossfadeCurve(curve: curve);
-  }
+  Future<void> setCrossfadeCurve(rust_audio.CrossfadeCurveType curve) =>
+      IosLocalAudioRequests.run(() async {
+        if (!_initialized) return;
+        await IosLocalAudioRequests.wait(
+          rust_audio.audioSetCrossfadeCurve(
+            requestEpoch: IosLocalAudioRequests.epoch,
+            curve: curve,
+          ),
+        );
+      });
 
   /// Set the BS2B crossfeed level.
   /// 0 = off, 1 = default, 2 = crossfeed, 3 = crossfeed easy.
-  Future<void> setCrossfeed(int level) async {
+  Future<void> setCrossfeed(int level) => IosLocalAudioRequests.run(() async {
     if (!_initialized) return;
     crossfeedLevelNotifier.value = level.clamp(0, 3);
-    await rust_audio.audioSetCrossfeed(level: crossfeedLevelNotifier.value);
-  }
+    await IosLocalAudioRequests.wait(
+      rust_audio.audioSetCrossfeed(
+        requestEpoch: IosLocalAudioRequests.epoch,
+        level: crossfeedLevelNotifier.value,
+      ),
+    );
+  });
 
   /// Skip to the next queued track (with crossfade if enabled).
-  Future<void> skipToNext() async {
+  Future<void> skipToNext() => IosLocalAudioRequests.run(() async {
     if (!_initialized) return;
-    await rust_audio.audioSkipToNext();
-  }
+    await IosLocalAudioRequests.wait(
+      rust_audio.audioSkipToNext(requestEpoch: IosLocalAudioRequests.epoch),
+    );
+  });
 
   /// Set the playback speed (0.5 to 2.0).
-  Future<void> setPlaybackSpeed(double speed) async {
-    if (!_initialized) return;
-    final clampedSpeed = speed.clamp(0.5, 2.0);
-    playbackSpeedNotifier.value = clampedSpeed;
-    await _reviveAndRetry(
-      () => rust_audio.audioSetPlaybackSpeed(speed: clampedSpeed),
-    );
-  }
+  Future<void> setPlaybackSpeed(double speed) =>
+      IosLocalAudioRequests.run(() async {
+        if (!_initialized) return;
+        final clampedSpeed = speed.clamp(0.5, 2.0);
+        playbackSpeedNotifier.value = clampedSpeed;
+        await IosLocalAudioRequests.wait(
+          _reviveAndRetry(
+            () => rust_audio.audioSetPlaybackSpeed(
+              requestEpoch: IosLocalAudioRequests.epoch,
+              speed: clampedSpeed,
+            ),
+          ),
+        );
+      });
 
   /// Set pitch shift in semitones (tempo preserved). 0 = bypass.
-  Future<void> setPitchShiftSemitones(double semitones) async {
-    if (!_initialized) return;
-    final clamped = semitones.clamp(-12.0, 12.0);
-    pitchSemitonesNotifier.value = clamped;
-    await rust_audio.audioSetPitchShiftSemitones(semitones: clamped);
-  }
+  Future<void> setPitchShiftSemitones(double semitones) =>
+      IosLocalAudioRequests.run(() async {
+        if (!_initialized) return;
+        final clamped = semitones.clamp(-12.0, 12.0);
+        pitchSemitonesNotifier.value = clamped;
+        await IosLocalAudioRequests.wait(
+          rust_audio.audioSetPitchShiftSemitones(
+            requestEpoch: IosLocalAudioRequests.epoch,
+            semitones: clamped,
+          ),
+        );
+      });
 
   /// Get the current playback speed.
   double getPlaybackSpeed() {

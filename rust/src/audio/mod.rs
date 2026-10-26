@@ -37,6 +37,7 @@ pub mod manager;
 pub mod opus_decoder;
 pub mod audiotrack_direct;
 pub mod pitch_shifter;
+pub(crate) mod request_generation;
 pub mod resampler;
 pub mod source;
 pub mod strategy;
