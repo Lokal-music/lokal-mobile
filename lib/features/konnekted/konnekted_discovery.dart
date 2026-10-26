@@ -1183,13 +1183,18 @@ Song progressiveAddonSong(DiscoveryTrack track, ResolvedDiscoveryAudio audio) {
     'aac': 'AAC', 'ogg': 'OGG', 'opus': 'OPUS',
     'wav': 'WAV', 'webm': 'OPUS',
   }[ext];
+  // Never combine a selected low-quality stream's few metadata fields with
+  // a 24/96 catalogue maximum from a different rendition. When the resolver
+  // reports any rendition detail, its missing fields must remain unknown.
+  final hasRenditionDetails = audio.codec != null ||
+      audio.quality != null ||
+      audio.bitDepth != null ||
+      audio.sampleRate != null;
   final audioInfo = advertisedOnlineAudio(
-    // Resolved-rendition metadata supersedes catalogue maxima, which can
-    // describe a different tier from the user's current add-on selection.
-    codec: audio.codec ?? track.catalogueCodec,
-    quality: audio.quality ?? track.catalogueQuality,
-    bitDepth: audio.bitDepth ?? track.catalogueBitDepth,
-    sampleRate: audio.sampleRate ?? track.catalogueSampleRate,
+    codec: hasRenditionDetails ? audio.codec : track.catalogueCodec,
+    quality: hasRenditionDetails ? audio.quality : track.catalogueQuality,
+    bitDepth: hasRenditionDetails ? audio.bitDepth : track.catalogueBitDepth,
+    sampleRate: hasRenditionDetails ? audio.sampleRate : track.catalogueSampleRate,
     // A filename suffix is only a container hint; M4A and WebM may hold
     // different codecs, so do not invent ALAC/OPUS from those extensions.
     fallbackFileType: (ext == 'm4a' || ext == 'webm')
