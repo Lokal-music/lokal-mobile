@@ -960,7 +960,10 @@ class AndroidAudioEngine implements AudioEngine {
     final modelEnd = automixModelEnd(
       duration ?? Duration.zero, _currentAutoMixProfile, cfg.durationSecs,
     );
-    final targetEnd = modelEnd ?? audibleDuration;
+    // If the model cue passed during a seek or late analysis, revert to
+    // the ordinary end-of-track transition instead of disabling AutoMix.
+    final usableModelEnd = modelEnd != null && modelEnd > pos ? modelEnd : null;
+    final targetEnd = usableModelEnd ?? audibleDuration;
     if (!shouldPrepareCrossfade(
       enabled: cfg.enabled,
       duration: targetEnd,
@@ -970,7 +973,7 @@ class AndroidAudioEngine implements AudioEngine {
       return;
     }
     _armCrossfade(cfg, (cfg.durationSecs * 1000).round(),
-        audibleDuration, modelEnd);
+        audibleDuration, usableModelEnd);
   }
 
   void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs,
@@ -1021,8 +1024,10 @@ class AndroidAudioEngine implements AudioEngine {
           } catch (_) {}
         }
         if (!valid()) { releaseIfOwned(); return; }
-        final modelPair = modelMixEnd != null &&
-            upcomingProfile != null && upcomingProfile.modelEntrances.isNotEmpty;
+        final modelEntry = upcomingProfile?.modelEntrances.where((t) =>
+            t.isFinite && t >= 0 && t <= 45 &&
+            t <= upcomingProfile!.durationSeconds - 20).firstOrNull;
+        final modelPair = modelMixEnd != null && modelEntry != null;
         final mixEnd = modelPair ? modelMixEnd! : normalMixEnd;
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
@@ -1032,12 +1037,8 @@ class AndroidAudioEngine implements AudioEngine {
             .setAudioSource(source, preload: true)
             .timeout(const Duration(seconds: 30));
         if (!valid()) { releaseIfOwned(); return; }
-        final modelEntry = modelPair
-            ? upcomingProfile!.modelEntrances.where((t) =>
-                t >= 0 && t <= 45 &&
-                t <= upcomingProfile.durationSeconds - 20).firstOrNull
-            : null;
-        final entrance = modelEntry ?? upcomingProfile?.leadInSeconds ?? 0;
+        final entrance = modelPair ? modelEntry! :
+            (upcomingProfile?.leadInSeconds ?? 0);
         final entry = (modelEntry != null || (entrance >= 0.4 && entrance <= 3)) &&
                 (upcomingProfile?.durationSeconds ?? 0) >= 20
             ? Duration(milliseconds: (entrance * 1000).round())
