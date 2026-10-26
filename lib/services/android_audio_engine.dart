@@ -932,7 +932,8 @@ class AndroidAudioEngine implements AudioEngine {
         if (!valid()) { releaseIfOwned(); return; }
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
-        _rampUserVolume = outgoing.volume <= 0 ? 1.0 : outgoing.volume;
+        // A muted track must stay muted through the preparation and ramp.
+        _rampUserVolume = outgoing.volume;
         await incoming
             .setAudioSource(source, preload: true)
             .timeout(const Duration(seconds: 30));
