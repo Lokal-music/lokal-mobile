@@ -4317,7 +4317,7 @@ class MainActivity: FlutterActivity() {
                 }
                 Log.e(
                     "UAC2",
-                    "Failed to force-claim USB audio interfaces for direct playback: $deviceName",
+                    "USB audio interface validation failed for direct playback: $deviceName",
                 )
                 return false
             }
