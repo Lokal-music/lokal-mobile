@@ -664,9 +664,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 key: ValueKey('immersive:${active.id}'),
                 song: active,
                 player: _player,
-                lyrics: _sublineLyrics ?? _lyrics,
-                baseLyrics: _lyrics,
-                loading: _lyricsLoading,
+                // Do not render the previous song's sublines while the new
+                // song's local/online lyrics are being resolved.
+                lyrics: _lyricsForSongId == active.id
+                    ? (_sublineLyrics ?? _lyrics) : null,
+                baseLyrics: _lyricsForSongId == active.id ? _lyrics : null,
+                loading: _lyricsLoading || _lyricsForSongId != active.id,
                 onExit: _toggleImmersiveLyrics,
                 onLyricsSource: _chooseImmersiveLyricsSource,
                 onSublineChanged: (updated) {
