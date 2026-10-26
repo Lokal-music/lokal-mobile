@@ -14,6 +14,7 @@
 // frame so that strings produced during startup already use the right locale.
 
 import 'package:flutter/widgets.dart';
+import 'package:home_widget/home_widget.dart';
 
 import 'package:flick/l10n/generated/app_localizations.dart';
 
@@ -135,6 +136,25 @@ class LocaleController extends ValueNotifier<Locale?> {
     if (locale == value) return;
     value = locale;
     await AppPreferencesService().setAppLocale(_storedFromLocale(locale));
+    // Android home-screen widgets use native resources, not Flutter's
+    // Localizations delegate. Mirror the choice and refresh the widget views
+    // so manually chosen Türkçe takes effect without requiring an OS switch.
+    try {
+      await HomeWidget.saveWidgetData<String>(
+        'flick_widget_locale',
+        locale?.languageCode ?? systemValue,
+      );
+      for (final provider in <String>[
+        'com.mossapps.flick.widgets.MiniPlayerWidgetProvider',
+        'com.mossapps.flick.widgets.FlowRadioWidgetProvider',
+        'com.mossapps.flick.widgets.CoverFlowRecommendationWidgetProvider',
+      ]) {
+        await HomeWidget.updateWidget(qualifiedAndroidName: provider);
+      }
+    } catch (_) {
+      // A widget host may not exist. Language selection still succeeds.
+    }
+
   }
 
   /// Points the global accessor at [localizations]. Called from the app builder.
