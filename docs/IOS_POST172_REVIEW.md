@@ -1,8 +1,8 @@
 # iPhone review of mobile PRs after #172
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-Latest integration includes **37 merged PRs through #216**, main
-`63280241a5216ef987111eb8cd17c93e0626f1e4`. Build 27 validates the source through
+Latest integration includes **38 merged PRs through #217**, main
+`ba8c7f5b9e6ab4e004f106ec1c02231143fb1d5b`. Build 27 validates the source through
 #210; build 29 passes the #216 continuation on iOS 18.6, but its iOS 26 simulator fails
 before app execution. Later Library labels/raw-sample checks await the next run.
 The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
@@ -448,3 +448,13 @@ runner must retry the current source without weakening its native gate.
 
 The later Library-label/raw-video-sample follow-ups have their own host checks and
 await a new native source build. This checkpoint does not cover those later changes.
+
+
+## Further upstream review: #217
+
+Main `ba8c7f5b9e6ab4e004f106ec1c02231143fb1d5b`, reviewed 26 October 2026
+(Europe/Paris). The integration now contains **38** merged mobile PRs after #172.
+
+| PR | Applied UI/behavior | iPhone validation and limits |
+| --- | --- | --- |
+| #217 | Accept documented `.spotiflac-ext` imports alongside `.sflx`/`.morneye-ext`, with matching picker guidance and case-insensitive URL/file validation. Download workers have a host-controlled 256 MiB heap ceiling; browsing stays at 64 MiB. | The shared iPhone picker/installer benefits from the same change. Keep all archive/permission/hash validation. 42 package/panel tests and all 308 Rust tests pass, including eight real QuickJS tests. The Rust function/config field adds no bridge entrypoint. Current native evidence remains build 29 through #216; iOS compilation/execution and peak memory on the oldest supported phone still need the new source run/device acceptance. Metadata-only/lyrics-only providers are not working audio sources merely because their ZIP installs. |

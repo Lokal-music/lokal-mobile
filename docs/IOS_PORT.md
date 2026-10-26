@@ -14,7 +14,7 @@ checksum and native evidence in the build-27 checkpoint below. Installation stil
 requires local signing; physical-device and Windows install/update acceptance
 remain open.
 
-The branch integrates **37 merged mobile PRs after #172 through #216**, including
+The branch integrates **38 merged mobile PRs after #172 through #217**, including
 Likes stream revalidation, retained-artwork Space, separate video timing, search,
 profile, notification artwork, playlists and locale updates. See
 [the PR-by-PR UI/behavior review and revised WidgetKit design](IOS_POST172_REVIEW.md)
@@ -800,3 +800,22 @@ runner must retry the current source without weakening its native gate.
 
 The later Library-label/raw-video-sample follow-ups have their own host checks and
 await a new native source build. This checkpoint does not cover those later changes.
+
+
+### Add-on continuation through #217
+
+Main `ba8c7f5b9e6ab4e004f106ec1c02231143fb1d5b` is carried forward, bringing the
+review to **38** merged PRs after #172. Documented `.spotiflac-ext` packages now
+pass the shared import picker and URL install path, alongside `.sflx` and
+`.morneye-ext`; archive/manifest/permission and SHA-256 protections are retained.
+Only isolated download workers receive the host-selected 256 MiB maximum heap;
+browsing/startup retain 64 MiB, with the native host clamping configuration.
+These are ceilings, not an allocation of 256 MiB at worker startup. Physical
+oldest-phone peak-memory and third-party search/auth/download/persistence remain
+acceptance work. Metadata-only and lyrics-only extensions are not represented as
+working audio sources.
+
+The package/panel selection passes **42** Flutter tests. All **308** host Rust
+tests pass, including the eight real QuickJS cases and the new heap-bound test.
+No FRB entrypoint/signature changed. The previous build-29 checkpoint is through
+#216 and does not cover #217; the updated source needs its fresh native run.
