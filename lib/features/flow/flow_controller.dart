@@ -197,12 +197,12 @@ class FlowController extends AsyncNotifier<FlowData> {
     final target = songId ?? data.session.currentId;
     final first = available.where((s) => s.id == target).firstOrNull ??
         available.first;
-    // Playback begins immediately with four tracks ahead. The online
+    // Playback begins immediately with a short local anchor. The online
     // radio lookup then fills the queue while the first song is playing.
     // This avoids blocking Play on network/auth and prevents a 24-track
     // downloaded queue from hiding online discoveries for an hour.
     final songs = [first, ...available.where((song) => song.id != first.id)]
-        .take(5).toList();
+        .take(3).toList();
     data = data.copyWith(
       session: FlowSession(
         trackIds: songs.map((s) => s.id),
@@ -213,8 +213,10 @@ class FlowController extends AsyncNotifier<FlowData> {
     );
     await _commit(data);
     await ref.read(flowPlaybackProvider).play(songs, first, data.session.seed);
-    // The player observation schedules the first background radio top-up.
-    // A test adapter without player events may request growth explicitly.
+    // Start the radio top-up even if the platform player has not published
+    // its first state update yet. It runs after this serialized play action,
+    // so it cannot delay the first note or deadlock the queue transaction.
+    _background(grow(onlyWhenLast: true));
   });
 
   /// Grow when at most four tracks remain; appending to the context tail
