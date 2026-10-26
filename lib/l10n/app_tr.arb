@@ -1,29 +1,29 @@
 {
-  "aLittleRecordOfWhatStayed": "A little record of what stayed on repeat.",
+  "aLittleRecordOfWhatStayed": "Tekrar tekrar dinlediklerinden küçük bir hatıra.",
   "@aLittleRecordOfWhatStayed": {
     "description": "lib/features/recap/screens/listening_recap_screen.dart:476"
   },
-  "aNewerFlickBuildIsOn": "A newer Lokal build is on the Play Store.",
+  "aNewerFlickBuildIsOn": "Play Store'da Lokal'in daha yeni bir sürümü var.",
   "@aNewerFlickBuildIsOn": {
     "description": "lib/features/menu/screens/menu_screen.dart:1234"
   },
-  "aPlaylistWithThisNameAlready": "A playlist with this name already exists",
+  "aPlaylistWithThisNameAlready": "Bu adda bir çalma listesi zaten var.",
   "@aPlaylistWithThisNameAlready": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:444"
   },
-  "aSmoothContinuousWaveAcrossFrequencies": "A smooth continuous wave across frequencies",
+  "aSmoothContinuousWaveAcrossFrequencies": "Frekanslar boyunca uzanan pürüzsüz, kesintisiz bir dalga",
   "@aSmoothContinuousWaveAcrossFrequencies": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:87"
   },
-  "aSongWithALongTitle": "A song with a long title to preview",
+  "aSongWithALongTitle": "Önizleme için uzun başlıklı bir şarkı",
   "@aSongWithALongTitle": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:369"
   },
-  "aTighterMixOfFavoritesAnd": "A tighter mix of favorites and the songs you keep circling back to.",
+  "aTighterMixOfFavoritesAnd": "Favorilerin ve dönüp dolaşıp dinlediğin şarkılardan daha seçkin bir karışım.",
   "@aTighterMixOfFavoritesAnd": {
     "description": "lib/features/menu/screens/menu_screen.dart:1768"
   },
-  "aWeekAndCountingYourDedication": "A week and counting — your dedication shows.",
+  "aWeekAndCountingYourDedication": "Bir haftayı geride bıraktın. İstikrarın ortada.",
   "@aWeekAndCountingYourDedication": {
     "description": "lib/features/milestone/widgets/streak_popup.dart:95"
   },
@@ -35,23 +35,23 @@
   "@aaudioAndroid81": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:638"
   },
-  "aaudioWithOpenslEsFallbackDefault": "AAudio with OpenSL ES fallback (default)",
+  "aaudioWithOpenslEsFallbackDefault": "OpenSL ES yedekli AAudio (varsayılan)",
   "@aaudioWithOpenslEsFallbackDefault": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:637"
   },
-  "about": "About",
+  "about": "Hakkında",
   "@about": {
     "description": "lib/features/artists/screens/artist_detail_screen.dart:654"
   },
-  "aboutThisAlbum": "About this album",
+  "aboutThisAlbum": "Bu albüm hakkında",
   "@aboutThisAlbum": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:519"
   },
-  "absoluteVolumeSync": "Absolute Volume Sync",
+  "absoluteVolumeSync": "Mutlak ses düzeyi eşitlemesi",
   "@absoluteVolumeSync": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:398"
   },
-  "accentColor": "Accent Color",
+  "accentColor": "Vurgu rengi",
   "@accentColor": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:263"
   },
@@ -59,7 +59,7 @@
   "@accuraterip": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:1102"
   },
-  "achieved": "Achieved {arg1}",
+  "achieved": "{arg1} başarısı kazanıldı",
   "@achieved": {
     "description": "lib/features/milestone/widgets/milestone_card.dart:211",
     "placeholders": {
@@ -68,19 +68,19 @@
       }
     }
   },
-  "achievementUnlocked": "ACHIEVEMENT UNLOCKED",
+  "achievementUnlocked": "BAŞARIM KİLİDİ AÇILDI",
   "@achievementUnlocked": {
     "description": "lib/features/milestone/widgets/milestone_card.dart:174"
   },
-  "activateFallback": "Activate Fallback",
+  "activateFallback": "Yedek yöntemi etkinleştir",
   "@activateFallback": {
     "description": "lib/widgets/uac2/uac2_fallback_manager.dart:179"
   },
-  "active": "Active",
+  "active": "Etkin",
   "@active": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:670"
   },
-  "activeBands": "{activeCount} active bands",
+  "activeBands": "{activeCount} etkin bant",
   "@activeBands": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:2166",
     "placeholders": {
@@ -89,63 +89,63 @@
       }
     }
   },
-  "activeDays": "Active days",
+  "activeDays": "Etkin günler",
   "@activeDays": {
     "description": "lib/features/recap/widgets/replay_card_options.dart:23"
   },
-  "add": "Add",
+  "add": "Ekle",
   "@add": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3016"
   },
-  "addAMusicFolderInSettings": "Add a music folder in Settings",
+  "addAMusicFolderInSettings": "Ayarlardan bir müzik klasörü ekle",
   "@addAMusicFolderInSettings": {
     "description": "lib/features/songs/screens/songs_screen.dart:1847"
   },
-  "addANextTrackButton": "Add a next-track button",
+  "addANextTrackButton": "Sonraki şarkı düğmesi ekle",
   "@addANextTrackButton": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:185"
   },
-  "addAPreviousTrackButton": "Add a previous-track button",
+  "addAPreviousTrackButton": "Önceki şarkı düğmesi ekle",
   "@addAPreviousTrackButton": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:177"
   },
-  "addAtLeastOneLyricLine": "Add at least one lyric line first.",
+  "addAtLeastOneLyricLine": "Önce en az bir şarkı sözü satırı ekle.",
   "@addAtLeastOneLyricLine": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:475"
   },
-  "addDescription": "Add Description",
+  "addDescription": "Açıklama ekle",
   "@addDescription": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:313"
   },
-  "addDescription2": "Add description",
+  "addDescription2": "Açıklama ekle",
   "@addDescription2": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:338"
   },
-  "addMusicFoldersInSettings": "Add music folders in Settings",
+  "addMusicFoldersInSettings": "Ayarlardan müzik klasörleri ekle",
   "@addMusicFoldersInSettings": {
     "description": "lib/features/folders/screens/folders_screen.dart:376"
   },
-  "addMusicWithAlbumTagsTo": "Add music with album tags to see them here",
+  "addMusicWithAlbumTagsTo": "Albümleri burada görmek için albüm bilgisi içeren müzikler ekle",
   "@addMusicWithAlbumTagsTo": {
     "description": "lib/features/albums/screens/albums_screen.dart:450"
   },
-  "addMusicWithArtistTagsTo": "Add music with artist tags to see them here",
+  "addMusicWithArtistTagsTo": "Sanatçıları burada görmek için sanatçı bilgisi içeren müzikler ekle",
   "@addMusicWithArtistTagsTo": {
     "description": "lib/features/artists/screens/artists_screen.dart:485"
   },
-  "addServer": "Add Server",
+  "addServer": "Sunucu ekle",
   "@addServer": {
     "description": "lib/features/settings/screens/network_sources_screen.dart:154"
   },
-  "addSongsFromThePlayerMenu": "Add songs from the player menu",
+  "addSongsFromThePlayerMenu": "Oynatıcı menüsünden şarkı ekle",
   "@addSongsFromThePlayerMenu": {
     "description": "lib/features/playlists/screens/playlist_detail_screen.dart:530"
   },
-  "addSongsFromThePlayerOr": "Add songs from the player or song actions menu.",
+  "addSongsFromThePlayerOr": "Oynatıcıdan veya şarkı seçenekleri menüsünden şarkı ekle.",
   "@addSongsFromThePlayerOr": {
     "description": "lib/features/queue/screens/queue_screen.dart:467"
   },
-  "addSongsToPlaylist": "Add {arg1} songs to playlist",
+  "addSongsToPlaylist": "{arg1} şarkıyı çalma listesine ekle",
   "@addSongsToPlaylist": {
     "description": "lib/features/songs/screens/songs_screen.dart:1407",
     "placeholders": {
@@ -154,7 +154,7 @@
       }
     }
   },
-  "addSongsToPlaylist2": "Add {arg1} Songs to Playlist",
+  "addSongsToPlaylist2": "{arg1} şarkıyı çalma listesine ekle",
   "@addSongsToPlaylist2": {
     "description": "lib/features/player/widgets/add_to_playlist_sheet.dart:52",
     "placeholders": {
@@ -163,31 +163,31 @@
       }
     }
   },
-  "addToFavorites": "Add to favorites",
+  "addToFavorites": "Favorilere ekle",
   "@addToFavorites": {
     "description": "lib/features/songs/screens/songs_screen.dart:2008"
   },
-  "addToFavorites2": "Add to Favorites",
+  "addToFavorites2": "Favorilere ekle",
   "@addToFavorites2": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:88"
   },
-  "addToPlaylist": "Add to playlist",
+  "addToPlaylist": "Çalma listesine ekle",
   "@addToPlaylist": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:344"
   },
-  "addToPlaylist2": "Add to Playlist",
+  "addToPlaylist2": "Çalma listesine ekle",
   "@addToPlaylist2": {
     "description": "lib/features/player/widgets/song_actions_sheet.dart:211"
   },
-  "addToQueue": "Add to Queue",
+  "addToQueue": "Sıraya ekle",
   "@addToQueue": {
     "description": "lib/features/player/widgets/song_actions_sheet.dart:202"
   },
-  "addToQueue2": "Add to queue",
+  "addToQueue2": "Sıraya ekle",
   "@addToQueue2": {
     "description": "lib/features/songs/screens/songs_screen.dart:2000"
   },
-  "addedSongsTo": "Added {arg1} songs to \"{arg2}\"",
+  "addedSongsTo": "{arg1} şarkı \"{arg2}\" listesine eklendi",
   "@addedSongsTo": {
     "description": "lib/features/player/widgets/add_to_playlist_sheet.dart:158",
     "placeholders": {
@@ -199,7 +199,7 @@
       }
     }
   },
-  "addedSongsTo2": "Added {arg1} songs to {playlistName}",
+  "addedSongsTo2": "{arg1} şarkı {playlistName} listesine eklendi",
   "@addedSongsTo2": {
     "description": "lib/features/songs/screens/songs_screen.dart:1489",
     "placeholders": {
@@ -211,7 +211,7 @@
       }
     }
   },
-  "addedSongsToFavorites": "Added {arg1} songs to favorites",
+  "addedSongsToFavorites": "{arg1} şarkı favorilere eklendi",
   "@addedSongsToFavorites": {
     "description": "lib/features/albums/screens/album_detail_screen.dart:300",
     "placeholders": {
@@ -220,7 +220,7 @@
       }
     }
   },
-  "addedSongsToFavorites3": "Added {arg1} songs to favorites",
+  "addedSongsToFavorites3": "{arg1} şarkı favorilere eklendi",
   "@addedSongsToFavorites3": {
     "description": "lib/features/songs/screens/songs_screen.dart:1363",
     "placeholders": {
@@ -229,7 +229,7 @@
       }
     }
   },
-  "addedSongsToQueue": "{count, plural, =1{Added to the queue} other{Added {count} songs to the queue}}",
+  "addedSongsToQueue": "{count, plural, =1{Sıraya eklendi} other{{count} şarkı sıraya eklendi}}",
   "@addedSongsToQueue": {
     "description": "Toast shown after adding songs to the playback queue.",
     "placeholders": {
@@ -238,7 +238,7 @@
       }
     }
   },
-  "addedTo": "Added to {arg1}",
+  "addedTo": "{arg1} konumuna eklendi",
   "@addedTo": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:493",
     "placeholders": {
@@ -247,7 +247,7 @@
       }
     }
   },
-  "addedTo2": "Added to \"{arg1}\"",
+  "addedTo2": "\"{arg1}\" listesine eklendi",
   "@addedTo2": {
     "description": "lib/features/player/widgets/add_to_playlist_sheet.dart:157",
     "placeholders": {
@@ -256,11 +256,11 @@
       }
     }
   },
-  "addedToFavorites": "Added to favorites",
+  "addedToFavorites": "Favorilere eklendi",
   "@addedToFavorites": {
     "description": "lib/features/player/widgets/player_action_button_row.dart:487"
   },
-  "addedToFavorites2": "Added \"{arg1}\" to favorites",
+  "addedToFavorites2": "\"{arg1}\" favorilere eklendi",
   "@addedToFavorites2": {
     "description": "lib/features/songs/screens/songs_screen.dart:1297",
     "placeholders": {
@@ -269,59 +269,59 @@
       }
     }
   },
-  "addsPreDriveAndCatchesPeaks": "Adds pre-drive and catches peaks against a final output ceiling.",
+  "addsPreDriveAndCatchesPeaks": "Ön yükseltme uygular ve çıkış tavanına ulaşan tepe seviyelerini sınırlar.",
   "@addsPreDriveAndCatchesPeaks": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3393"
   },
-  "adjustMetadataTextSizeInArtwork": "Adjust metadata text size in artwork card mode",
+  "adjustMetadataTextSizeInArtwork": "Albüm kapağı kartı modunda parça bilgisi metninin boyutunu ayarla",
   "@adjustMetadataTextSizeInArtwork": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:256"
   },
-  "adjustMetadataTextSizeInImmersive": "Adjust metadata text size in immersive mode",
+  "adjustMetadataTextSizeInImmersive": "Sürükleyici modda parça bilgisi metninin boyutunu ayarla",
   "@adjustMetadataTextSizeInImmersive": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:133"
   },
-  "adjustTheMiniPlayerSurface": "Adjust the mini player surface",
+  "adjustTheMiniPlayerSurface": "Mini oynatıcının görünümünü ayarla",
   "@adjustTheMiniPlayerSurface": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:198"
   },
-  "advanceToARandomCategory": "Advance to a random category",
+  "advanceToARandomCategory": "Rastgele bir kategoriye geç",
   "@advanceToARandomCategory": {
     "description": "lib/models/advance_list_order.dart:15"
   },
-  "advanceToTheNextCategoryAlphabetically": "Advance to the next category alphabetically",
+  "advanceToTheNextCategoryAlphabetically": "Alfabetik sıradaki kategoriye geç",
   "@advanceToTheNextCategoryAlphabetically": {
     "description": "lib/models/advance_list_order.dart:13"
   },
-  "advanceToTheNextMostRecently": "Advance to the next most recently added category",
+  "advanceToTheNextMostRecently": "En son eklenen bir sonraki kategoriye geç",
   "@advanceToTheNextMostRecently": {
     "description": "lib/models/advance_list_order.dart:14"
   },
-  "advanced": "Advanced",
+  "advanced": "Gelişmiş",
   "@advanced": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:905"
   },
-  "advancedMode": "Advanced mode",
+  "advancedMode": "Gelişmiş mod",
   "@advancedMode": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:686"
   },
-  "afterHours": "After Hours",
+  "afterHours": "Gece Saatleri",
   "@afterHours": {
     "description": "lib/features/menu/screens/menu_screen.dart:1782"
   },
-  "afterScanningMatchFilesWithMissing": "After scanning, match files with missing tags against Apple Music. Only confident matches apply automatically.",
+  "afterScanningMatchFilesWithMissing": "Taramadan sonra eksik etiketli dosyaları Apple Music ile eşleştir. Yalnızca güvenilir eşleşmeler otomatik uygulanır.",
   "@afterScanningMatchFilesWithMissing": {
     "description": "lib/features/settings/widgets/apple_music_settings_tile.dart:40"
   },
-  "air": "Air",
+  "air": "Ferahlık",
   "@air": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1891"
   },
-  "alacAudio": "ALAC Audio",
+  "alacAudio": "ALAC ses",
   "@alacAudio": {
     "description": "lib/widgets/alac_conversion_indicator.dart:128"
   },
-  "alacBit": "ALAC {arg1}-bit",
+  "alacBit": "ALAC {arg1} bit",
   "@alacBit": {
     "description": "lib/widgets/alac_conversion_indicator.dart:79",
     "placeholders": {
@@ -330,55 +330,55 @@
       }
     }
   },
-  "album": "Album",
+  "album": "Albüm",
   "@album": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:263"
   },
-  "albumArt": "Album Art",
+  "albumArt": "Albüm kapağı",
   "@albumArt": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:200"
   },
-  "albumArt2": "Album art",
+  "albumArt2": "Albüm kapağı",
   "@albumArt2": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:598"
   },
-  "albumArtist": "Album Artist",
+  "albumArtist": "Albüm sanatçısı",
   "@albumArtist": {
     "description": "lib/features/player/widgets/song_metadata_sheet.dart:68"
   },
-  "albumArtists": "Album Artists",
+  "albumArtists": "Albüm sanatçıları",
   "@albumArtists": {
     "description": "lib/features/search/models/search_category.dart:24"
   },
-  "albumArtwork": "Album Artwork",
+  "albumArtwork": "Albüm kapağı",
   "@albumArtwork": {
     "description": "lib/features/settings/screens/library_settings_screen.dart:2190"
   },
-  "albumColors": "Album Colors",
+  "albumColors": "Albüm renkleri",
   "@albumColors": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:395"
   },
-  "albumCount": "Album Count",
+  "albumCount": "Albüm sayısı",
   "@albumCount": {
     "description": "lib/features/artists/screens/artists_screen.dart:878"
   },
-  "albumLimit": "ALBUM LIMIT",
+  "albumLimit": "ALBÜM SINIRI",
   "@albumLimit": {
     "description": "lib/features/songs/screens/songs_screen.dart:2958"
   },
-  "albumName": "Album Name",
+  "albumName": "Albüm adı",
   "@albumName": {
     "description": "lib/features/albums/screens/albums_screen.dart:916"
   },
-  "albumOptions": "Album options",
+  "albumOptions": "Albüm seçenekleri",
   "@albumOptions": {
     "description": "lib/features/songs/screens/songs_screen.dart"
   },
-  "albums": "Albums",
+  "albums": "Albümler",
   "@albums": {
     "description": "lib/features/albums/screens/albums_screen.dart:252"
   },
-  "albums2": "{arg1} albums",
+  "albums2": "{arg1} albüm",
   "@albums2": {
     "description": "lib/features/albums/screens/albums_screen.dart:260",
     "placeholders": {
@@ -387,7 +387,7 @@
       }
     }
   },
-  "albums3": "{_totalAlbums} albums",
+  "albums3": "{_totalAlbums} albüm",
   "@albums3": {
     "description": "lib/features/artists/screens/artists_screen.dart:401",
     "placeholders": {
@@ -396,11 +396,11 @@
       }
     }
   },
-  "albumsShownPerPage": "Albums shown per page",
+  "albumsShownPerPage": "Sayfa başına gösterilen albüm sayısı",
   "@albumsShownPerPage": {
     "description": "lib/features/songs/screens/songs_screen.dart:2968"
   },
-  "albumsSongs": "{arg1} albums • {arg2} songs",
+  "albumsSongs": "{arg1} albüm • {arg2} şarkı",
   "@albumsSongs": {
     "description": "lib/features/artists/screens/artist_detail_screen.dart:620",
     "placeholders": {
@@ -412,51 +412,51 @@
       }
     }
   },
-  "all": "All",
+  "all": "Tümü",
   "@all": {
     "description": "lib/features/search/widgets/search_filter_chips.dart:60"
   },
-  "allArtists": "All Artists",
+  "allArtists": "Tüm sanatçılar",
   "@allArtists": {
     "description": "lib/features/artists/screens/artists_screen.dart:511"
   },
-  "allClearNoDuplicates": "All clear — no duplicates",
+  "allClearNoDuplicates": "Sorun yok — yinelenen kayıt bulunmadı",
   "@allClearNoDuplicates": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:264"
   },
-  "allFormats": "All Formats",
+  "allFormats": "Tüm biçimler",
   "@allFormats": {
     "description": "lib/providers/songs_provider.dart:116"
   },
-  "allFrequenciesEqually": "All frequencies equally",
+  "allFrequenciesEqually": "Tüm frekanslar eşit",
   "@allFrequenciesEqually": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:125"
   },
-  "allPass": "All Pass",
+  "allPass": "Tüm Geçiren",
   "@allPass": {
     "description": "lib/providers/equalizer_provider.dart:41"
   },
-  "allResultsAreHiddenByActive": "All results are hidden by active filters.",
+  "allResultsAreHiddenByActive": "Etkin filtreler nedeniyle tüm sonuçlar gizli.",
   "@allResultsAreHiddenByActive": {
     "description": "lib/features/player/widgets/online_lyrics_search_sheet.dart:701"
   },
-  "allSongs": "All Songs",
+  "allSongs": "Tüm şarkılar",
   "@allSongs": {
     "description": "lib/models/playback_context.dart:15"
   },
-  "allWordsStamped": "All words stamped",
+  "allWordsStamped": "Tüm sözcüklere zaman damgası eklendi",
   "@allWordsStamped": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1392"
   },
-  "allowed": "Allowed",
+  "allowed": "İzin verildi",
   "@allowed": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:683"
   },
-  "alphabetical": "Alphabetical",
+  "alphabetical": "Alfabetik",
   "@alphabetical": {
     "description": "lib/models/advance_list_order.dart:7"
   },
-  "alsoRespectsYourSystemTextSize": "Also respects your system text size",
+  "alsoRespectsYourSystemTextSize": "Sisteminin yazı tipi boyutuna da uyar",
   "@alsoRespectsYourSystemTextSize": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:234"
   },
@@ -469,15 +469,15 @@
       }
     }
   },
-  "amber": "Amber",
+  "amber": "Kehribar",
   "@amber": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:275"
   },
-  "andArtwork": " and artwork",
+  "andArtwork": " ve albüm kapağı",
   "@andArtwork": {
     "description": "lib/features/albums/widgets/identify_album_sheet.dart:58"
   },
-  "andMoreInRotation": "{arg1} and more in rotation",
+  "andMoreInRotation": "{arg1} ve dönüşümlü çalınan diğerleri",
   "@andMoreInRotation": {
     "description": "lib/features/menu/screens/menu_screen.dart:1439",
     "placeholders": {
@@ -490,11 +490,11 @@
   "@android": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:121"
   },
-  "androidAudioApi": "Android Audio API",
+  "androidAudioApi": "Android Ses API'si",
   "@androidAudioApi": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:346"
   },
-  "androidBlockedWritingToThisFile": "Android blocked writing to this file. Remove and re-add the folder in Settings to grant edit access, then try again.",
+  "androidBlockedWritingToThisFile": "Android bu dosyaya yazılmasını engelledi. Düzenleme izni vermek için klasörü Ayarlar'dan kaldırıp yeniden ekle, ardından tekrar dene.",
   "@androidBlockedWritingToThisFile": {
     "description": "lib/services/metadata_editor_service.dart:184"
   },
