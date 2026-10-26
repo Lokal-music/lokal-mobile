@@ -219,7 +219,7 @@ class AutoMixAnalysisCache {
     } catch (_) { return null; }
     // Sidecar revision is part of the memory identity: adding a report
     // during playback must not leave the earlier waveform-only memo live.
-    final advancedStamp = await File('$path\${AutoMixAdvancedReport.suffix}').stat();
+    final advancedStamp = await File('$path${AutoMixAdvancedReport.suffix}').stat();
     final identity = sha256.convert(utf8.encode(jsonEncode([
       version, path, stamp.size, stamp.modified.millisecondsSinceEpoch,
       song.duration.inMilliseconds,
