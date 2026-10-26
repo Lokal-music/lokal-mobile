@@ -145,7 +145,10 @@ class FavoritesService {
     // legacy IDs keep their historical ordinal ranks.
     final ordered = after.toList(growable: false);
     final now = DateTime.now().toUtc().microsecondsSinceEpoch;
-    var next = now;
+    // Even multiple likes inside one clock tick must remain ordered.
+    var next = existing.values.fold<int>(
+      now, (highest, rank) => rank > highest ? rank : highest,
+    );
     for (final id in ordered) {
       if (!before.contains(id)) {
         next++;
