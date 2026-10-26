@@ -199,14 +199,6 @@ void main() {
     });
     final audio = File('${directory.path}/Generated tone.wav');
     await audio.writeAsBytes(generatedPcmTone(), flush: true);
-    final artwork = File('${directory.path}/Generated artwork.png');
-    final artworkData = await rootBundle.load('assets/branding/lokal_icon.png');
-    await artwork.writeAsBytes(
-      artworkData.buffer.asUint8List(
-        artworkData.offsetInBytes,
-        artworkData.lengthInBytes,
-      ),
-    );
     final tagged = await tags.writeTags(
       path: audio.path,
       fields: const tags.TagEditFields(
@@ -228,6 +220,16 @@ void main() {
     expect(scan.totalFiles, 1);
     expect(scan.newOrModified.single.sampleRate, 44100);
     expect(scan.newOrModified.single.albumArtist, 'Various fixtures');
+
+    // Keep the scanner's single-audio-file fixture free of artwork files.
+    final artwork = File('${directory.path}/Generated artwork.png');
+    final artworkData = await rootBundle.load('assets/branding/lokal_icon.png');
+    await artwork.writeAsBytes(
+      artworkData.buffer.asUint8List(
+        artworkData.offsetInBytes,
+        artworkData.lengthInBytes,
+      ),
+    );
 
     debugPrint('iOS smoke: native scanner passed; executing QuickJS');
 

@@ -115,8 +115,14 @@ the actual host Rust metadata/QuickJS bridge (with `LOKAL_NATIVE_LIBRARY` set),
 iOS storage/document handling, processing selection, codec routing, ReplayGain
 and Desktop Link errors. These host checks do not replace the hosted iOS run.
 Build 19 compiled/packaged the updated release IPA, but attempt 1 failed the
-minimal Flutter control-app VM gate before Lokal could execute. Attempt 2 retries
-on a fresh hosted Mac. The newly added native UI interactions are still pending. The native Android widget regression passes all five cases (including the real
+minimal Flutter control-app VM gate before Lokal could execute. Attempt 2 was superseded by the fixture/documentation commit. Build 20 then
+passes the actual Library/Online controls, all four exclusive filters in each
+scope, profile-editor hit testing above the dock, navigation and Keychain on
+iOS 18.6, with screenshots (source `0d283e361ac664b809fa8a3360e389f1e8f93612`).
+Its scanner assertion stops the remaining suite: the added artwork PNG is
+correctly counted alongside the WAV, while the test expected only one file.
+Create the artwork after the single-file scan to preserve the scanner assertion.
+Player panel transitions and subsequent checks require the next native run. The native Android widget regression passes all five cases (including the real
 SharedPreferences numeric boundary), and application/integration analysis finds
 no errors (555 existing warning/info findings). Six focused player tests pass.
 
