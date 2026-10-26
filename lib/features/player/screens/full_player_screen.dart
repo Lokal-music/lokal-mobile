@@ -692,6 +692,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               ),
             ),
           if (_immersiveLyrics)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleImmersiveLyrics,
+                onLongPress: _showSpaceOptions,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          if (_immersiveLyrics)
             Positioned(
               left: 12, right: 12,
               bottom: MediaQuery.paddingOf(context).bottom + 52,
@@ -972,6 +981,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
                 ),
                 if (_immersiveLyrics)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _toggleImmersiveLyrics,
+                      onLongPress: _showSpaceOptions,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                if (_immersiveLyrics)
                   Positioned(
                     left: 10,
                     right: 10,
@@ -1166,7 +1184,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                     currentSong: song,
                     nextSong: _player.peekNext,
                     prevSong: _player.peekPrevious,
-                    enabled: progress == 0 && !_showLyrics && !_queue.isOpen,
+                    enabled: progress == 0 && !_showLyrics && !_queue.isOpen && !_immersiveLyrics,
                     onDragStateChanged: (value) {
                       _carouselDragging = value;
                       if (value) _restoreCanvasControls();
@@ -1316,7 +1334,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               );
             }
-            final atRest = p == 0 && !_queue.isOpen && !_showLyrics;
+            final atRest = p == 0 && !_queue.isOpen && !_showLyrics && !_immersiveLyrics;
             return ValueListenableBuilder<List<Song>>(
               valueListenable: _player.upNextNotifier,
               builder: (context, _, __) => ValueListenableBuilder<int>(
