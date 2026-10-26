@@ -89,6 +89,53 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('installs a streaming-only BitChord addon without enabling saves', (
+    tester,
+  ) async {
+    final store = _MemoryStore(const DiscoverySettings());
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(
+        request.url.toString(),
+        'https://bppcaf.bot-keep.xyz/manifest.json',
+      );
+      return http.Response(
+        jsonEncode({
+          'id': 'com.bitchord.qobuz',
+          'name': 'Qobuz',
+          'version': '1.0.0',
+          'resources': ['search', 'stream'],
+          'allowDownloads': 0,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    addTearDown(client.close);
+
+    await tester.pumpWidget(
+      _host(HttpAddonsSettingsPanel(store: store, client: client)),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('http-addon-manifest-url')),
+      'https://bppcaf.bot-keep.xyz/',
+    );
+    await tester.tap(find.byKey(const ValueKey('http-addon-add')));
+    for (var frame = 0; frame < 40 && store.saves == 0; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.pump();
+
+    expect(store.saves, 1);
+    expect(store.settings.addons, hasLength(1));
+    expect(store.settings.addons.single.endpoint, 'https://bppcaf.bot-keep.xyz');
+    expect(store.settings.addons.single.enabled, isTrue);
+    expect(store.settings.addons.single.displayName, 'Qobuz');
+    expect(find.text('Qobuz'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('rejects an invalid URL without contacting the server', (
     tester,
   ) async {
