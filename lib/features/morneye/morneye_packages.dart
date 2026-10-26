@@ -28,6 +28,12 @@ import 'morneye_playback_quality.dart';
 const morneyeRegistry =
     'https://raw.githubusercontent.com/mornyeapp/Mornye-Extension/refs/heads/main/registry.json';
 const morneyeCompatVersion = '5.1.0';
+/// Mornye's documented .spotiflac-ext format and its legacy/newer archives.
+bool morneyeIsPackageFileName(String filename) => RegExp(
+  r'\.(?:sflx|morneye-ext|spotiflac-ext)$',
+  caseSensitive: false,
+).hasMatch(filename);
+
 const morneyeFeatures = {
   'signedSession': 3,
   'sessionRefresh': 1,
@@ -1099,12 +1105,9 @@ class MorneyePackages {
     }
     if (bytes == null) {
       final path = url == null ? '' : Uri.parse(url).path;
-      if (!RegExp(
-        r'\.(sflx|morneye-ext|spotiflac-ext)$',
-        caseSensitive: false,
-      ).hasMatch(path)) {
+      if (!morneyeIsPackageFileName(path)) {
         throw const MorneyePackageError(
-          'Choose a .sflx or .morneye-ext package',
+          'Choose a .sflx, .spotiflac-ext or .morneye-ext package',
         );
       }
       bytes = await _document(url!, 32 * 1024 * 1024);
@@ -1306,6 +1309,7 @@ class MorneyePackages {
     List<String> grants = const [],
     void Function({double? percent, String? message})? onProgress,
     void Function(MorneyeTransfer)? onTransfer,
+    int heapMb = 64,
   }) {
     final network = _networkFor(addon);
     final session = addon.signedSession != null
@@ -1331,6 +1335,8 @@ class MorneyePackages {
         'signedSession': addon.manifest['signedSession'],
         'settings': settings(addon),
         'rawFfmpeg': (addon.manifest['capabilities'] as Map?)?['rawFfmpeg'],
+        // Host-only resource limit; not exposed as a user setting.
+        'heapMb': heapMb,
       },
       host,
       starter: _starter,
@@ -1660,6 +1666,9 @@ class MorneyePackages {
       grants: [staged.path],
       onProgress: onProgress,
       onTransfer: hooks ? null : onTransfer,
+      // Isolated download workers need headroom for segments/decryption.
+      // Browsing stays at 64 MiB. Native code caps this at 256 MiB.
+      heapMb: 256,
     );
     unawaited(cancel?.then((_) => runtime.close()));
     try {

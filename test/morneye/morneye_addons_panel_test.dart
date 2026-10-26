@@ -59,6 +59,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Install from file'), findsOneWidget);
+    expect(find.textContaining('.spotiflac-ext'), findsOneWidget);
     expect(find.text('Morneye official'), findsOneWidget);
     expect(find.byType(BackdropFilter), findsNothing);
 

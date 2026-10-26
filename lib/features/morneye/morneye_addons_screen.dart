@@ -173,11 +173,8 @@ class _MorneyeAddonsPanelState extends State<MorneyeAddonsPanel>
   Future<void> _installFile(MorneyePackages packages) async {
     final file = await FilePicker.pickFile(type: FileType.any);
     if (file == null) return;
-    if (!RegExp(
-      r'\.(sflx|morneye-ext)$',
-      caseSensitive: false,
-    ).hasMatch(file.name)) {
-      _say('Choose a .sflx or .morneye-ext package');
+    if (!morneyeIsPackageFileName(file.name)) {
+      _say('Choose a .sflx, .spotiflac-ext or .morneye-ext package');
       return;
     }
     final addon = await _run(
@@ -227,7 +224,7 @@ class _MorneyeAddonsPanelState extends State<MorneyeAddonsPanel>
         ),
       LokalSettingRow(
         label: 'Install from file',
-        description: 'A .sflx or .morneye-ext package you downloaded.',
+        description: 'A .sflx, .spotiflac-ext or .morneye-ext package.',
         icon: Icons.file_open_rounded,
         enabled: !_busy,
         onTap: () => _installFile(packages),
