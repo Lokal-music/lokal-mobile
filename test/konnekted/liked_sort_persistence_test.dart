@@ -1,9 +1,14 @@
 import 'dart:convert';
 
+import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/konnekted/library/lokal_song_browser.dart';
 import 'package:flick/features/konnekted/library/lokal_song_filter.dart';
 import 'package:flick/models/song.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Song _song(String id, String title, DateTime added) => Song(
   id: id,
@@ -56,6 +61,62 @@ void main() {
     expect(decoded.location, LokalSongLocation.phone);
     expect(decoded.audioFilter, 'format:16:44100');
     expect(decoded.query, 'Soundtrack');
+  });
+
+  testWidgets('Likes restores direction and quality/location filters across visits',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'lokal.likes.test_view': jsonEncode(const LokalSongBrowserViewSettings(
+        sort: LokalSongSort.recentlyAdded,
+        descending: false,
+        location: LokalSongLocation.phone,
+        audioFilter: 'quality:lossless',
+        query: '',
+      ).toJson()),
+    });
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    Widget page() => ProviderScope(
+      child: MaterialApp(
+        theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
+        home: Scaffold(
+          body: CustomScrollView(
+            slivers: [
+              LokalSongBrowser(
+                songs: [_song('local', 'Local track', DateTime(2026))],
+                preferencesKey: 'lokal.likes.test_view',
+                recentlyAddedRanks: const {'local': 1},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpWidget(page());
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Ascending · switch to descending'), findsOneWidget);
+    expect(find.text('Mobile'), findsOneWidget);
+    expect(find.text('Lossless'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Ascending · switch to descending'));
+    await tester.pumpAndSettle();
+    final preferences = await SharedPreferences.getInstance();
+    // SharedPreferences writes are queued, so flush the widget's microtasks.
+    await tester.pump(const Duration(milliseconds: 50));
+    final saved = LokalSongBrowserViewSettings.decode(
+      preferences.getString('lokal.likes.test_view'),
+    );
+    expect(saved!.descending, isTrue);
+    expect(saved.location, LokalSongLocation.phone);
+    expect(saved.audioFilter, 'quality:lossless');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(page());
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Descending · switch to ascending'), findsOneWidget);
+    expect(find.text('Mobile'), findsOneWidget);
   });
 
   test('malformed settings and removed format/quality names are safe', () {
