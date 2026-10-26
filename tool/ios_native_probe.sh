@@ -5,7 +5,7 @@ set -euo pipefail
 
 probe_root="$(cd "$(dirname "$0")/.." && pwd)"
 probe_target="${1:-aarch64-apple-ios}"
-probe_min_ios="15.0"
+probe_min_ios="16.0"
 
 if [[ "$(uname -s)" != Darwin ]]; then
   echo 'This probe requires macOS with Xcode; use the manual iOS native probe workflow.' >&2
@@ -15,13 +15,13 @@ fi
 case "$probe_target" in
   aarch64-apple-ios)
     probe_sdk=iphoneos
-    probe_clang_target=arm64-apple-ios15.0
+    probe_clang_target=arm64-apple-ios16.0
     ;;
   aarch64-apple-ios-sim|x86_64-apple-ios)
     probe_sdk=iphonesimulator
-    probe_clang_target=arm64-apple-ios15.0-simulator
+    probe_clang_target=arm64-apple-ios16.0-simulator
     if [[ "$probe_target" == x86_64-apple-ios ]]; then
-      probe_clang_target=x86_64-apple-ios15.0-simulator
+      probe_clang_target=x86_64-apple-ios16.0-simulator
     fi
     ;;
   *)

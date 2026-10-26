@@ -177,6 +177,11 @@ class RustBuilder {
   Future<Map<String, String>> _buildEnvironment() async {
     if (target.darwinPlatform == 'iphoneos' ||
         target.darwinPlatform == 'iphonesimulator') {
+      final deploymentTarget =
+          Platform.environment['IPHONEOS_DEPLOYMENT_TARGET'] ?? '16.0';
+      if (!RegExp(r'^\d+\.\d+(?:\.\d+)?$').hasMatch(deploymentTarget)) {
+        throw StateError('Invalid iPhone deployment target: $deploymentTarget');
+      }
       final sdk = runCommand('xcrun', [
         '--sdk',
         target.darwinPlatform!,
@@ -184,10 +189,10 @@ class RustBuilder {
       ]).stdout.toString().trim();
       return {
         'SDKROOT': sdk,
-        'IPHONEOS_DEPLOYMENT_TARGET': '15.0',
+        'IPHONEOS_DEPLOYMENT_TARGET': deploymentTarget,
         'BINDGEN_EXTRA_CLANG_ARGS':
             '${Platform.environment['BINDGEN_EXTRA_CLANG_ARGS'] ?? ''} '
-                '--target=${target.darwinArch == 'arm64' ? 'arm64' : 'x86_64'}-apple-ios15.0${target.darwinPlatform == 'iphonesimulator' ? '-simulator' : ''} '
+                '--target=${target.darwinArch == 'arm64' ? 'arm64' : 'x86_64'}-apple-ios$deploymentTarget${target.darwinPlatform == 'iphonesimulator' ? '-simulator' : ''} '
                 '-isysroot "$sdk"',
       };
     }

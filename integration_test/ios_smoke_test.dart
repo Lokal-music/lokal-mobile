@@ -628,7 +628,7 @@ void main() {
 
     // Real HTTP -> shared artwork cache -> Swift UIImage -> Now Playing.
     // The 40px remote fixture distinguishes this from the earlier local art.
-    await NotificationService.instance.updateNotification(
+    await NotificationService().updateNotification(
       song: successor.copyWith(
         albumArt: fixture.single.origin
             .resolve('/lokal-ios-notification-art.png')

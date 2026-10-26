@@ -30,7 +30,7 @@ jobs:
     env:
       CI: 'true'
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
-      IPHONEOS_DEPLOYMENT_TARGET: '15.0'
+      IPHONEOS_DEPLOYMENT_TARGET: '16.0'
       DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
       IOS_SIMULATOR_RUNTIME_VERSION: '18.6'
       IOS_SIMULATOR_DEVICE_TYPE: com.apple.CoreSimulator.SimDeviceType.iPhone-16

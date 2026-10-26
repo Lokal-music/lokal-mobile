@@ -67,7 +67,7 @@ flowchart LR
 
 ### Implementation already in place
 
-- iPhone-only runner, iOS 15 floor, generated alternate icons, pinned build tools
+- iPhone-only runner, iOS 16 floor, generated alternate icons, pinned build tools
   and locked dependencies, source/license bundle and unsigned IPA inspection.
 - Swift document imports with scoped/coordinated transactional copies; persistent
   app-owned library root and ID-preserving sandbox-path rebasing; database files
@@ -362,7 +362,7 @@ different Android/iOS package names, so subtracting those name lists would creat
 false missing-plugin findings.
 
 The locked file picker, FFmpeg audio and home-widget native specifications declare
-iOS 14 floors. The app targets **iOS 15+**; all 33 device Mach-O binaries in the
+iOS 14 floors. The app now targets **iOS 16+** (maintainer choice for the current Cast SDK); all 33 device Mach-O binaries in the
 first engineering package declare minimum versions at or below that floor.
 Actual OS-version compatibility still needs runtime and physical-device tests.
 The hosted workflows now pin Xcode 26.0.1 (17A400), Flutter 3.47.1 and Rust 1.98.0.
@@ -645,3 +645,10 @@ the repository's locked versions and actual builds decide compatibility.
 - [Apple: directory access](https://developer.apple.com/documentation/uikit/providing-access-to-directories) — document-picker directory access and scoped resource ownership; consult during the storage spike.
 - [just_audio platform matrix](https://pub.dev/documentation/just_audio/latest/) — documented iOS capabilities and file/network requirements; validate locked 0.10.6 separately.
 - [Flutter app extensions](https://docs.flutter.dev/platform-integration/ios/app-extensions) — extension lifecycle and shared-resource/App Group considerations.
+
+
+Compatibility decision, 26 October 2026: the maintainer chose one full-featured
+**iOS 16+** app rather than separate iOS 15/base and iOS 16/Cast distributions.
+Runner/pod/native probe/compiler targets and the package gate follow that floor.
+Earlier recorded engineering IPAs retain their original metadata and are not
+retroactively described as iOS 16 builds.
