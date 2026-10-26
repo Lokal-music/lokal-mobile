@@ -10,6 +10,7 @@ import 'package:flick/models/song.dart';
 import 'package:flick/services/audio_engine.dart';
 import 'package:flick/core/utils/dev_log.dart';
 import 'package:flick/services/atmos_diagnostics.dart';
+import 'package:flick/services/automix_analysis_cache.dart';
 
 /// A queue entry's identity includes the actual encoded media source. Two
 /// versions of the same catalogue song can share an ID but not a decoder or
@@ -43,6 +44,7 @@ typedef AndroidTrackIgnorePredicate = bool Function(Song track);
 typedef AndroidFastStartPredicate = bool Function();
 typedef AndroidCrossfadeConfigProvider = AndroidCrossfadeConfig Function();
 typedef AndroidNextSongProvider = Song? Function();
+typedef AndroidAutoMixProfileLookup = Future<AutoMixProfile?> Function(Song song);
 typedef AndroidTrackAdvancedCallback = void Function(Song track);
 typedef AndroidTrackErrorCallback = void Function(Song track);
 
@@ -167,6 +169,7 @@ class AndroidAudioEngine implements AudioEngine {
     required AndroidTrackIgnorePredicate shouldIgnoreTrack,
     required AndroidFastStartPredicate shouldFastStartCurrentTrackOnly,
     AndroidCrossfadeConfigProvider? crossfadeConfigProvider,
+    AndroidAutoMixProfileLookup? automixProfileLookup,
     AndroidNextSongProvider? onNextSong,
     AndroidTrackAdvancedCallback? onTrackAdvanced,
     AndroidTrackErrorCallback? onTrackError,
@@ -184,6 +187,7 @@ class AndroidAudioEngine implements AudioEngine {
        _shouldFastStartCurrentTrackOnly = shouldFastStartCurrentTrackOnly,
        _crossfadeConfigProvider =
            crossfadeConfigProvider ?? (() => AndroidCrossfadeConfig.disabled),
+       _automixProfileLookup = automixProfileLookup,
        _onNextSong = onNextSong,
        _onTrackAdvanced = onTrackAdvanced,
        _onTrackError = onTrackError;
@@ -201,6 +205,9 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidTrackIgnorePredicate _shouldIgnoreTrack;
   final AndroidFastStartPredicate _shouldFastStartCurrentTrackOnly;
   final AndroidCrossfadeConfigProvider _crossfadeConfigProvider;
+  final AndroidAutoMixProfileLookup? _automixProfileLookup;
+  AutoMixProfile? _currentAutoMixProfile;
+  int _autoMixProfileGeneration = 0;
   final AndroidNextSongProvider? _onNextSong;
   final AndroidTrackAdvancedCallback? _onTrackAdvanced;
   final AndroidTrackErrorCallback? _onTrackError;
@@ -676,6 +683,17 @@ class AndroidAudioEngine implements AudioEngine {
       _sourceFailed = false;
     }
     _loadedTrack = track;
+    _currentAutoMixProfile = null;
+    final profileRequest = ++_autoMixProfileGeneration;
+    final lookup = _automixProfileLookup;
+    if (lookup != null && !track.atmosEncoded) {
+      unawaited(lookup(track).then((profile) {
+        if (profileRequest == _autoMixProfileGeneration &&
+            identical(_loadedTrack, track)) {
+          _currentAutoMixProfile = profile;
+        }
+      }).catchError((Object _) {}));
+    }
     _lastAtmosPlaybackState = null;
     if (track.atmosEncoded) {
       AtmosDiagnostics.record('native_load_start', {
@@ -883,22 +901,44 @@ class AndroidAudioEngine implements AudioEngine {
   @override
   void updateTrack(Song track) {}
 
+  /// Use cached waveform analysis only to omit a substantial trailing
+  /// digital silence. Never trim ambiguous short fades or sources whose
+  /// measured duration disagrees with the active decoder.
+  Duration _audibleTransitionEnd(Duration? decoderDuration) {
+    final duration = decoderDuration ?? _loadedTrack?.duration ?? Duration.zero;
+    final profile = _currentAutoMixProfile;
+    if (profile == null || duration.inMilliseconds < 25000) return duration;
+    if ((duration.inMilliseconds / 1000 - profile.durationSeconds).abs() > 2) {
+      return duration;
+    }
+    final audible = Duration(
+      milliseconds: (profile.audibleEndSeconds * 1000).round(),
+    );
+    final silence = duration - audible;
+    return silence >= const Duration(seconds: 3) &&
+            silence <= const Duration(seconds: 15) &&
+            audible >= const Duration(seconds: 20)
+        ? audible
+        : duration;
+  }
+
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
     if (_crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
     final cfg = _crossfadeConfigProvider();
     final duration = player.duration;
+    final audibleDuration = _audibleTransitionEnd(duration);
     if (!shouldPrepareCrossfade(
       enabled: cfg.enabled,
-      duration: duration ?? Duration.zero,
+      duration: audibleDuration,
       position: pos,
       fadeSecs: cfg.durationSecs,
     )) {
       return;
     }
-    _armCrossfade(cfg, (cfg.durationSecs * 1000).round());
+    _armCrossfade(cfg, (cfg.durationSecs * 1000).round(), audibleDuration);
   }
 
-  void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs) {
+  void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs, Duration mixEnd) {
     // The preparation phase is independent of the fade itself: streams may
     // require several seconds to buffer. Skips/stops/route changes invalidate
     // this attempt and cannot start an obsolete successor after an await.
@@ -934,6 +974,17 @@ class AndroidAudioEngine implements AudioEngine {
       try {
         final incoming = await _ensureSecondary();
         if (!valid()) { releaseIfOwned(); return; }
+        // A cached local profile can trim verified leading silence. Provider
+        // streams and unavailable analyses keep their natural start.
+        AutoMixProfile? upcomingProfile;
+        if (_automixProfileLookup case final fetch?) {
+          try {
+            upcomingProfile = await fetch(next).timeout(
+              const Duration(milliseconds: 400), onTimeout: () => null,
+            );
+          } catch (_) {}
+        }
+        if (!valid()) { releaseIfOwned(); return; }
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
         // A muted track must stay muted through the preparation and ramp.
@@ -942,7 +993,12 @@ class AndroidAudioEngine implements AudioEngine {
             .setAudioSource(source, preload: true)
             .timeout(const Duration(seconds: 30));
         if (!valid()) { releaseIfOwned(); return; }
-        await incoming.seek(Duration.zero).timeout(const Duration(seconds: 15));
+        final entrance = upcomingProfile?.leadInSeconds ?? 0;
+        final entry = entrance >= 0.4 && entrance <= 3 &&
+            (upcomingProfile?.durationSeconds ?? 0) >= 20
+            ? Duration(milliseconds: (entrance * 1000).round())
+            : Duration.zero;
+        await incoming.seek(entry).timeout(const Duration(seconds: 15));
         if (!valid()) { releaseIfOwned(); return; }
         await incoming.setVolume(0);
         await incoming.setSpeed(outgoing.speed);
@@ -954,9 +1010,7 @@ class AndroidAudioEngine implements AudioEngine {
         // cannot cause a premature transition. The guard also covers manual
         // queue edits that do not trigger a player.load().
         while (valid()) {
-          final remainingMs = ((outgoing.duration ?? outgoingTrack.duration) -
-                  outgoing.position)
-              .inMilliseconds;
+          final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
           if (outgoing.processingState == just_audio.ProcessingState.completed ||
               remainingMs <= 0) {
             _crossfadeArmed = false; // normal end-of-track takes over
@@ -967,9 +1021,7 @@ class AndroidAudioEngine implements AudioEngine {
         }
         if (!valid()) { releaseIfOwned(); return; }
 
-        final remainingMs =
-            ((outgoing.duration ?? outgoingTrack.duration) - outgoing.position)
-                .inMilliseconds;
+        final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
         if (remainingMs <= 0) {
           _crossfadeArmed = false;
           return;
