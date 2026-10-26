@@ -51,6 +51,19 @@ String? normalizeLyricsPlusV2(
   if (entries.isEmpty || invalid > entries.length ~/ 4) return null;
   entries.sort((a, b) => a.time.compareTo(b.time));
 
+  // Many identical timestamps mean this is not usable synchronized lyrics:
+  // the binary-search player would immediately jump to the final duplicate.
+  if (entries.length >= 3) {
+    final occurrences = <int, int>{};
+    for (final entry in entries) {
+      occurrences[entry.time] = (occurrences[entry.time] ?? 0) + 1;
+    }
+    final largest = occurrences.values.fold<int>(
+      0, (maximum, count) => count > maximum ? count : maximum,
+    );
+    if (largest > entries.length / 2) return null;
+  }
+
   // A purported full-song lyric transcript whose *first* line is in the
   // final portion of a normal-length track is not usable for following it.
   // Reject it, leaving the auto selector free to use another provider.
