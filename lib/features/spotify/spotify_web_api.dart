@@ -36,6 +36,7 @@ class SpotifyWebApi implements SpotifyLibraryApi {
         '21ea11a6ac75a5f3e01fd365d29c18e0a4a8b7dc09f89bbb5d73910190c6acaf',
     'fetchLibraryTracks':
         '087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240',
+    'libraryV3': '390c78e5b951029bad359785e69b07b536a509c581cbcd0aded5e5067f187455',
   };
   Future<Map<String, dynamic>> query(
     String operation,
@@ -111,6 +112,61 @@ class SpotifyWebApi implements SpotifyLibraryApi {
       );
     }
     throw const SpotifyApiException('Spotify could not refresh your session.');
+  }
+
+  /// Spotify web-player Artists library, matching desktop's libraryV3 API.
+  /// Read only: Spotify's official /me/following endpoint often rejects the
+  /// cookie-backed WebPlayer session. A partial response never gets imported.
+  Future<List<String>> getFollowedArtists({
+    void Function(int loaded)? onProgress,
+    SpotifyCancellation? cancellation,
+    int pageSize = 50,
+    int maxArtists = 2000,
+  }) async {
+    final size = pageSize.clamp(1, 50).toInt();
+    final limit = maxArtists.clamp(size, 2000).toInt();
+    final names = <String, String>{};
+    for (var offset = 0; offset < limit; offset += size) {
+      cancellation?.check();
+      final data = await query('libraryV3', {
+        'filters': ['Artists'],
+        'order': null,
+        'textFilter': null,
+        'features': ['LIKED_SONGS', 'YOUR_EPISODES_V2', 'PRERELEASES', 'EVENTS'],
+        'limit': size, 'offset': offset, 'flatten': false,
+        'folderUri': null, 'includeFoldersWhenFlattening': true,
+      }, cancellation: cancellation);
+      final me = data['me'];
+      final library = me is Map ? me['libraryV3'] : null;
+      if (library is! Map || library['items'] is! List) {
+        throw const SpotifyApiException(
+          'Spotify could not read followed artists. Reconnect and retry.',
+        );
+      }
+      final items = library['items'] as List;
+      for (final row in items.whereType<Map>()) {
+        final wrapper = row['item'];
+        final artist = wrapper is Map ? wrapper['data'] : null;
+        if (artist is! Map || artist['__typename'] != 'Artist') continue;
+        final profile = artist['profile'];
+        final rawName = profile is Map ? profile['name'] : null;
+        final name = rawName is String ? rawName.trim() : '';
+        if (name.isNotEmpty && name.length <= 200) {
+          names.putIfAbsent(name.toLowerCase(), () => name);
+        }
+      }
+      onProgress?.call(names.length);
+      final total = (library['totalCount'] as num?)?.toInt();
+      if (total != null && total > limit) {
+        throw const SpotifyApiException('Spotify artist list exceeds the 2000-artist import limit.');
+      }
+      if (items.isEmpty || items.length < size ||
+          (total != null && offset + size >= total)) break;
+      if (offset + size >= limit) {
+        throw const SpotifyApiException('Spotify artist list was incomplete. Retry later.');
+      }
+    }
+    return names.values.toList(growable: false);
   }
 
   @override
