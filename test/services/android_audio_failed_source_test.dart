@@ -243,6 +243,58 @@ void main() {
     expect(nextFade.loads, 1);
   });
 
+  testWidgets('pausing during early preparation cannot start the fade', (tester) async {
+    final outgoing = _Player();
+    final incoming = _Player()..hungLoad = Completer<Duration?>();
+    final songs = [
+      const Song(id: 'first', title: 'First', artist: 'Artist',
+          duration: Duration(minutes: 3), fileType: 'FLAC',
+          filePath: '/first.flac'),
+      const Song(id: 'second', title: 'Second', artist: 'Artist',
+          duration: Duration(minutes: 3), fileType: 'FLAC',
+          filePath: '/second.flac'),
+    ];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => outgoing,
+      secondaryPlayerProvider: () async => incoming,
+      sourcesBuilder: () async => ja.AudioSource.uri(Uri.parse('file:///first.flac')),
+      sourceBuilder: (_) async => ja.AudioSource.uri(Uri.parse('file:///second.flac')),
+      playlistProvider: () => songs,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+      crossfadeConfigProvider: () => const AndroidCrossfadeConfig(
+        enabled: true, durationSecs: 3, curve: AndroidCrossfadeCurve.equalPower,
+      ),
+      onNextSong: () => songs.last,
+    );
+    addTearDown(() async {
+      incoming.hungLoad?.complete();
+      await engine.dispose();
+      await outgoing.positions.close();
+      await incoming.positions.close();
+      await outgoing.errors.close();
+      await incoming.errors.close();
+    });
+    await engine.load(songs.first);
+    await engine.play();
+    outgoing.positions.add(const Duration(minutes: 2, seconds: 52));
+    await tester.pump();
+    await tester.pump();
+    expect(incoming.loads, 1, reason: 'the next decoder starts loading early');
+    expect(incoming.playCalls, 0);
+    await engine.pause();
+    await engine.play();
+    expect(incoming.playCalls, 0, reason: 'resume cannot commit a prepared-only mix');
+    incoming.hungLoad!.complete(const Duration(minutes: 3));
+    await tester.pump();
+    outgoing.positions.add(const Duration(minutes: 2, seconds: 58));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(incoming.playCalls, 1, reason: 'mix commits only in the fade window');
+  });
+
   testWidgets('a stalled source is discarded and the next tap uses a fresh player', (
     tester,
   ) async {
