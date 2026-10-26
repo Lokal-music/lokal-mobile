@@ -129,12 +129,19 @@ void main() {
     expect(lyric.style.fontSize, 31);
     final translation = find.text('Next subtitle');
     expect(translation, findsNothing);
-    final ancestors = find.ancestor(
-      of: find.byType(LyricMotionLine),
-      matching: find.byType(DecoratedBox),
-    );
-    expect(ancestors, findsNothing,
-        reason: 'The black pill/shade behind Space lyrics must be removed');
+    var darkSubtitlePill = false;
+    tester.element(find.byType(LyricMotionLine)).visitAncestorElements((e) {
+      if (e.widget is DecoratedBox) {
+        final decoration = (e.widget as DecoratedBox).decoration;
+        if (decoration is BoxDecoration &&
+            decoration.color == const Color(0x44000000)) {
+          darkSubtitlePill = true;
+        }
+      }
+      return true;
+    });
+    expect(darkSubtitlePill, isFalse,
+        reason: 'The previous dark subtitle-pill decoration must be absent');
   });
 
   testWidgets('Space advances syllables between coarse playback position samples',
