@@ -240,7 +240,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   @override
   void dispose() {
     if (_videoFullscreen) {
-      // Restore standard edge-to-edge system bars when leaving a video.
+      // Restore Lokal's default portrait orientation on every exit path.
+      unawaited(SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]));
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     }
     LokalPerformanceAdvisor.exitPlayerSurface('modern-full-player');
@@ -434,6 +435,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
   void _toggleVideoFullscreen() {
     setState(() => _videoFullscreen = !_videoFullscreen);
+    unawaited(SystemChrome.setPreferredOrientations(
+      _videoFullscreen
+          ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+          : [DeviceOrientation.portraitUp],
+    ));
     unawaited(SystemChrome.setEnabledSystemUIMode(
       _videoFullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
     ));
