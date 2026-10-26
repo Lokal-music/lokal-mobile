@@ -257,6 +257,13 @@ class FlowController extends AsyncNotifier<FlowData> {
     }
     if (!ref.mounted ||
         (active && !playback.ownsSession(data.session.seed))) return;
+    // The online provider is a discovery boundary, not a policy bypass:
+    // apply the same bans, genre exclusions and recording deduplication.
+    online = library.eligibleOnline(
+      data,
+      online,
+      limit: remaining.clamp(0, FlowRules.topUpTracks),
+    );
     library.rememberOnline(online);
     final local = library.topUp(data).take(
       (remaining.clamp(0, FlowRules.topUpTracks) - online.length)
