@@ -51,6 +51,7 @@ internal class LokalMusicVideoView(
                 .build(),
             true, // Own Android audio focus while native video is playing.
         )
+        setHandleAudioBecomingNoisy(true)
     }
     private val view = (LayoutInflater.from(context).inflate(
         R.layout.lokal_music_video_player, null
