@@ -134,7 +134,6 @@ class LokalSongBrowser extends ConsumerStatefulWidget {
     this.subtitleOf,
     this.recentlyAddedRanks,
     this.preferencesKey,
-    this.playbackQueueBuilder,
   });
 
   final List<Song> songs;
@@ -143,8 +142,6 @@ class LokalSongBrowser extends ConsumerStatefulWidget {
   final Map<String, int>? recentlyAddedRanks;
   /// Optional persisted-view key, scoped to Likes rather than all song lists.
   final String? preferencesKey;
-  /// Resolve only while initiating playback; never churn resolver tokens in build.
-  final List<Song> Function(List<Song>)? playbackQueueBuilder;
 
   /// Offers [LokalSongSort.original] under this name, e.g. "Playlist order".
   final String? originalLabel;
@@ -421,21 +418,6 @@ class _LokalSongBrowserState extends ConsumerState<LokalSongBrowser> {
     }
   }
 
-  void _playVisible(
-    List<Song> songs, {
-    Song? start,
-    bool shuffle = false,
-  }) {
-    final playingQueue = widget.playbackQueueBuilder?.call(songs) ?? songs;
-    final selectedIndex =
-        start == null ? -1 : songs.indexWhere((song) => song.id == start.id);
-    unawaited(lokalPlay(
-      context, ref, playingQueue,
-      start: selectedIndex < 0 ? null : playingQueue[selectedIndex],
-      shuffle: shuffle,
-    ));
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = context.lokal;
@@ -536,15 +518,7 @@ class _LokalSongBrowserState extends ConsumerState<LokalSongBrowser> {
             ),
           ),
         ),
-        SliverToBoxAdapter(
-          child: LokalPlayShufflePills(
-            songs: songs,
-            onPlay: widget.playbackQueueBuilder == null
-                ? null : () => _playVisible(songs),
-            onShuffle: widget.playbackQueueBuilder == null
-                ? null : () => _playVisible(songs, shuffle: true),
-          ),
-        ),
+        SliverToBoxAdapter(child: LokalPlayShufflePills(songs: songs)),
         if (songs.isEmpty)
           SliverToBoxAdapter(
             child: LokalEmptyState(
@@ -563,7 +537,7 @@ class _LokalSongBrowserState extends ConsumerState<LokalSongBrowser> {
               return LokalTrackRow(
                 song: song,
                 subtitle: widget.subtitleOf?.call(song),
-                onTap: () => _playVisible(songs, start: song),
+                onTap: () => lokalPlay(context, ref, songs, start: song),
                 onRemove: widget.onRemove == null
                     ? null
                     : () => widget.onRemove!(song),
@@ -589,7 +563,6 @@ class LokalSongListPage extends ConsumerWidget {
     this.subtitleOf,
     this.recentlyAddedRanks,
     this.preferencesKey,
-    this.playbackQueueBuilder,
   });
 
   final String title;
@@ -602,7 +575,6 @@ class LokalSongListPage extends ConsumerWidget {
   final String Function(Song song)? subtitleOf;
   final Map<String, int> Function(WidgetRef ref)? recentlyAddedRanks;
   final String? preferencesKey;
-  final List<Song> Function(List<Song>)? playbackQueueBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -620,7 +592,6 @@ class LokalSongListPage extends ConsumerWidget {
             subtitleOf: subtitleOf,
             recentlyAddedRanks: recentlyAddedRanks?.call(ref),
             preferencesKey: preferencesKey,
-            playbackQueueBuilder: playbackQueueBuilder,
           )
         else
           SliverToBoxAdapter(
