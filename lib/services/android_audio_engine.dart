@@ -151,6 +151,25 @@ Duration automixEffectiveAudibleEnd(
 }
 
 @visibleForTesting
+Duration? automixModelEnd(
+  Duration decoderDuration, AutoMixProfile? profile, double fadeSecs,
+) {
+  if (profile == null || profile.modelExits.isEmpty ||
+      !fadeSecs.isFinite || fadeSecs <= 0) return null;
+  final duration = decoderDuration.inMilliseconds / 1000;
+  if (duration < 30 ||
+      (duration - profile.durationSeconds).abs() > 2) return null;
+  // A CUE-DETR overlap start is not proof of a vocal-free region. Limit
+  // early skips to the last 30 seconds unless a real stem mixer is present.
+  final candidates = profile.modelExits.where((time) =>
+      time.isFinite && time >= math.max(duration * 0.6, duration - 30) &&
+      time >= 20 && time + fadeSecs <= duration);
+  if (candidates.isEmpty) return null;
+  final start = candidates.reduce(math.max);
+  return Duration(milliseconds: ((start + fadeSecs) * 1000).round());
+}
+
+@visibleForTesting
 bool shouldUseFastStartCurrentTrackOnly({
   required bool allowFastStart,
   required bool loadedSingleTrackOnly,
@@ -938,18 +957,24 @@ class AndroidAudioEngine implements AudioEngine {
     final cfg = _crossfadeConfigProvider();
     final duration = player.duration;
     final audibleDuration = _audibleTransitionEnd(duration);
+    final modelEnd = automixModelEnd(
+      duration ?? Duration.zero, _currentAutoMixProfile, cfg.durationSecs,
+    );
+    final targetEnd = modelEnd ?? audibleDuration;
     if (!shouldPrepareCrossfade(
       enabled: cfg.enabled,
-      duration: audibleDuration,
+      duration: targetEnd,
       position: pos,
       fadeSecs: cfg.durationSecs,
     )) {
       return;
     }
-    _armCrossfade(cfg, (cfg.durationSecs * 1000).round(), audibleDuration);
+    _armCrossfade(cfg, (cfg.durationSecs * 1000).round(),
+        audibleDuration, modelEnd);
   }
 
-  void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs, Duration mixEnd) {
+  void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs,
+      Duration normalMixEnd, Duration? modelMixEnd) {
     // The preparation phase is independent of the fade itself: streams may
     // require several seconds to buffer. Skips/stops/route changes invalidate
     // this attempt and cannot start an obsolete successor after an await.
@@ -996,6 +1021,9 @@ class AndroidAudioEngine implements AudioEngine {
           } catch (_) {}
         }
         if (!valid()) { releaseIfOwned(); return; }
+        final modelPair = modelMixEnd != null &&
+            upcomingProfile != null && upcomingProfile.modelEntrances.isNotEmpty;
+        final mixEnd = modelPair ? modelMixEnd : normalMixEnd;
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
         // A muted track must stay muted through the preparation and ramp.
@@ -1004,9 +1032,14 @@ class AndroidAudioEngine implements AudioEngine {
             .setAudioSource(source, preload: true)
             .timeout(const Duration(seconds: 30));
         if (!valid()) { releaseIfOwned(); return; }
-        final entrance = upcomingProfile?.leadInSeconds ?? 0;
-        final entry = entrance >= 0.4 && entrance <= 3 &&
-            (upcomingProfile?.durationSeconds ?? 0) >= 20
+        final modelEntry = modelPair
+            ? upcomingProfile.modelEntrances.where((t) =>
+                t >= 0 && t <= 45 &&
+                t <= upcomingProfile.durationSeconds - 20).firstOrNull
+            : null;
+        final entrance = modelEntry ?? upcomingProfile?.leadInSeconds ?? 0;
+        final entry = (modelEntry != null || (entrance >= 0.4 && entrance <= 3)) &&
+                (upcomingProfile?.durationSeconds ?? 0) >= 20
             ? Duration(milliseconds: (entrance * 1000).round())
             : Duration.zero;
         await incoming.seek(entry).timeout(const Duration(seconds: 15));
