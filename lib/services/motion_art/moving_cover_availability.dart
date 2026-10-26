@@ -59,9 +59,15 @@ Future<bool> hasAvailableMovingCover({
 /// cannot inherit the preceding song's Cover button while lookup is pending.
 final movingCoverAvailabilityProvider =
     FutureProvider.autoDispose.family<bool, MovingCoverAvailabilityKey>(
-  (ref, song) => hasAvailableMovingCover(
-    song: song,
-    settings: ref.watch(movingCoverSettingsProvider),
-    lookup: ref.watch(movingCoverLookupProvider),
-  ),
+  (ref, song) {
+    // A per-track Cover toggle only changes disabledSongs; it must not
+    // invalidate availability and briefly make its own button disappear.
+    // Source changes (including enabling Spotify Canvas) do trigger a probe.
+    ref.watch(movingCoverSettingsProvider.select((s) => s.order.join(',')));
+    return hasAvailableMovingCover(
+      song: song,
+      settings: ref.read(movingCoverSettingsProvider),
+      lookup: ref.watch(movingCoverLookupProvider),
+    );
+  },
 );
