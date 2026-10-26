@@ -42,14 +42,36 @@ class LocalAudioLifecycle {
   final Future<void> Function() destroyNativeOutput;
   final Future<void> Function() restoreSession;
   final _zoneKey = Object();
+  final _remoteEpochKey = Object();
   final _participants = <Object, Future<void> Function()>{};
   final _requests = <_LocalAudioRequest>{};
-  final phase = ValueNotifier(LocalAudioPhase.ready);
+  final _phase = ValueNotifier(LocalAudioPhase.ready);
+  ValueListenable<LocalAudioPhase> get phase => _phase;
   BigInt _epoch;
   Future<void> _cleanup = Future<void>.value();
   Object? cleanupError;
 
   BigInt get epoch => _epoch;
+
+  /// Also checks the native counter, which advances before Dart is notified.
+  bool get canUseLocalOutput {
+    if (_phase.value != LocalAudioPhase.ready &&
+        _phase.value != LocalAudioPhase.paused) {
+      return false;
+    }
+    try {
+      return _nativeEpoch() == _epoch;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Clear the recovery notice only after an output confirms actual playback.
+  void confirmLocalPlaybackStarted() {
+    if (_phase.value == LocalAudioPhase.paused && canUseLocalOutput) {
+      _phase.value = LocalAudioPhase.ready;
+    }
+  }
 
   /// Retire synchronously, then return actual disposal acknowledgement. A
   /// participant must coalesce repeated disposal of the same native objects.
@@ -78,9 +100,20 @@ class LocalAudioLifecycle {
     requestEpoch;
   }
 
+  void checkAfterAwait() {
+    if (Zone.current[_zoneKey] != null ||
+        Zone.current[_remoteEpochKey] == null) {
+      checkRequest();
+    }
+  }
+
   /// The returned future retires promptly even when an old HTTP/native future
   /// cannot be cancelled. Its eventual completion/error remains observed.
   Future<T> run<T>(Future<T> Function() action) {
+    final remoteEpoch = Zone.current[_remoteEpochKey] as BigInt?;
+    if (remoteEpoch != null && remoteEpoch != _epoch) {
+      return Future<T>.error(const LocalAudioRequestRetired());
+    }
     final parent = Zone.current[_zoneKey] as _LocalAudioRequest?;
     if (parent != null) {
       return Future<T>.sync(() {
@@ -111,17 +144,42 @@ class LocalAudioLifecycle {
     return request.wait(work).whenComplete(() => _requests.remove(request));
   }
 
+  /// Receiver controls remain usable while phone output is unavailable. A
+  /// delayed remote command may not fall back into local playback across a
+  /// phone reset. Capture that eligibility before entering the operation queue.
+  Future<T> runRemote<T>(Future<T> Function() action) => Future<T>.sync(() {
+    final local = Zone.current[_zoneKey] as _LocalAudioRequest?;
+    local?.check();
+    final inherited = Zone.current[_remoteEpochKey] as BigInt?;
+    return runZoned(
+      () => Future<T>.sync(action),
+      zoneValues: {_remoteEpochKey: inherited ?? _epoch},
+    );
+  });
+
+  Future<void> failClosed(Object error, BigInt retiredEpoch) {
+    cleanupError ??= error;
+    return _retireOutputs(
+      LocalAudioNativeEvent.reset,
+      retiredEpoch < _epoch ? _epoch : retiredEpoch,
+    );
+  }
+
   /// [epoch] comes from the native observer, never a Dart-generated counter.
   /// Ignore duplicate/out-of-order notifications. Errors latch local output
   /// closed, but all remaining cleanup is still attempted on later events.
   Future<void> accept(LocalAudioNativeEvent event, BigInt epoch) {
     if (epoch <= _epoch) return _cleanup;
+    return _retireOutputs(event, epoch);
+  }
+
+  Future<void> _retireOutputs(LocalAudioNativeEvent event, BigInt epoch) {
     _epoch = epoch;
     for (final request in _requests.toList()) {
       request.retire();
     }
     _requests.clear();
-    phase.value = cleanupError != null
+    _phase.value = cleanupError != null
         ? LocalAudioPhase.blocked
         : event == LocalAudioNativeEvent.lost
         ? LocalAudioPhase.lost
@@ -140,13 +198,13 @@ class LocalAudioLifecycle {
       await _settle([retiredAll, Future<void>.sync(destroyNativeOutput)]);
       if (epoch != _epoch) return;
       if (cleanupError != null) {
-        phase.value = LocalAudioPhase.blocked;
+        _phase.value = LocalAudioPhase.blocked;
         return;
       }
       if (event == LocalAudioNativeEvent.reset) {
         await _settle([Future<void>.sync(restoreSession)]);
         if (epoch != _epoch) return;
-        phase.value = cleanupError == null
+        _phase.value = cleanupError == null
             ? LocalAudioPhase.paused
             : LocalAudioPhase.blocked;
       }

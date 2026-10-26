@@ -1,6 +1,8 @@
 import AVFoundation
 import Flutter
 import Foundation
+import UIKit
+import WebKit
 
 /// Observes the system without changing AVAudioSession configuration/activation.
 /// Construction is intentionally deferred until every Dart local output owner
@@ -43,7 +45,26 @@ final class LokalAudioLifecycle: NSObject, FlutterStreamHandler {
       latestPhase = phase
     }
     lock.unlock()
-    DispatchQueue.main.async { [weak self] in self?.publishLatest() }
+    DispatchQueue.main.async { [weak self] in
+      // Stop existing iframe outputs even when Dart is occupied. This is an
+      // early safeguard; Dart still requires its own native completion before
+      // another output is permitted to start.
+      self?.suspendWebVideo()
+      self?.publishLatest()
+    }
+  }
+
+  private func suspendWebVideo() {
+    func suspend(_ view: UIView) {
+      if let webView = view as? WKWebView {
+        webView.setAllMediaPlaybackSuspended(true, completionHandler: nil)
+      }
+      for child in view.subviews { suspend(child) }
+    }
+    for scene in UIApplication.shared.connectedScenes {
+      guard let scene = scene as? UIWindowScene else { continue }
+      for window in scene.windows { suspend(window) }
+    }
   }
 
   private func publishLatest() {

@@ -26,6 +26,91 @@ void main() {
   }
 
   test(
+    'recovery readiness cannot precede native epoch or actual playback',
+    () async {
+      await event(LocalAudioNativeEvent.reset);
+      expect(lifecycle.phase.value, LocalAudioPhase.paused);
+      expect(lifecycle.canUseLocalOutput, isTrue);
+      nativeEpoch += BigInt.one;
+      expect(lifecycle.canUseLocalOutput, isFalse);
+      lifecycle.confirmLocalPlaybackStarted();
+      expect(lifecycle.phase.value, LocalAudioPhase.paused);
+      await lifecycle.accept(LocalAudioNativeEvent.reset, nativeEpoch);
+      lifecycle.confirmLocalPlaybackStarted();
+      expect(lifecycle.phase.value, LocalAudioPhase.ready);
+    },
+  );
+
+  test(
+    'observation failure retires Dart waits even at an exhausted epoch',
+    () async {
+      final pending = Completer<void>();
+      final rejected = expectLater(
+        lifecycle.run(() => pending.future),
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      await lifecycle.failClosed(
+        StateError('native epoch exhausted'),
+        nativeEpoch,
+      );
+      await rejected;
+      expect(lifecycle.phase.value, LocalAudioPhase.blocked);
+      expect(destroyed, 1);
+      expect(restored, 0);
+      pending.complete();
+    },
+  );
+
+  test(
+    'receiver controls survive blocked phone output without native reads',
+    () async {
+      var readable = true;
+      lifecycle = LocalAudioLifecycle(
+        nativeEpoch: () {
+          if (!readable) throw StateError('native cleanup uncertain');
+          return nativeEpoch;
+        },
+        destroyNativeOutput: () async => destroyed++,
+        restoreSession: () async => restored++,
+      );
+      nativeEpoch += BigInt.one;
+      readable = false;
+      await lifecycle.failClosed(StateError('observation failed'), nativeEpoch);
+      var receiverPauses = 0;
+      await lifecycle.runRemote(() async => receiverPauses++);
+      expect(receiverPauses, 1);
+      expect(lifecycle.phase.value, LocalAudioPhase.blocked);
+      expect(restored, 0);
+    },
+  );
+
+  test(
+    'old receiver command cannot acquire fresh local fallback after reset',
+    () async {
+      final response = Completer<void>();
+      var receiverCommands = 0;
+      var localPlays = 0;
+      final remote = lifecycle.runRemote(() async {
+        await response.future;
+        receiverCommands++;
+        await expectLater(
+          lifecycle.run(() async => localPlays++),
+          throwsA(isA<LocalAudioRequestRetired>()),
+        );
+      });
+      await event(LocalAudioNativeEvent.reset);
+      response.complete();
+      await remote;
+      expect(receiverCommands, 1);
+      expect(localPlays, 0);
+      await lifecycle.runRemote(() async {
+        await lifecycle.run(() async => localPlays++);
+      });
+      expect(localPlays, 1);
+    },
+  );
+
+  test(
     'late probe cannot revive or refresh a retired nested request',
     () async {
       final probe = Completer<void>();
@@ -57,6 +142,30 @@ void main() {
         replacements++;
       });
       expect(replacements, 1);
+    },
+  );
+
+  test(
+    'nested receiver retry retains old local fallback eligibility',
+    () async {
+      final delayed = Completer<void>();
+      var receiverCommands = 0;
+      var localPlays = 0;
+      final old = lifecycle.runRemote(() async {
+        await delayed.future;
+        await lifecycle.runRemote(() async {
+          receiverCommands++;
+          await expectLater(
+            lifecycle.run(() async => localPlays++),
+            throwsA(isA<LocalAudioRequestRetired>()),
+          );
+        });
+      });
+      await event(LocalAudioNativeEvent.reset);
+      delayed.complete();
+      await old;
+      expect(receiverCommands, 1);
+      expect(localPlays, 0);
     },
   );
 

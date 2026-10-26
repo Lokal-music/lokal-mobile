@@ -1,11 +1,11 @@
 # iPhone media-services reset recovery
 
-Status: implementation in progress, 26 October 2026 (Europe/Paris). **Not enabled
-or qualified.** The request fence, scoped Rust/DSP callers, retirement coordinator,
-pending-attachment guards and deferred Swift observer now exist in the recovery
-candidate. The observer is deliberately not instantiated until PlayerService,
-radio, video and session/UI cleanup are connected. Ordinary interruption and
-build-27 playback tests do not establish reset recovery.
+Status: implementation and native acceptance candidate, 26 October 2026
+(Europe/Paris). **Production observation remains deferred.** PlayerService,
+radio, the native player registry, retained video and the recovery notice are
+connected. The native integration suite explicitly starts the Swift observer;
+its new posted-notification and delayed-HTTP checks have not run on a Mac yet.
+They are acceptance gates, not reported passes.
 
 Apple's [media-services reset contract](https://developer.apple.com/documentation/avfaudio/avaudiosession/mediaserviceswereresetnotification)
 requires orphaned audio objects and session configuration to be recreated, without
@@ -64,7 +64,7 @@ captured **in Dart before submitting the FFI call**. Capturing it only at the st
 of the Rust worker misses requests queued before Reset but executed afterwards.
 The candidate adds a synchronous epoch getter and optional generation parameters
 to 25 asynchronous mutators; pinned FRB 2.13.0 regeneration produces 140
-entrypoints. iOS rejects missing generations; Android's existing unscoped callers
+entrypoints in the foundation (141 in the connected candidate below). iOS rejects missing generations; Android's existing unscoped callers
 retain their behavior. Generator-owned bindings are not edited manually. FRB's
 unneeded build_runner phase is disabled so it cannot remove the unrelated tracked
 Isar/Riverpod outputs.
@@ -203,3 +203,68 @@ in the iPhone workflow, covering shared output ownership, Cast, video/Space,
 retirement, lyrics/provider/download localization and add-ons. This is host
 contract evidence; the revised bootstrap fence probe and latest source still
 require the next hosted native run.
+
+
+## Connected recovery candidate and acceptance gate
+
+PlayerService now retires its local operation queue outside native disposal,
+retains canonical song/source identity, queue order and position, clears stale
+interruption resume/duck flags, and restores the existing session configuration
+without activation or Play. Explicit receiver controls use a separate captured
+scope and continue while local output is unavailable; an old remote operation
+cannot acquire fresh local fallback across reset. Old session initializations
+cannot clear a newer confirmed engine. A recovered pending online selection can
+resolve on explicit Play; seeking an unattached recovered track updates its
+paused position without creating an output.
+
+The video lease retains the selected video and raw source position. Native
+WebKit suspension must complete before replacement; detached/disposed widgets
+retain an acknowledgement ledger, and failures remain closed. The old platform
+view stays mounted until suspension returns. iPhone documents defer autoplay to
+the host, which checks the request epoch and foreground state before Play. A
+reset replacement cues the saved position paused. Existing WebKit views also
+receive early native suspension on the notification thread's main-queue handoff;
+this safeguard is not substituted for the actual cleanup acknowledgement.
+Android retains its existing iframe autoplay policy.
+
+The recovery notice takes layout space below the content, including video
+controls, hides for an active Cast receiver, and announces state changes to
+accessibility. It directs the user to the selected source's Play control or to
+close/reopen the app when cleanup is uncertain. There is no simulated restart
+button. All eleven shipped locales fit a 320px phone at 200% text size.
+
+The regenerated bridge now has **141 entrypoints**: the additional synchronous
+retirement function fences requests if the observation channel fails or cleanup
+cannot be confirmed within twelve seconds. The actual disposal futures remain
+owned and observed; a timeout never authorizes replacement playback.
+
+Validation of this source before native publication:
+
+- The exact iPhone workflow contract selection passes **234 Flutter tests**,
+  including video/Space/Cast, stale requests, session retirement, lyrics,
+  downloads, radio timeouts and the localized recovery notice.
+- **315 Rust tests pass**; Android ARM64 compiles with the real pinned NDK.
+- Pinned FRB 2.13.0 regeneration reproduces all three bridge/API files exactly.
+  Whole lib/integration analysis reports no errors (569 warnings/information).
+- Ten simulator/control coordinator tests pass, including evidence preservation
+  when initial simulator inventory times out. Workflow actionlint passes.
+- Native harness additions post actual AVAudioSession reset notifications while
+  playing and paused through AVPlayer and Rust DSP, require explicit replay,
+  hold cleanup while a newer selection and repeated reset arrive, and hold a
+  real loopback HTTP probe until a replacement output is playing. These checks
+  are **pending hosted execution**. No actual daemon restart is claimed.
+
+[Build 36](https://github.com/lokal-music/lokal-mobile/actions/runs/40347453464)
+uses prior source `e549395101eb8a11ea98ac693402ba59ddaeb341` (tree
+`8fc2728deb15c855ff32c630fca11121b7fad06c`): unsigned release packaging and the
+complete ordinary iOS 18.6 suite pass with the shared-counter bootstrap probe.
+Its fresh iOS 26 host times out listing simulator devices before boot; no app
+acceptance ran there. Inventory now has a bounded ninety-second cold-service
+allowance and preserves partial output on failure. Build 34 remains the latest
+complete dual-runtime checkpoint. Build 36 does not test this connected recovery
+implementation.
+
+Still required after this gate: radio and retained WebKit notification-path
+acceptance, actual daemon resets/background/routes on an iPhone, and Windows
+sign/install/update acceptance. Public YouTube challenge responses remain
+inconclusive for live video playback; no challenge bypass is used.

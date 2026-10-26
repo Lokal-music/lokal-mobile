@@ -5,8 +5,9 @@ import 'package:flick/models/playback_state.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/audio_engine.dart';
 import 'package:flick/core/utils/dev_log.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
-class AudioEngineTransitionRetired implements Exception {
+class AudioEngineTransitionRetired extends LocalAudioRequestRetired {
   const AudioEngineTransitionRetired();
 }
 

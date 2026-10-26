@@ -635,7 +635,18 @@ class RustAudioService {
     return rust_audio.audioGetChannels()?.toInt();
   }
 
-  /// Shutdown the audio engine.
+  /// Retire Dart callbacks immediately; native shutdown is acknowledged below.
+  void retireLocalOutput() {
+    _stopProgressUpdates();
+    _stopEventPolling();
+    onTrackEnded = null;
+    onCrossfadeStarted = null;
+    onNextTrackReady = null;
+    onError = null;
+    stateNotifier.value = RustPlaybackState.paused;
+  }
+
+  /// Shut down the native engine and await its output/thread acknowledgement.
   Future<void> shutdown() async {
     if (!_initialized) return;
 

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flick/services/ios_local_audio_requests.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
 /// This origin identifies Lokal to YouTube's official iframe embed. It is
 /// deliberately unrelated to add-on/stream URLs or the audio engine.
@@ -29,7 +31,13 @@ bool validMusicVideoId(String videoId) => _musicVideoId.hasMatch(videoId);
 
 /// Uses YouTube's player; no media URL extraction, cookies, or stream proxy.
 @visibleForTesting
-String musicVideoEmbedHtml(String videoId, {String? appId}) {
+String musicVideoEmbedHtml(
+  String videoId, {
+  String? appId,
+  bool deferAutoplayToHost = false,
+  bool startPaused = false,
+  Duration initialPosition = Duration.zero,
+}) {
   if (!validMusicVideoId(videoId)) {
     throw ArgumentError.value(videoId, 'videoId', 'Invalid YouTube video ID');
   }
@@ -57,6 +65,9 @@ let lokalPlayer = null;
 let lokalReady = false;
 let lokalReleased = false;
 let lokalClock = null;
+const lokalStartPaused = $startPaused;
+const lokalHostAutoplay = $deferAutoplayToHost;
+const lokalInitialSeconds = ${initialPosition.inMilliseconds < 0 ? 0 : initialPosition.inMilliseconds / 1000};
 function lokalSnapshot(error) {
   if (!window.flutter_inappwebview) return;
   try {
@@ -94,7 +105,8 @@ window.onYouTubeIframeAPIReady = function() {
       lokalReady = true;
       if (lokalReleased) lokalPlayer.pauseVideo();
       else {
-        lokalPlayer.playVideo();
+        if (lokalStartPaused) lokalPlayer.cueVideoById({videoId: '$videoId', startSeconds: lokalInitialSeconds});
+        else if (!lokalHostAutoplay) lokalPlayer.playVideo();
         lokalClock = setInterval(lokalSnapshot, 250);
       }
       lokalSnapshot();
@@ -127,17 +139,39 @@ class MusicVideoSurface extends StatefulWidget {
   State<MusicVideoSurface> createState() => _MusicVideoSurfaceState();
 }
 
+/// A platform view keeps its own acknowledgement after the widget is removed.
+/// A delayed creation or command may never acknowledge a replacement's lease.
+class _IframeOutput {
+  _IframeOutput(
+    this.controller, {
+    required this.startPaused,
+    required this.position,
+    required this.epoch,
+  });
+  final Media3MusicVideoController? controller;
+  final bool startPaused;
+  final Duration position;
+  final BigInt? epoch;
+  int? lease;
+  InAppWebViewController? view;
+  final created = Completer<void>();
+  bool creationStarted = false;
+  bool released = false;
+  bool ready = false;
+  bool autoplayRequested = false;
+  bool initialPositionConfirmed = false;
+  bool quietConfirmed = false;
+  Future<void> commands = Future<void>.value();
+  Future<void>? quiet;
+}
+
 class _MusicVideoSurfaceState extends State<MusicVideoSurface>
     with WidgetsBindingObserver {
   bool _loading = true;
   bool _failed = false;
-  bool _ready = false;
-  bool _released = false;
-  int _generation = 0;
-  int? _lease;
-  InAppWebViewController? _webView;
-  bool _viewCreationStarted = false;
-  Completer<void> _webViewCreated = Completer<void>();
+  bool _needsRebuild = false;
+  Duration _resetPosition = Duration.zero;
+  late _IframeOutput _output;
   String? _appId;
   bool _identityReady = !Platform.isIOS;
   String get _appOrigin =>
@@ -147,8 +181,50 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _attach();
-    if (Platform.isIOS) unawaited(_loadInstalledIdentity());
+    _output = _newOutput();
+    if (Platform.isIOS) {
+      IosLocalAudioRequests.lifecycle.phase.addListener(_onLifecycle);
+      unawaited(_loadInstalledIdentity());
+    }
+  }
+
+  _IframeOutput _newOutput({
+    bool paused = false,
+    Duration position = Duration.zero,
+  }) {
+    final output = _IframeOutput(
+      widget.controller,
+      startPaused: paused,
+      position: position,
+      epoch: Platform.isIOS ? IosLocalAudioRequests.lifecycle.epoch : null,
+    );
+    output.lease = output.controller?.attach(
+      (method, args) => _command(output, method, args),
+    );
+    output.controller?.fallback();
+    return output;
+  }
+
+  bool _isCurrent(_IframeOutput output) =>
+      mounted &&
+      identical(output, _output) &&
+      !output.released &&
+      (output.controller == null || output.controller!.owns(output.lease));
+
+  void _onLifecycle() {
+    if (!mounted ||
+        !_needsRebuild ||
+        !Platform.isIOS ||
+        !IosLocalAudioRequests.lifecycle.canUseLocalOutput) {
+      return;
+    }
+    // All owners, including the retired WebKit view, have confirmed cleanup.
+    setState(() {
+      _output = _newOutput(paused: true, position: _resetPosition);
+      _needsRebuild = false;
+      _loading = true;
+      _failed = false;
+    });
   }
 
   Future<void> _loadInstalledIdentity() async {
@@ -157,14 +233,14 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
           .invokeMapMethod<String, dynamic>('get');
       final id = info?['bundleId'];
       if (id is! String) throw const FormatException('No installed bundle ID');
-      musicVideoOriginForAppId(id); // Validate before interpolating any HTML.
-      if (!mounted || _released) return;
+      musicVideoOriginForAppId(id);
+      if (!mounted) return;
       setState(() {
         _appId = id;
         _identityReady = true;
       });
     } catch (_) {
-      if (!mounted || _released) return;
+      if (!mounted) return;
       setState(() {
         _failed = true;
         _loading = false;
@@ -172,112 +248,202 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
     }
   }
 
-  void _attach() {
-    _lease = widget.controller?.attach(_command);
-    widget.controller?.fallback();
+  Future<void> _queue(_IframeOutput output, Future<void> Function() action) {
+    final work = output.commands.then((_) => action());
+    output.commands = work.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return work;
   }
 
-  Future<void> _command(String method, Map<String, Object?> args) async {
-    if (method == 'release') {
-      _released = true;
-      // A submitted platform-view creation can complete after this request.
-      // Await it before authorizing another output, or retain ownership on error.
-      if (_webView == null && _viewCreationStarted) {
-        await _webViewCreated.future.timeout(const Duration(seconds: 3));
+  Future<void> _command(
+    _IframeOutput output,
+    String method,
+    Map<String, Object?> args,
+  ) {
+    if (method == 'release' || method == 'mediaReset') {
+      // Tombstone synchronously, before an earlier unsuspend can complete.
+      output.released = true;
+      if (method == 'mediaReset' && identical(output, _output)) {
+        final ms = args['positionMs'];
+        _resetPosition = Duration(milliseconds: ms is int && ms >= 0 ? ms : 0);
+        _needsRebuild = true;
       }
-      final view = _webView;
-      if (view == null) return;
-      await view.evaluateJavascript(
-        source:
-            "window.lokalVideoCommand && window.lokalVideoCommand('release')",
+      return _queue(output, () async {
+        await _suspend(output);
+        if (mounted && identical(output, _output)) {
+          setState(() {
+            _loading = false;
+          });
+          _onLifecycle();
+        }
+      });
+    }
+    return IosLocalAudioRequests.run(
+      () => _queue(output, () async {
+        if (!_isCurrent(output) || !output.ready || output.view == null) {
+          throw StateError('Video controls are not ready.');
+        }
+        IosLocalAudioRequests.check();
+        final view = output.view!;
+        if (Platform.isIOS && (method == 'play' || method == 'seek')) {
+          final permitted = await IosLocalAudioRequests.wait(
+            const MethodChannel('lokal/ios').invokeMethod<bool>(
+              'canStartWebVideo',
+              {'epoch': output.epoch.toString()},
+            ),
+          );
+          if (permitted != true || !_isCurrent(output)) {
+            throw StateError(
+              'Video is waiting for active iPhone audio services.',
+            );
+          }
+        }
+        if (method == 'play' && Platform.isIOS) {
+          await IosLocalAudioRequests.wait(
+            view.setAllMediaPlaybackSuspended(suspended: false),
+          );
+        }
+        if (!_isCurrent(output)) throw const LocalAudioRequestRetired();
+        final position = args['positionMs'];
+        final ms = position is num && position.isFinite && position >= 0
+            ? position.toInt()
+            : 0;
+        final command = switch (method) {
+          'play' => "window.lokalVideoCommand('play')",
+          'pause' => "window.lokalVideoCommand('pause')",
+          'seek' => "window.lokalVideoCommand('seek', $ms)",
+          _ => throw ArgumentError.value(method, 'method'),
+        };
+        final accepted = await IosLocalAudioRequests.wait(
+          view.evaluateJavascript(source: command),
+        );
+        if (accepted != true) {
+          throw StateError('Video command was not accepted.');
+        }
+        if (method == 'pause' && Platform.isIOS) {
+          await IosLocalAudioRequests.wait(view.pauseAllMediaPlayback());
+        }
+      }),
+    );
+  }
+
+  Future<void> _suspend(_IframeOutput output) => output.quiet ??= () async {
+    try {
+      if (output.view == null && output.creationStarted) {
+        // A timeout reports uncertainty; the pending creation remains owned.
+        await output.created.future.timeout(const Duration(seconds: 12));
+      }
+      final view = output.view;
+      if (view != null) {
+        if (Platform.isIOS) {
+          // Native acknowledgement is required even if JS is unresponsive.
+          await view.setAllMediaPlaybackSuspended(suspended: true);
+          // Native suspension is authoritative; the JS tombstone adds defence
+          // against a queued iframe API Ready callback in the retired document.
+          unawaited(
+            view
+                .evaluateJavascript(
+                  source: "window.lokalVideoCommand && window.lokalVideoCommand('release')",
+                )
+                .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+          );
+        } else {
+          await view.evaluateJavascript(
+            source: "window.lokalVideoCommand && window.lokalVideoCommand('release')",
+          );
+          var confirmed = false;
+          for (var attempt = 0; attempt < 20; attempt++) {
+            if (await view.evaluateJavascript(
+                  source:
+                      'window.lokalVideoPaused && window.lokalVideoPaused()',
+                ) ==
+                true) {
+              confirmed = true;
+              break;
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          }
+          if (!confirmed) throw StateError('Video pause was not confirmed.');
+        }
+      }
+      output.quietConfirmed = true;
+      output.controller?.acknowledgeNativeQuiet(output.lease);
+    } catch (error, stack) {
+      output.controller?.acknowledgeNativeQuiet(
+        output.lease,
+        error: error,
+        stack: stack,
       );
       if (Platform.isIOS) {
-        // Unlike a posted iframe pause, this native completion stops playback
-        // across all frames and prevents a late autoplay before view disposal.
-        await view.setAllMediaPlaybackSuspended(suspended: true);
-      } else {
-        for (var attempt = 0; attempt < 20; attempt++) {
-          final paused = await view.evaluateJavascript(
-            source: 'window.lokalVideoPaused && window.lokalVideoPaused()',
-          );
-          if (paused == true) return;
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-        throw StateError('Video pause was not confirmed.');
+        unawaited(IosLocalAudioRequests.failLocalOutput(error));
       }
-      return;
+      rethrow;
     }
-    final view = _webView;
-    if (view == null || !_ready || _released) {
-      throw StateError('Video controls are not ready.');
-    }
-    if (method == 'play' && Platform.isIOS) {
-      await view.setAllMediaPlaybackSuspended(suspended: false);
-    }
-    final position = args['positionMs'];
-    final ms = position is num && position.isFinite && position >= 0
-        ? position.toInt()
-        : 0;
-    final command = switch (method) {
-      'play' => "window.lokalVideoCommand('play')",
-      'pause' => "window.lokalVideoCommand('pause')",
-      'seek' => "window.lokalVideoCommand('seek', $ms)",
-      _ => throw ArgumentError.value(method, 'method'),
-    };
-    final accepted = await view.evaluateJavascript(source: command);
-    if (accepted != true) throw StateError('Video command was not accepted.');
-    if (method == 'pause' && Platform.isIOS) await view.pauseAllMediaPlayback();
+  }();
+
+  Future<void> _removeOutput(_IframeOutput output) {
+    output.released = true;
+    output.controller?.detach(output.lease);
+    // Serialized behind an in-flight unsuspend: final native state is quiet.
+    return _queue(output, () => _suspend(output));
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      unawaited(_command('pause', const {}).catchError((Object _) {}));
-      final view = _webView;
-      if (view != null && Platform.isIOS) {
-        unawaited(
-          view
-              .setAllMediaPlaybackSuspended(suspended: true)
-              .catchError((Object _) {}),
-        );
-      }
+    if (state != AppLifecycleState.paused &&
+        state != AppLifecycleState.detached) {
+      return;
+    }
+    final output = _output;
+    if (Platform.isIOS) {
+      // Do not release ownership; explicit Play may unsuspend on foreground.
+      unawaited(
+        _queue(output, () async {
+          final view = output.view;
+          if (view != null) {
+            await view.setAllMediaPlaybackSuspended(suspended: true);
+          }
+        }).catchError((Object error) {
+          unawaited(IosLocalAudioRequests.failLocalOutput(error));
+        }),
+      );
+    } else {
+      unawaited(_command(output, 'pause', const {}).catchError((Object _) {}));
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.controller?.detach(_lease);
-    final view = _webView;
-    if (view != null && Platform.isIOS) {
-      unawaited(
-        view
-            .setAllMediaPlaybackSuspended(suspended: true)
-            .catchError((Object _) {}),
-      );
+    if (Platform.isIOS) {
+      IosLocalAudioRequests.lifecycle.phase.removeListener(_onLifecycle);
     }
-    _webView = null;
+    unawaited(
+      _removeOutput(_output)
+          .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
     super.dispose();
   }
 
-  void _snapshot(Object? value, int generation) {
-    if (!mounted ||
-        generation != _generation ||
+  void _snapshot(Object? value, _IframeOutput output) {
+    if (!_isCurrent(output) ||
         value is! Map ||
-        value['videoId'] != widget.videoId ||
-        _released) {
+        value['videoId'] != widget.videoId) {
       return;
     }
-    final controller = widget.controller;
-    if (controller != null && !controller.owns(_lease)) return;
+    if (Platform.isIOS && !IosLocalAudioRequests.lifecycle.canUseLocalOutput) {
+      return;
+    }
+    final controller = output.controller;
     if (value['error'] != null) {
       final error = value['error'];
       controller?.fallback(errorCode: error is num ? error.toInt() : -1);
       setState(() {
         _failed = true;
         _loading = false;
-        _ready = false;
+        output.ready = false;
       });
       return;
     }
@@ -292,19 +458,36 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
         duration < 0) {
       return;
     }
-    _ready = true;
+    output.ready = true;
     if (_loading || _failed) {
       setState(() {
         _loading = false;
         _failed = false;
       });
     }
+    // cueVideoById is asynchronous. Its first Ready snapshot can still be at
+    // zero; a second reset must retain the requested cue position in that gap.
+    if (position > 0 || value['playing'] == true) {
+      output.initialPositionConfirmed = true;
+    }
+    final reportedPosition =
+        output.startPaused && !output.initialPositionConfirmed && position == 0
+        ? output.position.inMilliseconds
+        : position.toInt();
     controller?.update(
-      positionMs: position.toInt(),
+      positionMs: reportedPosition,
       durationMs: duration.toInt(),
       playing: value['playing'] == true,
       buffering: value['buffering'] == true,
     );
+    if (Platform.isIOS && value['playing'] == true) {
+      IosLocalAudioRequests.lifecycle.confirmLocalPlaybackStarted();
+    }
+    if (Platform.isIOS && !output.startPaused && !output.autoplayRequested) {
+      output.autoplayRequested = true;
+      // iOS documents never self-autoplay: the host checks epoch + foreground.
+      unawaited(_command(output, 'play', const {}).catchError((Object _) {}));
+    }
   }
 
   Future<NavigationActionPolicy> _navigate(
@@ -325,30 +508,26 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
   @override
   void didUpdateWidget(covariant MusicVideoSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.videoId != widget.videoId) {
-      oldWidget.controller?.detach(_lease);
-      _generation++;
-      final oldView = _webView;
-      if (oldView != null && Platform.isIOS) {
-        unawaited(
-          oldView
-              .setAllMediaPlaybackSuspended(suspended: true)
-              .catchError((Object _) {}),
-        );
-      }
-      _webView = null;
-      _viewCreationStarted = false;
-      _webViewCreated = Completer<void>();
-      _ready = false;
-      _released = false;
+    if (oldWidget.videoId != widget.videoId ||
+        oldWidget.controller != widget.controller) {
+      final previous = _output;
+      final removed = _removeOutput(previous);
+      removed.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+      _needsRebuild = false;
       _loading = true;
       _failed = false;
-      _attach();
-      if (Platform.isIOS && !_identityReady)
-        unawaited(_loadInstalledIdentity());
-    } else if (oldWidget.controller != widget.controller) {
-      oldWidget.controller?.detach(_lease);
-      _attach();
+      // Preserve Android's established handoff. iOS creates the replacement
+      // only once the retired native view confirms suspension.
+      if (!Platform.isIOS) {
+        _output = _newOutput();
+      } else {
+        unawaited(
+          removed.then<void>((_) {
+            if (!mounted || !identical(previous, _output)) return;
+            setState(() => _output = _newOutput());
+          }, onError: (Object _, StackTrace _) {}),
+        );
+      }
     }
   }
 
@@ -359,48 +538,63 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
         child: Text('Invalid video', style: TextStyle(color: Colors.white70)),
       );
     }
-    final generation = _generation;
-    if (_identityReady && !_released) _viewCreationStarted = true;
+    final output = _output;
+    final canCreate =
+        _identityReady &&
+        !output.released &&
+        (!Platform.isIOS || IosLocalAudioRequests.lifecycle.canUseLocalOutput);
+    if (canCreate) output.creationStarted = true;
+    // A lifecycle notice can rebuild the root before WebKit acknowledges
+    // suspension. Keep that platform view mounted until its native call returns.
+    final retainUntilQuiet = output.creationStarted && !output.quietConfirmed;
     return Column(
       children: [
         Expanded(
-          child: !_identityReady || _released
+          child: !canCreate && !retainUntilQuiet
               ? const SizedBox.shrink()
               : InAppWebView(
-                  key: ValueKey(widget.videoId),
+                  key: ObjectKey(output),
                   onWebViewCreated: (view) {
-                    if (!mounted || generation != _generation) {
+                    output.view = view;
+                    if (!output.created.isCompleted) output.created.complete();
+                    if (!_isCurrent(output)) {
+                      // Also covers a creation that completes after a timeout/dispose.
                       if (Platform.isIOS) {
                         unawaited(
                           view
                               .setAllMediaPlaybackSuspended(suspended: true)
-                              .catchError((Object _) {}),
+                              .then<void>(
+                                (_) {},
+                                onError: (Object error, StackTrace _) {
+                                  unawaited(
+                                    IosLocalAudioRequests.failLocalOutput(
+                                      error,
+                                    ),
+                                  );
+                                },
+                              ),
                         );
                       }
                       return;
                     }
-                    _webView = view;
-                    if (!_webViewCreated.isCompleted)
-                      _webViewCreated.complete();
                     view.addJavaScriptHandler(
                       handlerName: 'LokalVideo',
                       callback: (arguments) {
                         if (arguments.isNotEmpty) {
-                          _snapshot(arguments.first, generation);
+                          _snapshot(arguments.first, output);
                         }
                         return null;
                       },
                     );
-                    if (_released && Platform.isIOS) {
-                      unawaited(
-                        view
-                            .setAllMediaPlaybackSuspended(suspended: true)
-                            .catchError((Object _) {}),
-                      );
-                    }
                   },
                   initialData: InAppWebViewInitialData(
-                    data: musicVideoEmbedHtml(widget.videoId, appId: _appId),
+                    data: musicVideoEmbedHtml(
+                      widget.videoId,
+                      appId: _appId,
+                      deferAutoplayToHost: Platform.isIOS,
+                      startPaused: output.startPaused,
+                      initialPosition: output.position,
+                    ),
                     baseUrl: WebUri('$_appOrigin/'),
                     historyUrl: WebUri('$_appOrigin/'),
                   ),
@@ -423,24 +617,22 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
                     useHybridComposition: false,
                   ),
                   onLoadStop: (_, __) {
-                    if (mounted && generation == _generation)
-                      setState(() => _loading = false);
+                    if (_isCurrent(output)) setState(() => _loading = false);
                   },
                   onReceivedError: (_, request, __) {
-                    if (!mounted || generation != _generation) return;
+                    if (!_isCurrent(output)) return;
                     final url = request.url;
                     final embedFailed =
                         request.isForMainFrame == false &&
                         url.host == 'www.youtube.com' &&
                         url.path == '/embed/${widget.videoId}';
-                    if (mounted &&
-                        (request.isForMainFrame == true || embedFailed)) {
+                    if (request.isForMainFrame == true || embedFailed) {
                       setState(() {
                         _failed = true;
                         _loading = false;
-                        _ready = false;
+                        output.ready = false;
                       });
-                      widget.controller?.fallback();
+                      output.controller?.fallback();
                     }
                   },
                   shouldOverrideUrlLoading: _navigate,

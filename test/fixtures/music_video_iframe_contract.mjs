@@ -28,6 +28,10 @@ function fixture() {
         playVideo() { this.plays++; this.state = 1; },
         pauseVideo() { this.pauses++; }, // acknowledgement deliberately separate
         seekTo(seconds) { this.position = seconds; },
+        cueVideoById({videoId, startSeconds}) {
+          assert.equal(videoId, 'abcdefghijk');
+          this.position = startSeconds; this.state = 5;
+        },
         ready() { options.events.onReady(); },
         stateChanged(state) { this.state = state; options.events.onStateChange({data: state}); },
         error(code) { options.events.onError({data: code}); },
@@ -45,11 +49,22 @@ let checks = 0;
   const f = fixture();
   assert.equal(f.window.lokalVideoCommand('play'), false, 'no false success before ready');
   f.player.ready();
-  assert.equal(f.player.plays, 1);
+  const paused = source.includes('const lokalStartPaused = true');
+  const deferred = source.includes('const lokalHostAutoplay = true');
+  assert.equal(f.player.plays, paused || deferred ? 0 : 1,
+    'iOS rebuilds and host-controlled documents cannot self-autoplay');
+  if (paused) {
+    assert.equal(f.player.state, 5, 'cue retains a paused player');
+    assert.equal(f.player.position, 12.345, 'cue restores the raw source position');
+  }
+  if (paused || deferred) {
+    assert.equal(f.window.lokalVideoCommand('play'), true);
+    assert.equal(f.player.plays, 1, 'Play requires an explicit host command');
+  }
   const snapshot = f.events.at(-1);
   assert.equal(snapshot.name, 'LokalVideo');
   assert.equal(snapshot.payload.videoId, 'abcdefghijk');
-  assert.equal(snapshot.payload.positionMs, 21250);
+  assert.equal(snapshot.payload.positionMs, paused ? 12345 : 21250);
   assert.equal(snapshot.payload.durationMs, 180000);
   assert.equal(snapshot.payload.playing, true);
   assert.equal(f.window.lokalVideoCommand('seek', 12345), true);

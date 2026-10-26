@@ -7,7 +7,7 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
 **Build 34 passes both complete native suites on iOS 18.6 and 26.0**, using
 a fresh Mac for iOS 26. It is the current complete checkpoint through #217.
-The candidate's later reset and lyrics work still requires native acceptance. The iOS 16+
+Build 36 also passes the ordinary iOS 18.6 suite through #219; its iOS 26 host fails before simulator boot. The connected reset candidate still requires native acceptance. The iOS 16+
 unsigned engineering IPA passes inspection of 34 device binaries, Cast resources,
 privacy metadata, source/notices and matching symbols. See the exact source,
 checksum and native evidence in the build-34 checkpoint below. Installation still
@@ -920,3 +920,23 @@ in the iPhone workflow, covering shared output ownership, Cast, video/Space,
 retirement, lyrics/provider/download localization and add-ons. This is host
 contract evidence; the revised bootstrap fence probe and latest source still
 require the next hosted native run.
+
+
+### Build 36 and connected reset acceptance candidate
+
+[Build 36](https://github.com/lokal-music/lokal-mobile/actions/runs/40347453464),
+source `e549395101eb8a11ea98ac693402ba59ddaeb341`, tree
+`8fc2728deb15c855ff32c630fca11121b7fad06c`, passes release/AOT packaging and
+the complete ordinary iOS 18.6 suite, including the pre-bootstrap Swift/FRB
+counter probe. The separate iOS 26 host fails while listing simulator devices,
+before boot or application acceptance. Build 34 remains the latest complete
+dual-runtime checkpoint; this later source carries the 40 merged PRs through
+#219.
+
+The following connected recovery candidate adds PlayerService selection/position
+preservation, independent receiver scopes, retained paused WebKit reconstruction,
+a localized accessibility notice and native notification/delayed-HTTP acceptance
+checks. Production subscription remains deferred while those new native checks
+are pending. Its exact workflow contract selection passes 234 Flutter tests;
+315 Rust tests and Android ARM64 native compilation pass. See
+[the state/sequence diagrams, ownership contracts and remaining gates](IOS_MEDIA_RESET_ARCHITECTURE.md).

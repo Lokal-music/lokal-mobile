@@ -1,5 +1,9 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Audio is temporarily unavailable.": "Le son est temporairement indisponible.",
+  "Restoring audio…": "Restauration du son…",
+  "Audio is ready. Use Play to continue.": "Le son est prêt. Appuyez sur Lecture pour continuer.",
+  "Close and reopen the app to restore audio.": "Fermez et rouvrez l’application pour rétablir le son.",
   "Found": "Trouvé",
   "Checking…": "Recherche…",
   "No result": "Aucun résultat",
@@ -546,6 +550,10 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Audio is temporarily unavailable.": "Audio ist vorübergehend nicht verfügbar.",
+  "Restoring audio…": "Audio wird wiederhergestellt…",
+  "Audio is ready. Use Play to continue.": "Audio ist bereit. Zum Fortfahren Wiedergabe drücken.",
+  "Close and reopen the app to restore audio.": "Schließe und öffne die App erneut, um Audio wiederherzustellen.",
   "Found": "Gefunden",
   "Checking…": "Wird geprüft…",
   "No result": "Kein Ergebnis",
@@ -1085,6 +1093,10 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Audio is temporarily unavailable.": "El audio no está disponible temporalmente.",
+  "Restoring audio…": "Restaurando el audio…",
+  "Audio is ready. Use Play to continue.": "El audio está listo. Pulsa Reproducir para continuar.",
+  "Close and reopen the app to restore audio.": "Cierra y vuelve a abrir la aplicación para restaurar el audio.",
   "Found": "Encontrado",
   "Checking…": "Buscando…",
   "No result": "Sin resultados",
@@ -1632,6 +1644,10 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Audio is temporarily unavailable.": "L’audio non è temporaneamente disponibile.",
+  "Restoring audio…": "Ripristino dell’audio…",
+  "Audio is ready. Use Play to continue.": "L’audio è pronto. Premi Riproduci per continuare.",
+  "Close and reopen the app to restore audio.": "Chiudi e riapri l’app per ripristinare l’audio.",
   "Found": "Trovato",
   "Checking…": "Ricerca…",
   "No result": "Nessun risultato",
@@ -2181,6 +2197,10 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Audio is temporarily unavailable.": "O áudio está temporariamente indisponível.",
+  "Restoring audio…": "Restaurando o áudio…",
+  "Audio is ready. Use Play to continue.": "O áudio está pronto. Toque em Reproduzir para continuar.",
+  "Close and reopen the app to restore audio.": "Feche e abra o aplicativo novamente para restaurar o áudio.",
   "Found": "Encontrado",
   "Checking…": "Buscando…",
   "No result": "Sem resultados",
@@ -2725,6 +2745,10 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Audio is temporarily unavailable.": "Audio is tijdelijk niet beschikbaar.",
+  "Restoring audio…": "Audio herstellen…",
+  "Audio is ready. Use Play to continue.": "Audio is gereed. Druk op Afspelen om verder te gaan.",
+  "Close and reopen the app to restore audio.": "Sluit en heropen de app om audio te herstellen.",
   "Found": "Gevonden",
   "Checking…": "Zoeken…",
   "No result": "Geen resultaat",
@@ -3281,6 +3305,10 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Audio is temporarily unavailable.": "Dźwięk jest chwilowo niedostępny.",
+  "Restoring audio…": "Przywracanie dźwięku…",
+  "Audio is ready. Use Play to continue.": "Dźwięk jest gotowy. Naciśnij Odtwórz, aby kontynuować.",
+  "Close and reopen the app to restore audio.": "Zamknij i ponownie otwórz aplikację, aby przywrócić dźwięk.",
   "Found": "Znaleziono",
   "Checking…": "Sprawdzanie…",
   "No result": "Brak wyników",
@@ -3827,6 +3855,10 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Audio is temporarily unavailable.": "Ljud är tillfälligt otillgängligt.",
+  "Restoring audio…": "Återställer ljud…",
+  "Audio is ready. Use Play to continue.": "Ljudet är klart. Tryck på Spela för att fortsätta.",
+  "Close and reopen the app to restore audio.": "Stäng och öppna appen igen för att återställa ljudet.",
   "Found": "Hittad",
   "Checking…": "Söker…",
   "No result": "Inget resultat",
@@ -4379,6 +4411,10 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Audio is temporarily unavailable.": "音频暂时不可用。",
+  "Restoring audio…": "正在恢复音频…",
+  "Audio is ready. Use Play to continue.": "音频已就绪。点击播放以继续。",
+  "Close and reopen the app to restore audio.": "请关闭并重新打开应用以恢复音频。",
   "Found": "已找到",
   "Checking…": "正在检查…",
   "No result": "无结果",
@@ -4930,6 +4966,10 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Audio is temporarily unavailable.": "Ses geçici olarak kullanılamıyor.",
+  "Restoring audio…": "Ses geri yükleniyor…",
+  "Audio is ready. Use Play to continue.": "Ses hazır. Devam etmek için Oynat’a dokunun.",
+  "Close and reopen the app to restore audio.": "Sesi geri yüklemek için uygulamayı kapatıp yeniden açın.",
   "Found": "Bulundu",
   "Checking…": "Kontrol ediliyor…",
   "No result": "Sonuç yok",

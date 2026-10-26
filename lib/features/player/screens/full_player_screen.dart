@@ -575,9 +575,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     unawaited(_loadLyrics());
   }
 
+  Future<void> _retireVideoForMediaReset() async {
+    _resumeAudioAfterVideo = false;
+    await _videoController.retireForMediaReset();
+  }
+
   Future<void> _prepareInitialVideo() async {
     try {
-      final lease = await _player.acquireExternalPlayback(_yieldVideoOutput);
+      final lease = await _player.acquireExternalPlayback(_yieldVideoOutput,
+        onMediaReset: _retireVideoForMediaReset);
       _videoOutputLease = lease;
       if (!mounted) {
         await lease.release();
@@ -596,7 +602,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     final wasPlaying = _player.isPlayingNotifier.value;
     final originalSong = _player.currentSongNotifier.value;
     try {
-      final lease = await _player.acquireExternalPlayback(_yieldVideoOutput);
+      final lease = await _player.acquireExternalPlayback(_yieldVideoOutput,
+        onMediaReset: _retireVideoForMediaReset);
       _videoOutputLease = lease;
       if (!mounted || lease.isReleased ||
           !identical(_player.currentSongNotifier.value, originalSong)) {

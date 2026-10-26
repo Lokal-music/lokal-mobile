@@ -564,3 +564,18 @@ in the iPhone workflow, covering shared output ownership, Cast, video/Space,
 retirement, lyrics/provider/download localization and add-ons. This is host
 contract evidence; the revised bootstrap fence probe and latest source still
 require the next hosted native run.
+
+
+### Build 36 and recovery continuation
+
+Build 36 at `e549395101eb8a11ea98ac693402ba59ddaeb341` passes the complete
+ordinary iOS 18.6 suite and unsigned release packaging through #219. Its isolated
+iOS 26 job fails during initial simulator inventory, before the app can run;
+Build 34 remains the latest complete dual-runtime pass.
+
+The connected recovery continuation retains track/source identity, queue,
+position and video selection, preserves remote controls, and adds a localized
+notice beneath content. Host checks cover all eleven locales at 200% on a
+320px phone. The exact workflow contract selection passes 234 tests; native
+posted-reset and delayed-HTTP acceptance is added but pending. Production
+observation remains deferred; no physical reset or live-video pass is claimed.

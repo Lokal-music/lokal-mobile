@@ -2019,6 +2019,13 @@ pub fn audio_local_request_epoch() -> Result<u64, String> {
     crate::audio::request_generation::LOCAL_REQUESTS.generation()
 }
 
+/// Fence outstanding work if Dart can no longer trust lifecycle observation.
+/// Normal system notifications use the immediate Swift C-ABI invalidator.
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_local_retire_requests() -> Result<u64, String> {
+    crate::audio::request_generation::LOCAL_REQUESTS.invalidate()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

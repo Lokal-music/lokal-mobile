@@ -45,6 +45,8 @@ import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 
 import '../test/fixtures/generated_audio.dart';
 import 'ios_live_video_probe.dart';
+import 'ios_media_reset_probe.dart';
+import 'package:flick/services/ios_local_audio_requests.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -331,6 +333,9 @@ void main() {
     binding.reportData!['quickjs_echo'] = quickJsResult;
 
     final player = PlayerService();
+    // Exercise the complete recovery path before enabling production
+    // subscription. Every local output owner is registered before creation.
+    await IosLocalAudioRequests.startObservation();
     final song = Song(
       id: 'ios-smoke',
       title: 'Generated tone',
@@ -346,6 +351,12 @@ void main() {
     final systemProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosSystem);
     binding.reportData!['system_wav_progress_ms'] = systemProgress;
+    await probeIosMediaReset(tester, binding, player,
+      engine: AudioEngineType.iosSystem, song: song,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await probeIosNewSelectionDuringReset(tester, binding, player, song,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await player.play(song, playlist: [song]);
     await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
@@ -498,6 +509,11 @@ void main() {
     final dspProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
     binding.reportData!['rust_dsp_progress_ms'] = dspProgress;
+    await probeIosMediaReset(tester, binding, player,
+      engine: AudioEngineType.iosRust, song: song,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await probeIosDelayedHttpReset(tester, binding, player, audio,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
     await player.pause();
     await applyEqualizer(EqualizerState.initial());
     await player.syncIosProcessingRoute();

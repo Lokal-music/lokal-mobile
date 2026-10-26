@@ -511,6 +511,11 @@ Future<void> audioShutdown() =>
 BigInt audioLocalRequestEpoch() =>
     RustLib.instance.api.crateApiAudioApiAudioLocalRequestEpoch();
 
+/// Fence outstanding work if Dart can no longer trust lifecycle observation.
+/// Normal system notifications use the immediate Swift C-ABI invalidator.
+BigInt audioLocalRetireRequests() =>
+    RustLib.instance.api.crateApiAudioApiAudioLocalRetireRequests();
+
 class AudioCapabilityInfo {
   final List<AudioCapabilityType> capabilities;
   final String routeType;

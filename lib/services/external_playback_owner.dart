@@ -13,25 +13,52 @@ class ExternalPlaybackOwner {
     }
   }
 
-  ExternalPlaybackLease claim(Future<void> Function() release) {
+  Future<void> retireForMediaReset() {
+    final lease = _current;
+    if (lease == null || lease.isReleased) return Future<void>.value();
+    return lease._onMediaReset == null
+        ? releaseCurrent()
+        : lease._retireForMediaReset();
+  }
+
+  ExternalPlaybackLease claim(
+    Future<void> Function() release, {
+    Future<void> Function()? onMediaReset,
+  }) {
     if (_current?.isReleased == false) {
       throw StateError('The previous output has not released audio.');
     }
     final revision = ++_revision;
-    final lease = ExternalPlaybackLease._(release, () => revision == _revision);
+    final lease = ExternalPlaybackLease._(
+      release,
+      () => revision == _revision,
+      onMediaReset,
+    );
     _current = lease;
     return lease;
   }
 }
 
 class ExternalPlaybackLease {
-  ExternalPlaybackLease._(this._release, this._isLatest);
+  ExternalPlaybackLease._(this._release, this._isLatest, this._onMediaReset);
   final Future<void> Function() _release;
   final bool Function() _isLatest;
+  final Future<void> Function()? _onMediaReset;
+  Future<void>? _resetInFlight;
   Future<void>? _inFlight;
   bool _released = false;
   bool get isReleased => _released;
   bool get isLatest => _isLatest();
+
+  Future<void> _retireForMediaReset() {
+    if (_resetInFlight != null) return _resetInFlight!;
+    late final Future<void> work;
+    work = Future<void>.sync(_onMediaReset!).whenComplete(() {
+      if (identical(_resetInFlight, work)) _resetInFlight = null;
+    });
+    _resetInFlight = work;
+    return work;
+  }
 
   Future<void> release() {
     if (_released) return Future<void>.value();

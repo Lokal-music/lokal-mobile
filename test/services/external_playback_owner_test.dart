@@ -4,6 +4,51 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/services/external_playback_owner.dart';
 
 void main() {
+  test(
+    'reset waits for native quiet while retaining selected video ownership',
+    () async {
+      final owner = ExternalPlaybackOwner();
+      final quiet = Completer<void>();
+      var resetCalls = 0;
+      var releases = 0;
+      final lease = owner.claim(
+        () async => releases++,
+        onMediaReset: () {
+          resetCalls++;
+          return quiet.future;
+        },
+      );
+      final first = owner.retireForMediaReset();
+      final repeated = owner.retireForMediaReset();
+      expect(resetCalls, 1);
+      expect(identical(first, repeated), isTrue);
+      expect(() => owner.claim(() async {}), throwsStateError);
+      quiet.complete();
+      await first;
+      expect(lease.isReleased, isFalse);
+      expect(lease.isLatest, isTrue);
+      expect(releases, 0);
+      await owner.releaseCurrent();
+      expect(releases, 1);
+    },
+  );
+
+  test(
+    'unconfirmed reset keeps video ownership and rejects replacement',
+    () async {
+      final owner = ExternalPlaybackOwner();
+      final lease = owner.claim(
+        () async {},
+        onMediaReset: () async {
+          throw StateError('WebKit suspension unconfirmed');
+        },
+      );
+      await expectLater(owner.retireForMediaReset(), throwsStateError);
+      expect(lease.isReleased, isFalse);
+      expect(() => owner.claim(() async {}), throwsStateError);
+    },
+  );
+
   test('an unreleased output cannot be replaced', () async {
     final owner = ExternalPlaybackOwner();
     final first = owner.claim(() async {});

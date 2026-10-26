@@ -17,7 +17,6 @@ import 'package:flick/services/local_audio_lifecycle.dart';
 /// A queue entry's identity includes the actual encoded media source. Two
 /// versions of the same catalogue song can share an ID but not a decoder or
 /// cached URL. Reusing the old playlist here silently plays the wrong track.
-@visibleForTesting
 String androidAudioSourceIdentity(Song song) =>
     jsonEncode([song.id, song.filePath, song.atmosEncoded, song.fileType]);
 

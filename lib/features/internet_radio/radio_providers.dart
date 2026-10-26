@@ -391,6 +391,9 @@ class RadioPlayerNotifier extends Notifier<RadioPlayback> {
         loading: loading,
         error: state.error,
       );
+      if (Platform.isIOS && state.playing && !state.loading) {
+        IosLocalAudioRequests.lifecycle.confirmLocalPlaybackStarted();
+      }
       _syncNotification();
     });
     return _player = player;

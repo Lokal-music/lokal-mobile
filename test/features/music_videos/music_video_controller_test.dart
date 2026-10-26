@@ -4,6 +4,94 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/features/music_videos/music_video_controller.dart';
 
 void main() {
+  test(
+    'disposed or detached iPhone video waits for actual native suspension',
+    () async {
+      final video = Media3MusicVideoController(
+        trackNativeOutputQuiescence: true,
+      );
+      final owner = video.attach((_, _) async {});
+      video.dispose();
+      var quiet = false;
+      final release = video.releaseAudio().then((_) => quiet = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(quiet, isFalse);
+      video.acknowledgeNativeQuiet(owner);
+      await release;
+      expect(quiet, isTrue);
+    },
+  );
+
+  test('failed native suspension stays failed after widget removal', () async {
+    final video = Media3MusicVideoController(trackNativeOutputQuiescence: true);
+    final owner = video.attach((_, _) async {});
+    video.detach(owner);
+    video.acknowledgeNativeQuiet(
+      owner,
+      error: StateError('WebKit did not confirm'),
+    );
+    await expectLater(video.releaseAudio(), throwsStateError);
+    video.acknowledgeNativeQuiet(
+      owner,
+    ); // A late callback cannot erase failure.
+    await expectLater(video.releaseAudio(), throwsStateError);
+    video.dispose();
+  });
+
+  test(
+    'reset preserves source position and waits for native quiet without Play',
+    () async {
+      final video = Media3MusicVideoController(
+        trackNativeOutputQuiescence: true,
+      );
+      addTearDown(video.dispose);
+      final suspended = Completer<void>();
+      final commands = <String>[];
+      video.attach((method, args) {
+        commands.add(method);
+        expect(args, {'positionMs': 12345});
+        return suspended.future;
+      });
+      video.update(
+        positionMs: 12345,
+        durationMs: 90000,
+        playing: true,
+        buffering: false,
+      );
+      var retired = false;
+      final reset = video.retireForMediaReset().then((_) => retired = true);
+      expect(video.positionNotifier.value, const Duration(milliseconds: 12345));
+      expect(video.playingNotifier.value, isFalse);
+      expect(video.advancingNotifier.value, isFalse);
+      await Future<void>.delayed(Duration.zero);
+      expect(retired, isFalse);
+      suspended.complete();
+      await reset;
+      expect(video.sourcePosition, const Duration(milliseconds: 12345));
+      expect(commands, ['mediaReset']);
+    },
+  );
+
+  test(
+    'a quiet replacement does not acknowledge an earlier removed view',
+    () async {
+      final video = Media3MusicVideoController(
+        trackNativeOutputQuiescence: true,
+      );
+      addTearDown(video.dispose);
+      final old = video.attach((_, _) async {});
+      video.detach(old);
+      video.attach((_, _) async {});
+      var quiet = false;
+      final release = video.releaseAudio().then((_) => quiet = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(quiet, isFalse);
+      video.acknowledgeNativeQuiet(old);
+      await release;
+      expect(quiet, isTrue);
+    },
+  );
+
   testWidgets('transport samples remain distinct from the smoothed UI clock', (
     tester,
   ) async {
@@ -14,10 +102,12 @@ void main() {
       playing: true,
       buffering: false,
     );
-      // Production uses a monotonic Stopwatch; let real time advance outside
-      // Flutter's fake clock before delivering the periodic UI samples.
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 70)));
-      await tester.pump(const Duration(milliseconds: 100));
+    // Production uses a monotonic Stopwatch; let real time advance outside
+    // Flutter's fake clock before delivering the periodic UI samples.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 70)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
     expect(
       video.positionNotifier.value,
       greaterThan(const Duration(milliseconds: 100)),

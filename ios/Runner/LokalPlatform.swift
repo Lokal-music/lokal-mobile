@@ -20,6 +20,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
   private var nowPlaying: [String: Any] = [:]
   private var spotify: LokalSpotifySession?
   private var cast: LokalCastBridge?
+  private var audioLifecycle: LokalAudioLifecycle?
   private let desktopDiscovery = LokalDesktopDiscovery()
   private let fileQueue = DispatchQueue(label: "app.lokal.mobile.import", qos: .userInitiated)
 
@@ -91,6 +92,20 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
     }
     register("lokal/ios", messenger) { [weak self] call, result in
       switch call.method {
+      case "canStartWebVideo":
+        let args = call.arguments as? [String: Any]
+        let expected = (args?["epoch"] as? String).flatMap(UInt64.init)
+        result(UIApplication.shared.applicationState == .active &&
+          expected == lokal_audio_local_request_epoch())
+      case "startAudioLifecycle":
+        guard let self = self else {
+          result(FlutterError(code: "AUDIO_LIFECYCLE_UNAVAILABLE", message: "Audio lifecycle owner unavailable", details: nil))
+          return
+        }
+        if self.audioLifecycle == nil {
+          self.audioLifecycle = LokalAudioLifecycle(messenger: messenger)
+        }
+        result(nil)
       case "preparePlaybackCredentials":
         // flutter_secure_storage 10.3.4's default service and unlocked class.
         // Change only accessibility, atomically, without retrieving/replacing
@@ -117,8 +132,15 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
         }
       case "libraryRoot": result(try? self?.libraryRoot().path)
       #if DEBUG
+      case "postMediaServicesResetForIntegrationTest":
+        guard let lifecycle = self?.audioLifecycle else {
+          result(FlutterError(code: "AUDIO_LIFECYCLE_UNAVAILABLE", message: "Audio lifecycle observer has not started", details: nil))
+          return
+        }
+        lifecycle.postResetForIntegrationTest()
+        result(nil)
       case "invalidateLocalAudioRequestsForIntegrationTest":
-        // Destructive final harness check, not a system media-daemon reset.
+        // Destructive pre-owner bootstrap check, not a media-daemon reset.
         let previous = lokal_audio_local_request_epoch()
         let epoch = lokal_audio_invalidate_local_requests()
         result(["previous": String(previous), "epoch": String(epoch)])
