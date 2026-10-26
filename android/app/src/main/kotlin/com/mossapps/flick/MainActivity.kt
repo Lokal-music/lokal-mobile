@@ -138,6 +138,8 @@ class MainActivity: FlutterActivity() {
     private var activeDirectUsbDeviceName: String? = null
     private var exclusiveDacModeEnabled = false
     private var directUsbPlaybackActive = false
+    // Never close a UsbDeviceConnection while Rust still has submitted URBs.
+    private var directUsbTeardownPending = false
     private var killIsochronousUsbOnQuit = true
     private var directUsbFocusGain: Int? = null
     private var directUsbAudioFocusRequest: AudioFocusRequest? = null
@@ -4252,8 +4254,24 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    private fun isRustDirectUsbRegistered(): Boolean {
+        return try {
+            val state = nativeGetRustAudioDebugStateJson() ?: return false
+            org.json.JSONObject(state).optJSONObject("direct_usb")
+                ?.optBoolean("registered", false) == true
+        } catch (e: Exception) {
+            Log.w("UAC2", "Failed to inspect Rust USB registration", e)
+            false
+        }
+    }
+
     private fun activateDirectUsb(deviceName: String): Boolean {
         return try {
+            // A native USB teardown may still own outstanding transfers on this fd.
+            if (directUsbTeardownPending) {
+                Log.w("UAC2", "USB activation deferred while the previous session drains")
+                return false
+            }
             val usbManager = getSystemService(Context.USB_SERVICE) as? UsbManager ?: return false
             val device = usbManager.deviceList?.get(deviceName) ?: return false
             if (!usbManager.hasPermission(device)) {
@@ -4263,7 +4281,18 @@ class MainActivity: FlutterActivity() {
 
             val existingConnection = directUsbConnections[deviceName]
             if (activeDirectUsbDeviceName == deviceName && existingConnection != null) {
-                return true
+                // Kotlin holding a connection does not imply Rust still has a DAC.
+                // After a failed stream Rust can clear its registration while this
+                // Android fd remains open. Skipping JNI registration then leaves
+                // every subsequent bit-perfect retry stuck on Android shared.
+                if (isRustDirectUsbRegistered()) {
+                    return true
+                }
+                if (nativeIsRustDirectUsbSessionActive()) {
+                    Log.w("UAC2", "Refusing USB re-registration with an active native session")
+                    return false
+                }
+                Log.i("UAC2", "Stale Kotlin USB connection; re-registering DAC in Rust")
             }
             val connection = existingConnection ?: usbManager.openDevice(device)
             if (connection == null) {
@@ -4306,6 +4335,10 @@ class MainActivity: FlutterActivity() {
             if (!registered) {
                 if (existingConnection == null) {
                     connection.close()
+                } else if (!nativeIsRustDirectUsbSessionActive()) {
+                    closeDirectUsbConnection(deviceName)
+                    if (activeDirectUsbDeviceName == deviceName) activeDirectUsbDeviceName = null
+                    updateDirectUsbAudioFocus()
                 }
                 Log.e("UAC2", "Rust rejected direct USB registration for $deviceName")
                 return false
@@ -4478,6 +4511,7 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun deactivateDirectUsb(): Boolean {
+        if (directUsbTeardownPending) return false
         return try {
             directUsbPlaybackActive = false
             nativeSetRustDirectUsbLockEnabled(false)
@@ -4485,10 +4519,34 @@ class MainActivity: FlutterActivity() {
             val deviceName = activeDirectUsbDeviceName
             val stopped = nativeWaitRustDirectUsbSessionStopped(4_000)
             if (!stopped) {
+                // Closing here invalidates libusb's in-flight URBs. Those URBs
+                // subsequently report NO_DEVICE even if the DAC is still plugged
+                // in, and callbacks can race against freed native state.
                 Log.w(
                     "UAC2",
-                    "[USB] Timed out waiting for Rust direct USB shutdown for ${deviceName ?: "unknown"}; forcing connection close",
+                    "[USB] Native session still draining for ${deviceName ?: "unknown"}; preserving fd",
                 )
+                directUsbTeardownPending = true
+                mainScope.launch(Dispatchers.IO) {
+                    val drained = runCatching {
+                        nativeWaitRustDirectUsbSessionStopped(30_000)
+                    }.getOrDefault(false)
+                    withContext(Dispatchers.Main) {
+                        if (drained && activeDirectUsbDeviceName == deviceName) {
+                            closeDirectUsbConnection(deviceName)
+                            activeDirectUsbDeviceName = null
+                            updateDirectUsbAudioFocus()
+                            Log.i("UAC2", "[USB] Deferred native USB teardown completed")
+                        } else if (!drained) {
+                            // Keep the connection owned, not dangling under libusb.
+                            // A subsequent deactivation or process exit can retry.
+                            Log.e("UAC2", "[USB] Native session did not drain; USB fd retained")
+                        }
+                        directUsbTeardownPending = false
+                    }
+                }
+                updateDirectUsbAudioFocus()
+                return false
             }
             closeDirectUsbConnection(deviceName)
             activeDirectUsbDeviceName = null
@@ -4597,7 +4655,7 @@ class MainActivity: FlutterActivity() {
             preferredSerial = preferredSerial,
         )
 
-        val directUsbRegistered = activeDirectUsbDeviceName != null
+        val directUsbRegistered = activeDirectUsbDeviceName != null && isRustDirectUsbRegistered()
         val hasSystemVolumeControl = audioManager != null && !audioManager.isVolumeFixed
         val hasDirectUsbHardwareVolume = hasDirectUsbHardwareVolume()
         val hasVolumeControl = if (directUsbRegistered) {
@@ -4784,7 +4842,7 @@ class MainActivity: FlutterActivity() {
     private fun getDirectUsbDiagnostics(): Map<String, Any?> {
         return mapOf(
             "activeDirectUsbDeviceName" to activeDirectUsbDeviceName,
-            "directUsbRegistered" to (activeDirectUsbDeviceName != null),
+            "directUsbRegistered" to (activeDirectUsbDeviceName != null && isRustDirectUsbRegistered()),
             "exclusiveDacModeEnabled" to exclusiveDacModeEnabled,
             "directUsbPlaybackActive" to directUsbPlaybackActive,
             "audioFocusHeld" to (directUsbFocusGain != null),

@@ -7773,6 +7773,41 @@ fn submit_iso_transfer(
     }
 }
 
+/// A cancelled libusb transfer is *still owned by libusb* until its callback
+/// has been dispatched. Freeing the transfer/buffer after a fixed timeout
+/// causes a native use-after-free on slower Android USB host controllers.
+/// Leak only in the exceptional undrainable case; never free a live URB.
+fn cancel_and_drain_iso_feedback(
+    context: &Context,
+    transfer: std::ptr::NonNull<libusb_transfer>,
+    user_data: *mut IsoTransferUserData,
+) {
+    let cancel_result = unsafe { libusb_cancel_transfer(transfer.as_ptr()) };
+    if cancel_result != 0 {
+        dev_eprintln!("[USB] Feedback cancellation returned {}", cancel_result);
+    }
+    for _ in 0..20 {
+        let completed = unsafe { &(*user_data).completion }
+            .status.lock()
+            .map(|status| status.is_some())
+            .unwrap_or_else(|poisoned| poisoned.into_inner().is_some());
+        if completed {
+            unsafe {
+                libusb_free_transfer(transfer.as_ptr());
+                drop(Box::from_raw(user_data));
+            }
+            return;
+        }
+        if let Err(error) = context.handle_events(Some(Duration::from_millis(10))) {
+            dev_eprintln!("[USB] Feedback cancellation event pump failed: {}", error);
+        }
+    }
+    // Deliberately retain transfer and callback data: libusb may still invoke
+    // the callback after this function returns. In particular do not drop
+    // Box::from_raw(user_data) while the transfer is outstanding.
+    dev_eprintln!("[USB] Feedback URB undrained; preserving transfer memory");
+}
+
 fn read_iso_feedback_packet(
     context: &Context,
     handle: &DeviceHandle<Context>,
@@ -7831,23 +7866,16 @@ fn read_iso_feedback_packet(
                 break status;
             }
             if iterations >= MAX_FEEDBACK_POLL_ITERATIONS {
-                unsafe { libusb_cancel_transfer(transfer_ptr.as_ptr()) };
-                for _ in 0..MAX_FEEDBACK_POLL_ITERATIONS {
-                    if (*completion.status.lock().unwrap()).is_some() {
-                        break;
-                    }
-                    let _ = context.handle_events(Some(Duration::from_millis(10)));
-                }
-                unsafe {
-                    libusb_free_transfer(transfer_ptr.as_ptr());
-                    drop(Box::from_raw(user_data_ptr));
-                }
+                cancel_and_drain_iso_feedback(context, transfer_ptr, user_data_ptr);
                 return Ok(None);
             }
             iterations += 1;
-            context
-                .handle_events(Some(Duration::from_millis(10)))
-                .map_err(|error| format!("libusb_handle_events failed: {}", error))?;
+            if let Err(error) = context.handle_events(Some(Duration::from_millis(10))) {
+                // An event-loop error does not mean the kernel cancelled the
+                // transfer. The callback may still arrive: drain before return.
+                cancel_and_drain_iso_feedback(context, transfer_ptr, user_data_ptr);
+                return Err(format!("libusb_handle_events failed: {}", error));
+            }
         }
     };
 
