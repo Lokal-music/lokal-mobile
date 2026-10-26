@@ -148,6 +148,8 @@ class LocaleController extends ValueNotifier<Locale?> {
         'com.mossapps.flick.widgets.MiniPlayerWidgetProvider',
         'com.mossapps.flick.widgets.FlowRadioWidgetProvider',
         'com.mossapps.flick.widgets.CoverFlowRecommendationWidgetProvider',
+        'com.mossapps.flick.widgets.FlagshipWidgetProvider',
+        'com.mossapps.flick.widgets.CompactWidgetProvider',
       ]) {
         await HomeWidget.updateWidget(qualifiedAndroidName: provider);
       }
