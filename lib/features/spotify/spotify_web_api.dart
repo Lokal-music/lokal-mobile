@@ -55,17 +55,27 @@ class SpotifyWebApi implements SpotifyLibraryApi {
         throw const SpotifyApiException(
           'Your Spotify session expired. Update its cookie in Data → Accounts.',
         );
+      final extensions = {
+        'persistedQuery': {
+          'version': 1,
+          'sha256Hash': tokens.queryHashes[operation] ?? hashes[operation],
+        },
+      };
+      // The desktop-proven libraryV3 operation is served on Pathfinder v1
+      // as a GET. Other existing Spotify operations retain their v2 POST.
+      final artistsLibrary = operation == 'libraryV3';
       final response = await _http.send(
-        Uri.https('api-partner.spotify.com', '/pathfinder/v2/query'),
-        jsonBody: jsonEncode({
+        artistsLibrary
+            ? Uri.https('api-partner.spotify.com', '/pathfinder/v1/query', {
+                'operationName': operation,
+                'variables': jsonEncode(variables),
+                'extensions': jsonEncode(extensions),
+              })
+            : Uri.https('api-partner.spotify.com', '/pathfinder/v2/query'),
+        jsonBody: artistsLibrary ? null : jsonEncode({
           'operationName': operation,
           'variables': variables,
-          'extensions': {
-            'persistedQuery': {
-              'version': 1,
-              'sha256Hash': tokens.queryHashes[operation] ?? hashes[operation],
-            },
-          },
+          'extensions': extensions,
         }),
         headers: {
           'Authorization': 'Bearer ${tokens.accessToken}',
