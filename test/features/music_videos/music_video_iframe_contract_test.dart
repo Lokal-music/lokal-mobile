@@ -35,7 +35,7 @@ Future<void> main() async {
             0,
             reason: '${result.stdout}\n${result.stderr}',
           );
-          expect((jsonDecode(result.stdout as String) as Map)['checks'], 4);
+          expect((jsonDecode(result.stdout as String) as Map)['checks'], 5);
         } finally {
           await temp.delete(recursive: true);
         }

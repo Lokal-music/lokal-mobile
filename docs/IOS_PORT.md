@@ -940,3 +940,12 @@ checks. Production subscription remains deferred while those new native checks
 are pending. Its exact workflow contract selection passes 234 Flutter tests;
 315 Rust tests and Android ARM64 native compilation pass. See
 [the state/sequence diagrams, ownership contracts and remaining gates](IOS_MEDIA_RESET_ARCHITECTURE.md).
+
+
+The connected candidate's first full run, Build 37, fails before compilation on
+an HTTP 504 from the unchanged pinned FFmpeg download. Both Apple Rust target
+probes pass. The next revision adds bounded verified dependency retries, native
+radio reset/reopen coverage using a loopback station, and paused iPhone video
+seek preservation. Sixteen Python dependency/simulator/control tests, actionlint
+and thirteen focused video contract tests pass; the new native app gates remain
+pending. The current complete dual-runtime checkpoint remains Build 34.

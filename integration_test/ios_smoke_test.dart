@@ -46,6 +46,7 @@ import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import '../test/fixtures/generated_audio.dart';
 import 'ios_live_video_probe.dart';
 import 'ios_media_reset_probe.dart';
+import 'ios_radio_reset_probe.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -514,6 +515,7 @@ void main() {
       expectProgress: () => _expectPlaybackProgress(tester, player));
     await probeIosDelayedHttpReset(tester, binding, player, audio,
       expectProgress: () => _expectPlaybackProgress(tester, player));
+    await probeIosRadioReset(tester, binding, audio);
     await player.pause();
     await applyEqualizer(EqualizerState.initial());
     await player.syncIosProcessingRoute();

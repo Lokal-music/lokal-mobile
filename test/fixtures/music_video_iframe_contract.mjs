@@ -107,4 +107,18 @@ let checks = 0;
   assert.equal(f.window.lokalVideoCommand('play'), false);
   checks++;
 }
+{
+  const f = fixture();
+  f.player.ready();
+  const paused = source.includes('const lokalStartPaused = true');
+  const deferred = source.includes('const lokalHostAutoplay = true');
+  const plays = f.player.plays;
+  if (!paused && !deferred) f.player.stateChanged(2);
+  assert.equal(f.window.lokalVideoCommand('seek', 0), true);
+  assert.equal(f.player.plays, plays, 'a paused seek must not issue Play');
+  assert.equal(f.player.position, 0);
+  if (paused || deferred) assert.equal(f.player.state, 5,
+    'seeking a reset/cued document remains cued instead of starting playback');
+  checks++;
+}
 console.log(JSON.stringify({checks, scope: 'Production JavaScript with controlled YouTube API; no live receiver or WebKit acceptance'}));

@@ -268,3 +268,28 @@ Still required after this gate: radio and retained WebKit notification-path
 acceptance, actual daemon resets/background/routes on an iPhone, and Windows
 sign/install/update acceptance. Public YouTube challenge responses remain
 inconclusive for live video playback; no challenge bypass is used.
+
+
+### Build 37 dependency failure and radio continuation
+
+[Build 37](https://github.com/lokal-music/lokal-mobile/actions/runs/40373620894)
+at `beb956ed476df2db4c259806426b27335166eed7` stops before application
+compilation because the pinned FFmpeg archive download returns HTTP 504.
+Neither native app suite runs. Both independent Apple Rust target probes pass
+for this source (device and simulator, regenerated API 141).
+
+The dependency helper now retries only bounded transient transport failures,
+discards incomplete downloads, verifies the unchanged pinned SHA-256 before
+publishing its path, and never retries a checksum mismatch or permanent HTTP
+error. A cached archive is reusable only after its bytes are checked again.
+All sixteen dependency/simulator/control Python tests and actionlint pass.
+
+The native radio continuation uses a loopback WAV station through the production
+radio notifier and actual AVPlayer. It requires native Ready, retained paused
+station state across reset, and an actual fresh HTTP open on explicit replay.
+This is a deterministic local fixture, not a live public station or audible
+hardware acceptance. Its native execution is pending with the other reset gates.
+A paused/cued iPhone video seek now cues the new position instead of issuing a
+seek that may start playback. Thirteen focused production-JavaScript/controller
+tests pass, including the unchanged Android autoplay policy. Source analysis of
+this continuation has no issues. Production observation remains deferred.

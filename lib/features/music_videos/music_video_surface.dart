@@ -90,8 +90,16 @@ window.lokalVideoCommand = function(method, positionMs) {
   if (!lokalReady || lokalReleased) return false;
   if (method === 'play') lokalPlayer.playVideo();
   else if (method === 'pause') lokalPlayer.pauseVideo();
-  else if (method === 'seek' && Number.isFinite(positionMs) && positionMs >= 0)
-    lokalPlayer.seekTo(positionMs / 1000, true);
+  else if (method === 'seek' && Number.isFinite(positionMs) && positionMs >= 0) {
+    const state = lokalPlayer.getPlayerState();
+    if ((lokalStartPaused || lokalHostAutoplay) && [-1, 0, 5].includes(state))
+      lokalPlayer.cueVideoById({videoId: '$videoId', startSeconds: positionMs / 1000});
+    else {
+      lokalPlayer.seekTo(positionMs / 1000, true);
+      if ((lokalStartPaused || lokalHostAutoplay) && state !== 1)
+        lokalPlayer.pauseVideo();
+    }
+  }
   else return false;
   lokalSnapshot();
   return true;
@@ -316,6 +324,7 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
           'seek' => "window.lokalVideoCommand('seek', $ms)",
           _ => throw ArgumentError.value(method, 'method'),
         };
+      if (method == 'seek') output.initialPositionConfirmed = true;
         final accepted = await IosLocalAudioRequests.wait(
           view.evaluateJavascript(source: command),
         );
