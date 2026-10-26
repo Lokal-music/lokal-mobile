@@ -140,6 +140,21 @@ class _ReadyYoutube extends KonnektedDiscoveryNotifier {
   Future<void> load({bool refresh = false}) async {}
 }
 
+class _HiddenOnlyLastfm extends KonnektedDiscoveryNotifier {
+  @override
+  KonnektedDiscoveryState build() => const KonnektedDiscoveryState(
+    source: KonnektedDiscoverySource.lastfm,
+    data: LokalDiscovery(
+      account: 'Last.fm',
+      page: 0,
+      quickPicks: [LokalDiscoveryTrack(title: 'Top Scrobble', artist: 'Artist')],
+      history: [LokalDiscoveryTrack(title: 'Recent Scrobble', artist: 'Artist')],
+    ),
+  );
+  @override
+  Future<void> load({bool refresh = false}) async {}
+}
+
 class _ReadySpotify extends KonnektedDiscoveryNotifier {
   @override
   KonnektedDiscoveryState build() =>
@@ -204,7 +219,10 @@ void main() {
                 data: SpotifyDiscoveryData(
                   account: 'Spotify',
                   quickPicks: [],
-                  recentlyPlayed: [],
+                  recentlyPlayed: [
+                    LokalDiscoveryTrack(title: 'Spotify history track',
+                        artist: 'Artist'),
+                  ],
                   likedSongs: [
                     LokalDiscoveryTrack(title: 'Like', artist: 'Artist'),
                   ],
@@ -245,6 +263,8 @@ void main() {
       expect(find.text('Mixed for you'), findsOneWidget);
       expect(find.text('Liked Songs'), findsNothing);
       expect(find.text('Like'), findsNothing);
+      expect(find.text('Recently Played'), findsOneWidget);
+      expect(find.text('Spotify history track'), findsOneWidget);
       expect(
         tester
             .widget<ListView>(find.byKey(const PageStorageKey('spotify-mixes')))
@@ -295,6 +315,31 @@ void main() {
       expect(shelf.scrollDirection, Axis.horizontal);
     },
   );
+
+  testWidgets('Last.fm with only hidden scrobbles shows the empty state',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          konnektedDiscoveryProvider.overrideWith(_HiddenOnlyLastfm.new),
+        ],
+        child: _app(
+          SingleChildScrollView(
+            child: KonnektedDiscoveryView(
+              onNavigate: (_) {},
+              onPlay: (_, __) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing to recommend yet'), findsOneWidget);
+    expect(find.text('Quick Picks'), findsNothing);
+    expect(find.text('Scrobble History'), findsNothing);
+    expect(find.text('Top Scrobble'), findsNothing);
+    expect(find.text('Recent Scrobble'), findsNothing);
+  });
 
   test('the library index finds your copy, and albums and artists', () {
     final index = KonnektedLibraryIndex(_library);
