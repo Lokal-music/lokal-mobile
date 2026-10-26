@@ -10,6 +10,11 @@ import 'package:flick/models/song.dart';
 import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/player_service.dart';
 
+/// Space is shown only after real synchronized lines have been loaded.
+/// Do not claim a plain/empty lyric file has subtitle timing.
+bool hasImmersiveLyrics(LyricsData? lyrics) =>
+    lyrics != null && lyrics.isSynchronized && lyrics.lines.isNotEmpty;
+
 /// Independently renders the song's current timed lyric as a subtitle while
 /// keeping the album sleeve front and centre. Like Prism's immersive mode,
 /// but built entirely on Lokal's existing audio clock and lyric services.
