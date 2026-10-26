@@ -1,6 +1,12 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flick/features/library_jobs/artist_metadata.dart';
+import 'package:flick/features/discovery/recommendation_match.dart';
+import 'package:flick/features/spotify/spotify_api.dart';
+import 'package:flick/features/spotify/spotify_oauth.dart';
+import 'package:flick/features/spotify/spotify_storage.dart';
+import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/features/library_jobs/library_jobs.dart';
 import 'package:flick/features/library_jobs/library_job_control.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
@@ -12,6 +18,7 @@ import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'artist_follow_store.dart';
 import 'lokal_library_kit.dart';
 import 'lokal_library_groups.dart';
 import 'lokal_music_detail_page.dart';
@@ -58,6 +65,7 @@ class _SearchablePage<T> extends StatefulWidget {
     required this.emptyIcon,
     required this.emptyMessage,
     required this.job,
+    this.controls,
   });
 
   final String title;
@@ -68,6 +76,7 @@ class _SearchablePage<T> extends StatefulWidget {
   final IconData emptyIcon;
   final String emptyMessage;
   final LibraryJob job;
+  final Widget? controls;
 
   @override
   State<_SearchablePage<T>> createState() => _SearchablePageState<T>();
@@ -105,6 +114,7 @@ class _SearchablePageState<T> extends State<_SearchablePage<T>> {
             ),
       slivers: [
         SliverToBoxAdapter(child: LibraryJobControl(widget.job)),
+        if (widget.controls != null) SliverToBoxAdapter(child: widget.controls!),
         if (all != null && all.isNotEmpty)
           SliverPersistentHeader(
             pinned: true,
@@ -181,28 +191,187 @@ class LokalAlbumsPage extends ConsumerWidget {
       );
 }
 
-/// Library › Artists: round portraits A to Z.
-class LokalArtistsPage extends ConsumerWidget {
+/// Spotify favorites may not have local songs. Keep them in Artists anyway.
+enum ArtistFavoritesFilter { all, favorites, nonFavorites }
+
+List<LokalArtist> selectArtistFavorites(
+  List<LokalArtist> local,
+  ArtistFollowStore follows,
+  ArtistFavoritesFilter filter,
+) {
+  final rows = <String, LokalArtist>{};
+  for (final artist in local) {
+    final key = recommendationKey(artist.name);
+    if (key.isNotEmpty) rows.putIfAbsent(key, () => artist);
+  }
+  for (final name in follows.knownNames) {
+    final key = recommendationKey(name);
+    if (key.isNotEmpty) {
+      rows.putIfAbsent(key, () => LokalArtist(name, const []));
+    }
+  }
+  final selected = [
+    for (final artist in rows.values)
+      if (filter == ArtistFavoritesFilter.all ||
+          follows.isFollowed(artist.name) ==
+              (filter == ArtistFavoritesFilter.favorites))
+        artist,
+  ];
+  selected.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  return selected;
+}
+
+class LokalArtistsPage extends ConsumerStatefulWidget {
   const LokalArtistsPage({super.key});
+  @override
+  ConsumerState<LokalArtistsPage> createState() => _LokalArtistsPageState();
+}
+
+class _LokalArtistsPageState extends ConsumerState<LokalArtistsPage> {
+  final _follows = ArtistFollowStore.instance;
+  ArtistFavoritesFilter _filter = ArtistFavoritesFilter.all;
+  bool _importing = false;
+  String? _status, _error;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) =>
-      _SearchablePage<LokalArtist>(
-        title: lokalText('Artists'),
-        job: LibraryJob.artists,
-        items: ref.watch(lokalArtistsProvider),
-        nameOf: (a) => a.name,
-        hint: 'Search artists',
-        emptyIcon: Icons.person_rounded,
-        emptyMessage: 'Artists come from your files’ artist tags.',
-        builder: (artists) => SliverList.builder(
-          itemCount: artists.length,
-          itemBuilder: (context, index) {
-            final artist = artists[index];
-            return _ArtistRow(artist: artist);
-          },
+  void initState() {
+    super.initState();
+    _follows.addListener(_onFavoritesChanged);
+    unawaited(_follows.load().catchError((Object _) {
+      if (mounted) setState(() => _error = 'Could not load favorite artists.');
+    }));
+  }
+
+  void _onFavoritesChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _follows.removeListener(_onFavoritesChanged);
+    super.dispose();
+  }
+
+  Future<void> _importSpotify() async {
+    if (_importing) return;
+    setState(() {
+      _importing = true;
+      _error = null;
+      _status = 'Connecting to Spotify…';
+    });
+    final settings = SpotifySettingsStore();
+    final oauth = SpotifyOAuthService(tokenStore: settings.tokenStore);
+    SpotifyWebApi? api;
+    try {
+      if (!await oauth.isConnected) await oauth.signIn();
+      api = SpotifyWebApi(store: settings.tokenStore, oauth: oauth);
+      final names = await api.getFollowedArtists(onProgress: (count) {
+        if (mounted) {
+          setState(() => _status =
+              'Reading Spotify favorites… ' + count.toString() + ' artists');
+        }
+      });
+      final imported = await _follows.importNames(names);
+      if (!mounted) return;
+      setState(() {
+        _filter = ArtistFavoritesFilter.favorites;
+        _status = imported.received == 0
+            ? 'No followed artists found on Spotify.'
+            : 'Imported ' + imported.added.toString() + ' new favorites ('
+                + imported.received.toString() + ' found on Spotify).';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _status = null;
+        _error = error is SpotifyApiException || error is SpotifyOAuthException
+            ? error.toString()
+            : 'Could not import Spotify artists. Check your connection and retry.';
+      });
+    } finally {
+      api?.close();
+      if (mounted) setState(() => _importing = false);
+    }
+  }
+
+  Widget _controls(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final option in ArtistFavoritesFilter.values)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(switch (option) {
+                      ArtistFavoritesFilter.all => 'All',
+                      ArtistFavoritesFilter.favorites => 'Favorites',
+                      ArtistFavoritesFilter.nonFavorites => 'Non-favorites',
+                    }),
+                    selected: _filter == option,
+                    onSelected: (_) => setState(() => _filter = option),
+                  ),
+                ),
+            ],
+          ),
         ),
-      );
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _importing ? null : _importSpotify,
+          icon: _importing
+              ? const SizedBox.square(dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.link_rounded, size: 18),
+          label: Text(_importing
+              ? 'Importing Spotify artists…'
+              : 'Import favorites from Spotify'),
+        ),
+        if (_status != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(_status!, style: TextStyle(
+              fontSize: 12, color: context.lokal.muted)),
+          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(_error!, style: TextStyle(
+              fontSize: 12, color: context.lokal.text)),
+          ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final source = ref.watch(lokalArtistsProvider);
+    return _SearchablePage<LokalArtist>(
+      title: lokalText('Artists'),
+      job: LibraryJob.artists,
+      items: source.whenData(
+        (artists) => selectArtistFavorites(artists, _follows, _filter)),
+      nameOf: (artist) => artist.name,
+      hint: 'Search artists',
+      emptyIcon: Icons.person_rounded,
+      emptyMessage: switch (_filter) {
+        ArtistFavoritesFilter.all =>
+          'Artists come from your library or Spotify favorites.',
+        ArtistFavoritesFilter.favorites =>
+          'Follow an artist or import your Spotify favorites.',
+        ArtistFavoritesFilter.nonFavorites =>
+          'No non-favorite artists in your library.',
+      },
+      controls: _controls(context),
+      builder: (artists) => SliverList.builder(
+        itemCount: artists.length,
+        itemBuilder: (context, index) => _ArtistRow(artist: artists[index]),
+      ),
+    );
+  }
 }
 
 class _ArtistRow extends ConsumerWidget {
@@ -217,15 +386,17 @@ class _ArtistRow extends ConsumerWidget {
         (paths) => paths[ArtistMetadata.key(artist.name)],
       ),
     );
-    final fallback = KonnektedArtwork(
-      song: artist.songs.first,
-      size: 52,
-      radius: 26,
-    );
+    final fallback = artist.songs.isEmpty
+        ? CircleAvatar(radius: 26,
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+            child: Icon(Icons.person_rounded, color: context.lokal.muted))
+        : KonnektedArtwork(
+            song: artist.songs.first, size: 52, radius: 26);
     return InkWell(
       onTap: () => pushLokal(
         context,
-        LokalArtistPage(name: artist.name, songs: artist.songs),
+        LokalArtistPage(name: artist.name, songs: artist.songs,
+          initialOnline: artist.songs.isEmpty),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -245,21 +416,43 @@ class _ArtistRow extends ConsumerWidget {
                   ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                artist.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(artist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w500)),
+                  Text(artist.songs.isEmpty
+                      ? 'Not in library' : lokalSongCount(artist.songs.length),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: context.lokal.muted)),
+                ],
               ),
             ),
-            Text(
-              lokalSongCount(artist.songs.length),
-              style: TextStyle(fontSize: 13, color: context.lokal.muted),
+            IconButton(
+              tooltip: ArtistFollowStore.instance.isFollowed(artist.name)
+                  ? 'Remove from favorites' : 'Add to favorites',
+              icon: Icon(
+                ArtistFollowStore.instance.isFollowed(artist.name)
+                    ? Icons.star_rounded : Icons.star_border_rounded,
+              ),
+              onPressed: () async {
+                try {
+                  final follows = ArtistFollowStore.instance;
+                  await follows.setFollowed(
+                    artist.name, !follows.isFollowed(artist.name));
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not save artist favorite.')));
+                  }
+                }
+              },
             ),
-            Icon(Icons.chevron_right_rounded, color: context.lokal.muted2),
+
           ],
         ),
       ),
