@@ -386,6 +386,41 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     unawaited(_loadLyrics());
   }
 
+  void _showSpaceOptions() {
+    if (!_immersiveLyrics) return;
+    final source = _lyrics;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.library_music_outlined),
+                title: const Text('Lyrics source'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_chooseImmersiveLyricsSource());
+                },
+              ),
+              if (source != null)
+                LyricsSublineButtons(
+                  lyrics: source,
+                  onChanged: (updated) {
+                    if (mounted && identical(_lyrics, source)) {
+                      setState(() => _sublineLyrics = updated);
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _chooseImmersiveLyricsSource() async {
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -542,7 +577,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   Widget _videoScaffold(Song song, String videoId) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _immersiveLyrics ? _toggleImmersiveLyrics : null,
+        onLongPress: _immersiveLyrics ? _showSpaceOptions : null,
+        child: Stack(
         fit: StackFit.expand,
         children: [
           Center(
@@ -561,12 +600,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                      key: _videoSurfaceKey,
                      videoId: videoId,
                      controller: _videoController,
+                     showControls: !_immersiveLyrics,
                    ),
                 );
               },
             ),
           ),
-          if (!_videoFullscreen)
+          if (!_immersiveLyrics && !_videoFullscreen)
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -602,7 +642,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             )
-          else
+          else if (!_immersiveLyrics)
             SafeArea(
               child: Align(
                 alignment: Alignment.topRight,
@@ -651,7 +691,25 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             ),
+          if (_immersiveLyrics)
+            Positioned(
+              left: 12, right: 12,
+              bottom: MediaQuery.paddingOf(context).bottom + 52,
+              child: IgnorePointer(
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _videoController.nativeNotifier,
+                  builder: (_, native, __) => native
+                      ? _spaceSubtitle(song)
+                      : const Text(
+                          'Timed subtitles unavailable in video fallback',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                ),
+              ),
+            ),
         ],
+      ),
       ),
     );
   }
@@ -782,6 +840,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             onTap: _immersiveLyrics
                 ? _toggleImmersiveLyrics
                 : (clearViewAvailable ? _toggleCanvasControls : null),
+            onLongPress: _immersiveLyrics ? _showSpaceOptions : null,
             child: Stack(
               key: _playerBoundsKey,
               fit: StackFit.expand,
@@ -1150,6 +1209,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                   key: _videoSurfaceKey,
                                   videoId: _activeVideoId!,
                                   controller: _videoController,
+                showControls: !_immersiveLyrics,
                 onFullscreen: _toggleVideoFullscreen,
                                 ),
                               ),
@@ -1443,6 +1503,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 key: _videoSurfaceKey,
                 videoId: _activeVideoId!,
                 controller: _videoController,
+                showControls: !_immersiveLyrics,
                 onFullscreen: _toggleVideoFullscreen,
               ),
             ),
