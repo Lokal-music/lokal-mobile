@@ -22,6 +22,7 @@ import '../widgets/player_transport_controls.dart';
 import '../widgets/artwork_gradient_backdrop.dart';
 import '../widgets/artwork_mesh_blur_backdrop.dart';
 import '../widgets/lyric_motion_line.dart';
+import '../widgets/immersive_lyrics_stage.dart';
 import '../widgets/material_player_thumb.dart';
 
 import 'dart:async';
@@ -68,6 +69,7 @@ import 'package:flick/models/song.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/services/favorites_service.dart';
 import 'package:flick/services/lyrics_service.dart';
+import 'package:flick/services/lyrics_sources.dart';
 import 'package:flick/services/lyrics_playback_prefetch.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/services/player_volume_control.dart';
@@ -102,6 +104,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   final LyricsService _lyricsService = LyricsService();
 
   bool _videoFullscreen = false;
+  bool _immersiveLyrics = false;
   String? _videoOverrideId;
   Song? _videoOverrideSong;
   bool _resumeAudioAfterVideo = false;
@@ -227,6 +230,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _player.favoriteNotificationToggleNotifier.addListener(_refreshFavorite);
     _refreshFavorite();
     _discoverVideo(_player.currentSongNotifier.value);
+    unawaited(_loadLyrics());
   }
 
   void _discoverVideo(Song? song) {
@@ -262,7 +266,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _draggingSeek = false;
     _refreshFavorite();
     _discoverVideo(_player.currentSongNotifier.value);
-    if (_showLyrics) _loadLyrics();
+    unawaited(_loadLyrics());
   }
 
   Future<void> _refreshFavorite() async {
@@ -360,6 +364,61 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     if (open) unawaited(_loadLyrics());
   }
 
+  void _toggleImmersiveLyrics() {
+    _restoreCanvasControls();
+    if (_immersiveLyrics) {
+      setState(() => _immersiveLyrics = false);
+      return;
+    }
+    if (_showLyrics) _moveLyrics(false);
+    _queue.setOpen(false, animate: false);
+    HapticFeedback.selectionClick();
+    setState(() => _immersiveLyrics = true);
+    unawaited(_loadLyrics());
+  }
+
+  Future<void> _chooseImmersiveLyricsSource() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
+          children: [
+            const ListTile(
+              title: Text('Lyrics source'),
+              subtitle: Text('Choose the best available timing for this song'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded),
+              title: const Text('Refresh current source'),
+              onTap: () => Navigator.pop(sheetContext, '__refresh'),
+            ),
+            for (final entry in {
+              'auto': 'Automatic',
+              'local': 'Local file',
+              ...lyricsSources,
+            }.entries)
+              ListTile(
+                title: Text(entry.value),
+                trailing: _lyricsSource == entry.key
+                    ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.pop(sheetContext, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == '__refresh') {
+      unawaited(_loadLyrics(force: true, refreshOnline: true));
+      return;
+    }
+    setState(() => _lyricsSource = choice);
+    unawaited(_loadLyrics(force: true));
+  }
+
   void _toggleLyrics() {
     HapticFeedback.selectionClick();
     if (_showLyrics) {
@@ -396,7 +455,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   }
 
   void _close() {
-    if (_videoFullscreen) {
+    if (_immersiveLyrics) {
+      _toggleImmersiveLyrics();
+    } else if (_videoFullscreen) {
       _toggleVideoFullscreen();
     } else if (_videoOverrideId != null) {
       _exitVideoMode();
@@ -640,10 +701,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
     return PopScope(
       // Back puts the queue or the lyrics away first, then closes the player.
-      canPop: _videoOverrideId == null && !_videoFullscreen && !_showLyrics && !_queue.isOpen,
+      canPop: !_immersiveLyrics && _videoOverrideId == null && !_videoFullscreen && !_showLyrics && !_queue.isOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_videoFullscreen) {
+        if (_immersiveLyrics) {
+          _toggleImmersiveLyrics();
+        } else if (_videoFullscreen) {
           _toggleVideoFullscreen();
         } else if (_videoOverrideId != null) {
           _exitVideoMode();
@@ -656,12 +719,14 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       child: LokalPullToDismiss(
         onDismiss: _close,
         // Pulling up drags the queue in, following the finger.
-        onPullUpUpdate: _showLyrics || _videoOverrideId != null ||
+        onPullUpUpdate: _immersiveLyrics || _showLyrics ||
+                _videoOverrideId != null ||
                 widget.videoSong != null ? null : _queue.dragBy,
-        onPullUpEnd: _showLyrics || _videoOverrideId != null ||
+        onPullUpEnd: _immersiveLyrics || _showLyrics ||
+                _videoOverrideId != null ||
                 widget.videoSong != null ? null : _releaseQueue,
         // While the queue is out, its header owns vertical drags.
-        isBlocked: () => _videoOverrideId != null || widget.videoSong != null ||
+        isBlocked: () => _immersiveLyrics || _videoOverrideId != null || widget.videoSong != null ||
             _carouselDragging || _queue.engaged,
         child: _scaffold(colors, isCasting, diagnostics),
       ),
@@ -677,6 +742,32 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     final videoId = _videoOverrideId ?? widget.videoId;
     if (videoSong != null && videoId != null) {
       return _videoScaffold(videoSong, videoId);
+    }
+    if (_immersiveLyrics) {
+      return ValueListenableBuilder<Song?>(
+        valueListenable: _player.currentSongNotifier,
+        builder: (context, active, _) => active == null
+            ? const Scaffold(
+                backgroundColor: Colors.black,
+                body: Center(child: CircularProgressIndicator()),
+              )
+            : ImmersiveLyricsStage(
+                key: ValueKey('immersive:${active.id}'),
+                song: active,
+                player: _player,
+                // Do not render the previous song's sublines while the new
+                // song's local/online lyrics are being resolved.
+                lyrics: _lyricsForSongId == active.id
+                    ? (_sublineLyrics ?? _lyrics) : null,
+                baseLyrics: _lyricsForSongId == active.id ? _lyrics : null,
+                loading: _lyricsLoading || _lyricsForSongId != active.id,
+                onExit: _toggleImmersiveLyrics,
+                onLyricsSource: _chooseImmersiveLyricsSource,
+                onSublineChanged: (updated) {
+                  if (mounted) setState(() => _sublineLyrics = updated);
+                },
+              ),
+      );
     }
     final fullCover = ref.watch(
       lokalAppearanceProvider.select((look) => look.fullscreenCover),
@@ -1434,6 +1525,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             ),
+            if (hasImmersiveLyrics(data))
+              IconButton(
+                tooltip: 'Space — immersive lyrics',
+                icon: const Icon(LucideIcons.expand, color: Colors.white70, size: 19),
+                onPressed: _toggleImmersiveLyrics,
+              ),
             LyricsSourceButton(
               selected: _lyricsSource,
               lyrics: data,
@@ -1803,6 +1900,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             active: _showLyrics,
             width: (constraints.maxWidth - 8) / 4,
           ),
+          if (_lyricsForSongId == _player.currentSongNotifier.value?.id &&
+              hasImmersiveLyrics(_lyrics))
+            chip(
+              LucideIcons.expand,
+              'Space',
+              _toggleImmersiveLyrics,
+              active: _immersiveLyrics,
+              width: (constraints.maxWidth - 8) / 4,
+            ),
           if (ref.watch(musicVideosEnabledProvider))
             if (_player.currentSongNotifier.value case final current?)
               if (ref.watch(musicVideoIndexProvider).videoFor(current.id)
