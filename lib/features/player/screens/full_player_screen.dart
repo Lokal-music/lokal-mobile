@@ -14,6 +14,7 @@ import 'package:flick/widgets/common/overflow_marquee_title.dart';
 import 'package:flick/core/theme/lokal_appearance.dart';
 
 import '../widgets/lyrics_source_button.dart';
+import '../widgets/lyrics_file_export.dart';
 import '../widgets/player_panel_stage.dart';
 import '../widgets/motion_art_widget.dart';
 
@@ -120,6 +121,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   bool _enteringVideo = false;
   bool _showLyrics = false;
   bool _lyricsLoading = false;
+  bool _savingLyricsFile = false;
   String _lyricsSource = 'auto';
   int _lyricsRequest = 0;
   LyricsData? _lyrics;
@@ -390,6 +392,32 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     unawaited(_loadLyrics());
   }
 
+  Future<void> _saveLyricsFile(Song song, LyricsData lyrics) async {
+    if (_savingLyricsFile) return;
+    setState(() => _savingLyricsFile = true);
+    try {
+      final saved = await saveCurrentLyricsFile(song: song, lyrics: lyrics);
+      if (saved && mounted) {
+        LokalToast.fromSnackBar(
+          context,
+          SnackBar(content: Text(l10n.saved), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        LokalToast.fromSnackBar(
+          context,
+          const SnackBar(
+            content: Text('Could not save lyrics to file.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingLyricsFile = false);
+    }
+  }
+
   void _showSpaceOptions() {
     if (!_immersiveLyrics) return;
     final source = _lyrics;
@@ -409,6 +437,18 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   unawaited(_chooseImmersiveLyricsSource());
                 },
               ),
+              if (source != null && source.lines.isNotEmpty)
+                ListTile(
+                  leading: const Icon(LucideIcons.download),
+                  title: Text(l10n.saveLyrics),
+                  enabled: !_savingLyricsFile,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    final song = _videoOverrideSong ?? widget.videoSong ??
+                        _player.currentSongNotifier.value;
+                    if (song != null) unawaited(_saveLyricsFile(song, source));
+                  },
+                ),
               if (source != null)
                 LyricsSublineButtons(
                   lyrics: source,
@@ -1679,6 +1719,23 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             ),
+            if (data != null && data.lines.isNotEmpty)
+              IconButton(
+                key: const ValueKey('save-current-lyrics-file'),
+                tooltip: 'Save lyrics to file',
+                visualDensity: VisualDensity.compact,
+                icon: _savingLyricsFile
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(LucideIcons.download,
+                        color: Colors.white70, size: 19),
+                onPressed: _savingLyricsFile
+                    ? null
+                    : () => unawaited(_saveLyricsFile(song, data)),
+              ),
             if (hasImmersiveLyrics(data))
               IconButton(
                 tooltip: 'Space — immersive lyrics',
