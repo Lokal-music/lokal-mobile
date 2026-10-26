@@ -1718,39 +1718,39 @@
   "@createACustomPreset": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:738"
   },
-  "createAPlaylistImportAnM3u": "Create a playlist, import an M3U, or let the mixes above carry the session.",
+  "createAPlaylistImportAnM3u": "Bir çalma listesi oluştur, M3U içe aktar veya müziği yukarıdaki karışımlara bırak.",
   "@createAPlaylistImportAnM3u": {
     "description": "lib/features/menu/screens/menu_screen.dart:991"
   },
-  "createLyrics": "Create Lyrics",
+  "createLyrics": "Şarkı sözü oluştur",
   "@createLyrics": {
     "description": "lib/features/player/widgets/inline_lyrics_panel.dart:208"
   },
-  "createNewPlaylist": "Create new playlist",
+  "createNewPlaylist": "Yeni çalma listesi oluştur",
   "@createNewPlaylist": {
     "description": "lib/features/songs/screens/songs_screen.dart:1442"
   },
-  "createNewPlaylist2": "Create New Playlist",
+  "createNewPlaylist2": "Yeni çalma listesi oluştur",
   "@createNewPlaylist2": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:464"
   },
-  "createPlaylist": "Create Playlist",
+  "createPlaylist": "Çalma listesi oluştur",
   "@createPlaylist": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:124"
   },
-  "createPlaylistFromSelected": "Create playlist from selected",
+  "createPlaylistFromSelected": "Seçilenlerden çalma listesi oluştur",
   "@createPlaylistFromSelected": {
     "description": "lib/features/songs/screens/songs_screen.dart:1586"
   },
-  "createYourFirstPlaylistOrJump": "Create your first playlist or jump into your saved collections.",
+  "createYourFirstPlaylistOrJump": "İlk çalma listeni oluştur veya kaydettiğin koleksiyonlara göz at.",
   "@createYourFirstPlaylistOrJump": {
     "description": "lib/features/menu/screens/menu_screen.dart:974"
   },
-  "createYourFirstPlaylistToOrganize": "Create your first playlist to organize\nyour favorite songs",
+  "createYourFirstPlaylistToOrganize": "Favori şarkılarını düzenlemek için\nilk çalma listeni oluştur.",
   "@createYourFirstPlaylistToOrganize": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:242"
   },
-  "created": "Created {arg1}",
+  "created": "{arg1} oluşturuldu",
   "@created": {
     "description": "lib/features/playlists/screens/playlist_detail_screen.dart:435",
     "placeholders": {
@@ -1759,7 +1759,7 @@
       }
     }
   },
-  "createdAndAddedSong": "Created {arg1} and added song",
+  "createdAndAddedSong": "{arg1} oluşturuldu ve şarkı eklendi",
   "@createdAndAddedSong": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:546",
     "placeholders": {
@@ -1768,7 +1768,7 @@
       }
     }
   },
-  "createdAndAddedSongs": "Created {name} and added {arg1} songs",
+  "createdAndAddedSongs": "{name} oluşturuldu ve {arg1} şarkı eklendi",
   "@createdAndAddedSongs": {
     "description": "lib/features/songs/screens/songs_screen.dart:1523",
     "placeholders": {
@@ -1780,11 +1780,11 @@
       }
     }
   },
-  "creativeFx": "Creative FX",
+  "creativeFx": "Yaratıcı efektler",
   "@creativeFx": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3505"
   },
-  "credentialsRejectedByReEnterThe": "Credentials rejected by {arg1}. Re-enter the password.",
+  "credentialsRejectedByReEnterThe": "{arg1} kimlik bilgilerini reddetti. Şifreyi yeniden gir.",
   "@credentialsRejectedByReEnterThe": {
     "description": "lib/features/settings/screens/network_sources_screen.dart:110",
     "placeholders": {
@@ -1793,35 +1793,35 @@
       }
     }
   },
-  "credentialsSavedSuccessfully": "Credentials saved successfully!",
+  "credentialsSavedSuccessfully": "Kimlik bilgileri kaydedildi!",
   "@credentialsSavedSuccessfully": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:622"
   },
-  "crystalCaverns": "Crystal Caverns",
+  "crystalCaverns": "Kristal Mağaralar",
   "@crystalCaverns": {
     "description": "lib/models/song.dart:348"
   },
-  "cueSheetTracksCannotBeEdited": "CUE sheet tracks cannot be edited.",
+  "cueSheetTracksCannotBeEdited": "CUE sayfası parçaları düzenlenemez.",
   "@cueSheetTracksCannotBeEdited": {
     "description": "lib/services/metadata_editor_service.dart:67"
   },
-  "cueSheetTracksCannotBeEdited2": "CUE sheet tracks cannot be edited",
+  "cueSheetTracksCannotBeEdited2": "CUE sayfası parçaları düzenlenemez",
   "@cueSheetTracksCannotBeEdited2": {
     "description": "lib/features/songs/screens/metadata_editor_screen.dart:319"
   },
-  "currentArtwork": "Current artwork",
+  "currentArtwork": "Geçerli kapak görseli",
   "@currentArtwork": {
     "description": "lib/features/songs/widgets/album_art_picker_bottom_sheet.dart:327"
   },
-  "currentCustomArt": "Current custom art",
+  "currentCustomArt": "Geçerli özel görsel",
   "@currentCustomArt": {
     "description": "lib/features/songs/widgets/album_art_picker_bottom_sheet.dart:326"
   },
-  "currentPlaybackMode": "Current Playback Mode",
+  "currentPlaybackMode": "Geçerli oynatma modu",
   "@currentPlaybackMode": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1080"
   },
-  "currentRoute": "Current route: {arg1}.",
+  "currentRoute": "Geçerli çıkış: {arg1}.",
   "@currentRoute": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:528",
     "placeholders": {
@@ -1830,55 +1830,55 @@
       }
     }
   },
-  "currentSongPreviewOnly": "Current song · preview only",
+  "currentSongPreviewOnly": "Çalan şarkı · yalnızca önizleme",
   "@currentSongPreviewOnly": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:389"
   },
-  "currentStreak": "Current Streak",
+  "currentStreak": "Güncel seri",
   "@currentStreak": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:756"
   },
-  "curvePreview": "Curve Preview",
+  "curvePreview": "Eğri önizlemesi",
   "@curvePreview": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1778"
   },
-  "curvedWave": "Curved Wave",
+  "curvedWave": "Kavisli dalga",
   "@curvedWave": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:94"
   },
-  "custom": "Custom",
+  "custom": "Özel",
   "@custom": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:782"
   },
-  "customFormat": "Custom Format",
+  "customFormat": "Özel biçim",
   "@customFormat": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:266"
   },
-  "customFormatForcesPlaybackToThe": "Custom format forces playback to the selected output format. If the chosen sample rate, bit depth, or channels do not suit the song or device, you may hear altered sound, pitch, speed, or instability.",
+  "customFormatForcesPlaybackToThe": "Özel biçim, sesi seçilen çıkış biçiminde oynatmaya zorlar. Örnekleme hızı, bit derinliği veya kanal sayısı şarkıya ya da cihaza uygun değilse ses, perde, hız veya kararlılık etkilenebilir.",
   "@customFormatForcesPlaybackToThe": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1315"
   },
-  "customFormatIsDisabledInBit": "Custom format is disabled in Bit-perfect (USB DAC) mode because exact sample rate matching is required. Disable Bit-perfect (USB DAC) to set custom formats.",
+  "customFormatIsDisabledInBit": "Bit-perfect (USB DAC) modunda örnekleme hızının tam eşleşmesi gerektiği için özel biçim kullanılamaz. Özel biçim seçmek için bit-perfect'i kapat.",
   "@customFormatIsDisabledInBit": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:281"
   },
-  "customFormatIsUnavailableBecauseAudio": "Custom format is unavailable because Audio Format is disabled in Settings.",
+  "customFormatIsUnavailableBecauseAudio": "Ayarlar'da Ses Biçimi kapalı olduğu için özel biçim kullanılamıyor.",
   "@customFormatIsUnavailableBecauseAudio": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:286"
   },
-  "customWidth": "Custom Width",
+  "customWidth": "Özel genişlik",
   "@customWidth": {
     "description": "lib/features/settings/widgets/mini_player_customization.dart:90"
   },
-  "customizeAudioDisplayNavigationAnd": "Customize audio, display, navigation, and integrations.",
+  "customizeAudioDisplayNavigationAnd": "Sesi, görünümü, gezinmeyi ve bağlantıları özelleştir.",
   "@customizeAudioDisplayNavigationAnd": {
     "description": "lib/providers/tutorial_provider.dart:44"
   },
-  "customizeBottomBar": "Customize Bottom Bar",
+  "customizeBottomBar": "Alt çubuğu özelleştir",
   "@customizeBottomBar": {
     "description": "lib/widgets/navigation/flick_nav_bar.dart:463"
   },
-  "dAgo": "{arg1}d ago",
+  "dAgo": "{arg1} gün önce",
   "@dAgo": {
     "description": "lib/features/recently_added/screens/recently_added_screen.dart:494",
     "placeholders": {
@@ -1887,7 +1887,7 @@
       }
     }
   },
-  "dAgo2": "{arg1}d ago",
+  "dAgo2": "{arg1} gün önce",
   "@dAgo2": {
     "description": "lib/features/recently_added/screens/recently_added_screen.dart:494",
     "placeholders": {
@@ -1896,11 +1896,11 @@
       }
     }
   },
-  "dacClaim": "DAC Claim",
+  "dacClaim": "DAC denetimini üstlen",
   "@dacClaim": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:700"
   },
-  "dacWillBeOfferedAgain": "{count, plural, =1{{count} DAC} other{{count} DACs}} will be offered again.",
+  "dacWillBeOfferedAgain": "{count, plural, =1{{count} DAC} other{{count} DAC}} yeniden sunulacak.",
   "@dacWillBeOfferedAgain": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:514",
     "placeholders": {
@@ -1909,55 +1909,55 @@
       }
     }
   },
-  "daily": "Daily",
+  "daily": "Günlük",
   "@daily": {
     "description": "lib/data/repositories/recently_played_repository.dart:14"
   },
-  "damp": "Damp",
+  "damp": "Sönümleme",
   "@damp": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3589"
   },
-  "dapNativeBitOrder": "DAP Native Bit Order",
+  "dapNativeBitOrder": "DAP yerel bit sırası",
   "@dapNativeBitOrder": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1521"
   },
-  "dapNativeByteGrouping": "DAP Native Byte Grouping",
+  "dapNativeByteGrouping": "DAP yerel bayt gruplaması",
   "@dapNativeByteGrouping": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1532"
   },
-  "dark": "Dark",
+  "dark": "Koyu",
   "@dark": {
     "description": "lib/features/settings/screens/widget_settings_screen.dart:180"
   },
-  "date": "Date",
+  "date": "Tarih",
   "@date": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:697"
   },
-  "dateAdded": "Date Added",
+  "dateAdded": "Eklenme tarihi",
   "@dateAdded": {
     "description": "lib/features/folders/screens/folders_screen.dart:2596"
   },
-  "dateAddedNewest": "Date Added (Newest)",
+  "dateAddedNewest": "Eklenme tarihi (en yeni)",
   "@dateAddedNewest": {
     "description": "lib/features/playlists/widgets/playlist_sort_bottom_sheet.dart:23"
   },
-  "dateAddedOldest": "Date Added (Oldest)",
+  "dateAddedOldest": "Eklenme tarihi (en eski)",
   "@dateAddedOldest": {
     "description": "lib/features/playlists/widgets/playlist_sort_bottom_sheet.dart:25"
   },
-  "dayStreak": "day streak",
+  "dayStreak": "günlük seri",
   "@dayStreak": {
     "description": "lib/features/milestone/widgets/streak_popup.dart:193"
   },
-  "dayStreak2": "Day streak",
+  "dayStreak2": "Günlük seri",
   "@dayStreak2": {
     "description": "lib/app/app.dart:423"
   },
-  "dayStreak3": "Day Streak",
+  "dayStreak3": "Günlük seri",
   "@dayStreak3": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:378"
   },
-  "dayUnit": "{count, plural, =1{day} other{days}}",
+  "dayUnit": "{count, plural, =1{gün} other{gün}}",
   "@dayUnit": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:782",
     "placeholders": {
@@ -1984,7 +1984,7 @@
       }
     }
   },
-  "db15": "{arg1}%  {arg2} dB",
+  "db15": "%{arg1}  {arg2} dB",
   "@db15": {
     "description": "lib/widgets/uac2/iso_volume_popup.dart:275",
     "placeholders": {
@@ -2014,7 +2014,7 @@
       }
     }
   },
-  "dbCut": "{arg1} dB cut",
+  "dbCut": "{arg1} dB azaltma",
   "@dbCut": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:2377",
     "placeholders": {
@@ -2023,7 +2023,7 @@
       }
     }
   },
-  "dbMax": "{arg1} dB max",
+  "dbMax": "en fazla {arg1} dB",
   "@dbMax": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1787",
     "placeholders": {
@@ -2032,39 +2032,39 @@
       }
     }
   },
-  "deactivateFallback": "Deactivate Fallback",
+  "deactivateFallback": "Yedek yöntemi devre dışı bırak",
   "@deactivateFallback": {
     "description": "lib/widgets/uac2/uac2_fallback_manager.dart:178"
   },
-  "dec": "Dec",
+  "dec": "Ara",
   "@dec": {
     "description": "lib/features/milestone/screens/milestones_screen.dart:513"
   },
-  "decode": "Decode",
+  "decode": "Kod çözme",
   "@decode": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:917"
   },
-  "deepEarth": "Deep Earth",
+  "deepEarth": "Yerin Derinlikleri",
   "@deepEarth": {
     "description": "lib/models/song.dart:353"
   },
-  "defaultAndroidPlaybackEngineUsedBy": "Default Android playback engine used by Lokal right now.",
+  "defaultAndroidPlaybackEngineUsedBy": "Lokal'in şu anda kullandığı varsayılan Android oynatma motoru.",
   "@defaultAndroidPlaybackEngineUsedBy": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:761"
   },
-  "defaultAndroidPlayerPlaysEverything": "Default Android player — plays everything reliably. The safest choice for most listeners.",
+  "defaultAndroidPlayerPlaysEverything": "Varsayılan Android oynatıcı — tüm içerikleri güvenilir biçimde çalar. Çoğu kullanıcı için en güvenli seçenek.",
   "@defaultAndroidPlayerPlaysEverything": {
     "description": "lib/features/menu/screens/menu_screen.dart:484"
   },
-  "delays": "Delays",
+  "delays": "Gecikmeler",
   "@delays": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3615"
   },
-  "delete": "Delete",
+  "delete": "Sil",
   "@delete": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:649"
   },
-  "deleteAndAllSongsAndPlaylists": "Delete \"{arg1}\" and all songs and playlists synced from it? Cached downloads are kept.",
+  "deleteAndAllSongsAndPlaylists": "\"{arg1}\" ve ondan eşitlenen tüm şarkılar ile çalma listeleri silinsin mi? Önbellekteki indirmeler korunur.",
   "@deleteAndAllSongsAndPlaylists": {
     "description": "lib/features/settings/screens/network_server_edit_screen.dart:329",
     "placeholders": {
@@ -2073,39 +2073,39 @@
       }
     }
   },
-  "deleteFile": "Delete File",
+  "deleteFile": "Dosyayı sil",
   "@deleteFile": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:753"
   },
-  "deleteFiles": "Delete Files",
+  "deleteFiles": "Dosyaları sil",
   "@deleteFiles": {
     "description": "lib/features/songs/screens/songs_screen.dart:1644"
   },
-  "deletePlaylist": "Delete Playlist",
+  "deletePlaylist": "Çalma listesini sil",
   "@deletePlaylist": {
     "description": "lib/features/playlists/screens/playlists_screen.dart:328"
   },
-  "deletePreset": "Delete Preset?",
+  "deletePreset": "Ön ayar silinsin mi?",
   "@deletePreset": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:704"
   },
-  "deleteSelected": "Delete selected",
+  "deleteSelected": "Seçilenleri sil",
   "@deleteSelected": {
     "description": "lib/features/songs/screens/songs_screen.dart:1594"
   },
-  "deleteSong": "Delete Song",
+  "deleteSong": "Şarkıyı sil",
   "@deleteSong": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:197"
   },
-  "deleteSong2": "Delete Song?",
+  "deleteSong2": "Şarkı silinsin mi?",
   "@deleteSong2": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:718"
   },
-  "deleteSong3": "Delete song",
+  "deleteSong3": "Şarkıyı sil",
   "@deleteSong3": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:716"
   },
-  "deleteSongs": "Delete {arg1} songs?",
+  "deleteSongs": "{arg1} şarkı silinsin mi?",
   "@deleteSongs": {
     "description": "lib/features/songs/screens/songs_screen.dart:1624",
     "placeholders": {
@@ -2114,11 +2114,11 @@
       }
     }
   },
-  "deleteSongs2": "Delete songs",
+  "deleteSongs2": "Şarkıları sil",
   "@deleteSongs2": {
     "description": "lib/features/songs/screens/songs_screen.dart:1622"
   },
-  "deleteThisCannotBeUndone": "Delete \"{arg1}\"? This cannot be undone.",
+  "deleteThisCannotBeUndone": "\"{arg1}\" silinsin mi? Bu işlem geri alınamaz.",
   "@deleteThisCannotBeUndone": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:705",
     "placeholders": {
@@ -2127,7 +2127,7 @@
       }
     }
   },
-  "deleted": "Deleted \"{arg1}\"",
+  "deleted": "\"{arg1}\" silindi",
   "@deleted": {
     "description": "lib/features/songs/widgets/song_actions_bottom_sheet.dart:829",
     "placeholders": {
@@ -2136,7 +2136,7 @@
       }
     }
   },
-  "deletedSongs": "Deleted {arg1} songs",
+  "deletedSongs": "{arg1} şarkı silindi",
   "@deletedSongs": {
     "description": "lib/features/songs/screens/songs_screen.dart:1714",
     "placeholders": {
@@ -2145,123 +2145,123 @@
       }
     }
   },
-  "deselectAll": "Deselect all",
+  "deselectAll": "Tümünün seçimini kaldır",
   "@deselectAll": {
     "description": "lib/features/songs/screens/songs_screen.dart:1574"
   },
-  "designed": "Designed",
+  "designed": "Tasarlandı",
   "@designed": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:593"
   },
-  "details": "Details",
+  "details": "Ayrıntılar",
   "@details": {
     "description": "lib/features/recap/screens/replay_studio_screen.dart:522"
   },
-  "developerMode": "Developer Mode",
+  "developerMode": "Geliştirici modu",
   "@developerMode": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:359"
   },
-  "developerOptionsIsDisabledEnableIt": "Developer Options is disabled. Enable it via Settings → About phone (tap Build number 7 times), then retry.",
+  "developerOptionsIsDisabledEnableIt": "Geliştirici Seçenekleri kapalı. Ayarlar → Telefon hakkında bölümünde Derleme numarasına 7 kez dokunarak aç, ardından tekrar dene.",
   "@developerOptionsIsDisabledEnableIt": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:173"
   },
-  "device": "Device",
+  "device": "Cihaz",
   "@device": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:641"
   },
-  "deviceCapabilities": "Device Capabilities",
+  "deviceCapabilities": "Cihaz yetenekleri",
   "@deviceCapabilities": {
     "description": "lib/widgets/uac2/uac2_device_capabilities.dart:38"
   },
-  "deviceConnected": "Device connected",
+  "deviceConnected": "Cihaz bağlandı",
   "@deviceConnected": {
     "description": "lib/widgets/uac2/uac2_hotplug_monitor.dart:48"
   },
-  "deviceDac": "Device DAC",
+  "deviceDac": "Cihaz DAC'i",
   "@deviceDac": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:923"
   },
-  "deviceDacVolume": "Device DAC Volume",
+  "deviceDacVolume": "Cihaz DAC ses düzeyi",
   "@deviceDacVolume": {
     "description": "lib/widgets/uac2/uac2_volume_control.dart:163"
   },
-  "deviceDisconnected": "Device disconnected",
+  "deviceDisconnected": "Cihaz bağlantısı kesildi",
   "@deviceDisconnected": {
     "description": "lib/widgets/uac2/uac2_hotplug_monitor.dart:49"
   },
-  "deviceInformation": "Device Information",
+  "deviceInformation": "Cihaz bilgileri",
   "@deviceInformation": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:79"
   },
-  "deviceType": "Device Type",
+  "deviceType": "Cihaz türü",
   "@deviceType": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:553"
   },
-  "devices": "Devices",
+  "devices": "Cihazlar",
   "@devices": {
     "description": "lib/features/settings/screens/bluetooth_settings_screen.dart:306"
   },
-  "direct": "Direct",
+  "direct": "Doğrudan",
   "@direct": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:657"
   },
-  "directAlsaOutputIsActiveAnd": "Direct ALSA output is active and bypassing the Android audio server.",
+  "directAlsaOutputIsActiveAnd": "Doğrudan ALSA çıkışı etkin; Android ses sunucusu atlanıyor.",
   "@directAlsaOutputIsActiveAnd": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1047"
   },
-  "directLibusbIsochronousUsbEngineBest": "Direct libusb isochronous USB engine. Best paired with Bit-perfect (USB DAC) for verified external DAC playback.",
+  "directLibusbIsochronousUsbEngineBest": "Doğrudan libusb eşzamanlı USB motoru. Doğrulanmış harici DAC oynatımı için bit-perfect (USB DAC) ile birlikte kullanılması önerilir.",
   "@directLibusbIsochronousUsbEngineBest": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:830"
   },
-  "directUsb": "Direct USB",
+  "directUsb": "Doğrudan USB",
   "@directUsb": {
     "description": "lib/widgets/uac2/uac2_player_status.dart:224"
   },
-  "directUsbDeviceManaged": "Direct USB device-managed",
+  "directUsbDeviceManaged": "Cihaz tarafından yönetilen doğrudan USB",
   "@directUsbDeviceManaged": {
     "description": "lib/features/settings/screens/uac2_settings_screen.dart:691"
   },
-  "directUsbExperimental": "Direct USB experimental",
+  "directUsbExperimental": "Deneysel doğrudan USB",
   "@directUsbExperimental": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:500"
   },
-  "disabled": "Disabled",
+  "disabled": "Devre dışı",
   "@disabled": {
     "description": "lib/features/settings/screens/bottom_bar_settings_screen.dart:185"
   },
-  "disabledInBitPerfectUsbDac": "Disabled in Bit-perfect (USB DAC) mode (exact rate required)",
+  "disabledInBitPerfectUsbDac": "Bit-perfect (USB DAC) modunda devre dışı (tam hız eşleşmesi gerekli)",
   "@disabledInBitPerfectUsbDac": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:235"
   },
-  "disabledWhileBothBitPerfectOptions": "Disabled while both bit-perfect options are off on this DAP.",
+  "disabledWhileBothBitPerfectOptions": "Bu DAP'te her iki bit-perfect seçeneği de kapalıyken devre dışı.",
   "@disabledWhileBothBitPerfectOptions": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:760"
   },
-  "disc": "Disc",
+  "disc": "Disk",
   "@disc": {
     "description": "lib/features/player/widgets/song_metadata_sheet.dart:80"
   },
-  "disc2": "Disc #",
+  "disc2": "Disk no.",
   "@disc2": {
     "description": "lib/features/songs/screens/metadata_editor_screen.dart:288"
   },
-  "discard": "Discard",
+  "discard": "Vazgeç",
   "@discard": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:594"
   },
-  "discardChanges": "Discard changes?",
+  "discardChanges": "Değişikliklerden vazgeçilsin mi?",
   "@discardChanges": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:588"
   },
-  "discardChanges2": "Discard Changes?",
+  "discardChanges2": "Değişikliklerden vazgeçilsin mi?",
   "@discardChanges2": {
     "description": "lib/features/songs/screens/metadata_editor_screen.dart:562"
   },
-  "disconnect": "Disconnect",
+  "disconnect": "Bağlantıyı kes",
   "@disconnect": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:253"
   },
-  "disconnectFrom": "Disconnect from {arg1}",
+  "disconnectFrom": "{arg1} bağlantısını kes",
   "@disconnectFrom": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:113",
     "placeholders": {
@@ -2270,51 +2270,51 @@
       }
     }
   },
-  "disconnectLastFm": "Disconnect Last.fm?",
+  "disconnectLastFm": "Last.fm bağlantısı kesilsin mi?",
   "@disconnectLastFm": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:156"
   },
-  "disconnectListenbrainz": "Disconnect ListenBrainz?",
+  "disconnectListenbrainz": "ListenBrainz bağlantısı kesilsin mi?",
   "@disconnectListenbrainz": {
     "description": "lib/features/settings/widgets/listenbrainz_settings_tile.dart:95"
   },
-  "discoversDlnaUpnpAndChromecastReceivers": "Discovers DLNA, UPnP and Chromecast receivers on your network",
+  "discoversDlnaUpnpAndChromecastReceivers": "Ağındaki DLNA, UPnP ve Chromecast alıcılarını bulur",
   "@discoversDlnaUpnpAndChromecastReceivers": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:76"
   },
-  "dismiss": "Dismiss",
+  "dismiss": "Kapat",
   "@dismiss": {
     "description": "lib/features/settings/screens/library_settings_screen.dart:2000"
   },
-  "displayFileFormatAndBitrateIn": "Display file format and bitrate in immersive mode",
+  "displayFileFormatAndBitrateIn": "Sürükleyici modda dosya biçimini ve bit hızını göster",
   "@displayFileFormatAndBitrateIn": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:205"
   },
-  "displayFileFormatAndBitrateIn2": "Display file format and bitrate in artwork card mode",
+  "displayFileFormatAndBitrateIn2": "Kapak kartı modunda dosya biçimini ve bit hızını göster",
   "@displayFileFormatAndBitrateIn2": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:343"
   },
-  "displayTheAlbumNameInArtwork": "Display the album name in artwork card mode",
+  "displayTheAlbumNameInArtwork": "Kapak kartı modunda albüm adını göster",
   "@displayTheAlbumNameInArtwork": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:330"
   },
-  "displayTheArtistNameInArtwork": "Display the artist name in artwork card mode",
+  "displayTheArtistNameInArtwork": "Kapak kartı modunda sanatçı adını göster",
   "@displayTheArtistNameInArtwork": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:318"
   },
-  "displayTheArtistNameInImmersive": "Display the artist name in immersive mode",
+  "displayTheArtistNameInImmersive": "Sürükleyici modda sanatçı adını göster",
   "@displayTheArtistNameInImmersive": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:193"
   },
-  "displayTheTrackTitleInArtwork": "Display the track title in artwork card mode",
+  "displayTheTrackTitleInArtwork": "Kapak kartı modunda şarkı adını göster",
   "@displayTheTrackTitleInArtwork": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:306"
   },
-  "displayTheTrackTitleInImmersive": "Display the track title in immersive mode",
+  "displayTheTrackTitleInImmersive": "Sürükleyici modda şarkı adını göster",
   "@displayTheTrackTitleInImmersive": {
     "description": "lib/features/settings/screens/player_layout_settings_screen.dart:181"
   },
-  "dlnaAndUpnpReceiversAreControlled": "DLNA and UPnP receivers are controlled directly in pure Dart — no extra dependencies. Chromecast support uses the native Cast SDK. Network sources (Subsonic, WebDAV, Jellyfin, UPnP), local files, and cached songs can all be cast — locals are served straight from this phone. While casting, volume keys and the system volume panel control the connected device.",
+  "dlnaAndUpnpReceiversAreControlled": "DLNA ve UPnP alıcıları ek bağımlılık olmadan doğrudan Dart üzerinden yönetilir. Chromecast desteği yerel Cast SDK'sını kullanır. Ağ kaynakları (Subsonic, WebDAV, Jellyfin, UPnP), yerel dosyalar ve önbellekteki şarkılar yayınlanabilir; yerel dosyalar doğrudan bu telefondan sunulur. Yayın sırasında ses tuşları ve sistem ses paneli bağlı cihazın ses düzeyini kontrol eder.",
   "@dlnaAndUpnpReceiversAreControlled": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:300"
   },
@@ -2322,11 +2322,11 @@
   "@dlnaUpnp": {
     "description": "lib/features/settings/screens/casting_settings_screen.dart:45"
   },
-  "donTShowAgainToday": "Don't show again today",
+  "donTShowAgainToday": "Bugün tekrar gösterme",
   "@donTShowAgainToday": {
     "description": "lib/features/milestone/widgets/streak_popup.dart:287"
   },
-  "done": "Done",
+  "done": "Bitti",
   "@done": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:634"
   },
@@ -2334,23 +2334,23 @@
   "@dop": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:712"
   },
-  "dots": "Dots",
+  "dots": "Noktalar",
   "@dots": {
     "description": "lib/features/settings/screens/visualizer_settings_screen.dart:111"
   },
-  "doubleTapABandToReset": "Double-tap a band to reset",
+  "doubleTapABandToReset": "Sıfırlamak için banda iki kez dokun",
   "@doubleTapABandToReset": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1753"
   },
-  "doubleTapToReset": "Double-tap to reset",
+  "doubleTapToReset": "Sıfırlamak için iki kez dokun",
   "@doubleTapToReset": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:383"
   },
-  "doubleTapToResetThisBand": "Double-tap to reset this band",
+  "doubleTapToResetThisBand": "Bu bandı sıfırlamak için iki kez dokun",
   "@doubleTapToResetThisBand": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:1904"
   },
-  "down": "{arg1} down",
+  "down": "{arg1} aşağı",
   "@down": {
     "description": "lib/features/player/widgets/player_layout_sheet.dart:566",
     "placeholders": {
@@ -2386,27 +2386,27 @@
       }
     }
   },
-  "dragABoundaryToStretchOr": "Drag a boundary to stretch or shrink the word before it. The last boundary moves the next line.",
+  "dragABoundaryToStretchOr": "Önündeki sözcüğü uzatmak veya kısaltmak için sınırı sürükle. Son sınır bir sonraki satırı taşır.",
   "@dragABoundaryToStretchOr": {
     "description": "lib/features/player/screens/lyrics_sync_screen.dart:1705"
   },
-  "dragBandsUpOrDown": "Drag bands up or down",
+  "dragBandsUpOrDown": "Bantları yukarı veya aşağı sürükle",
   "@dragBandsUpOrDown": {
     "description": "lib/widgets/equalizer/interactive_eq_graph.dart:129"
   },
-  "dragToChangeFrequencyGain": "Drag to change frequency & gain",
+  "dragToChangeFrequencyGain": "Frekansı ve kazancı değiştirmek için sürükle",
   "@dragToChangeFrequencyGain": {
     "description": "lib/widgets/equalizer/interactive_eq_graph.dart:161"
   },
-  "dragToMovePinchToWiden": "Drag to move • Pinch to widen/narrow",
+  "dragToMovePinchToWiden": "Taşımak için sürükle • Genişletmek veya daraltmak için iki parmağınla sıkıştır",
   "@dragToMovePinchToWiden": {
     "description": "lib/widgets/equalizer/interactive_eq_graph.dart:130"
   },
-  "dragVerticallyToChangeGain": "Drag vertically to change gain",
+  "dragVerticallyToChangeGain": "Kazancı değiştirmek için dikey sürükle",
   "@dragVerticallyToChangeGain": {
     "description": "lib/widgets/equalizer/interactive_eq_graph.dart:160"
   },
-  "driftMs": "Drift {arg1} ms",
+  "driftMs": "Sapma {arg1} ms",
   "@driftMs": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:1040",
     "placeholders": {
@@ -2415,47 +2415,47 @@
       }
     }
   },
-  "dsdMode": "DSD mode",
+  "dsdMode": "DSD modu",
   "@dsdMode": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:713"
   },
-  "dsdOutputMode": "DSD Output Mode",
+  "dsdOutputMode": "DSD çıkış modu",
   "@dsdOutputMode": {
     "description": "lib/features/settings/screens/uac2_preferences_screen.dart:1508"
   },
-  "dsdStream": "DSD stream",
+  "dsdStream": "DSD akışı",
   "@dsdStream": {
     "description": "lib/features/player/widgets/bit_perfect_indicator.dart:918"
   },
-  "duplicateCleaner": "Duplicate Cleaner",
+  "duplicateCleaner": "Yinelenenleri temizle",
   "@duplicateCleaner": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:429"
   },
-  "duplicatesRemovedUsingRecommendedPicks": "Duplicates removed using recommended picks.",
+  "duplicatesRemovedUsingRecommendedPicks": "Yinelenen kayıtlar önerilen seçimlere göre kaldırıldı.",
   "@duplicatesRemovedUsingRecommendedPicks": {
     "description": "lib/features/settings/screens/duplicate_cleaner_screen.dart:947"
   },
-  "duration": "Duration",
+  "duration": "Süre",
   "@duration": {
     "description": "lib/features/settings/screens/audio_settings_screen.dart:330"
   },
-  "durationMatch": "Duration Match",
+  "durationMatch": "Süre eşleşmesi",
   "@durationMatch": {
     "description": "lib/features/player/widgets/online_lyrics_search_sheet.dart:874"
   },
-  "dynamics": "Dynamics",
+  "dynamics": "Dinamikler",
   "@dynamics": {
     "description": "lib/features/settings/screens/equalizer_screen.dart:3255"
   },
-  "earlier": "Earlier",
+  "earlier": "Daha önce",
   "@earlier": {
     "description": "lib/data/repositories/recently_played_repository.dart:296"
   },
-  "earlierStandoutsPulledBackIntoView": "Earlier standouts pulled back into view from your listening history.",
+  "earlierStandoutsPulledBackIntoView": "Dinleme geçmişinden öne çıkan eski parçalar yeniden karşında.",
   "@earlierStandoutsPulledBackIntoView": {
     "description": "lib/features/menu/screens/menu_screen.dart:1759"
   },
-  "editCredentials": "Edit Credentials",
+  "editCredentials": "Kimlik bilgilerini düzenle",
   "@editCredentials": {
     "description": "lib/features/settings/widgets/lastfm_settings_tile.dart:921"
   },
