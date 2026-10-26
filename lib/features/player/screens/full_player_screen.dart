@@ -105,6 +105,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   String? _videoOverrideId;
   Song? _videoOverrideSong;
   bool _resumeAudioAfterVideo = false;
+  bool _enteringVideo = false;
   bool _showLyrics = false;
   bool _lyricsLoading = false;
   String _lyricsSource = 'auto';
@@ -405,16 +406,32 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   }
 
   Future<void> _enterVideoMode(Song song, String videoId) async {
-    if (!RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)) return;
-    _resumeAudioAfterVideo = _player.isPlayingNotifier.value;
-    // One active audio owner: pause album audio before native video audio.
-    if (_resumeAudioAfterVideo) await _player.pause();
-    if (!mounted || _player.currentSongNotifier.value?.id != song.id) return;
-    HapticFeedback.selectionClick();
-    setState(() {
-      _videoOverrideSong = song;
-      _videoOverrideId = videoId;
-    });
+    if (!RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId) ||
+        _enteringVideo || _videoOverrideId != null) return;
+    _enteringVideo = true;
+    final wasPlaying = _player.isPlayingNotifier.value;
+    var entered = false;
+    try {
+      // One active audio owner: pause album audio before native video audio.
+      if (wasPlaying) await _player.pause();
+      if (!mounted || _player.currentSongNotifier.value?.id != song.id) return;
+      HapticFeedback.selectionClick();
+      setState(() {
+        _resumeAudioAfterVideo = wasPlaying;
+        _videoOverrideSong = song;
+        _videoOverrideId = videoId;
+      });
+      entered = true;
+    } catch (_) {
+      // Resolver/player errors must not strand the original song paused.
+    } finally {
+      _enteringVideo = false;
+      if (!entered && wasPlaying && mounted &&
+          _player.currentSongNotifier.value?.id == song.id &&
+          !_player.isPlayingNotifier.value) {
+        unawaited(_player.resume());
+      }
+    }
   }
 
   void _exitVideoMode() {
@@ -639,10 +656,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       child: LokalPullToDismiss(
         onDismiss: _close,
         // Pulling up drags the queue in, following the finger.
-        onPullUpUpdate: _showLyrics ? null : _queue.dragBy,
-        onPullUpEnd: _showLyrics ? null : _releaseQueue,
+        onPullUpUpdate: _showLyrics || _videoOverrideId != null ||
+                widget.videoSong != null ? null : _queue.dragBy,
+        onPullUpEnd: _showLyrics || _videoOverrideId != null ||
+                widget.videoSong != null ? null : _releaseQueue,
         // While the queue is out, its header owns vertical drags.
-        isBlocked: () => _carouselDragging || _queue.engaged,
+        isBlocked: () => _videoOverrideId != null || widget.videoSong != null ||
+            _carouselDragging || _queue.engaged,
         child: _scaffold(colors, isCasting, diagnostics),
       ),
     );
@@ -1783,10 +1803,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             active: _showLyrics,
             width: (constraints.maxWidth - 8) / 4,
           ),
-          if (ref.watch(musicVideosEnabledProvider) &&
-              _player.currentSongNotifier.value case final current?)
-            if (ref.watch(musicVideoIndexProvider).videoFor(current.id)
-                case final videoId?)
+          if (ref.watch(musicVideosEnabledProvider))
+            if (_player.currentSongNotifier.value case final current?)
+              if (ref.watch(musicVideoIndexProvider).videoFor(current.id)
+                  case final videoId?)
               chip(
                 LucideIcons.video,
                 'Video',
