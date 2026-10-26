@@ -73,7 +73,8 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
     _playing = widget.playing?.value ?? false;
     _speed = widget.playbackSpeed?.value ?? 1.0;
     _listen();
-    _ticker = createTicker(_onFrame)..start();
+    _ticker = createTicker(_onFrame);
+    if (_playing) _ticker.start();
   }
 
   void _listen() {
@@ -103,6 +104,15 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
       _framePosition.value = _anchorPosition;
       _playing = widget.playing?.value ?? false;
       _speed = widget.playbackSpeed?.value ?? 1.0;
+      if (_ticker.isActive != _playing) {
+        if (_playing) {
+          _anchorElapsed = Duration.zero;
+          _frameElapsed = Duration.zero;
+          _ticker.start();
+        } else {
+          _ticker.stop();
+        }
+      }
       _listen();
     }
   }
@@ -140,18 +150,32 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
   }
 
   void _onPlaybackState() {
-    final wasPlaying = _playing;
     final nowPlaying = widget.playing?.value ?? false;
     final speed = widget.playbackSpeed?.value ?? 1.0;
-    if (wasPlaying == nowPlaying && _speed == speed) return;
-    // Preserve a continuous timeline on pause, resume and speed changes.
-    _anchorPosition = wasPlaying
-        ? _interpolated(_frameElapsed)
-        : widget.position.value;
-    _anchorElapsed = _frameElapsed;
-    _playing = nowPlaying;
-    _speed = speed;
-    if (!_playing) _framePosition.value = widget.position.value;
+    if (_playing == nowPlaying && _speed == speed) return;
+
+    if (_playing && !nowPlaying) {
+      // Freeze the extrapolated position, not a stale Media3 sample.
+      _anchorPosition = _interpolated(_frameElapsed);
+      _anchorElapsed = Duration.zero;
+      _frameElapsed = Duration.zero;
+      _playing = false;
+      _speed = speed;
+      _ticker.stop();
+      _framePosition.value = _anchorPosition;
+    } else if (!_playing && nowPlaying) {
+      _anchorPosition = widget.position.value;
+      _anchorElapsed = Duration.zero;
+      _frameElapsed = Duration.zero;
+      _playing = true;
+      _speed = speed;
+      _ticker.start();
+    } else {
+      // Keep a continuous playhead through speed changes.
+      _anchorPosition = _interpolated(_frameElapsed);
+      _anchorElapsed = _frameElapsed;
+      _speed = speed;
+    }
   }
 
   void _onFrame(Duration elapsed) {
