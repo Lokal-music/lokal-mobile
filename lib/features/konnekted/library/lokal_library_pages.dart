@@ -13,7 +13,6 @@ import 'lokal_albums_artists.dart';
 import 'lokal_genres.dart';
 import 'lokal_playlists.dart';
 import 'lokal_song_browser.dart';
-import 'liked_playback.dart';
 
 /// Songs Lokal downloaded (they live in its "Lokal Downloads" folder).
 final lokalDownloadsProvider = Provider<AsyncValue<List<Song>>>((ref) {
@@ -69,7 +68,6 @@ Widget? lokalLibraryPage(String name) => switch (name) {
     recentlyAddedRanks: (ref) =>
         ref.watch(favoritesProvider).value?.likedRanks ?? const <String, int>{},
     preferencesKey: 'lokal.likes.song_browser_view.v1',
-    playbackQueueBuilder: playableLikedQueue,
     emptyIcon: Icons.favorite_border_rounded,
     emptyTitle: 'No liked songs yet',
     emptyMessage: 'Tap the heart on any song and it shows up here.',
