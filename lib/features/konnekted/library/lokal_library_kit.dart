@@ -18,6 +18,7 @@ import 'package:flick/widgets/lokal/lokal_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/widgets/lokal/lokal_swipe_to_queue.dart';
+import 'replayable_stream_songs.dart';
 
 /// Shared pieces of Lokal's Library screens: Apple Music's iOS layout on the
 /// theme's own solid background, glass only for the small round buttons.
@@ -32,11 +33,20 @@ Future<void> lokalPlay(
   bool shuffle = false,
 }) async {
   if (queue.isEmpty) return;
-  final list = shuffle ? (List<Song>.of(queue)..shuffle()) : queue;
+  final list = replayableStreamQueue(
+    shuffle ? (List<Song>.of(queue)..shuffle()) : queue,
+  );
+  // Playback must use the same reconstructed entry as the queue, not a
+  // stale favorite object from before the provider refreshed.
+  final selectedId = shuffle ? list.first.id : (start ?? queue.first).id;
+  final selected = list.firstWhere(
+    (song) => song.id == selectedId,
+    orElse: () => list.first,
+  );
   try {
     await ref
         .read(playerProvider.notifier)
-        .play(shuffle ? list.first : (start ?? list.first), playlist: list);
+        .play(selected, playlist: list);
   } catch (_) {
     if (!context.mounted) return;
     LokalToast.show(
@@ -54,7 +64,7 @@ Future<void> lokalQueueAll(
 ) async {
   final player = ref.read(playerProvider.notifier);
   for (final song in songs) {
-    await player.addToQueue(song);
+    await player.addToQueue(replayableStreamSong(song));
   }
   if (!context.mounted) return;
   LokalToast.show(context, l10n.addedSongsToQueue(songs.length));
