@@ -271,7 +271,9 @@ void main() {
       onNextSong: () => songs.last,
     );
     addTearDown(() async {
-      incoming.hungLoad?.complete();
+      if (incoming.hungLoad != null && !incoming.hungLoad!.isCompleted) {
+        incoming.hungLoad!.complete();
+      }
       await engine.dispose();
       await outgoing.positions.close();
       await incoming.positions.close();
