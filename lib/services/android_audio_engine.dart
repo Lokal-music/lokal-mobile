@@ -1036,6 +1036,9 @@ class AndroidAudioEngine implements AudioEngine {
           }),
         );
         _loadedTrack = next;
+        // Advance profile ownership together with the two playback decoders.
+        ++_autoMixProfileGeneration;
+        _currentAutoMixProfile = upcomingProfile;
         _loadedSingleTrackOnly = true;
         _playlistSignature = const <String>[];
         _rampTotal = Duration(milliseconds: activeFadeMs);
