@@ -20,6 +20,7 @@ import '../widgets/player_transport_controls.dart';
 import '../widgets/artwork_gradient_backdrop.dart';
 import '../widgets/artwork_mesh_blur_backdrop.dart';
 import '../widgets/lyric_motion_line.dart';
+import '../widgets/immersive_lyrics_stage.dart';
 import '../widgets/material_player_thumb.dart';
 
 import 'dart:async';
@@ -66,6 +67,7 @@ import 'package:flick/models/song.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/services/favorites_service.dart';
 import 'package:flick/services/lyrics_service.dart';
+import 'package:flick/services/lyrics_sources.dart';
 import 'package:flick/services/lyrics_playback_prefetch.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/services/player_volume_control.dart';
@@ -100,6 +102,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   final LyricsService _lyricsService = LyricsService();
 
   bool _videoFullscreen = false;
+  bool _immersiveLyrics = false;
   bool _showLyrics = false;
   bool _lyricsLoading = false;
   String _lyricsSource = 'auto';
@@ -244,7 +247,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     _restoreCanvasControls();
     _draggingSeek = false;
     _refreshFavorite();
-    if (_showLyrics) _loadLyrics();
+    if (_showLyrics || _immersiveLyrics) _loadLyrics();
   }
 
   Future<void> _refreshFavorite() async {
@@ -342,6 +345,61 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     if (open) unawaited(_loadLyrics());
   }
 
+  void _toggleImmersiveLyrics() {
+    _restoreCanvasControls();
+    if (_immersiveLyrics) {
+      setState(() => _immersiveLyrics = false);
+      return;
+    }
+    if (_showLyrics) _moveLyrics(false);
+    _queue.setOpen(false, animate: false);
+    HapticFeedback.selectionClick();
+    setState(() => _immersiveLyrics = true);
+    unawaited(_loadLyrics());
+  }
+
+  Future<void> _chooseImmersiveLyricsSource() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
+          children: [
+            const ListTile(
+              title: Text('Lyrics source'),
+              subtitle: Text('Choose the best available timing for this song'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded),
+              title: const Text('Refresh current source'),
+              onTap: () => Navigator.pop(sheetContext, '__refresh'),
+            ),
+            for (final entry in {
+              'auto': 'Automatic',
+              'local': 'Local file',
+              ...lyricsSources,
+            }.entries)
+              ListTile(
+                title: Text(entry.value),
+                trailing: _lyricsSource == entry.key
+                    ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.pop(sheetContext, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == '__refresh') {
+      unawaited(_loadLyrics(force: true, refreshOnline: true));
+      return;
+    }
+    setState(() => _lyricsSource = choice);
+    unawaited(_loadLyrics(force: true));
+  }
+
   void _toggleLyrics() {
     HapticFeedback.selectionClick();
     if (_showLyrics) {
@@ -378,7 +436,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   }
 
   void _close() {
-    if (_videoFullscreen) {
+    if (_immersiveLyrics) {
+      _toggleImmersiveLyrics();
+    } else if (_videoFullscreen) {
       _toggleVideoFullscreen();
     } else {
       Navigator.of(context).pop();
@@ -559,10 +619,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
 
     return PopScope(
       // Back puts the queue or the lyrics away first, then closes the player.
-      canPop: !_videoFullscreen && !_showLyrics && !_queue.isOpen,
+      canPop: !_immersiveLyrics && !_videoFullscreen && !_showLyrics && !_queue.isOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_videoFullscreen) {
+        if (_immersiveLyrics) {
+          _toggleImmersiveLyrics();
+        } else if (_videoFullscreen) {
           _toggleVideoFullscreen();
         } else if (_showLyrics) {
           _toggleLyrics();
@@ -576,7 +638,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
         onPullUpUpdate: _showLyrics ? null : _queue.dragBy,
         onPullUpEnd: _showLyrics ? null : _releaseQueue,
         // While the queue is out, its header owns vertical drags.
-        isBlocked: () => _carouselDragging || _queue.engaged,
+        isBlocked: () => _immersiveLyrics || _carouselDragging || _queue.engaged,
         child: _scaffold(colors, isCasting, diagnostics),
       ),
     );
@@ -589,6 +651,29 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   ) {
     if (widget.videoSong case final videoSong?) {
       return _videoScaffold(videoSong, widget.videoId!);
+    }
+    if (_immersiveLyrics) {
+      return ValueListenableBuilder<Song?>(
+        valueListenable: _player.currentSongNotifier,
+        builder: (context, active, _) => active == null
+            ? const Scaffold(
+                backgroundColor: Colors.black,
+                body: Center(child: CircularProgressIndicator()),
+              )
+            : ImmersiveLyricsStage(
+                key: ValueKey('immersive:${active.id}'),
+                song: active,
+                player: _player,
+                lyrics: _sublineLyrics ?? _lyrics,
+                baseLyrics: _lyrics,
+                loading: _lyricsLoading,
+                onExit: _toggleImmersiveLyrics,
+                onLyricsSource: _chooseImmersiveLyricsSource,
+                onSublineChanged: (updated) {
+                  if (mounted) setState(() => _sublineLyrics = updated);
+                },
+              ),
+      );
     }
     final fullCover = ref.watch(
       lokalAppearanceProvider.select((look) => look.fullscreenCover),
@@ -1346,6 +1431,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             ),
+            IconButton(
+              tooltip: 'Immersive lyrics',
+              icon: const Icon(LucideIcons.maximize, color: Colors.white70, size: 19),
+              onPressed: _toggleImmersiveLyrics,
+            ),
             LyricsSourceButton(
               selected: _lyricsSource,
               lyrics: data,
@@ -1713,6 +1803,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
             l10n.lyrics,
             _toggleLyrics,
             active: _showLyrics,
+            width: (constraints.maxWidth - 8) / 4,
+          ),
+          chip(
+            LucideIcons.maximize,
+            'Immersive',
+            _toggleImmersiveLyrics,
+            active: _immersiveLyrics,
             width: (constraints.maxWidth - 8) / 4,
           ),
           ValueListenableBuilder<Duration?>(
