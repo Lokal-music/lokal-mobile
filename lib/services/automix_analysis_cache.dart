@@ -89,9 +89,9 @@ class AutoMixProfile {
     if (maxPeak <= 0) return null;
     final normalized = peaks.map((v) => v / maxPeak).toList(growable: false);
     final bucket = seconds / normalized.length;
-    // A conservative floor avoids counting the quietest digital noise as
-    // music while not removing soft intros from ordinary songs.
-    const floor = 0.035;
+    // Near-digital silence only (~-54 dB relative peak). Do not classify
+    // acoustic intros, quiet breakdowns or intentional fade tails as silence.
+    const floor = 0.002;
     var first = 0;
     while (first < normalized.length && normalized[first] < floor) first++;
     var last = normalized.length - 1;
