@@ -11114,6 +11114,7 @@ class _AppLocalizationsDelegate
     'pl',
     'pt',
     'sv',
+    'tr',
     'zh',
   ].contains(locale.languageCode);
 
