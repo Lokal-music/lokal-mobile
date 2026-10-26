@@ -69,6 +69,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.mossapps.flick.audiofx.JustAudioProcessingController
 import com.mossapps.flick.widgets.WidgetActionInbox
 import com.mossapps.flick.youtube.YoutubeNativeResolver
+import com.mossapps.flick.youtube.LokalMusicVideoFactory
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
@@ -250,6 +251,9 @@ class MainActivity: FlutterActivity() {
         FileCopyService.register(flutterEngine.dartExecutor.binaryMessenger, applicationContext)
         LokalDesktopDiscovery.register(flutterEngine.dartExecutor.binaryMessenger, this)
         YoutubeNativeResolver.initialize(applicationContext)
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "lokal/media3_music_video", LokalMusicVideoFactory(flutterEngine.dartExecutor.binaryMessenger)
+        )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, YOUTUBE_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "cancelResolve") {
@@ -258,7 +262,7 @@ class MainActivity: FlutterActivity() {
                 } else if (call.method == "streamRefused") {
                     call.argument<String>("url")?.let { YoutubeNativeResolver.onStreamRefused(it) }
                     result.success(null)
-                } else if (call.method != "resolveStream") {
+                } else if (call.method != "resolveStream" && call.method != "resolveVideo") {
                     result.notImplemented()
                 } else {
                     val videoId = call.argument<String>("videoId")
@@ -272,7 +276,11 @@ class MainActivity: FlutterActivity() {
                         youtubeResolveJobs[requestId] = mainScope.launch {
                             try {
                                 val stream = withContext(Dispatchers.IO) {
-                                    YoutubeNativeResolver.resolveStream(videoId, cookie, visitorData)
+                                    if (call.method == "resolveVideo") {
+                                        YoutubeNativeResolver.resolveVideo(videoId, cookie, visitorData)
+                                    } else {
+                                        YoutubeNativeResolver.resolveStream(videoId, cookie, visitorData)
+                                    }
                                 }
                                 result.success(stream)
                             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
