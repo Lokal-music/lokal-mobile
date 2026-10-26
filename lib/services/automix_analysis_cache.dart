@@ -239,7 +239,9 @@ class AutoMixAnalysisCache {
       } finally {
         if (await temp.exists()) await temp.delete();
       }
-      if (++_writes % 32 == 0) unawaited(_prune(directory));
+      // Re-enforce the cap on the first write after each restart as well as
+      // in long sessions (otherwise 31 inserts per restart can accumulate).
+      if (++_writes == 1 || _writes % 32 == 0) unawaited(_prune(directory));
       return _remember(identity, profile);
     } catch (_) {
       // Storage can be full or metadata unavailable: use normal crossfade.
