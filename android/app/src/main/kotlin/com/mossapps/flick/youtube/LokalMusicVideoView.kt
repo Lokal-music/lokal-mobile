@@ -34,6 +34,7 @@ internal class LokalMusicVideoFactory(private val messenger: BinaryMessenger) :
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class LokalMusicVideoView(
     context: Context,
     messenger: BinaryMessenger,
