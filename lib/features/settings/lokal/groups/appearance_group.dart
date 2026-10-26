@@ -3,6 +3,7 @@ import 'package:flick/features/appearance/lokal_performance_selector.dart';
 import 'dart:async';
 
 import 'package:flick/services/motion_art/moving_cover_settings.dart';
+import 'package:flick/features/music_videos/video_quality_settings.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -109,6 +110,29 @@ List<LokalSettingsSection> appearanceSettings(
           ),
           value: appearance.fullscreenCover,
           onChanged: look.setFullscreenCover,
+        ),
+        LokalSettingRow(
+          label: lokalText('Video quality'),
+          description: lokalText(
+            'Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.',
+          ),
+          stacked: true,
+          trailing: DropdownButtonFormField<int>(
+            initialValue: ref.watch(videoQualityProvider),
+            isExpanded: true,
+            items: [
+              for (final height in videoQualityHeights)
+                DropdownMenuItem(
+                  value: height,
+                  child: Text(videoQualityLabel(height)),
+                ),
+            ],
+            onChanged: (height) {
+              if (height != null) {
+                unawaited(ref.read(videoQualityProvider.notifier).select(height));
+              }
+            },
+          ),
         ),
         LokalSettingRow.toggle(
           label: lokalText('Moving covers'),
