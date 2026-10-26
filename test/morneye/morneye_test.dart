@@ -450,6 +450,23 @@ void main() {
     });
   });
 
+  group('Mornye package file names', () {
+    test('accepts official .spotiflac-ext packages and registry formats', () {
+      for (final name in [
+        'extension.spotiflac-ext', 'EXTENSION.SPOTIFLAC-EXT',
+        'extension.sflx', 'extension.morneye-ext',
+      ]) {
+        expect(morneyeIsPackageFileName(name), isTrue, reason: name);
+      }
+      for (final name in [
+        'extension.zip', 'extension.json', 'extension.spotiflac-ext.zip',
+        'extension.spotiflac-ext/index.js', 'extension.spotiflac-ext.exe',
+      ]) {
+        expect(morneyeIsPackageFileName(name), isFalse, reason: name);
+      }
+    });
+  });
+
   group('manifests', () {
     test('accepts a download provider', () {
       expect(morneyeValidateManifest(manifestFor('qobuz'))['name'], 'qobuz');
@@ -621,6 +638,7 @@ void main() {
         );
         expect(addon.displayName, 'QOBUZ');
         expect(addon.methods, contains('download'));
+        expect(engine.configurations.last['heapMb'], 64);
 
         final again = MorneyePackages(
           dir,
@@ -665,6 +683,18 @@ void main() {
         bytes: packageBytes(manifestFor('qobuz', version: '2.0.0'), 'v2'),
       );
       expect(updated.version, '2.0.0');
+    });
+
+    test('imports a documented .spotiflac-ext URL and can search it', () async {
+      engine.scripts['v1'] = downloader();
+      const url = 'https://repo.example.com/qobuz.spotiflac-ext';
+      served[url] = packageBytes(manifestFor('qobuz'), 'v1');
+
+      final addon = await packages.install(url: url);
+      expect(addon.name, 'qobuz');
+      expect(addon.methods, containsAll(['searchTracks', 'download']));
+      final songs = await packages.search(addon.key, 'Song');
+      expect(songs.single.title, 'Song');
     });
 
     test('installs from a repository and checks its SHA-256', () async {
@@ -770,6 +800,7 @@ void main() {
       native.info = {'codec': 'aac', 'format': 'isomp4', 'duration_ms': 181000};
 
       final download = await packages.download(addon.key, 't1');
+      expect(engine.configurations.last['heapMb'], 256);
       expect(p.extension(download.file.path), '.m4a');
       expect(download.file.readAsStringSync(), 'audio');
       expect(download.metadata['name'], 'Song');
