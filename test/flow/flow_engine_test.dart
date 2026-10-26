@@ -190,7 +190,7 @@ void main() {
       previousArtists: tail,
       limit: 6,
     );
-    expect(result.first.artistKey, isNot(anyOf(tail.map(normalizeFlowText))));
+    expect(result.first.artistKey, isNot(isIn(tail.map(normalizeFlowText))));
   });
 
   test('top-ups exclude previous IDs and duplicate recordings', () {
