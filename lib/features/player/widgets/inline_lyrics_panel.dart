@@ -17,6 +17,7 @@ import 'package:flick/core/constants/app_constants.dart';
 import 'package:flick/features/player/widgets/lyrics_alignment.dart';
 
 import 'picked_lyrics_file.dart';
+import 'lyrics_file_export.dart';
 import 'lyrics_subline_buttons.dart';
 
 import 'package:flick/features/player/widgets/online_lyrics_search_sheet.dart';
@@ -51,6 +52,7 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
   LyricsData? _lyricsData;
   LyricsData? _sublineLyrics;
   bool _isLoading = true;
+  bool _savingLyricsFile = false;
   String? _loadedSongId;
   String _selectedLyricsSource = 'auto';
   int _lyricsRequest = 0;
@@ -161,6 +163,27 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
     LokalToast.fromSnackBar(context, 
         SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
+  }
+
+  Future<void> _saveLyricsFile(
+    LyricsData lyrics, {
+    bool includeDisplayedSubline = false,
+  }) async {
+    if (_savingLyricsFile || _loadedSongId != widget.song.id) return;
+    final song = widget.song;
+    setState(() => _savingLyricsFile = true);
+    try {
+      final saved = await saveCurrentLyricsFile(
+        song: song,
+        lyrics: lyrics,
+        includeDisplayedSubline: includeDisplayedSubline,
+      );
+      if (saved && mounted) _showMessage(l10n.saved);
+    } catch (_) {
+      if (mounted) _showMessage('Could not save lyrics to file.');
+    } finally {
+      if (mounted) setState(() => _savingLyricsFile = false);
+    }
   }
 
   Future<void> _importLyricsFile() async {
@@ -425,6 +448,25 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
       Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          if (_lyricsData case final lyrics?
+              when hasUsableLyrics(_sublineLyrics ?? lyrics))
+            IconButton(
+              key: const ValueKey('save-inline-lyrics-file'),
+              tooltip: 'Save lyrics to file',
+              visualDensity: VisualDensity.compact,
+              icon: _savingLyricsFile
+                  ? const SizedBox(
+                      height: 18, width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(LucideIcons.download, size: 19),
+              onPressed: _savingLyricsFile
+                  ? null
+                  : () => unawaited(_saveLyricsFile(
+                      _sublineLyrics ?? lyrics,
+                      includeDisplayedSubline: _sublineLyrics != null,
+                    )),
+            ),
           if (_lyricsData case final lyrics?)
             LyricsSublineButtons(
               lyrics: lyrics,
