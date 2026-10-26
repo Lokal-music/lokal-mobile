@@ -1482,11 +1482,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             ),
-            IconButton(
-              tooltip: 'Space — immersive lyrics',
-              icon: const Icon(LucideIcons.expand, color: Colors.white70, size: 19),
-              onPressed: _toggleImmersiveLyrics,
-            ),
+            if (hasImmersiveLyrics(data))
+              IconButton(
+                tooltip: 'Space — immersive lyrics',
+                icon: const Icon(LucideIcons.expand, color: Colors.white70, size: 19),
+                onPressed: _toggleImmersiveLyrics,
+              ),
             LyricsSourceButton(
               selected: _lyricsSource,
               lyrics: data,
