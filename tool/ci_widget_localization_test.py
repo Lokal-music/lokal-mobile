@@ -49,7 +49,7 @@ class NativeTurkishLocalizationTest(unittest.TestCase):
         for path in native_dir.rglob("*.kt"):
             source = path.read_text(encoding="utf-8")
             referenced.update(
-                re.findall(r"R\\.string\\.((?:widget|native)_\\w+)", source)
+                re.findall(r"R\.string\.((?:widget|native)_\w+)", source)
             )
         self.assertFalse(referenced - names, f"Unknown resource IDs: {referenced - names}")
 
