@@ -354,6 +354,11 @@ class _KonnektedDiscoveryViewState
     final mixes = data?.mixes ?? const <LokalDiscoveryMix>[];
     final albums = data?.albums ?? const <LokalDiscoveryAlbum>[];
     final artists = data?.artists ?? const <LokalDiscoveryArtist>[];
+    // Hidden account/history shelves must not count as visible recommendations.
+    final hasRecommendations = source == KonnektedDiscoverySource.lastfm
+        ? albums.isNotEmpty || artists.isNotEmpty || fresh.isNotEmpty
+        : mixes.isNotEmpty || artists.isNotEmpty || fresh.isNotEmpty ||
+            quick.isNotEmpty;
 
     Widget tracks(_Shelf shelf, List<LokalDiscoveryTrack> items) => Column(
       children: [
@@ -468,7 +473,7 @@ class _KonnektedDiscoveryViewState
                 ? lokalText('Loading your YouTube Music shelves…')
                 : lokalText('Building your Last.fm recommendations…'),
           )
-        else if (data != null && data.isEmpty)
+        else if (data != null && !hasRecommendations)
           Padding(
             padding: const EdgeInsets.only(top: 20),
             child: KonnektedMessage(
@@ -560,9 +565,6 @@ class _KonnektedDiscoveryViewState
             'Quick Picks',
             Icons.auto_awesome_rounded,
             quick.length,
-            subtitle: lokalText(
-              'Tracks you scrobbled most often over the past week.',
-            ),
           ),
           tracks(_Shelf.quick, quick),
         ],
@@ -598,6 +600,10 @@ class _KonnektedDiscoveryViewState
     final fresh = data?.freshFinds ?? const <LokalDiscoveryTrack>[];
     final quick = data?.quickPicks ?? const <LokalDiscoveryTrack>[];
     final history = data?.recentlyPlayed ?? const <LokalDiscoveryTrack>[];
+    final hasRecommendations = data != null && (
+        data.mixes.isNotEmpty || data.freshFinds.isNotEmpty ||
+        data.quickPicks.isNotEmpty || data.recentlyPlayed.isNotEmpty ||
+        data.albums.isNotEmpty || data.artists.isNotEmpty);
 
     Widget tracks(_Shelf shelf, List<LokalDiscoveryTrack> items) => Column(
       children: [
@@ -691,7 +697,7 @@ class _KonnektedDiscoveryViewState
               _selectDiscoverySource(KonnektedDiscoverySource.spotify),
             ),
           )
-        else if (data == null || data.isEmpty)
+        else if (!hasRecommendations)
           KonnektedMessage(
             title: lokalText('Nothing to recommend yet'),
             message: lokalText(
