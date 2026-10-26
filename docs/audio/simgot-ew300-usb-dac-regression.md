@@ -7,7 +7,10 @@ The USB Audio page can list the DAC while direct Rust USB registration is missin
 
 1. `MainActivity.activateDirectUsb` previously returned success solely because its Kotlin connection cache still contained the device. A Rust-side fallback/clear can invalidate native registration without clearing the Kotlin cache. The new activation path checks `direct_usb.registered` in JNI diagnostics and re-registers on a retry when no native session is active.
 2. `MainActivity.deactivateDirectUsb` previously **closed the USB fd after 4 s even when Rust still owned in-flight transfers**. It now retains the fd until native shutdown completes, including a deferred 30 s drain attempt. Failing to drain is logged and leaves the fd owned rather than causing an unsafe close.
-3. Rust's transient isochronous feedback request previously freed its callback data even if `libusb_cancel_transfer` had not produced a callback, and also returned through `?` on event-pump errors with the transfer outstanding. It now drains cancellation and retains memory if completion cannot be proven.
+3. Rust now rejects starting a second direct USB stream while the previous stream still owns the session guard. Previously the engine force-released the guard after 1.5 s and started another stream against live URBs. The new guard uses compare-exchange and preserves the original stop signal; its exclusion behavior has a unit test.
+4. Rust's transient isochronous feedback request previously freed its callback data even if `libusb_cancel_transfer` had not produced a callback, and also returned through `?` on event-pump errors with the transfer outstanding. It now drains cancellation and retains memory if completion cannot be proven.
+
+5. `LIBUSB_TRANSFER_NO_DEVICE` is reported as loss of the *USB host handle*, not proof the physical DAC was unplugged.
 
 ## Hardware acceptance criteria (still required before merge)
 
