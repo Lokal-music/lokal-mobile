@@ -118,13 +118,14 @@ List<LokalSettingsSection> appearanceSettings(
           ),
           stacked: true,
           trailing: DropdownButtonFormField<int>(
+            key: ValueKey(ref.watch(videoQualityProvider)),
             initialValue: ref.watch(videoQualityProvider),
             isExpanded: true,
             items: [
               for (final height in videoQualityHeights)
                 DropdownMenuItem(
                   value: height,
-                  child: Text(videoQualityLabel(height)),
+                  child: Text(lokalText(videoQualityLabel(height))),
                 ),
             ],
             onChanged: (height) {
