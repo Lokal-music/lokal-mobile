@@ -7,6 +7,7 @@ import 'package:flick/models/playback_state.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/rust_audio_engine.dart';
 import 'package:flick/services/rust_audio_service.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
 class _Service implements RustAudioService {
   @override
@@ -18,8 +19,10 @@ class _Service implements RustAudioService {
   @override
   final bufferLevelNotifier = ValueNotifier(1.0);
   final pauseAcknowledged = Completer<void>();
+  int plays = 0;
   @override
   Future<void> play(String path) async {
+    plays++;
     stateNotifier.value = RustPlaybackState.playing;
   }
 
@@ -121,6 +124,65 @@ void main() {
       await expectation;
       await Future<void>.delayed(Duration.zero);
       expect(states.last.isPlaying, true);
+    },
+  );
+
+  test(
+    'retired HTTP resolver cannot play or fall back into a new engine',
+    () async {
+      final source = Completer<({String url, Map<String, String> headers})?>();
+      var disposed = 0;
+      final old = RustAudioEngine(
+        playbackMode: AudioEngineType.iosRust,
+        rustAudioService: service,
+        ensureInitialized: () async {},
+        resolvePlaybackPath: (song) async => song.filePath,
+        resolveHttpSource: (_) => source.future,
+        disposeEngine: () async => disposed++,
+      );
+      await old.load(song);
+      final rejected = expectLater(
+        old.play(),
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final cleanup = old.dispose();
+      expect(identical(cleanup, old.dispose()), isTrue);
+      await cleanup;
+      source.complete((
+        url: 'https://fixture.invalid/audio',
+        headers: <String, String>{},
+      ));
+      await rejected;
+      expect(service.plays, 1); // Only the setup's explicit Play.
+      expect(disposed, 1);
+    },
+  );
+
+  test(
+    'disposal joins pending initialization and prevents late listeners',
+    () async {
+      final initialized = Completer<void>();
+      var disposed = 0;
+      final old = RustAudioEngine(
+        playbackMode: AudioEngineType.iosRust,
+        rustAudioService: service,
+        ensureInitialized: () => initialized.future,
+        resolvePlaybackPath: (song) async => song.filePath,
+        disposeEngine: () async => disposed++,
+      );
+      final rejected = expectLater(
+        old.load(song),
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      final cleanup = old.dispose();
+      await Future<void>.delayed(Duration.zero);
+      expect(disposed, 0);
+      initialized.complete();
+      await cleanup;
+      await rejected;
+      expect(disposed, 1);
+      await expectLater(old.play(), throwsA(isA<LocalAudioRequestRetired>()));
     },
   );
 }

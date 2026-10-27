@@ -1,3 +1,5 @@
+import 'package:flick/services/ios_local_audio_requests.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -29,7 +31,9 @@ bool requiresIosRustDsp(EqualizerState state) =>
 /// Applies EQ and processing state to the active audio backend.
 /// Rust engine: graphic EQ, dynamics, and creative FX are applied natively.
 /// just_audio on Android: uses native AudioEffect counterparts where available.
-Future<void> applyEqualizer(EqualizerState state) async {
+Future<void> applyEqualizer(
+  EqualizerState state,
+) => IosLocalAudioRequests.run(() async {
   _lastRequestedState = _snapshotState(state);
 
   final playerService = PlayerService();
@@ -65,6 +69,7 @@ Future<void> applyEqualizer(EqualizerState state) async {
       // Stash the specs so they land on the Rust engine when it starts.
       try {
         await rust_audio.audioSetEqualizer(
+          requestEpoch: IosLocalAudioRequests.epoch,
           enabled: state.enabled,
           preampDb: state.preampDb,
           specs: _buildRustSpecs(state),
@@ -120,11 +125,13 @@ Future<void> applyEqualizer(EqualizerState state) async {
     }
     if (bypassForBitPerfect) {
       await rust_audio.audioSetEqualizer(
+        requestEpoch: IosLocalAudioRequests.epoch,
         enabled: false,
         preampDb: 0.0,
         specs: const [],
       );
       await rust_audio.audioSetCompressor(
+        requestEpoch: IosLocalAudioRequests.epoch,
         enabled: false,
         thresholdDb: state.compressor.thresholdDb,
         ratio: state.compressor.ratio,
@@ -133,12 +140,14 @@ Future<void> applyEqualizer(EqualizerState state) async {
         makeupGainDb: state.compressor.makeupGainDb,
       );
       await rust_audio.audioSetLimiter(
+        requestEpoch: IosLocalAudioRequests.epoch,
         enabled: false,
         inputGainDb: state.limiter.inputGainDb,
         ceilingDb: state.limiter.ceilingDb,
         releaseMs: state.limiter.releaseMs,
       );
       await rust_audio.audioSetFx(
+        requestEpoch: IosLocalAudioRequests.epoch,
         enabled: false,
         balance: state.fx.balance,
         tempo: state.fx.tempo,
@@ -151,6 +160,7 @@ Future<void> applyEqualizer(EqualizerState state) async {
         width: state.fx.width,
       );
       await rust_audio.audioSetConvolver(
+        requestEpoch: IosLocalAudioRequests.epoch,
         enabled: false,
         mix: state.convolver.mix,
       );
@@ -158,11 +168,13 @@ Future<void> applyEqualizer(EqualizerState state) async {
     }
 
     await rust_audio.audioSetEqualizer(
+      requestEpoch: IosLocalAudioRequests.epoch,
       enabled: state.enabled,
       preampDb: state.preampDb,
       specs: _buildRustSpecs(state),
     );
     await rust_audio.audioSetCompressor(
+      requestEpoch: IosLocalAudioRequests.epoch,
       enabled: state.enabled && state.compressor.enabled,
       thresholdDb: state.compressor.thresholdDb,
       ratio: state.compressor.ratio,
@@ -171,12 +183,14 @@ Future<void> applyEqualizer(EqualizerState state) async {
       makeupGainDb: state.compressor.makeupGainDb,
     );
     await rust_audio.audioSetLimiter(
+      requestEpoch: IosLocalAudioRequests.epoch,
       enabled: state.enabled && state.limiter.enabled,
       inputGainDb: state.limiter.inputGainDb,
       ceilingDb: state.limiter.ceilingDb,
       releaseMs: state.limiter.releaseMs,
     );
     await rust_audio.audioSetFx(
+      requestEpoch: IosLocalAudioRequests.epoch,
       enabled: state.enabled && state.fx.enabled,
       balance: state.fx.balance,
       tempo: state.fx.tempo,
@@ -189,39 +203,47 @@ Future<void> applyEqualizer(EqualizerState state) async {
       width: state.fx.width,
     );
     await rust_audio.audioSetConvolver(
+      requestEpoch: IosLocalAudioRequests.epoch,
       enabled: state.enabled && state.convolver.enabled,
       mix: state.convolver.mix,
     );
   } catch (_) {}
-}
+});
 
-Future<void> reapplyEqualizer() async {
+Future<void> reapplyEqualizer() => IosLocalAudioRequests.run(() async {
   await applyEqualizer(_lastRequestedState);
   final ir = _lastRequestedState.convolver.irPath;
   if (ir != null && ir.isNotEmpty) {
     try {
-      await rust_audio.audioLoadIr(path: ir);
+      await rust_audio.audioLoadIr(
+        requestEpoch: IosLocalAudioRequests.epoch,
+        path: ir,
+      );
     } catch (_) {}
   }
-}
+});
 
 /// Loads (decodes + resamples) an impulse response into the native convolver.
-Future<void> loadConvolverIr(String path) async {
-  if (!rust_audio.audioIsNativeAvailable() ||
-      !rust_audio.audioIsInitialized()) {
-    return;
-  }
-  await rust_audio.audioLoadIr(path: path);
-}
+Future<void> loadConvolverIr(String path) =>
+    IosLocalAudioRequests.run(() async {
+      if (!rust_audio.audioIsNativeAvailable() ||
+          !rust_audio.audioIsInitialized()) {
+        return;
+      }
+      await rust_audio.audioLoadIr(
+        requestEpoch: IosLocalAudioRequests.epoch,
+        path: path,
+      );
+    });
 
 /// Clears the loaded impulse response from the native convolver.
-Future<void> clearConvolverIr() async {
+Future<void> clearConvolverIr() => IosLocalAudioRequests.run(() async {
   if (!rust_audio.audioIsNativeAvailable() ||
       !rust_audio.audioIsInitialized()) {
     return;
   }
-  await rust_audio.audioClearIr();
-}
+  await rust_audio.audioClearIr(requestEpoch: IosLocalAudioRequests.epoch);
+});
 
 /// Map parametric bands to 10-band gains for the Android fixed-band path.
 /// ponytail: fallback when the device band layout can't be queried.

@@ -10,11 +10,13 @@ import 'package:flick/models/song.dart';
 import 'package:flick/services/audio_engine.dart';
 import 'package:flick/core/utils/dev_log.dart';
 import 'package:flick/services/atmos_diagnostics.dart';
+import 'package:flick/services/ios_local_audio_requests.dart';
+import 'package:flick/services/ios_local_audio_players.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
 /// A queue entry's identity includes the actual encoded media source. Two
 /// versions of the same catalogue song can share an ID but not a decoder or
 /// cached URL. Reusing the old playlist here silently plays the wrong track.
-@visibleForTesting
 String androidAudioSourceIdentity(Song song) =>
     jsonEncode([song.id, song.filePath, song.atmosEncoded, song.fileType]);
 
@@ -120,9 +122,9 @@ bool shouldUseFastStartCurrentTrackOnly({
 /// A Discovery/Search queue can contain placeholders that do not yet have
 /// playable sources. Never submit them to just_audio's native sequence:
 /// repeat-all would otherwise cause Media3 to prepare an empty URI.
-bool hasUnresolvedAudioSources(List<Song> playlist) =>
-    playlist.any((song) => song.isPending ||
-        song.filePath == null || song.filePath!.isEmpty);
+bool hasUnresolvedAudioSources(List<Song> playlist) => playlist.any(
+  (song) => song.isPending || song.filePath == null || song.filePath!.isEmpty,
+);
 
 @visibleForTesting
 bool shouldExitSingleTrackMode({
@@ -151,6 +153,7 @@ class AndroidAudioEngine implements AudioEngine {
     AndroidNextSongProvider? onNextSong,
     AndroidTrackAdvancedCallback? onTrackAdvanced,
     AndroidTrackErrorCallback? onTrackError,
+    bool guardRetirement = false,
   }) : _playerProvider = playerProvider,
        _sourcesBuilder = sourcesBuilder,
        _sourceBuilder = sourceBuilder,
@@ -167,7 +170,8 @@ class AndroidAudioEngine implements AudioEngine {
            crossfadeConfigProvider ?? (() => AndroidCrossfadeConfig.disabled),
        _onNextSong = onNextSong,
        _onTrackAdvanced = onTrackAdvanced,
-       _onTrackError = onTrackError {
+       _onTrackError = onTrackError,
+       _guardRetirement = guardRetirement {
     _state = PlaybackState.empty(engineType);
   }
 
@@ -187,6 +191,58 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidNextSongProvider? _onNextSong;
   final AndroidTrackAdvancedCallback? _onTrackAdvanced;
   final AndroidTrackErrorCallback? _onTrackError;
+  final bool _guardRetirement;
+  bool _retired = false;
+  Future<void>? _disposal;
+  final _creations = <Future<just_audio.AudioPlayer>>{};
+
+  void _checkLive() {
+    if (_guardRetirement && _retired) {
+      throw const LocalAudioRequestRetired();
+    }
+  }
+
+  Future<T> _run<T>(Future<T> Function() action) {
+    if (!_guardRetirement) return action();
+    return IosLocalAudioRequests.run(() async {
+      _checkLive();
+      final result = await action();
+      _checkLive();
+      return result;
+    });
+  }
+
+  Future<T> _wait<T>(Future<T> result) =>
+      _guardRetirement ? _checkedWait(result) : result;
+
+  Future<T> _checkedWait<T>(Future<T> result) async {
+    final value = await IosLocalAudioRequests.wait(result);
+    _checkLive();
+    return value;
+  }
+
+  Future<just_audio.AudioPlayer> _createPlayer(
+    Future<just_audio.AudioPlayer> Function() create,
+  ) async {
+    _checkLive();
+    if (!_guardRetirement) return create();
+    IosLocalAudioRequests.check();
+    final future = Future<just_audio.AudioPlayer>.sync(create);
+    _creations.add(future);
+    try {
+      final player = await future;
+      try {
+        _checkLive();
+        IosLocalAudioRequests.check();
+        return player;
+      } catch (_) {
+        await IosLocalAudioPlayers.dispose(player);
+        rethrow;
+      }
+    } finally {
+      _creations.remove(future);
+    }
+  }
 
   /// Fast-start and crossfade may load only one audio source even though the
   /// logical playlist contains more tracks. A native repeat-all on that source
@@ -200,14 +256,19 @@ class AndroidAudioEngine implements AudioEngine {
   /// keeping repeat-all in manual-advance mode until it completes.
   Future<bool> restoreFastStartPlaylist({
     required bool Function() isCurrent,
-  }) async {
+  }) => _run(() async {
     final player = _player;
     final playing = _loadedTrack;
-    if (player == null || playing == null || !_loadedSingleTrackOnly ||
-        isCrossfadeActive || !isCurrent()) return false;
+    if (player == null ||
+        playing == null ||
+        !_loadedSingleTrackOnly ||
+        isCrossfadeActive ||
+        !isCurrent())
+      return false;
     final songs = _playlistProvider();
     final index = songs.indexWhere(
-      (song) => androidAudioSourceIdentity(song) ==
+      (song) =>
+          androidAudioSourceIdentity(song) ==
           androidAudioSourceIdentity(playing),
     );
     if (index < 0 || songs.length < 2 || player.sequence.length != 1) {
@@ -223,32 +284,38 @@ class AndroidAudioEngine implements AudioEngine {
       for (var i = 0; i < songs.length; i++) {
         if (!isCurrent()) return false;
         if (i == index) continue;
-        final source = await _sourceBuilder(songs[i]);
+        final source = await _wait(_sourceBuilder(songs[i]));
         if (i < index) {
           before.add(source);
         } else {
           after.add(source);
         }
       }
-      if (!isCurrent() || !identical(_player, player) ||
+      if (!isCurrent() ||
+          !identical(_player, player) ||
           !_loadedSingleTrackOnly ||
-          !identical(_loadedTrack, playing) || player.sequence.length != 1 ||
+          !identical(_loadedTrack, playing) ||
+          player.sequence.length != 1 ||
           !listEquals(
             songs.map(androidAudioSourceIdentity).toList(),
             _playlistProvider().map(androidAudioSourceIdentity).toList(),
-          )) return false;
+          ))
+        return false;
 
       _restoringFastStartPlaylist = true;
       // Followed by preceding tracks: the existing track stays the active
       // source, with its logical index shifted to match the full playlist.
-      if (after.isNotEmpty) await player.addAudioSources(after);
-      if (before.isNotEmpty) await player.insertAudioSources(0, before);
+      if (after.isNotEmpty) await _wait(player.addAudioSources(after));
+      if (before.isNotEmpty) await _wait(player.insertAudioSources(0, before));
       _loadedSingleTrackOnly = false;
-      _playlistSignature =
-          songs.map(androidAudioSourceIdentity).toList(growable: false);
+      _playlistSignature = songs
+          .map(androidAudioSourceIdentity)
+          .toList(growable: false);
       restored = true;
-      devLog('[Playback] Restored repeat-all sequence in place '
-          '(${songs.length} tracks)');
+      devLog(
+        '[Playback] Restored repeat-all sequence in place '
+        '(${songs.length} tracks)',
+      );
       return true;
     } catch (error) {
       devLog('[Playback] Repeat-all sequence restore failed: $error');
@@ -268,7 +335,7 @@ class AndroidAudioEngine implements AudioEngine {
         }
       }
     }
-  }
+  });
 
   bool _restoringFastStartPlaylist = false;
 
@@ -309,9 +376,10 @@ class AndroidAudioEngine implements AudioEngine {
   Stream<PlaybackState> get playbackStateStream => _controller.stream;
 
   Future<just_audio.AudioPlayer> _ensurePlayer() async {
+    _checkLive();
     final existing = _player;
     if (existing != null) return existing;
-    final player = await _playerProvider();
+    final player = await _createPlayer(_playerProvider);
     _player = player;
     _providerPlayer = player;
     _attachListeners(player);
@@ -319,22 +387,25 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   Future<just_audio.AudioPlayer> _ensureSecondary() async {
+    _checkLive();
     final existing = _secondary;
     if (existing != null) return existing;
-    final player = _secondaryPlayerProvider == null
-        ? just_audio.AudioPlayer(useProxyForRequestHeaders: false)
-        : await _secondaryPlayerProvider!();
+    final player = await _createPlayer(
+      () async => _secondaryPlayerProvider == null
+          ? just_audio.AudioPlayer(useProxyForRequestHeaders: false)
+          : await _secondaryPlayerProvider(),
+    );
     _secondary = player;
     _attachListeners(player);
-    await player.setVolume(0);
-    await player.setLoopMode(just_audio.LoopMode.off);
+    await _wait(player.setVolume(0));
+    await _wait(player.setLoopMode(just_audio.LoopMode.off));
     return player;
   }
 
   void _attachListeners(just_audio.AudioPlayer player) {
     _subscriptions.add(
       player.playerStateStream.listen((state) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         final song = _loadedTrack;
         if (song?.atmosEncoded == true) {
           final status = '${state.processingState.name}:${state.playing}';
@@ -353,7 +424,7 @@ class AndroidAudioEngine implements AudioEngine {
 
     _subscriptions.add(
       player.playbackEventStream.listen((event) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         final nextDuration = event.duration ?? _state.duration;
         _emit(
           _state.copyWith(
@@ -368,7 +439,7 @@ class AndroidAudioEngine implements AudioEngine {
 
     _subscriptions.add(
       player.positionStream.listen((pos) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         _emit(_state.copyWith(position: pos));
         _syncTrackFromIndex(player.currentIndex);
         _maybeArmCrossfade(player, pos);
@@ -377,14 +448,14 @@ class AndroidAudioEngine implements AudioEngine {
 
     _subscriptions.add(
       player.bufferedPositionStream.listen((pos) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         _emit(_state.copyWith(bufferedPosition: pos));
       }),
     );
 
     _subscriptions.add(
       player.durationStream.listen((dur) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         if (dur == null) return;
         _emit(_state.copyWith(duration: dur));
       }),
@@ -392,21 +463,21 @@ class AndroidAudioEngine implements AudioEngine {
 
     _subscriptions.add(
       player.sequenceStateStream.listen((sequenceState) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         _syncTrackFromIndex(sequenceState.currentIndex);
       }),
     );
 
     _subscriptions.add(
       player.currentIndexStream.listen((index) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         _syncTrackFromIndex(index);
       }),
     );
 
     _subscriptions.add(
       player.processingStateStream.listen((state) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         if (state == just_audio.ProcessingState.completed) {
           if (_loadedTrack?.atmosEncoded == true) {
             AtmosDiagnostics.record('playback_end', {
@@ -421,7 +492,7 @@ class AndroidAudioEngine implements AudioEngine {
 
     _subscriptions.add(
       player.errorStream.listen((error) {
-        if (!identical(player, _player)) return;
+        if (_retired || !identical(player, _player)) return;
         if (_loadedTrack?.atmosEncoded == true) {
           // Media3/ExoPlayer errors sometimes contain file:// paths or
           // signed source URLs. Log only the error code and error class.
@@ -456,6 +527,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _syncTrackFromIndex(int? index) {
+    if (_retired) return;
     if (_restoringFastStartPlaylist) return;
     _syncPlaylistStateFromPlayer();
     if (_shouldSuppressTrackSync()) return;
@@ -477,6 +549,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _syncPlaylistStateFromPlayer() {
+    if (_retired) return;
     if (_restoringFastStartPlaylist) return;
     final player = _player;
     if (player == null) return;
@@ -507,6 +580,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _emit(PlaybackState next) {
+    if (_retired) return;
     if (next == _state) return;
     _state = next;
     _controller.add(next);
@@ -547,7 +621,8 @@ class AndroidAudioEngine implements AudioEngine {
     }
     if (orphanedFadePlayer != null) {
       try {
-        await orphanedFadePlayer.dispose().timeout(const Duration(seconds: 3));
+        await IosLocalAudioPlayers.dispose(orphanedFadePlayer)
+            .timeout(const Duration(seconds: 3));
       } catch (error) {
         devLog('[Playback] Crossfade player cleanup failed: $error');
       }
@@ -557,9 +632,10 @@ class AndroidAudioEngine implements AudioEngine {
     // re-attached by _ensurePlayer(), never as a secondary.
     try {
       final retire = _retireStalledPlayer;
-      await (retire == null ? player.dispose() : retire(player)).timeout(
-        const Duration(seconds: 3),
-      );
+      await (retire == null
+              ? IosLocalAudioPlayers.dispose(player)
+              : retire(player))
+          .timeout(const Duration(seconds: 3));
     } catch (error) {
       devLog('[Playback] Timed-out Android player retirement failed: $error');
     }
@@ -571,23 +647,26 @@ class AndroidAudioEngine implements AudioEngine {
     int? initialIndex,
   }) async {
     try {
-      await player
-          .setAudioSource(source, initialIndex: initialIndex, preload: true)
-          .timeout(const Duration(seconds: 30));
+      await _wait(
+        player
+            .setAudioSource(source, initialIndex: initialIndex, preload: true)
+            .timeout(const Duration(seconds: 30)),
+      );
       _sourceFailed = false;
     } catch (error) {
+      if (IosLocalAudioRequests.isRetired(error)) rethrow;
       // A failed source must never be reused by seek/resume. stop() also
       // cancels an outstanding prepare before the next queued command.
       _sourceFailed = true;
       _emit(_state.copyWith(isPlaying: false));
       try {
-        await player.stop().timeout(const Duration(seconds: 3));
+        await _wait(player.stop().timeout(const Duration(seconds: 3)));
       } catch (_) {}
       _playlistSignature = const [];
       _loadedSingleTrackOnly = false;
       // Error 0 ("Source error") is just as capable of wedging ExoPlayer
       // as a timeout. The old player cannot be reused for a new selection.
-      await _retireTimedOutPlayer(player);
+      await _wait(_retireTimedOutPlayer(player));
       if (error is TimeoutException) {
         throw TimeoutException(
           'Audio source did not become ready. The audio engine was reset; retry playback.',
@@ -603,10 +682,13 @@ class AndroidAudioEngine implements AudioEngine {
     int? index,
   }) async {
     try {
-      await player
-          .seek(position, index: index)
-          .timeout(const Duration(seconds: 15));
+      await _wait(
+        player
+            .seek(position, index: index)
+            .timeout(const Duration(seconds: 15)),
+      );
     } catch (error) {
+      if (IosLocalAudioRequests.isRetired(error)) rethrow;
       _sourceFailed = true;
       _playlistSignature = const [];
       _emit(_state.copyWith(isPlaying: false));
@@ -614,15 +696,15 @@ class AndroidAudioEngine implements AudioEngine {
       // timeout. stop() alone leaves that native decoder attached, causing
       // each new Discovery track to fail in the same way. Retire the player
       // before the next selection; the provider constructs a fresh instance.
-      await _retireTimedOutPlayer(player);
+      await _wait(_retireTimedOutPlayer(player));
       Error.throwWithStackTrace(error, StackTrace.current);
     }
   }
 
   @override
-  Future<void> load(Song track) async {
-    await _cancelCrossfade();
-    final player = await _ensurePlayer();
+  Future<void> load(Song track) => _run(() async {
+    await _wait(_cancelCrossfade());
+    final player = await _wait(_ensurePlayer());
     final playlist = _playlistProvider();
     var index = playlist.indexWhere((song) => song.id == track.id);
     if (index < 0) {
@@ -648,7 +730,7 @@ class AndroidAudioEngine implements AudioEngine {
         'to': track.atmosEncoded ? 'atmos' : 'normal',
         'outcome': 'releasing_previous_decoder',
       });
-      await player.stop().timeout(const Duration(seconds: 5));
+      await _wait(player.stop().timeout(const Duration(seconds: 5)));
       _playlistSignature = const <String>[];
       canReusePlaylist = false;
       _loadedSingleTrackOnly = false;
@@ -663,7 +745,7 @@ class AndroidAudioEngine implements AudioEngine {
         'crossfadeDisabled': true,
       });
     }
-    await _configurePlayer(player);
+    await _wait(_configurePlayer(player));
 
     // Passthrough and object-based Atmos rendering cannot be crossfaded as
     // PCM. Preserve the original JOC frames and use a single player.
@@ -676,10 +758,11 @@ class AndroidAudioEngine implements AudioEngine {
       devLog('[Playback] Android load(${track.id}) single-track (crossfade)');
       _awaitingInitialSeek = true;
       try {
-        final source = await _sourceBuilder(track)
-            .timeout(const Duration(seconds: 30));
-        await _loadSource(player, source);
-        await _seekPlayer(player, Duration.zero);
+        final source = await _wait(
+          _sourceBuilder(track).timeout(const Duration(seconds: 30)),
+        );
+        await _wait(_loadSource(player, source));
+        await _wait(_seekPlayer(player, Duration.zero));
       } finally {
         _awaitingInitialSeek = false;
       }
@@ -701,7 +784,8 @@ class AndroidAudioEngine implements AudioEngine {
     // Repeat All is a logical queue setting, not permission to send pending
     // Discovery slots as empty URIs to Android. Keep one playable source
     // loaded and use PlayerService's manual completion until resolved.
-    final shouldFastStartCurrentTrackOnly = unresolvedQueue ||
+    final shouldFastStartCurrentTrackOnly =
+        unresolvedQueue ||
         shouldUseFastStartCurrentTrackOnly(
           allowFastStart: _shouldFastStartCurrentTrackOnly(),
           loadedSingleTrackOnly: _loadedSingleTrackOnly,
@@ -713,17 +797,18 @@ class AndroidAudioEngine implements AudioEngine {
         player.sequence.isNotEmpty &&
         !_loadedSingleTrackOnly) {
       devLog('[Playback] Android load(${track.id}) using existing playlist');
-      await _seekPlayer(player, Duration.zero, index: index);
+      await _wait(_seekPlayer(player, Duration.zero, index: index));
     } else if (shouldFastStartCurrentTrackOnly) {
       devLog(
         '[Playback] Android load(${track.id}) fast-starting current track',
       );
       _awaitingInitialSeek = true;
       try {
-        final source = await _sourceBuilder(track)
-            .timeout(const Duration(seconds: 30));
-        await _loadSource(player, source);
-        await _seekPlayer(player, Duration.zero);
+        final source = await _wait(
+          _sourceBuilder(track).timeout(const Duration(seconds: 30)),
+        );
+        await _wait(_loadSource(player, source));
+        await _wait(_seekPlayer(player, Duration.zero));
       } finally {
         _awaitingInitialSeek = false;
       }
@@ -733,22 +818,22 @@ class AndroidAudioEngine implements AudioEngine {
       // Repeat All becomes manual advancement for a one-item native source,
       // while Repeat One must remain native LoopMode.one.
       if (playlist.length > 1) {
-        await _configurePlayer(player);
+        await _wait(_configurePlayer(player));
       }
     } else {
       devLog('[Playback] Android load(${track.id}) rebuilding playlist');
       _awaitingInitialSeek = true;
       try {
-        final source = await _sourcesBuilder().timeout(
-          const Duration(seconds: 30),
+        final source = await _wait(
+          _sourcesBuilder().timeout(const Duration(seconds: 30)),
         );
         // ignore: deprecated_member_use
         if (source is just_audio.ConcatenatingAudioSource &&
             source.children.isEmpty) {
           throw StateError('No audio sources available for playback');
         }
-        await _loadSource(player, source, initialIndex: index);
-        await _seekPlayer(player, Duration.zero, index: index);
+        await _wait(_loadSource(player, source, initialIndex: index));
+        await _wait(_seekPlayer(player, Duration.zero, index: index));
       } finally {
         _awaitingInitialSeek = false;
       }
@@ -765,14 +850,14 @@ class AndroidAudioEngine implements AudioEngine {
         duration: player.duration ?? track.duration,
       ),
     );
-  }
+  });
 
   @override
-  Future<void> play() async {
+  Future<void> play() => _run(() async {
     if (_sourceFailed && _loadedTrack != null) {
-      await load(_loadedTrack!);
+      await _wait(load(_loadedTrack!));
     }
-    final player = await _ensurePlayer();
+    final player = await _wait(_ensurePlayer());
     // just_audio keeps this future alive while playback is active, which would
     // block the PlayerService command queue until the track ends.
     try {
@@ -802,12 +887,12 @@ class AndroidAudioEngine implements AudioEngine {
         _startRampTimer(outgoing, player);
       }
     }
-  }
+  });
 
   @override
-  Future<void> pause() async {
-    final player = await _ensurePlayer();
-    await player.pause();
+  Future<void> pause() => _run(() async {
+    final player = await _wait(_ensurePlayer());
+    await _wait(player.pause());
     if (_crossfadeArmed) {
       // Freeze the ramp where it is; play() resumes from [_rampElapsed].
       _crossfadeTimer?.cancel();
@@ -815,23 +900,23 @@ class AndroidAudioEngine implements AudioEngine {
       final outgoing = _secondary;
       if (outgoing != null) {
         try {
-          await outgoing.pause();
+          await _wait(outgoing.pause());
         } catch (_) {}
       }
     }
-  }
+  });
 
   @override
-  Future<void> stop() async {
-    await _cancelCrossfade();
+  Future<void> stop() => _run(() async {
+    await _wait(_cancelCrossfade());
     // A stuck Media3 stop() must not indefinitely block the resolver when
     // switching from a failed Discovery source to its next placeholder.
     final player = _player;
     if (player == null) return;
     try {
-      await player.stop().timeout(const Duration(seconds: 3));
+      await _wait(player.stop().timeout(const Duration(seconds: 3)));
     } on TimeoutException {
-      await _retireTimedOutPlayer(player);
+      await _wait(_retireTimedOutPlayer(player));
       throw TimeoutException('Android playback stop stalled; player reset.');
     }
     _emit(
@@ -842,26 +927,27 @@ class AndroidAudioEngine implements AudioEngine {
         duration: player.duration ?? _state.duration,
       ),
     );
-  }
+  });
 
   @override
-  Future<void> seek(Duration position) async {
-    final player = await _ensurePlayer();
+  Future<void> seek(Duration position) => _run(() async {
+    final player = await _wait(_ensurePlayer());
     if (_crossfadeArmed) {
       // Aborting the in-flight fade: silence the outgoing tail and snap the
       // active player back to full volume before seeking.
-      await _cancelCrossfade();
+      await _wait(_cancelCrossfade());
       try {
-        await player.setVolume(_rampUserVolume);
+        await _wait(player.setVolume(_rampUserVolume));
       } catch (_) {}
     }
-    await _seekPlayer(player, position);
-  }
+    await _wait(_seekPlayer(player, position));
+  });
 
   @override
   void updateTrack(Song track) {}
 
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
+    if (_retired) return;
     if (_crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
     final cfg = _crossfadeConfigProvider();
     final duration = player.duration;
@@ -893,16 +979,20 @@ class AndroidAudioEngine implements AudioEngine {
         return;
       }
       try {
-        final incoming = await _ensureSecondary();
-        final source = await _sourceBuilder(next);
+        final incoming = await _wait(_ensureSecondary());
+        final source = await _wait(_sourceBuilder(next));
         _rampUserVolume = outgoing.volume <= 0 ? 1.0 : outgoing.volume;
-        await incoming
-            .setAudioSource(source, preload: true)
-            .timeout(const Duration(seconds: 30));
-        await incoming.seek(Duration.zero).timeout(const Duration(seconds: 15));
-        await incoming.setVolume(0);
-        await incoming.setSpeed(outgoing.speed);
-        await incoming.setLoopMode(just_audio.LoopMode.off);
+        await _wait(
+          incoming
+              .setAudioSource(source, preload: true)
+              .timeout(const Duration(seconds: 30)),
+        );
+        await _wait(
+          incoming.seek(Duration.zero).timeout(const Duration(seconds: 15)),
+        );
+        await _wait(incoming.setVolume(0));
+        await _wait(incoming.setSpeed(outgoing.speed));
+        await _wait(incoming.setLoopMode(just_audio.LoopMode.off));
         unawaited(
           incoming.play().catchError((Object error, StackTrace stackTrace) {
             devLog('[crossfade] incoming play() failed: $error');
@@ -934,13 +1024,14 @@ class AndroidAudioEngine implements AudioEngine {
         // playback-state subscription, so the service does them here.
         _onTrackAdvanced?.call(next);
       } catch (error, stackTrace) {
+        if (IosLocalAudioRequests.isRetired(error)) return;
         devLog('[crossfade] arm failed: $error');
         debugPrintStack(stackTrace: stackTrace);
         _crossfadeArmed = false;
         final active = _player;
         if (active != null) {
           try {
-            await active.setVolume(_rampUserVolume);
+            await _wait(active.setVolume(_rampUserVolume));
           } catch (_) {}
         }
       }
@@ -975,10 +1066,10 @@ class AndroidAudioEngine implements AudioEngine {
 
   Future<void> _finishCrossfade(just_audio.AudioPlayer outgoing) async {
     try {
-      await outgoing.stop().timeout(const Duration(seconds: 3));
+      await _wait(outgoing.stop().timeout(const Duration(seconds: 3)));
     } catch (_) {}
     try {
-      await outgoing.setVolume(_rampUserVolume);
+      await _wait(outgoing.setVolume(_rampUserVolume));
     } catch (_) {}
     _crossfadeArmed = false;
   }
@@ -991,10 +1082,10 @@ class AndroidAudioEngine implements AudioEngine {
     final secondary = _secondary;
     if (secondary != null) {
       try {
-        await secondary.stop().timeout(const Duration(seconds: 3));
+        await _wait(secondary.stop().timeout(const Duration(seconds: 3)));
       } catch (_) {}
       try {
-        await secondary.setVolume(_rampUserVolume);
+        await _wait(secondary.setVolume(_rampUserVolume));
       } catch (_) {}
     }
     // If we were mid-fade, the active player's volume was being ramped down;
@@ -1003,14 +1094,53 @@ class AndroidAudioEngine implements AudioEngine {
       final active = _player;
       if (active != null) {
         try {
-          await active.setVolume(_rampUserVolume);
+          await _wait(active.setVolume(_rampUserVolume));
         } catch (_) {}
       }
     }
   }
 
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() {
+    if (!_guardRetirement) return _dispose();
+    _retired = true;
+    return _disposal ??= _disposeRetired();
+  }
+
+  Future<void> _disposeRetired() async {
+    _crossfadeTimer?.cancel();
+    _crossfadeTimer = null;
+    _crossfadeArmed = false;
+    final subscriptions = _subscriptions.toList();
+    _subscriptions.clear();
+    final owned = {
+      if (_player != null && !identical(_player, _providerPlayer)) _player!,
+      if (_secondary != null && !identical(_secondary, _providerPlayer))
+        _secondary!,
+    };
+    final pending = _creations.toList();
+    _player = null;
+    _secondary = null;
+    _providerPlayer = null;
+    _playlistSignature = const <String>[];
+    _loadedSingleTrackOnly = false;
+    try {
+      await Future.wait<void>([
+        for (final subscription in subscriptions) subscription.cancel(),
+        for (final player in owned) IosLocalAudioPlayers.dispose(player),
+        for (final future in pending)
+          future.then<void>(
+            IosLocalAudioPlayers.dispose,
+            onError: (Object _, StackTrace _) {},
+          ),
+        Future<void>.sync(_disposeEngine),
+      ]);
+    } finally {
+      await _controller.close();
+    }
+  }
+
+  Future<void> _dispose() async {
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;

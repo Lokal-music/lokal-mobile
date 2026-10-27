@@ -45,6 +45,9 @@ import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 
 import '../test/fixtures/generated_audio.dart';
 import 'ios_live_video_probe.dart';
+import 'ios_media_reset_probe.dart';
+import 'ios_radio_reset_probe.dart';
+import 'package:flick/services/ios_local_audio_requests.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -87,7 +90,30 @@ void main() {
     await playbackPreferences.setReplayGainPreampDb(0);
     await playbackPreferences.setReplayGainPreventClipping(true);
     debugPrint('iOS smoke: real application bootstrap');
-    await app.bootstrapForIntegrationTest();
+    var nativeFenceVerified = false;
+    await app.bootstrapForIntegrationTest(afterNativeInitialization: () async {
+      // Swift and FRB must share the same atomic counter. Advance it before
+      // playback owners exist; the ordinary suite then uses a nonzero epoch.
+      final previousEpoch = native_audio.audioLocalRequestEpoch();
+      final fence = await const MethodChannel('lokal/ios')
+          .invokeMapMethod<String, dynamic>('invalidateLocalAudioRequestsForIntegrationTest');
+      final advancedEpoch = BigInt.parse(fence!['epoch'] as String);
+      expect(BigInt.parse(fence['previous'] as String), previousEpoch);
+      expect(advancedEpoch, previousEpoch + BigInt.one);
+      expect(native_audio.audioLocalRequestEpoch(), advancedEpoch);
+      await expectLater(
+        native_audio.audioResume(requestEpoch: previousEpoch),
+        throwsA(predicate((Object error) =>
+            error.toString().contains('AUDIO_LOCAL_REQUEST_RETIRED'))),
+      );
+      await native_audio.audioShutdown();
+      nativeFenceVerified = true;
+      binding.reportData = {
+        ...?binding.reportData,
+        'native_swift_frb_request_fence': 'passed',
+        'native_request_epoch': advancedEpoch.toString(),
+      };
+    });
     for (
       var i = 0;
       i < 30 && find.byType(FlickPlayerApp).evaluate().isEmpty;
@@ -308,6 +334,9 @@ void main() {
     binding.reportData!['quickjs_echo'] = quickJsResult;
 
     final player = PlayerService();
+    // Exercise the complete recovery path before enabling production
+    // subscription. Every local output owner is registered before creation.
+    await IosLocalAudioRequests.startObservation();
     final song = Song(
       id: 'ios-smoke',
       title: 'Generated tone',
@@ -323,6 +352,12 @@ void main() {
     final systemProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosSystem);
     binding.reportData!['system_wav_progress_ms'] = systemProgress;
+    await probeIosMediaReset(tester, binding, player,
+      engine: AudioEngineType.iosSystem, song: song,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await probeIosNewSelectionDuringReset(tester, binding, player, song,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await player.play(song, playlist: [song]);
     await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
@@ -475,6 +510,12 @@ void main() {
     final dspProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
     binding.reportData!['rust_dsp_progress_ms'] = dspProgress;
+    await probeIosMediaReset(tester, binding, player,
+      engine: AudioEngineType.iosRust, song: song,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await probeIosDelayedHttpReset(tester, binding, player, audio,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await probeIosRadioReset(tester, binding, audio);
     await player.pause();
     await applyEqualizer(EqualizerState.initial());
     await player.syncIosProcessingRoute();
@@ -796,6 +837,8 @@ void main() {
     if (const bool.fromEnvironment('LOKAL_IOS_VIDEO_PROBE')) {
       await probeLiveIosVideo(tester, binding);
     }
+    expect(nativeFenceVerified, true);
+    binding.reportData!['native_swift_frb_request_fence'] = 'passed';
     await tester.pumpWidget(const SizedBox.shrink());
     player.dispose();
   }, timeout: const Timeout(Duration(minutes:

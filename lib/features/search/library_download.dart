@@ -14,6 +14,7 @@ import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/atmos_diagnostics.dart';
+import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/album_art_import_service.dart';
 import 'package:flick/services/music_folder_service.dart';
 import 'package:flick/services/music_library_path.dart';
@@ -62,7 +63,8 @@ class LibraryDownloader {
     this.fallbackRoot,
     Future<void> Function(String path, String name)? registerFolder,
     Future<void> Function(SongEntity entity)? upsert,
-    Future<bool> Function(String path, Song song)? tag,
+    Future<bool> Function(String path, Song song, LyricsData? lyrics)? tag,
+    Future<LyricsData?> Function(Song song)? lyricsLookup,
     Future<void> Function(String path, Song song, String artwork)? cover,
     Future<void> Function(List<String> paths)? indexMedia,
     DateTime Function()? now,
@@ -70,6 +72,7 @@ class LibraryDownloader {
        _registerFolder = registerFolder ?? _register,
        _upsert = upsert ?? SongRepository().upsertSong,
        _tag = tag ?? _writeTags,
+       _lyricsLookup = lyricsLookup ?? _getDownloadLyrics,
        _cover = cover ?? _applyCover,
        _indexMedia = indexMedia ?? MusicFolderService().indexMediaFiles,
        _now = now ?? DateTime.now;
@@ -82,7 +85,8 @@ class LibraryDownloader {
   final Future<List<LibraryDownloadFolder>> Function() _folders;
   final Future<void> Function(String path, String name) _registerFolder;
   final Future<void> Function(SongEntity entity) _upsert;
-  final Future<bool> Function(String path, Song song) _tag;
+  final Future<bool> Function(String path, Song song, LyricsData? lyrics) _tag;
+  final Future<LyricsData?> Function(Song song) _lyricsLookup;
   final Future<void> Function(String path, Song song, String artwork) _cover;
   final Future<void> Function(List<String> paths) _indexMedia;
   final DateTime Function() _now;
@@ -102,7 +106,35 @@ class LibraryDownloader {
   static Future<void> _register(String path, String name) =>
       MusicFolderService().addLocalFolder(path, name);
 
-  static Future<bool> _writeTags(String path, Song song) async {
+  /// The saved file must carry usable lyrics, not just its cover and names.
+  /// Online lookup is best-effort and bounded; a provider outage never blocks
+  /// the audio download. Prefer the cached file's lyrics when they are better.
+  static Future<LyricsData?> _getDownloadLyrics(Song song) async {
+    return LyricsService().loadLyricsForSong(song, fetchOnline: true)
+        .timeout(const Duration(seconds: 14), onTimeout: () => null);
+  }
+
+  static String? portableLyrics(LyricsData? data) {
+    if (data == null || data.lines.isEmpty) return null;
+    final content = data.isSynchronized
+        ? LyricsService().buildLrcContent(
+            lines: [
+              for (final line in data.lines)
+                LyricsLine(
+                  timestamp: line.timestamp,
+                  text: line.text,
+                  translation: line.translation,
+                ),
+            ],
+          )
+        : data.lines.map((l) => l.text).where((s) => s.trim().isNotEmpty)
+              .join('\n');
+    return content.trim().isEmpty ? null : content;
+  }
+
+  static Future<bool> _writeTags(
+    String path, Song song, LyricsData? lyrics,
+  ) async {
     try {
       final result = await rust_metadata.writeTags(
         path: path,
@@ -110,6 +142,7 @@ class LibraryDownloader {
           title: song.title,
           artist: song.artist,
           album: song.album,
+          lyrics: portableLyrics(lyrics),
         ),
       );
       return result.success;
@@ -231,9 +264,33 @@ class LibraryDownloader {
       if (target.fallback) await _registerFolder(target.root, folderName);
       // Rust tag editors may rewrite the MP4 audio sample description;
       // preserve E-AC-3 JOC bitstream metadata byte for byte.
+      LyricsData? lyrics;
+      if (!prepared.atmosEncoded) {
+        try {
+          lyrics = await _lyricsLookup(prepared);
+        } catch (_) {
+          // Lyrics failure must not prevent the download being saved.
+        }
+      }
       final tagged = prepared.atmosEncoded
-          ? false
-          : await _tag(copy.path, prepared);
+          ? false : await _tag(copy.path, prepared, lyrics);
+      // The portable embedded tag stores plain/line LRC so other players do
+      // not display "<word time>" markup. Preserve actual per-word timings
+      // in a companion enhanced-LRC file that Lokal reads before the tag.
+      if (!prepared.atmosEncoded &&
+          lyrics?.isSynchronized == true &&
+          lyrics!.lines.any((line) => line.words?.isNotEmpty == true)) {
+        final enhanced = LyricsService().buildLrcContent(
+          lines: lyrics.lines,
+          song: prepared,
+          length: prepared.duration,
+        );
+        try {
+          await File(p.setExtension(copy.path, '.elrc')).writeAsString(enhanced);
+        } catch (_) {
+          // The audio and its embedded portable lyric are still valid.
+        }
+      }
       final stat = await copy.stat();
       final now = _now();
       await _upsert(

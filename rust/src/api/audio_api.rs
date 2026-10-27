@@ -258,8 +258,7 @@ pub fn set_dsd_track_rate(rate: u32) {
 
 // Why the last native-DSD attempt fell back (SAS offload / ALSA reasons), so
 // diagnostics can say more than "native unavailable".
-static LAST_DSD_NATIVE_FAILURE: Lazy<Mutex<Option<String>>> =
-    Lazy::new(|| Mutex::new(None));
+static LAST_DSD_NATIVE_FAILURE: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
 
 pub fn last_dsd_native_failure() -> Option<String> {
     LAST_DSD_NATIVE_FAILURE
@@ -388,7 +387,10 @@ pub fn take_pending_crossfeed() -> Option<u8> {
 fn with_audio_engine<T>(
     f: impl FnOnce(&crate::audio::engine::AudioEngineHandle) -> Result<T, String>,
 ) -> Result<T, String> {
-    ENGINE_MANAGER.with_rust_handle(f)
+    ENGINE_MANAGER.with_rust_handle(|handle| {
+        crate::audio::request_generation::check_current()?;
+        f(handle)
+    })
 }
 
 fn read_audio_engine<T>(
@@ -550,15 +552,23 @@ fn verify_dsd_engine_rate(
     let required_rate = match mode {
         DsdOutputMode::Native => {
             #[cfg(all(feature = "uac2", target_os = "android"))]
-            if read_audio_engine(|handle| handle.output_runtime().direct_usb_active).unwrap_or(false) {
+            if read_audio_engine(|handle| handle.output_runtime().direct_usb_active)
+                .unwrap_or(false)
+            {
                 let debug = crate::uac2::android_direct_debug_state();
-                let subslot = debug.transport_subslot_size.filter(|&s| matches!(s, 1 | 2 | 4))
+                let subslot = debug
+                    .transport_subslot_size
+                    .filter(|&s| matches!(s, 1 | 2 | 4))
                     .ok_or_else(|| "USB native DSD subslot is not verified".to_string())?;
                 dsd_rate.sample_rate() / (8 * u32::from(subslot))
-            } else { dsd_rate.byte_rate() }
+            } else {
+                dsd_rate.byte_rate()
+            }
             #[cfg(not(all(feature = "uac2", target_os = "android")))]
-            { dsd_rate.byte_rate() }
-        },
+            {
+                dsd_rate.byte_rate()
+            }
+        }
         DsdOutputMode::Dop => dsd_rate.dop_carrier_rate(),
         _ => return Ok(()),
     };
@@ -578,12 +588,17 @@ fn verify_dop_passthrough(engine_rate: u32) -> Result<(), String> {
     let verified = read_audio_engine(|handle| {
         let rt = handle.output_runtime();
         rt.strategy == OutputStrategy::DsdDoP.as_str()
-            && rt.actual_sample_rate == engine_rate && rt.requested_sample_rate == engine_rate
-            && rt.passthrough_allowed && !rt.resampler_active
+            && rt.actual_sample_rate == engine_rate
+            && rt.requested_sample_rate == engine_rate
+            && rt.passthrough_allowed
+            && !rt.resampler_active
             && (!rt.direct_usb_active || rt.direct_usb_verified)
     });
     if verified.unwrap_or(false) {
-        log::info!("[AUDIO] DoP carrier pre-flight OK: wire_rate={}", engine_rate);
+        log::info!(
+            "[AUDIO] DoP carrier pre-flight OK: wire_rate={}",
+            engine_rate
+        );
         return Ok(());
     }
     Err(format!(
@@ -990,7 +1005,10 @@ pub fn audio_set_audio_api(preference: AudioApiPreference) {
 /// importing the generated enum mirror.
 #[flutter_rust_bridge::frb(sync)]
 pub fn audio_get_audio_api() -> String {
-    ENGINE_MANAGER.get_audio_api_preference().as_str().to_string()
+    ENGINE_MANAGER
+        .get_audio_api_preference()
+        .as_str()
+        .to_string()
 }
 
 /// Toggle experimental 432 Hz tuning. When enabled the engine leaves bit-perfect
@@ -1154,7 +1172,11 @@ pub fn audio_is_dac_available(preferred_sample_rate: Option<u32>) -> Result<bool
 }
 
 /// Prepare the Rust audio engine for the requested output rate before playback starts.
-pub fn audio_prepare_engine(preferred_sample_rate: Option<u32>) -> Result<(), String> {
+pub fn audio_prepare_engine(
+    preferred_sample_rate: Option<u32>,
+    request_epoch: Option<u64>,
+) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     ensure_audio_engine(resolve_requested_output_sample_rate(preferred_sample_rate)?)
 }
 
@@ -1168,14 +1190,14 @@ pub struct AudioProbeFormat {
 }
 
 pub fn audio_probe_format(path: String) -> Result<AudioProbeFormat, String> {
+    use std::fs::File;
+    use std::path::Path;
     use symphonia::core::codecs::audio::CODEC_ID_NULL_AUDIO;
     use symphonia::core::codecs::CodecParameters;
     use symphonia::core::formats::probe::Hint;
     use symphonia::core::formats::FormatOptions;
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
-    use std::fs::File;
-    use std::path::Path;
 
     let path_obj = Path::new(&path);
     let file = File::open(path_obj).map_err(|e| format!("Failed to open file: {}", e))?;
@@ -1209,17 +1231,14 @@ pub fn audio_probe_format(path: String) -> Result<AudioProbeFormat, String> {
         .ok_or("No audio track found".to_string())?;
     Ok(AudioProbeFormat {
         sample_rate: cp.sample_rate.unwrap_or(44100),
-        channels: cp
-            .channels
-            .as_ref()
-            .map(|c| c.count() as u16)
-            .unwrap_or(2),
+        channels: cp.channels.as_ref().map(|c| c.count() as u16).unwrap_or(2),
         bits_per_sample: cp.bits_per_sample,
     })
 }
 
 /// Play an audio file.
-pub fn audio_play(path: String) -> Result<(), String> {
+pub fn audio_play(path: String, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     crate::assert_android_debug_logging();
     let path = PathBuf::from(&path);
     match detect_file_type(&path) {
@@ -1273,7 +1292,9 @@ pub fn audio_play(path: String) -> Result<(), String> {
             if effective_mode == DsdOutputMode::Dop {
                 if let Err(dop_err) = verify_dop_passthrough(output_sample_rate) {
                     #[cfg(all(feature = "uac2", target_os = "android"))]
-                    if crate::uac2::android_direct_usb_enabled() { return Err(dop_err); }
+                    if crate::uac2::android_direct_usb_enabled() {
+                        return Err(dop_err);
+                    }
                     log::info!(
                         "[AUDIO] DoP pre-flight failed ({}), degrading to PCM decimation",
                         dop_err
@@ -1356,7 +1377,8 @@ pub fn audio_play(path: String) -> Result<(), String> {
 }
 
 /// Queue the next track for gapless playback.
-pub fn audio_queue_next(path: String) -> Result<(), String> {
+pub fn audio_queue_next(path: String, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     crate::assert_android_debug_logging();
     let path = PathBuf::from(path);
     if !audio_is_initialized() {
@@ -1411,7 +1433,9 @@ pub fn audio_queue_next(path: String) -> Result<(), String> {
                 if effective_mode == DsdOutputMode::Dop {
                     if let Err(dop_err) = verify_dop_passthrough(output_sample_rate) {
                         #[cfg(all(feature = "uac2", target_os = "android"))]
-                        if crate::uac2::android_direct_usb_enabled() { return Err(dop_err); }
+                        if crate::uac2::android_direct_usb_enabled() {
+                            return Err(dop_err);
+                        }
                         log::info!(
                             "[AUDIO] DoP pre-flight failed ({}), degrading to PCM decimation",
                             dop_err
@@ -1541,10 +1565,15 @@ pub fn audio_queue_next(path: String) -> Result<(), String> {
 /// verifies `Accept-Ranges: bytes`); PCM only, no DSD/WavPack over HTTP.
 /// Auth is carried via `headers` (e.g. WebDAV Basic) — Subsonic/Jellyfin embed
 /// credentials in the URL query and pass an empty header map.
-pub fn audio_play_from_http(url: String, headers: HashMap<String, String>) -> Result<(), String> {
+pub fn audio_play_from_http(
+    url: String,
+    headers: HashMap<String, String>,
+    request_epoch: Option<u64>,
+) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     clear_dsd_track_rate();
-    let probe_result = probe_http(&url, headers)
-        .map_err(|e| format!("Failed to probe HTTP stream: {}", e))?;
+    let probe_result =
+        probe_http(&url, headers).map_err(|e| format!("Failed to probe HTTP stream: {}", e))?;
     let file_rate = probe_result.source_info.original_sample_rate;
     ensure_audio_engine(resolve_track_playback_output_sample_rate(Some(file_rate))?)?;
     let (output_sample_rate, output_channels) =
@@ -1573,11 +1602,13 @@ pub fn audio_play_from_http(url: String, headers: HashMap<String, String>) -> Re
 pub fn audio_queue_next_from_http(
     url: String,
     headers: HashMap<String, String>,
+    request_epoch: Option<u64>,
 ) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     if !audio_is_initialized() {
         clear_dsd_track_rate();
-        let probe_result = probe_http(&url, headers)
-            .map_err(|e| format!("Failed to probe HTTP stream: {}", e))?;
+        let probe_result =
+            probe_http(&url, headers).map_err(|e| format!("Failed to probe HTTP stream: {}", e))?;
         let file_rate = probe_result.source_info.original_sample_rate;
         ensure_audio_engine(resolve_track_playback_output_sample_rate(Some(file_rate))?)?;
         let (output_sample_rate, output_channels) =
@@ -1642,7 +1673,8 @@ pub fn audio_queue_next_from_http(
 }
 
 /// Pause playback.
-pub fn audio_pause() -> Result<(), String> {
+pub fn audio_pause(request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     #[cfg(target_os = "ios")]
     {
         // Release the global engine mutex before waiting. Synchronous progress
@@ -1657,27 +1689,33 @@ pub fn audio_pause() -> Result<(), String> {
 }
 
 /// Resume playback after pause.
-pub fn audio_resume() -> Result<(), String> {
+pub fn audio_resume(request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| handle.resume())
 }
 
 /// Stop playback completely.
-pub fn audio_stop() -> Result<(), String> {
+pub fn audio_stop(request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     clear_dsd_track_rate();
     with_audio_engine(|handle| handle.stop())
 }
 
 /// Seek to a position in the current track.
-pub fn audio_seek(position_secs: f64) -> Result<(), String> {
+pub fn audio_seek(position_secs: f64, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| handle.seek(position_secs))
 }
 
 /// Set the playback volume.
-pub fn audio_set_volume(volume: f32) -> Result<(), String> {
-    let clamped = volume.clamp(0.0, crate::audio::engine::MAX_VOLUME);
-    set_pending_volume(clamped);
-    let _ = with_audio_engine(|handle| handle.set_volume(clamped));
-    Ok(())
+pub fn audio_set_volume(volume: f32, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
+    crate::audio::request_generation::mutate(|| {
+        let clamped = volume.clamp(0.0, crate::audio::engine::MAX_VOLUME);
+        set_pending_volume(clamped);
+        let _ = with_audio_engine(|handle| handle.set_volume(clamped));
+        Ok(())
+    })
 }
 
 /// Set the effective ReplayGain (dB) for the current track and as the default
@@ -1686,7 +1724,8 @@ pub fn audio_set_volume(volume: f32) -> Result<(), String> {
 /// Callers compute the final value — mode gain (track/album) + preamp +
 /// clipping-prevention reduction — before calling. The engine applies it as a
 /// per-source linear gain; a non-zero value forces the DSP path.
-pub fn audio_set_replaygain(gain_db: f32) -> Result<(), String> {
+pub fn audio_set_replaygain(gain_db: f32, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     let clamped = gain_db.clamp(-60.0, 30.0);
     with_audio_engine(|handle| handle.set_replaygain(clamped))
 }
@@ -1694,7 +1733,11 @@ pub fn audio_set_replaygain(gain_db: f32) -> Result<(), String> {
 /// Set only the spawn-time default ReplayGain (dB): the running source keeps
 /// its own gain while currently-playing. Used when pre-queueing the next
 /// gapless track, whose gain is stamped on the newly spawned source.
-pub fn audio_set_replaygain_default(gain_db: f32) -> Result<(), String> {
+pub fn audio_set_replaygain_default(
+    gain_db: f32,
+    request_epoch: Option<u64>,
+) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     let clamped = gain_db.clamp(-60.0, 30.0);
     with_audio_engine(|handle| handle.set_replaygain_default(clamped))
 }
@@ -1706,22 +1749,33 @@ pub fn audio_set_equalizer(
     enabled: bool,
     preamp_db: f32,
     specs: Vec<EqBandSpec>,
+    request_epoch: Option<u64>,
 ) -> Result<(), String> {
-    set_pending_equalizer(enabled, preamp_db, specs.clone());
-    with_audio_engine(|handle| handle.set_equalizer(enabled, preamp_db, specs))
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
+    crate::audio::request_generation::mutate(|| {
+        set_pending_equalizer(enabled, preamp_db, specs.clone());
+        with_audio_engine(|handle| handle.set_equalizer(enabled, preamp_db, specs))
+    })
 }
 
 /// Set BS2B crossfeed level for the native audio engine.
 /// 0 = Off, 1 = Default (BS2B middle preset), 2 = Crossfeed (high),
 /// 3 = Crossfeed easy (gentle). 0 fully bypasses processing.
-pub fn audio_set_crossfeed(level: u8) -> Result<(), String> {
-    set_pending_crossfeed(level);
-    with_audio_engine(|handle| handle.set_crossfeed(CrossfeedLevel::from_u8(level)))
+pub fn audio_set_crossfeed(level: u8, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
+    crate::audio::request_generation::mutate(|| {
+        set_pending_crossfeed(level);
+        with_audio_engine(|handle| handle.set_crossfeed(CrossfeedLevel::from_u8(level)))
+    })
 }
 
 /// Set pitch shift in semitones for the native audio engine (tempo preserved).
 /// 0 = bypass. Range is clamped internally to ±12 semitones.
-pub fn audio_set_pitch_shift_semitones(semitones: f32) -> Result<(), String> {
+pub fn audio_set_pitch_shift_semitones(
+    semitones: f32,
+    request_epoch: Option<u64>,
+) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     log::info!("[PITCH] FFI audio_set_pitch_shift_semitones({semitones})");
     with_audio_engine(|handle| handle.set_pitch_shift(semitones))
 }
@@ -1734,7 +1788,9 @@ pub fn audio_set_compressor(
     attack_ms: f32,
     release_ms: f32,
     makeup_gain_db: f32,
+    request_epoch: Option<u64>,
 ) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| {
         handle.set_compressor(
             enabled,
@@ -1753,7 +1809,9 @@ pub fn audio_set_limiter(
     input_gain_db: f32,
     ceiling_db: f32,
     release_ms: f32,
+    request_epoch: Option<u64>,
 ) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| handle.set_limiter(enabled, input_gain_db, ceiling_db, release_ms))
 }
 
@@ -1770,7 +1828,9 @@ pub fn audio_set_fx(
     mix: f32,
     feedback: f32,
     width: f32,
+    request_epoch: Option<u64>,
 ) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| {
         handle.set_fx(
             enabled, balance, tempo, damp, filter_hz, delay_ms, size, mix, feedback, width,
@@ -1780,22 +1840,31 @@ pub fn audio_set_fx(
 
 /// Enable/disable the impulse-response convolver and set its wet/dry mix
 /// (0.0 = dry, 1.0 = full IR).
-pub fn audio_set_convolver(enabled: bool, mix: f32) -> Result<(), String> {
+pub fn audio_set_convolver(
+    enabled: bool,
+    mix: f32,
+    request_epoch: Option<u64>,
+) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| handle.set_convolver(enabled, mix))
 }
 
 /// Decode an impulse-response file, resample it to the engine rate and load it
 /// into the convolver. Decoding runs on this thread (not the audio callback);
 /// a failure leaves the previously-loaded IR untouched.
-pub fn audio_load_ir(path: String) -> Result<(), String> {
+pub fn audio_load_ir(path: String, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     let rate = with_audio_engine(|handle| Ok(handle.sample_rate()))?;
     let coeffs = crate::audio::ir_loader::load_ir(std::path::Path::new(&path), rate)?;
     with_audio_engine(|handle| handle.set_convolver_ir(coeffs))
 }
 
 /// Drop any loaded IR and disable the convolver.
-pub fn audio_clear_ir() -> Result<(), String> {
-    with_audio_engine(|handle| handle.send_command(crate::audio::commands::AudioCommand::ClearConvolverIr))
+pub fn audio_clear_ir(request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
+    with_audio_engine(|handle| {
+        handle.send_command(crate::audio::commands::AudioCommand::ClearConvolverIr)
+    })
 }
 
 /// Configure crossfade settings.
@@ -1804,22 +1873,31 @@ pub fn audio_clear_ir() -> Result<(), String> {
 /// processing policy) authoritatively decide whether crossfade runs; the old
 /// passthrough guard here was redundant and self-defeating — it blocked the
 /// very `crossfade_forces_dsp` flip that lets crossfade escape passthrough.
-pub fn audio_set_crossfade(enabled: bool, duration_secs: f32) -> Result<(), String> {
-    // While crossfade is on, keep the output clock pinned to the rate of the
-    // track that started playback so mismatched-rate successors can still be
-    // queued and faded; explicit plays still renegotiate to the native rate.
-    CROSSFADE_PINS_OUTPUT_RATE.store(enabled, Ordering::Relaxed);
-    set_pending_crossfade(enabled, duration_secs);
-    with_audio_engine(|handle| handle.set_crossfade(enabled, duration_secs))
+pub fn audio_set_crossfade(
+    enabled: bool,
+    duration_secs: f32,
+    request_epoch: Option<u64>,
+) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
+    crate::audio::request_generation::mutate(|| {
+        // While crossfade is on, keep the output clock pinned to the rate of the
+        // track that started playback so mismatched-rate successors can still be
+        // queued and faded; explicit plays still renegotiate to the native rate.
+        CROSSFADE_PINS_OUTPUT_RATE.store(enabled, Ordering::Relaxed);
+        set_pending_crossfade(enabled, duration_secs);
+        with_audio_engine(|handle| handle.set_crossfade(enabled, duration_secs))
+    })
 }
 
 /// Skip to the next queued track.
-pub fn audio_skip_to_next() -> Result<(), String> {
+pub fn audio_skip_to_next(request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| handle.skip_to_next())
 }
 
 /// Set the playback speed.
-pub fn audio_set_playback_speed(speed: f32) -> Result<(), String> {
+pub fn audio_set_playback_speed(speed: f32, request_epoch: Option<u64>) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
     with_audio_engine(|handle| handle.set_playback_speed(speed))
 }
 
@@ -1887,15 +1965,21 @@ pub fn audio_poll_event() -> Option<AudioEventType> {
 }
 
 /// Set the crossfade curve type.
-pub fn audio_set_crossfade_curve(curve: CrossfadeCurveType) -> Result<(), String> {
-    let curve = match curve {
-        CrossfadeCurveType::EqualPower => crate::audio::crossfader::CrossfadeCurve::EqualPower,
-        CrossfadeCurveType::Linear => crate::audio::crossfader::CrossfadeCurve::Linear,
-        CrossfadeCurveType::SquareRoot => crate::audio::crossfader::CrossfadeCurve::SquareRoot,
-        CrossfadeCurveType::SCurve => crate::audio::crossfader::CrossfadeCurve::SCurve,
-    };
-    set_pending_crossfade_curve(curve);
-    with_audio_engine(|handle| handle.set_crossfade_curve(curve))
+pub fn audio_set_crossfade_curve(
+    curve: CrossfadeCurveType,
+    request_epoch: Option<u64>,
+) -> Result<(), String> {
+    let _request = crate::audio::request_generation::RequestScope::enter(request_epoch)?;
+    crate::audio::request_generation::mutate(|| {
+        let curve = match curve {
+            CrossfadeCurveType::EqualPower => crate::audio::crossfader::CrossfadeCurve::EqualPower,
+            CrossfadeCurveType::Linear => crate::audio::crossfader::CrossfadeCurve::Linear,
+            CrossfadeCurveType::SquareRoot => crate::audio::crossfader::CrossfadeCurve::SquareRoot,
+            CrossfadeCurveType::SCurve => crate::audio::crossfader::CrossfadeCurve::SCurve,
+        };
+        set_pending_crossfade_curve(curve);
+        with_audio_engine(|handle| handle.set_crossfade_curve(curve))
+    })
 }
 
 /// Get the audio engine's sample rate.
@@ -1920,7 +2004,26 @@ pub fn audio_get_channels() -> Option<usize> {
 
 /// Shutdown the audio engine.
 pub fn audio_shutdown() -> Result<(), String> {
-    ENGINE_MANAGER.shutdown()
+    use crate::audio::request_generation::{cleanup_failed, LOCAL_REQUESTS};
+    let drained = LOCAL_REQUESTS.drain().map_err(|error| cleanup_failed(error, None));
+    // Always attempt to stop the known output, even if mutation cleanup failed.
+    let stopped = ENGINE_MANAGER.shutdown();
+    drained.and(stopped)?;
+    LOCAL_REQUESTS.require_healthy()
+}
+
+/// Snapshot the iPhone native generation BEFORE submitting asynchronous work.
+/// The native lifecycle observer invalidates it before the event reaches Dart.
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_local_request_epoch() -> Result<u64, String> {
+    crate::audio::request_generation::LOCAL_REQUESTS.generation()
+}
+
+/// Fence outstanding work if Dart can no longer trust lifecycle observation.
+/// Normal system notifications use the immediate Swift C-ABI invalidator.
+#[flutter_rust_bridge::frb(sync)]
+pub fn audio_local_retire_requests() -> Result<u64, String> {
+    crate::audio::request_generation::LOCAL_REQUESTS.invalidate()
 }
 
 #[cfg(test)]

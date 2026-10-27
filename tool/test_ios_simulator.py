@@ -24,12 +24,30 @@ DEVICES = json.dumps({'devices': {
 
 
 class SimulatorCoordinatorTest(unittest.TestCase):
+    def test_inventory_timeout_preserves_partial_output_without_a_false_ready(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, self.environment(directory), clear=True), \
+             patch.object(ios_simulator, 'command', side_effect=subprocess.TimeoutExpired(
+                 ['xcrun', 'simctl', 'list'], 90,
+                 output=b'CoreSimulatorService is starting\n', stderr=b'inventory pending\n')), \
+             patch('builtins.print') as ready:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                ios_simulator.main()
+            evidence = Path(directory) / 'ios-simulator-boot-18.6'
+            self.assertIn('TimeoutExpired', (evidence / 'discovery-failure.txt').read_text())
+            self.assertIn('CoreSimulatorService', (evidence / 'discovery-stdout.log').read_text())
+            self.assertIn('inventory pending', (evidence / 'discovery-stderr.log').read_text())
+            self.assertFalse((evidence / 'selected.json').exists())
+            self.assertFalse((Path(directory) / 'environment').exists())
+            ready.assert_not_called()
+
     def environment(self, directory):
         return {
             'IOS_SIMULATOR_RUNTIME_VERSION': '18.6',
             'IOS_SIMULATOR_DEVICE_TYPE': DEVICE,
             'RUNNER_TEMP': directory,
             'GITHUB_ENV': str(Path(directory) / 'environment'),
+            'DEVELOPER_DIR': '/Xcode/Developer',
         }
 
     def test_uses_exact_os_and_isolated_device_instead_of_unrelated_booted_phone(self):
@@ -42,6 +60,10 @@ class SimulatorCoordinatorTest(unittest.TestCase):
                 'xcrun', 'simctl', 'create', 'Lokal iPhone iOS 18.6', DEVICE, RUNTIME,
             ))
             self.assertEqual(run.call_args.args[0], ['xcrun', 'simctl', 'bootstatus', 'owned-udid', '-b'])
+            calls = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(calls[-2], ['open', '-a',
+                '/Xcode/Developer/Applications/Simulator.app', '--args',
+                '-CurrentDeviceUDID', 'owned-udid'])
             selected = json.loads((Path(directory) / 'ios-simulator-boot-18.6/selected.json').read_text())
             self.assertEqual(selected['runtime'], RUNTIME)
             self.assertEqual(selected['device_type'], DEVICE)

@@ -5,6 +5,13 @@ import 'package:flutter/foundation.dart';
 /// One clock and transport interface for the native video and the regular
 /// Full Player chrome/Space subtitles. Album playback has a separate clock.
 class Media3MusicVideoController {
+  Media3MusicVideoController({bool? trackNativeOutputQuiescence})
+    : _trackQuiescence =
+          trackNativeOutputQuiescence ??
+          defaultTargetPlatform == TargetPlatform.iOS;
+
+  final bool _trackQuiescence;
+  final _nativeQuiet = <int, Completer<void>>{};
   final positionNotifier = ValueNotifier<Duration>(Duration.zero);
   final durationNotifier = ValueNotifier<Duration>(Duration.zero);
   final playingNotifier = ValueNotifier<bool>(false);
@@ -25,10 +32,37 @@ class Media3MusicVideoController {
   int _owner = 0;
   bool _disposed = false;
 
-  int attach(Future<void> Function(String, Map<String, Object?>) command) {
+  int attach(
+    Future<void> Function(String, Map<String, Object?>) command, {
+    bool requiresQuiescence = true,
+  }) {
     _send = command;
-    return ++_owner;
+    final owner = ++_owner;
+    if (_trackQuiescence && requiresQuiescence) {
+      final quiet = Completer<void>();
+      // A removed view can fail before the next album playback request waits.
+      quiet.future.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+      _nativeQuiet[owner] = quiet;
+    }
+    return owner;
   }
+
+  /// Called only after native suspension completes, including after dispose.
+  void acknowledgeNativeQuiet(int? owner, {Object? error, StackTrace? stack}) {
+    final quiet = _nativeQuiet[owner];
+    if (quiet == null || quiet.isCompleted) return;
+    if (error == null) {
+      quiet.complete();
+      _nativeQuiet.remove(owner);
+    } else {
+      // Retain failed acknowledgement so a detached view cannot imply safety.
+      quiet.completeError(error, stack);
+    }
+  }
+
+  Future<void> _awaitNativeQuiet() => Future.wait<void>([
+    for (final quiet in _nativeQuiet.values.toList()) quiet.future,
+  ]).then<void>((_) {});
 
   bool owns(int? owner) => !_disposed && owner == _owner;
 
@@ -117,16 +151,38 @@ class Media3MusicVideoController {
   }
 
   Future<void> releaseAudio() async {
-    if (_disposed) return;
     final owner = _owner;
     final send = _send;
-    if (send != null) await send('release', const {});
+    if (!_disposed && send != null) {
+      await send('release', const {});
+      acknowledgeNativeQuiet(owner);
+    }
+    await _awaitNativeQuiet();
     if (owns(owner)) {
       _ticker?.cancel();
       _ticker = null;
       playingNotifier.value = false;
       advancingNotifier.value = false;
     }
+  }
+
+  /// Preserve the raw transport position, never the interpolated UI clock.
+  Future<void> retireForMediaReset() async {
+    final owner = _owner;
+    final send = _send;
+    if (!_disposed) {
+      _ticker?.cancel();
+      _ticker = null;
+      _sampleClock.stop();
+      positionNotifier.value = _samplePosition;
+      playingNotifier.value = false;
+      advancingNotifier.value = false;
+    }
+    if (!_disposed && send != null) {
+      await send('mediaReset', {'positionMs': _samplePosition.inMilliseconds});
+      acknowledgeNativeQuiet(owner);
+    }
+    await _awaitNativeQuiet();
   }
 
   Future<void> togglePlayPause() =>

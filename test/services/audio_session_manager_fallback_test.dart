@@ -1,9 +1,47 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flick/models/audio_engine_type.dart';
 import 'package:flick/services/audio_session_manager.dart';
 
 void main() {
+  test(
+    'retired initialization cannot clear a newer confirmed engine',
+    () async {
+      final oldAcknowledgement = Completer<void>();
+      final manager = AudioSessionManager(
+        onSwitchEngine:
+            ({
+              required from,
+              required to,
+              required initializeNewEngine,
+              required reason,
+            }) async {
+              if (to == AudioEngineType.rustOboe)
+                await oldAcknowledgement.future;
+            },
+        isPlaybackActive: () => false,
+      );
+      addTearDown(manager.dispose);
+      final old = expectLater(
+        manager.switchMode(AudioEngineType.rustOboe, initializeNewEngine: true),
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      manager.retireLocalOutput();
+      expect(manager.selectedMode, AudioEngineType.rustOboe);
+      expect(manager.initializedMode, isNull);
+      await manager.switchMode(
+        AudioEngineType.iosSystem,
+        initializeNewEngine: true,
+      );
+      oldAcknowledgement.complete();
+      await old;
+      expect(manager.initializedMode, AudioEngineType.iosSystem);
+    },
+  );
+
   test('iPhone reports a system route before the first playback request', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);

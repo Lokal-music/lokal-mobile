@@ -9,6 +9,7 @@ import 'package:flick/services/uac2_service.dart';
 import 'package:flick/src/rust/api/audio_api.dart' as rust_audio;
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/core/utils/dev_log.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
 typedef AudioSessionSwitchHandler = Future<void> Function({
   required AudioEngineType? from,
@@ -60,6 +61,13 @@ class AudioSessionManager {
   bool _initialized = false;
   Future<void>? _initializeInFlight;
   Future<void>? _routeSyncInFlight;
+  int _lifecycleRevision = 0;
+
+  void retireLocalOutput() {
+    _lifecycleRevision++;
+    initializedModeNotifier.value = null;
+  }
+
   VoidCallback? _deviceInfoListener;
   final Map<String, String> _exclusiveUnavailableUsbDeviceReasons =
       <String, String>{};
@@ -102,6 +110,7 @@ class AudioSessionManager {
     bool initializeNewEngine = false,
     String reason = 'manual switch',
   }) async {
+    final revision = _lifecycleRevision;
     final previousInitialized = initializedMode;
     final selectedChanged = selectedMode != mode;
     final needsInitialization =
@@ -129,10 +138,15 @@ class AudioSessionManager {
           initializeNewEngine: initializeNewEngine,
           reason: reason,
         );
+        if (revision != _lifecycleRevision) {
+          throw const LocalAudioRequestRetired();
+        }
       } catch (_) {
         // The outgoing engine may already have been disposed by the handler.
         // Do not report it as initialized or skip its reinitialization later.
-        initializedModeNotifier.value = null;
+        if (revision == _lifecycleRevision) {
+          initializedModeNotifier.value = null;
+        }
         rethrow;
       }
     }

@@ -36,6 +36,7 @@ pub struct TagEditFields {
     pub album: Option<String>,
     pub album_artist: Option<String>,
     pub genre: Option<String>,
+    pub lyrics: Option<String>,
     pub year: Option<u32>,
     pub track_number: Option<u32>,
     pub disc_number: Option<u32>,
@@ -377,6 +378,17 @@ fn apply_tag_fields(
             if let Some(ref v) = fields.genre {
                 t.set_genre(v.clone());
             }
+            if let Some(ref v) = fields.lyrics {
+                // Lofty's generic Lyrics key is not writable for ID3v2.
+                // Its USLT frame is exposed as UnsyncLyrics; on FLAC/Vorbis
+                // and MP4 the Lyrics key stores portable LRC/plain text.
+                let key = if t.tag_type() == lofty::tag::TagType::Id3v2 {
+                    ItemKey::UnsyncLyrics
+                } else {
+                    ItemKey::Lyrics
+                };
+                t.insert_text(key, v.clone());
+            }
             if let Some(v) = fields.year {
                 t.set_date(Timestamp {
                     year: v as u16,
@@ -435,6 +447,37 @@ mod tests {
         std::fs::write(path, bytes).unwrap();
     }
 
+    #[test]
+    fn embedded_lrc_round_trips_in_flac_vorbis_comment() {
+        let dir = std::env::temp_dir().join(format!(
+            "lokal_embedded_lyrics_{}", std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("song.flac");
+        write_minimal_flac(&path, &["TITLE=Song"]);
+        let expected = "[00:01.20]The first line\n[00:03.40]The next line";
+        let result = write_tags(
+            path.to_string_lossy().to_string(),
+            TagEditFields {
+                title: Some("Song".into()),
+                artist: None,
+                album: None,
+                album_artist: None,
+                genre: None,
+                lyrics: Some(expected.into()),
+                year: None,
+                track_number: None,
+                disc_number: None,
+            },
+        ).unwrap();
+        assert!(result.success, "write failed: {:?}", result.error);
+
+        let saved = Probe::open(&path).unwrap().read().unwrap();
+        let tag = saved.primary_tag().or_else(|| saved.first_tag()).unwrap();
+        assert_eq!(tag.get_string(ItemKey::Lyrics), Some(expected));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Hand-builds a minimal PCM WAV with no tag chunk at all.
     fn write_minimal_wav(path: &Path) {
         let sample_rate: u32 = 8000;
@@ -481,6 +524,7 @@ mod tests {
                 album: Some("Identified Album".into()),
                 album_artist: Some("Identified Artist".into()),
                 genre: Some("Electronic".into()),
+                lyrics: Some("[00:01.20] A test line".into()),
                 year: Some(1994),
                 track_number: Some(3),
                 disc_number: Some(1),
@@ -493,6 +537,13 @@ mod tests {
         assert_eq!(after.title.as_deref(), Some("Identified Title"));
         assert_eq!(after.artist.as_deref(), Some("Identified Artist"));
         assert_eq!(after.album.as_deref(), Some("Identified Album"));
+        // ID3v2 must store USLT, not Lofty's unsupported generic Lyrics key.
+        let raw = Probe::open(&path).unwrap().read().unwrap();
+        let tag = raw.primary_tag().or_else(|| raw.first_tag()).unwrap();
+        assert_eq!(
+            tag.get_string(ItemKey::UnsyncLyrics),
+            Some("[00:01.20] A test line")
+        );
         assert_eq!(after.genre.as_deref(), Some("Electronic"));
         assert_eq!(after.year, Some(1994));
         assert_eq!(after.track_number, Some(3));

@@ -84,10 +84,17 @@ Future<void> main() async {
 /// real bootstrap without moving runApp into a different zone or swallowing
 /// failures that the test framework must report.
 @visibleForTesting
-Future<void> bootstrapForIntegrationTest() =>
-    _bootstrapApp(installErrorHandlers: false);
+Future<void> bootstrapForIntegrationTest({
+  Future<void> Function()? afterNativeInitialization,
+}) => _bootstrapApp(
+  installErrorHandlers: false,
+  afterNativeInitialization: afterNativeInitialization,
+);
 
-Future<void> _bootstrapApp({bool installErrorHandlers = true}) async {
+Future<void> _bootstrapApp({
+  bool installErrorHandlers = true,
+  Future<void> Function()? afterNativeInitialization,
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Snapshot install freshness before anything can write to the preference
@@ -128,6 +135,9 @@ Future<void> _bootstrapApp({bool installErrorHandlers = true}) async {
   }
 
   await RustLib.init();
+  // A native-only acceptance phase can run before any Dart playback owner is
+  // constructed. Production startup never supplies this callback.
+  if (afterNativeInitialization != null) await afterNativeInitialization();
   _subscribeRustLogs();
   unawaited(ProcessExitDiagnosticsService().reportPreviousExits());
 

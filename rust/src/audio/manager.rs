@@ -224,8 +224,12 @@ impl EngineManager {
         preferred_sample_rate: Option<u32>,
         excluded_strategies: Vec<OutputStrategy>,
     ) -> Result<(), String> {
-        self.runtime()
-            .block_on(self.ensure_rust_engine_async(preferred_sample_rate, excluded_strategies))
+        let request_epoch = crate::audio::request_generation::current();
+        self.runtime().block_on(self.ensure_rust_engine_async(
+            preferred_sample_rate,
+            excluded_strategies,
+            request_epoch,
+        ))
     }
 
     pub fn with_rust_handle<T>(
@@ -276,9 +280,14 @@ impl EngineManager {
         &self,
         preferred_sample_rate: Option<u32>,
         excluded_strategies: Vec<OutputStrategy>,
+        request_epoch: Option<u64>,
     ) -> Result<(), String> {
+        use crate::audio::request_generation::LOCAL_REQUESTS;
+        LOCAL_REQUESTS.check(request_epoch)?;
         let _gate = self.init_gate.lock().await;
+        LOCAL_REQUESTS.check(request_epoch)?;
         let selection = self.selection_async(preferred_sample_rate).await?;
+        LOCAL_REQUESTS.check(request_epoch)?;
 
         if selection.engine != AudioEngine::Rust {
             self.state.lock().current = Some(AudioEngine::Default);
@@ -353,8 +362,13 @@ impl EngineManager {
         if let Some(handle) = previous_handle {
             tokio::task::spawn_blocking(move || handle.shutdown())
                 .await
-                .map_err(|error| format!("Existing engine shutdown task failed: {}", error))??;
+                .map_err(|error| format!("Existing engine shutdown task failed: {}", error))
+                .and_then(|result| result)
+                .map_err(|error| {
+                    crate::audio::request_generation::cleanup_failed(error, request_epoch)
+                })?;
         }
+        LOCAL_REQUESTS.check(request_epoch)?;
 
         #[cfg(all(feature = "uac2", target_os = "android"))]
         crate::uac2::force_release_usb_session();
@@ -371,6 +385,18 @@ impl EngineManager {
         .await
         .map_err(|error| format!("Rust engine initialization task failed: {}", error))??;
 
+        // Native construction can cross reset even after a valid probe. Do not
+        // publish the cancelled handle; destroy it while still holding init_gate.
+        if let Err(cancelled) = LOCAL_REQUESTS.check(request_epoch) {
+            tokio::task::spawn_blocking(move || new_handle.shutdown())
+                .await
+                .map_err(|error| format!("Cancelled engine shutdown task failed: {}", error))
+                .and_then(|result| result)
+                .map_err(|error| {
+                    crate::audio::request_generation::cleanup_failed(error, request_epoch)
+                })?;
+            return Err(cancelled);
+        }
         let mut state = self.state.lock();
         state.current = Some(AudioEngine::Rust);
         state.rust_handle = Some(new_handle);
@@ -389,18 +415,15 @@ impl EngineManager {
                 let _ = handle.set_crossfade_curve(curve);
             }
         }
-        if let Some((enabled, preamp_db, specs)) =
-            crate::api::audio_api::take_pending_equalizer()
-        {
+        if let Some((enabled, preamp_db, specs)) = crate::api::audio_api::take_pending_equalizer() {
             if let Some(handle) = state.rust_handle.as_ref() {
                 let _ = handle.set_equalizer(enabled, preamp_db, specs);
             }
         }
         if let Some(level) = crate::api::audio_api::take_pending_crossfeed() {
             if let Some(handle) = state.rust_handle.as_ref() {
-                let _ = handle.set_crossfeed(crate::audio::crossfeed::CrossfeedLevel::from_u8(
-                    level,
-                ));
+                let _ =
+                    handle.set_crossfeed(crate::audio::crossfeed::CrossfeedLevel::from_u8(level));
             }
         }
         Ok(())
@@ -417,7 +440,9 @@ impl EngineManager {
         if let Some(handle) = previous_handle {
             tokio::task::spawn_blocking(move || handle.shutdown())
                 .await
-                .map_err(|error| format!("Rust engine shutdown task failed: {}", error))??;
+                .map_err(|error| format!("Rust engine shutdown task failed: {}", error))
+                .and_then(|result| result)
+                .map_err(|error| crate::audio::request_generation::cleanup_failed(error, None))?;
         }
 
         #[cfg(all(feature = "uac2", target_os = "android"))]

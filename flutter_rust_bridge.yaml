@@ -1,3 +1,5 @@
 rust_input: crate::api
 rust_root: rust/
 dart_output: lib/src/rust
+# FRB uses plain Dart models; leave Isar/Riverpod model generation separate.
+build_runner: false

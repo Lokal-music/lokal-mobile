@@ -23,10 +23,22 @@ def main():
     evidence_name = f'ios-simulator-boot-{version}' + (f'-{suffix}' if suffix else '')
     output = Path(os.environ.get('RUNNER_TEMP', 'build/ios/runtime-evidence')) / evidence_name
     output.mkdir(parents=True, exist_ok=True)
-    devices_json = command('xcrun', 'simctl', 'list', 'devices', 'available', '--json')
-    (output / 'devices-before.json').write_text(devices_json)
-    runtimes_json = command('xcrun', 'simctl', 'list', 'runtimes', 'available', '--json')
-    (output / 'runtimes.json').write_text(runtimes_json)
+    try:
+        # CoreSimulatorService is cold on an isolated hosted Mac. Inventory
+        # needs its own bounded startup allowance, before a UDID exists.
+        devices_json = command('xcrun', 'simctl', 'list', 'devices', 'available', '--json', timeout=90)
+        (output / 'devices-before.json').write_text(devices_json)
+        runtimes_json = command('xcrun', 'simctl', 'list', 'runtimes', 'available', '--json', timeout=90)
+        (output / 'runtimes.json').write_text(runtimes_json)
+    except (OSError, subprocess.SubprocessError) as error:
+        (output / 'discovery-failure.txt').write_text(f'{type(error).__name__}: {error}\n')
+        for attribute in ('stdout', 'stderr'):
+            partial = getattr(error, attribute, None)
+            if partial:
+                if isinstance(partial, bytes):
+                    partial = partial.decode('utf-8', errors='replace')
+                (output / f'discovery-{attribute}.log').write_text(partial)
+        raise
     devices = json.loads(devices_json)['devices']
     runtime = next((r for r in json.loads(runtimes_json)['runtimes']
                     if r['identifier'] == runtime_id and r.get('isAvailable')), None)
@@ -65,6 +77,14 @@ def main():
             if device['state'] != 'Booted':
                 subprocess.run(['xcrun', 'simctl', 'boot', udid], check=True,
                                stdout=log, stderr=subprocess.STDOUT, timeout=60)
+            # A device reported as Booted can still lack a usable display on a
+            # fresh hosted Mac. Start its GUI session before waiting for full
+            # SpringBoard readiness; bootstatus and the control app remain gates.
+            developer = os.environ.get('DEVELOPER_DIR') or command('xcode-select', '-p').strip()
+            simulator = Path(developer) / 'Applications/Simulator.app'
+            subprocess.run(['open', '-a', str(simulator), '--args',
+                            '-CurrentDeviceUDID', udid], check=True,
+                           stdout=log, stderr=subprocess.STDOUT, timeout=20)
             subprocess.run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], check=True,
                            stdout=log, stderr=subprocess.STDOUT, timeout=300)
     except (OSError, subprocess.SubprocessError) as error:
@@ -72,6 +92,9 @@ def main():
         for args, destination in [
             (['xcrun', 'simctl', 'list', 'devices', '--json'], 'devices-after.json'),
             (['xcrun', 'simctl', 'io', udid, 'screenshot', str(output / 'boot.png')], 'screenshot.log'),
+            (['xcrun', 'simctl', 'spawn', udid, 'log', 'show', '--last', '5m',
+              '--style', 'compact', '--predicate',
+              'process == "SpringBoard" OR process == "backboardd"'], 'system-display.log'),
         ]:
             try:
                 with (output / destination).open('w') as log:
