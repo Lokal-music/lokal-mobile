@@ -954,11 +954,9 @@ class _Header extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: LokalGlass.capsule(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: LokalGlass.capsule(
                 thickness: LokalGlassThickness.thin,
                 shadow: false,
                 padding: const EdgeInsets.all(3),
@@ -980,7 +978,6 @@ class _Header extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         ),
         IconButton(
           tooltip: lokalText('Refresh'),
@@ -1037,6 +1034,8 @@ class _ProviderChip extends StatelessWidget {
             onLongPress: onLongPress,
             borderRadius: BorderRadius.circular(999),
             child: Container(
+              constraints: const BoxConstraints(minWidth: 60, minHeight: 44),
+              alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: selected ? t.accent : Colors.transparent,
