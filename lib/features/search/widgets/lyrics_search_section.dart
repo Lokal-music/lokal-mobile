@@ -9,6 +9,7 @@ import 'package:flick/services/link/library_song_identity.dart';
 import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/online_lyrics_service.dart';
 import 'package:flick/services/online_playlist_reference.dart';
+import 'package:flick/features/search/models/local_lyrics_matcher.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
 
 import 'lyrics_search_result_card.dart';
@@ -92,7 +93,7 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
     final songs = preferLocalLibrarySongs(loaded)
         .where((s) => s.filePath != null && s.filePath!.isNotEmpty)
         .toList(growable: false);
-    final needle = query.trim().toLowerCase();
+    final needle = normalizeLocalLyricSearch(query);
     final sourceRevision = LyricsService.contentRevision.value;
     final hits = <_LyricHit>[];
     var scanned = 0;
@@ -120,8 +121,11 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
           _textCache[key] = lines;
         }
       }
-      final matching = lines.where((line) =>
-          line.toLowerCase().contains(needle)).firstOrNull;
+      // Unicode letters and combining vowel signs are preserved. Compare
+      // normalized phrases, so punctuation and full-width forms don't hide
+      // Japanese, Chinese, Hindi or Punjabi lyric matches.
+      final matching = needle.isEmpty ? null : lines.where((line) =>
+          matchesLocalLyricLine(line, needle)).firstOrNull;
       if (matching != null) hits.add((song: song, line: matching));
       scanned++;
       if (scanned % 24 == 0 || scanned == songs.length) {
