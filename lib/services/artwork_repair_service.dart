@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 import '../data/repositories/song_repository.dart';
 import '../models/song.dart';
 import 'album_art_import_service.dart';
+import 'artwork_pixel_validation.dart';
 
 /// An explicit maintenance operation, never a startup/background scan.
 /// Only exact album/artist matches are eligible; user-selected artwork is
@@ -75,12 +74,6 @@ bool isCoverUpgrade({required int currentShortSide, required int newShortSide}) 
       newShortSide >= currentShortSide * 1.5;
 }
 
-Future<int> decodedCoverShortSide(Uint8List bytes) => Isolate.run(() {
-  final decoded = img.decodeImage(bytes);
-  return decoded == null ? 0 :
-      decoded.width < decoded.height ? decoded.width : decoded.height;
-});
-
 class ArtworkRepairService {
   ArtworkRepairService({
     SongRepository? repository,
@@ -112,7 +105,7 @@ class ArtworkRepairService {
     if (!await file.exists()) return 0;
     final length = await file.length();
     if (length <= 0 || length > 5 * 1024 * 1024) return null;
-    return decodedCoverShortSide(await file.readAsBytes());
+    return (await validateArtworkBytes(await file.readAsBytes()))?.shortSide ?? 0;
   }
 
   Future<Uint8List?> _fetchArtwork(String url) async {
@@ -189,7 +182,7 @@ class ArtworkRepairService {
         if (candidate == null) { skipped += low.length; continue; }
         final bytes = await _fetchArtwork(candidate.imageUrl);
         if (bytes == null) { failed += low.length; continue; }
-        final newSide = await decodedCoverShortSide(bytes);
+        final newSide = (await validateArtworkBytes(bytes))?.shortSide ?? 0;
         for (final (song, currentSide) in low) {
           if (_cancel) break;
           if (!isCoverUpgrade(
