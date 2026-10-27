@@ -5893,6 +5893,10 @@ class PlayerService {
       await _playbackManager.pause();
     } catch (e) {
       _debugLog('Pause failed: $e');
+      // The engine may still be playing after a rejected pause. Keep
+      // position persistence and network prefetch alive until the next
+      // successful transport transition.
+      _ensurePositionSaveTimer();
     }
     await _savePosition();
     await _refreshAudioOutputDiagnostics(
