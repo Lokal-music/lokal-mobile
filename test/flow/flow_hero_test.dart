@@ -11,12 +11,13 @@ Widget heroApp({
   required VoidCallback onSave,
   required VoidCallback onTune,
   bool playing = false,
+  bool disableAnimations = true,
 }) => MaterialApp(
   theme: LokalTheme.build(tokens),
   home: MediaQuery(
-    data: const MediaQueryData(
-      size: Size(320, 650),
-      disableAnimations: true,
+    data: MediaQueryData(
+      size: const Size(320, 650),
+      disableAnimations: disableAnimations,
     ),
     child: Scaffold(
       body: SingleChildScrollView(
@@ -133,4 +134,54 @@ void main() {
     expect(tester.getSize(find.byType(FlowInfinityOrb)).width, 88);
     expect(tester.takeException(), isNull);
   });
+  
+  testWidgets('Flow orb never schedules continuous frames with motion enabled', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(320, 650)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var playCalls = 0;
+    final tokens = LokalTokens.resolve(LokalThemeId.dark);
+
+    await tester.pumpWidget(
+      heroApp(
+        tokens: tokens,
+        playing: false,
+        disableAnimations: false,
+        onPlay: () => playCalls++,
+        onSave: () {},
+        onTune: () {},
+      ),
+    );
+    await tester.pumpAndSettle();
+    final orb = find.byType(FlowInfinityOrb);
+    expect(orb, findsOneWidget);
+    expect(find.descendant(of: orb, matching: find.byType(AnimatedBuilder)),
+        findsNothing);
+    expect(find.descendant(of: orb, matching: find.byType(Transform)),
+        findsNothing);
+    expect(tester.binding.transientCallbackCount, 0);
+
+    await tester.tap(orb);
+    await tester.pump();
+    expect(playCalls, 1);
+
+    await tester.pumpWidget(
+      heroApp(
+        tokens: tokens,
+        playing: true,
+        disableAnimations: false,
+        onPlay: () => playCalls++,
+        onSave: () {},
+        onTune: () {},
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Pause Flow'), findsOneWidget);
+    expect(tester.binding.transientCallbackCount, 0);
+    expect(tester.takeException(), isNull);
+  });
+
 }

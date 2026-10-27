@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flutter/material.dart';
@@ -224,127 +222,81 @@ class _FlowGlow extends CustomPainter {
       old.accent != accent || old.secondary != secondary;
 }
 
-/// A compact, tappable version of desktop's three breathing infinity rings.
-/// Reduced-motion users see the still orb; frames repaint only this boundary.
-class FlowInfinityOrb extends StatefulWidget {
+/// Static, tappable Flow mark. No ticker or continuous animations: the Flow
+/// screen stays idle when playback state and the selected mood do not change.
+class FlowInfinityOrb extends StatelessWidget {
   const FlowInfinityOrb({
     super.key,
     required this.playing,
     required this.onPressed,
   });
+
   final bool playing;
   final VoidCallback? onPressed;
-  @override
-  State<FlowInfinityOrb> createState() => _FlowInfinityOrbState();
-}
-
-class _FlowInfinityOrbState extends State<FlowInfinityOrb>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(vsync: this);
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(covariant FlowInfinityOrb old) {
-    super.didUpdateWidget(old);
-    if (old.playing != widget.playing) _sync();
-  }
-
-  void _sync() {
-    if (MediaQuery.disableAnimationsOf(context) || !TickerMode.of(context)) {
-      _pulse.stop();
-      _pulse.value = 0;
-      return;
-    }
-    final duration = Duration(milliseconds: widget.playing ? 2200 : 3900);
-    if (_pulse.isAnimating && _pulse.duration == duration) return;
-    _pulse.duration = duration;
-    _pulse.repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final t = context.lokal;
-    final still = MediaQuery.disableAnimationsOf(context);
-    final label = widget.playing ? 'Pause Flow' : 'Play Flow';
+    final label = playing ? 'Pause Flow' : 'Play Flow';
     return Tooltip(
       message: label,
       child: Semantics(
         button: true,
-        enabled: widget.onPressed != null,
+        enabled: onPressed != null,
         label: label,
-        onTap: widget.onPressed,
+        onTap: onPressed,
         excludeSemantics: true,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: widget.onPressed,
+          onTap: onPressed,
           child: RepaintBoundary(
             child: SizedBox.square(
               dimension: 88,
-              child: AnimatedBuilder(
-                animation: _pulse,
-                builder: (context, _) => Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            t.accent.withValues(alpha: .28),
-                            t.accent.withValues(alpha: .07),
-                            Colors.transparent,
-                          ],
-                        ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: t.accent.withValues(alpha: .07),
+                      border: Border.all(
+                        color: t.accent.withValues(alpha: .20),
+                        width: 1.2,
                       ),
                     ),
-                    if (!still)
-                      for (final delay in [0.0, 1 / 3, 2 / 3])
-                        _ring(t, (_pulse.value + delay) % 1),
-                    Transform.rotate(
-                      angle: still ? 0 : _pulse.value * math.pi * 2 / 3,
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: SweepGradient(
-                            colors: [t.accent, t.purple, t.accentDim, t.accent],
-                          ),
-                          border: Border.all(
-                            color: t.text.withValues(alpha: .18),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: t.accent.withValues(alpha: .23),
-                              blurRadius: 14,
-                            ),
-                          ],
-                        ),
-                        child: Transform.rotate(
-                          angle: still ? 0 : -_pulse.value * math.pi * 2 / 3,
-                          child: const Icon(
-                            Icons.all_inclusive_rounded,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        ),
+                  ),
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: t.accent.withValues(alpha: playing ? .42 : .30),
+                        width: 1.5,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: SweepGradient(
+                        colors: [t.accent, t.purple, t.accentDim, t.accent],
+                      ),
+                      border: Border.all(
+                        color: t.text.withValues(alpha: .18),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.all_inclusive_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -352,19 +304,4 @@ class _FlowInfinityOrbState extends State<FlowInfinityOrb>
       ),
     );
   }
-
-  Widget _ring(LokalTokens t, double phase) => Transform.scale(
-    scale: .9 + .85 * phase,
-    child: Container(
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: t.accent.withValues(alpha: .6 * (1 - phase)),
-          width: 1.5,
-        ),
-      ),
-    ),
-  );
 }
