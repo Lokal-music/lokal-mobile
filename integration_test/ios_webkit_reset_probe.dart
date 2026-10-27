@@ -88,6 +88,13 @@ Future<void> probeIosWebKitReset(
       }
     }
     binding.reportData!['media_reset_webkit_gate_timeout'] = diagnostics;
+    try {
+      await binding
+          .takeScreenshot('ios-webkit-gate-timeout')
+          .timeout(const Duration(seconds: 5));
+    } catch (error) {
+      diagnostics['failure_screenshot_error'] = error.toString();
+    }
     fail(reason);
   }
 

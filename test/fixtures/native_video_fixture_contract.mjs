@@ -23,6 +23,7 @@ const media = {
   seeking: false, playbackRate: 1, currentSrc: 'blob:https://app.lokal.mobile/generated',
   seekable: {length: 1, start: () => 0, end: () => 12}, buffered: {length: 0},
   plays: 0, pauses: 0,
+  getBoundingClientRect() { return {left: 1, top: 2, width: 320, height: 240}; },
   addEventListener(name, handler) { handlers.set(name, handler); },
   play() { this.plays++; this.paused = false; return Promise.resolve(); },
   pause() { this.pauses++; this.paused = true; },
@@ -48,7 +49,9 @@ childContext = createContext({
   Blob, Uint8Array,
   atob: value => Buffer.from(value, 'base64').toString('binary'),
   URL: {createObjectURL(blob) { mediaBlob = blob; return media.currentSrc; }},
-  document: {getElementById(id) { equal(id, 'media'); return media; }},
+  document: {visibilityState: 'visible', hidden: false, hasFocus: () => true,
+    getElementById(id) { equal(id, 'media'); return media; }},
+  innerWidth: 320, innerHeight: 240,
   parent: Object.assign(parentSender, {postMessage(data) {
     topMessage({source: frame.contentWindow, data});
   }}),
@@ -71,6 +74,12 @@ equal(top.__lokalNativeVideoSnapshot().pendingSeekSeconds, null, 'decoded media 
 equal(JSON.stringify(top.__lokalNativeVideoSnapshot().seekable), '[[0,12]]',
   'native seekable ranges are reported without invented media time');
 equal(top.__lokalNativeVideoSnapshot().frames, 0, 'source-clock samples must never invent frames');
+equal(top.__lokalNativeVideoSnapshot().documentVisibility, 'visible');
+equal(top.__lokalNativeVideoSnapshot().documentHidden, false);
+equal(top.__lokalNativeVideoSnapshot().documentFocused, true);
+equal(top.__lokalNativeVideoSnapshot().viewportWidth, 320);
+equal(top.__lokalNativeVideoSnapshot().viewportHeight, 240);
+equal(JSON.stringify(top.__lokalNativeVideoSnapshot().videoRectangle), JSON.stringify({left: 1, top: 2, width: 320, height: 240}));
 handlers.get('timeupdate')();
 equal(top.__lokalNativeVideoSnapshot().frames, 0, 'timeupdate is not frame delivery');
 equal(typeof nextFrame, 'function');
