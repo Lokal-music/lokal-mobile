@@ -1229,6 +1229,145 @@ class AndroidAudioEngine implements AudioEngine {
     }());
   }
 
+  /// Third decoder is only for a verified, offline-rendered Demucs window.
+  /// It is never used for network sources, bit-perfect routes or Atmos.
+  Future<bool> _commitStemClip({
+    required AutoMixStemClip clip,
+    required just_audio.AudioPlayer outgoing,
+    required just_audio.AudioPlayer incoming,
+    required Song next,
+    required AutoMixProfile? nextProfile,
+    required bool Function() valid,
+    required int epoch,
+  }) async {
+    just_audio.AudioPlayer? mixed;
+    try {
+      mixed = _stemPlayerProvider != null
+          ? await _stemPlayerProvider!()
+          : just_audio.AudioPlayer(useProxyForRequestHeaders: false);
+      await mixed.setVolume(0);
+      await mixed.setLoopMode(just_audio.LoopMode.off);
+      await mixed.setAudioSource(
+        just_audio.AudioSource.uri(Uri.file(clip.path)), preload: true,
+      ).timeout(const Duration(seconds: 8));
+      final lateMs = (outgoing.position - clip.start).inMilliseconds;
+      if (!valid() || !outgoing.playing || lateMs.abs() > 650) {
+        await mixed.dispose();
+        return false;
+      }
+      if (lateMs > 0) await mixed.seek(Duration(milliseconds: lateMs));
+      if (!valid() || !outgoing.playing) {
+        await mixed.dispose();
+        return false;
+      }
+      _stemPlayer = mixed;
+      _stemHandoffStarted = false;
+      _rampUserVolume = outgoing.volume;
+      // just_audio.play returns only when playback completes: never await.
+      unawaited(mixed.play().catchError((Object error) {
+        devLog('[automix] stem render failed: $error');
+      }));
+      _loadedTrack = next;
+      ++_autoMixProfileGeneration;
+      _currentAutoMixProfile = nextProfile;
+      _loadedSingleTrackOnly = true;
+      _playlistSignature = const <String>[];
+      _player = incoming;
+      _secondary = outgoing;
+      _crossfadeCommitted = true;
+      _emit(_state.copyWith(
+        currentTrack: next,
+        position: Duration(milliseconds: (clip.inStart * 1000).round()),
+        bufferedPosition: Duration.zero,
+        duration: incoming.duration ?? next.duration,
+      ));
+      _onTrackAdvanced?.call(next);
+      _stemTimer?.cancel();
+      _stemTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+        if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed)) return;
+        if (!mixed!.playing) {
+          if (mixed.processingState == just_audio.ProcessingState.completed) {
+            unawaited(_finishStemClip(epoch, clip, outgoing, incoming, mixed));
+          }
+          return;
+        }
+        final position = mixed.position.inMilliseconds;
+        final total = clip.length.inMilliseconds;
+        final initial = (position / 180).clamp(0.0, 1.0);
+        if (!_stemHandoffStarted) {
+          unawaited(outgoing.setVolume(_rampUserVolume * (1 - initial)));
+          unawaited(mixed.setVolume(_rampUserVolume * initial));
+          if (total - position <= 900) {
+            _stemHandoffStarted = true;
+            final remaining = math.max(0, total - position);
+            final resume = clip.resume - Duration(milliseconds: remaining);
+            unawaited(() async {
+              try {
+                await incoming.seek(resume);
+                if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed)) return;
+                await incoming.setVolume(0);
+                unawaited(incoming.play());
+              } catch (_) {}
+            }());
+          }
+        } else {
+          final p = ((position - (total - 900)) / 900).clamp(0.0, 1.0);
+          unawaited(mixed.setVolume(_rampUserVolume * (1 - p)));
+          unawaited(incoming.setVolume(_rampUserVolume * p));
+        }
+        if (position >= total - 20 ||
+            mixed.processingState == just_audio.ProcessingState.completed) {
+          unawaited(_finishStemClip(epoch, clip, outgoing, incoming, mixed));
+        }
+      });
+      return true;
+    } catch (error) {
+      devLog('[automix] prepared stem unavailable: $error');
+      if (mixed != null) {
+        if (identical(_stemPlayer, mixed)) _stemPlayer = null;
+        try { await mixed.dispose(); } catch (_) {}
+      }
+      return false;
+    }
+  }
+
+  Future<void> _finishStemClip(
+    int epoch, AutoMixStemClip clip,
+    just_audio.AudioPlayer outgoing, just_audio.AudioPlayer incoming,
+    just_audio.AudioPlayer mixed,
+  ) async {
+    if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed)) return;
+    _stemTimer?.cancel();
+    _stemTimer = null;
+    _stemPlayer = null;
+    final hadHandoff = _stemHandoffStarted;
+    _stemHandoffStarted = false;
+    try {
+      if (!hadHandoff || !incoming.playing) {
+        await incoming.seek(clip.resume);
+        if (epoch == _crossfadeEpoch) unawaited(incoming.play());
+      }
+      if (epoch == _crossfadeEpoch) await incoming.setVolume(_rampUserVolume);
+    } catch (_) {}
+    try { await mixed.stop(); } catch (_) {}
+    try { await mixed.dispose(); } catch (_) {}
+    if (epoch != _crossfadeEpoch) return;
+    try { await outgoing.stop().timeout(const Duration(seconds: 3)); } catch (_) {}
+    _crossfadeCommitted = false;
+    _crossfadeArmed = false;
+  }
+
+  void _disposeStemPlayer() {
+    _stemTimer?.cancel();
+    _stemTimer = null;
+    _stemHandoffStarted = false;
+    final mixed = _stemPlayer;
+    _stemPlayer = null;
+    if (mixed != null) {
+      unawaited(mixed.dispose().catchError((Object _) {}));
+    }
+  }
+
   void _startRampTimer(
     just_audio.AudioPlayer outgoing,
     just_audio.AudioPlayer incoming,
