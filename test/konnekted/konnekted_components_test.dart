@@ -100,7 +100,8 @@ void main() {
     expect(find.text('New playlist'), findsOneWidget);
     expect(find.text('Import a playlist link'), findsOneWidget);
     expect(find.text('Import M3U'), findsOneWidget);
-    expect(find.text('Add a music folder'), findsOneWidget);
+    // Also present in the empty-library action behind the add sheet.
+    expect(find.text('Add a music folder'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
