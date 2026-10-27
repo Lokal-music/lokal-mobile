@@ -1,4 +1,5 @@
 import 'package:flick/features/settings/widgets/battery_optimization_setting.dart';
+import 'package:flick/features/settings/widgets/eco_data_mode_toggle.dart';
 import 'package:flick/features/settings/library_scan/library_scan_flow.dart';
 import 'package:flick/providers/library_scan_preferences_provider.dart';
 import 'package:flick/services/scan_session_controller.dart';
@@ -137,6 +138,12 @@ List<LokalSettingsSection> dataSettings(
         description: lokalText('Send your listens to ListenBrainz'),
         child: ListenBrainzSettingsTile(),
       ),
+    ],
+  ),
+  LokalSettingsSection(
+    title: lokalText('Mobile data'),
+    children: const [
+      EcoDataModeToggle(),
     ],
   ),
   LokalSettingsSection(
