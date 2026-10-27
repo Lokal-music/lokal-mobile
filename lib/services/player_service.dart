@@ -2431,6 +2431,7 @@ class PlayerService {
       },
       automixProfileLookup: AutoMixAnalysisCache.instance.read,
       stemClipLookup: AutoMixStemClipCache.instance.read,
+      stemVolumeProvider: () => _currentVolume,
       onNextSong: _resolveAndroidCrossfadeNext,
       onTrackAdvanced: _onAndroidTrackAdvanced,
       onTrackError: _onAndroidTrackError,
