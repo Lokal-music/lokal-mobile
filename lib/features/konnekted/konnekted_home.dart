@@ -334,6 +334,7 @@ class _HomeModeSelector extends StatefulWidget {
 
 class _HomeModeSelectorState extends State<_HomeModeSelector> {
   final _scrollController = ScrollController();
+  bool _revealScheduled = false;
   final _viewportKey = GlobalKey();
   final _tabKeys = {
     for (final tab in KonnektedHomeTab.values) tab: GlobalKey(),
@@ -358,7 +359,10 @@ class _HomeModeSelectorState extends State<_HomeModeSelector> {
   }
 
   void _revealSelected() {
+    if (_revealScheduled) return;
+    _revealScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealScheduled = false;
       if (!mounted || !_scrollController.hasClients) return;
       final tab = _tabKeys[widget.selectedTab]?.currentContext?.findRenderObject();
       final viewport = _viewportKey.currentContext?.findRenderObject();
