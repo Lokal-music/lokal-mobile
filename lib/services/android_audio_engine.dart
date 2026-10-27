@@ -239,6 +239,7 @@ class AndroidAudioEngine implements AudioEngine {
     AndroidCrossfadeConfigProvider? crossfadeConfigProvider,
     AndroidAutoMixProfileLookup? automixProfileLookup,
     AndroidStemClipLookup? stemClipLookup,
+    double Function()? stemVolumeProvider,
     Future<just_audio.AudioPlayer> Function()? stemPlayerProvider,
     AndroidNextSongProvider? onNextSong,
     AndroidTrackAdvancedCallback? onTrackAdvanced,
@@ -259,6 +260,7 @@ class AndroidAudioEngine implements AudioEngine {
            crossfadeConfigProvider ?? (() => AndroidCrossfadeConfig.disabled),
        _automixProfileLookup = automixProfileLookup,
        _stemClipLookup = stemClipLookup,
+       _stemVolumeProvider = stemVolumeProvider,
        _stemPlayerProvider = stemPlayerProvider,
        _onNextSong = onNextSong,
        _onTrackAdvanced = onTrackAdvanced,
@@ -279,6 +281,7 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidCrossfadeConfigProvider _crossfadeConfigProvider;
   final AndroidAutoMixProfileLookup? _automixProfileLookup;
   final AndroidStemClipLookup? _stemClipLookup;
+  final double Function()? _stemVolumeProvider;
   final Future<just_audio.AudioPlayer> Function()? _stemPlayerProvider;
   Future<AutoMixStemClip?>? _stemCandidate;
   String? _stemCandidateIdentity;
@@ -1356,6 +1359,7 @@ class AndroidAudioEngine implements AudioEngine {
         }
         final position = clipPlayer.position.inMilliseconds;
         final total = clip.length.inMilliseconds;
+        final userVolume = _stemVolumeProvider?.call() ?? _rampUserVolume;
         if (!_stemHandoffStarted) {
           _emit(_state.copyWith(
             position: Duration(milliseconds:
@@ -1364,8 +1368,8 @@ class AndroidAudioEngine implements AudioEngine {
         }
         final initial = (position / 180).clamp(0.0, 1.0);
         if (!_stemHandoffStarted) {
-          unawaited(outgoing.setVolume(_rampUserVolume * (1 - initial)));
-          unawaited(clipPlayer.setVolume(_rampUserVolume * initial));
+          unawaited(outgoing.setVolume(userVolume * (1 - initial)));
+          unawaited(clipPlayer.setVolume(userVolume * initial));
           if (total - position <= 900) {
             _stemHandoffStarted = true;
             final remaining = math.max(0, total - position);
@@ -1384,8 +1388,8 @@ class AndroidAudioEngine implements AudioEngine {
           }
         } else {
           final p = ((position - (total - 900)) / 900).clamp(0.0, 1.0);
-          unawaited(clipPlayer.setVolume(_rampUserVolume * (1 - p)));
-          unawaited(incoming.setVolume(_rampUserVolume * p));
+          unawaited(clipPlayer.setVolume(userVolume * (1 - p)));
+          unawaited(incoming.setVolume(userVolume * p));
         }
         if (position >= total - 20 ||
             clipPlayer.processingState == just_audio.ProcessingState.completed) {
@@ -1434,7 +1438,9 @@ class AndroidAudioEngine implements AudioEngine {
         await incoming.seek(clip.resume);
         if (epoch == _crossfadeEpoch) unawaited(incoming.play());
       }
-      if (epoch == _crossfadeEpoch) await incoming.setVolume(_rampUserVolume);
+      if (epoch == _crossfadeEpoch) {
+        await incoming.setVolume(_stemVolumeProvider?.call() ?? _rampUserVolume);
+      }
     } catch (_) {}
     try { await mixed.stop(); } catch (_) {}
     try { await mixed.dispose(); } catch (_) {}
