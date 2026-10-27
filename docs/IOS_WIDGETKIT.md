@@ -310,3 +310,38 @@ source `7fd28cf71417e7ea787b8df7e6cfcce4f26486c1`, tree
 `9bc8e5ba0eeff8610f7b7b1d47e527966002e5fc`. All 85 Flutter, 45 reader,
 20 storage and 14 publisher cases also pass. Full app channel execution,
 provisioned publication and extension rendering remain separate gates.
+
+
+## Native operation ownership after a deadline
+
+A Dart deadline bounds the caller's wait; it cannot cancel a native file write
+or a queued capability check. The coordinator retains those real futures until
+completion. Fresh states coalesce into one pending request while a timed-out
+write remains owned: no second native operation or artwork job is started.
+Capability retries share the existing in-flight check. Late replies/errors
+release ownership without exposing an obsolete receipt, notifying disposed
+listeners, or creating an automatic retry loop. A later explicit retry or
+meaningful state update can publish the latest retained sample with a new
+revision, after checking actual availability again when requested.
+
+```mermaid
+sequenceDiagram
+  participant P as Canonical player state
+  participant D as Dart coordinator
+  participant N as Native utility queue
+  D->>N: Publish revision 1
+  Note over D: Wait deadline expires; retain native operation
+  P->>D: Newer sampled state
+  Note over D: Coalesce latest; start no second native or artwork job
+  N-->>D: Late success or error
+  Note over D: Release ownership; discard late receipt; do not auto-retry
+  P->>D: Next meaningful update or explicit retry
+  D->>N: Publish latest sample at a new revision
+```
+
+Three asynchronous regressions cover hung publication with repeated new states
+and retries, a hung capability check, and late native failure. Actual in-flight
+publication concurrency stays at one; late completions never publish stale
+acknowledgements. The full widget/Android-widget selection passes **88 Flutter
+tests**. These checks extend the 583-test parity checkpoint; they do not claim a
+new combined full-app native pass or make the runtime sampler available.

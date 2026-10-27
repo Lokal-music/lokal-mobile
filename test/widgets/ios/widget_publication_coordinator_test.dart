@@ -28,11 +28,12 @@ class Transport implements IosWidgetPublicationTransport {
   final images = <Map<String, Uint8List>>[];
   final reloads = <bool>[];
   Future<IosWidgetPublicationReceipt> Function(IosWidgetSnapshot)? handler;
+  Future<IosWidgetPublicationCapability> Function()? capabilityHandler;
 
   @override
   Future<IosWidgetPublicationCapability> capability() async {
     capabilityCalls++;
-    return available;
+    return await (capabilityHandler?.call() ?? Future.value(available));
   }
 
   @override
@@ -397,6 +398,123 @@ void main() {
       artwork.complete({});
       await work;
       expect(transport.publications, isEmpty);
+    },
+  );
+  test('timed-out native writes stay owned and block further work until completion', () async {
+    coordinator.dispose();
+    coordinator = IosWidgetPublicationCoordinator(
+      transport: transport,
+      debounce: const Duration(days: 1),
+      operationTimeout: const Duration(milliseconds: 5),
+    );
+    final blocked = Completer<IosWidgetPublicationReceipt>();
+    transport.handler = (_) => blocked.future;
+    coordinator.submit(snapshot('First'));
+    await coordinator.flush();
+    expect(coordinator.phase.value, IosWidgetPublicationPhase.failed);
+    var loads = 0;
+    for (var i = 0; i < 4; i++) {
+      coordinator.submit(
+        snapshot('Latest $i'),
+        loadArtwork: () async {
+          loads++;
+          return {};
+        },
+      );
+      await coordinator.flush();
+      await coordinator.retry();
+    }
+    expect(transport.publications, hasLength(1));
+    expect(transport.capabilityCalls, 1);
+    expect(loads, 0);
+    expect(transport.maximumActive, 1);
+    blocked.complete(IosWidgetPublicationReceipt(revision: 1));
+    await blocked.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      coordinator.lastReceipt,
+      isNull,
+      reason: 'late acknowledgements cannot escape',
+    );
+    expect(
+      transport.publications,
+      hasLength(1),
+      reason: 'completion does not retry automatically',
+    );
+    transport.handler = null;
+    await coordinator.retry();
+    expect(transport.publications, hasLength(2));
+    expect(transport.maximumActive, 1);
+    expect(coordinator.lastReceipt?.revision, 2);
+    expect(
+      (transport.publications.last.toJson()['current']! as Map)['title'],
+      'Latest 3',
+    );
+  });
+
+  test(
+    'a timed-out capability check stays owned across fresh states and retries',
+    () async {
+      coordinator.dispose();
+      coordinator = IosWidgetPublicationCoordinator(
+        transport: transport,
+        debounce: const Duration(days: 1),
+        operationTimeout: const Duration(milliseconds: 5),
+      );
+      final blocked = Completer<IosWidgetPublicationCapability>();
+      transport.capabilityHandler = () => blocked.future;
+      coordinator.submit(snapshot('First'));
+      await coordinator.flush();
+      for (var i = 0; i < 3; i++) {
+        coordinator.submit(snapshot('Latest $i'));
+        await coordinator.flush();
+        await coordinator.retry();
+      }
+      expect(transport.capabilityCalls, 1);
+      expect(transport.publications, isEmpty);
+      blocked.complete(
+        const IosWidgetPublicationCapability(
+          available: true,
+          committedRevision: 40,
+        ),
+      );
+      await blocked.future;
+      await Future<void>.delayed(Duration.zero);
+      transport.capabilityHandler = null;
+      transport.available = const IosWidgetPublicationCapability(
+        available: true,
+        committedRevision: 40,
+      );
+      await coordinator.retry();
+      expect(coordinator.lastReceipt?.revision, 41);
+      expect(
+        (transport.publications.single.toJson()['current']! as Map)['title'],
+        'Latest 2',
+      );
+    },
+  );
+
+  test(
+    'late failed native publication clears ownership without automatic retries',
+    () async {
+      coordinator.dispose();
+      coordinator = IosWidgetPublicationCoordinator(
+        transport: transport,
+        debounce: const Duration(days: 1),
+        operationTimeout: const Duration(milliseconds: 5),
+      );
+      final blocked = Completer<IosWidgetPublicationReceipt>();
+      transport.handler = (_) => blocked.future;
+      coordinator.submit(snapshot('First'));
+      await coordinator.flush();
+      blocked.completeError(StateError('Late native failure'));
+      await Future<void>.delayed(Duration.zero);
+      expect(transport.publications, hasLength(1));
+      expect(coordinator.phase.value, IosWidgetPublicationPhase.failed);
+      transport.handler = null;
+      await coordinator.retry();
+      expect(coordinator.lastReceipt?.revision, 2);
+      expect(transport.maximumActive, 1);
     },
   );
 }
