@@ -103,44 +103,53 @@ class KonnektedLibrary extends ConsumerWidget {
         key: const PageStorageKey('konnekted-library'),
         slivers: [
           SliverToBoxAdapter(
-            child: LokalPageBar(
+            child: Padding(
               padding: konnektedTopBarPadding,
-              showBack: false,
-              leading: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LokalRoundAction(
-                    icon: Icons.add_rounded,
-                    iconSize: 24,
-                    label: lokalText('Add music, playlists and folders'),
-                    onPressed: () => _showAdd(context, ref),
-                  ),
-                  const SizedBox(width: 12),
-                  Semantics(
-                    header: true,
-                    child: GestureDetector(
-                      // Preserve the Classipod easter egg on the new title.
-                      onLongPress: () => Navigator.of(context)
-                          .push(ClassipodScreen.route(context)),
-                      child: Text(
-                        lokalText('Library'),
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -.8,
-                          color: context.lokal.text,
+              child: SizedBox(
+                height: 44,
+                child: Row(
+                  children: [
+                    LokalRoundAction(
+                      icon: Icons.add_rounded,
+                      iconSize: 24,
+                      label: lokalText('Add music, playlists and folders'),
+                      onPressed: () => _showAdd(context, ref),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Semantics(
+                        header: true,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          // Preserve the Classipod easter egg on the title.
+                          onLongPress: () => Navigator.of(context)
+                              .push(ClassipodScreen.route(context)),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              lokalText('Library'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -.8,
+                                color: context.lokal.text,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              actions: [
-                KonnektedHeaderActions(
-                  onSettings: () => onNavigate(KonnektedDestination.settings),
+                    const SizedBox(width: 8),
+                    KonnektedHeaderActions(
+                      onSettings: () => onNavigate(
+                        KonnektedDestination.settings,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 18)),
