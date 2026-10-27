@@ -53,7 +53,7 @@ dependencies:
   home_widget: ^0.10.0
   freezed_annotation: ^3.0.0
   http: ^1.2.0
-  image: ^4.10.1
+  image: ^4.10.2
   image_picker: ^1.2.3
   intl: any
   isar_community: ^3.3.2
