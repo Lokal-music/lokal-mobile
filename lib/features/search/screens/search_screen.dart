@@ -8,6 +8,7 @@ import '../widgets/recent_search_grid.dart';
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -38,7 +39,12 @@ import 'package:flick/services/catalogue_quality.dart';
 import 'package:flick/widgets/lokal/lokal_quality.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.footerFocusRequests});
+
+  /// Supplied only by the bottom-bar Search destination. An explicit tap
+  /// requests the keyboard even if the optional generic auto-focus preference
+  /// is disabled. Other Search entry points keep their existing behavior.
+  final ValueListenable<int>? footerFocusRequests;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -55,7 +61,41 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   static const int _previewLimit = 4;
 
   @override
+  void initState() {
+    super.initState();
+    widget.footerFocusRequests?.addListener(_onFooterSearchTap);
+    // The footer may have been tapped before this lazily mounted screen
+    // exists. Focus after the TextField attaches to the element tree.
+    if (widget.footerFocusRequests != null) _focusAfterNavigation();
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.footerFocusRequests != widget.footerFocusRequests) {
+      oldWidget.footerFocusRequests?.removeListener(_onFooterSearchTap);
+      widget.footerFocusRequests?.addListener(_onFooterSearchTap);
+      if (widget.footerFocusRequests != null) _focusAfterNavigation();
+    }
+  }
+
+  void _onFooterSearchTap() => _focusAfterNavigation();
+
+  void _focusAfterNavigation() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.footerFocusRequests == null) return;
+      _focusNode.requestFocus();
+      // Android may hide its IME on Back while leaving the field focused.
+      // requestKeyboard() also reopens it on a repeated dock Search tap.
+      _focusNode.context
+          ?.findAncestorStateOfType<EditableTextState>()
+          ?.requestKeyboard();
+    });
+  }
+
+  @override
   void dispose() {
+    widget.footerFocusRequests?.removeListener(_onFooterSearchTap);
     _debounce?.cancel();
     _controller.dispose();
     _focusNode.dispose();

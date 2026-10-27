@@ -24,6 +24,27 @@ Song song(String id) => Song(
 class _Player extends PlayerNotifier {
   PlayerState? initial;
   final played = <String>[];
+  final upNextMoves = <(int, int)>[];
+  final manualMoves = <(int, int)>[];
+  List<String> get upNextIds => state.upNext.map((s) => s.id).toList();
+  List<String> get manualIds => state.queue.map((s) => s.id).toList();
+
+  @override
+  Future<void> moveUpNextItem(int from, int to) async {
+    upNextMoves.add((from, to));
+    final items = [...state.upNext];
+    items.insert(to, items.removeAt(from));
+    state = state.copyWith(upNext: items);
+  }
+
+  @override
+  Future<void> moveQueueItem(int from, int to) async {
+    manualMoves.add((from, to));
+    final items = [...state.queue];
+    items.insert(to, items.removeAt(from));
+    state = state.copyWith(queue: items);
+  }
+
   @override
   PlayerState build() =>
       initial ??
@@ -55,15 +76,27 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     bool manualOnly = false,
+    bool reorderDemo = false,
     bool autoplayOnly = false,
     bool discoveryPendingOnly = false,
     LokalThemeId theme = LokalThemeId.dark,
   }) async {
-    tester.view.physicalSize = const Size(400, 800);
+    // Give the sheet enough height for both sliver sections to be mounted.
+    // Existing sheet sizing tests keep their regular phone dimensions.
+    tester.view.physicalSize = reorderDemo
+        ? const Size(400, 1300)
+        : const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     player = _Player();
     if (manualOnly) player.initial = PlayerState(queue: [song('Manual')]);
+    if (reorderDemo) {
+      player.initial = PlayerState(
+        currentSong: song('Now'),
+        upNext: [song('Next0'), song('Next1'), song('Next2')],
+        queue: [song('Manual0'), song('Manual1'), song('Manual2')],
+      );
+    }
     if (discoveryPendingOnly) {
       player.initial = PlayerState(
         currentSong: song('Now'),
@@ -227,6 +260,56 @@ void main() {
     expect(player.played, ['manual:0']);
     expect(opens, 1);
   });
+  testWidgets('popup queue grip drags Up Next down and Manual Queue up',
+      (tester) async {
+    await pump(tester, reorderDemo: true);
+    await tester.drag(find.text('Track Now'), const Offset(0, -600));
+    await tester.pumpAndSettle();
+
+    Future<void> drag(WidgetTester tester, Finder grip, Offset delta) async {
+      final handle = grip;
+      expect(handle, findsOneWidget);
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump(const Duration(milliseconds: 40));
+      for (var step = 0; step < 12; step++) {
+        await gesture.moveBy(delta / 12);
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await tester.pump(const Duration(milliseconds: 250));
+      await gesture.up();
+      await tester.pumpAndSettle();
+    }
+
+    await drag(tester, find.byKey(const ValueKey('upnext-drag-0')),
+        const Offset(0, 165));
+    expect(player.upNextMoves, isNotEmpty,
+        reason: 'Drag handle in the mini-player sheet must invoke the callback');
+    expect(player.upNextMoves.last.$1, 0);
+    expect(player.upNextMoves.last.$2, greaterThan(0));
+    expect(player.upNextIds.first, isNot('Next0'));
+
+    // Make sure the second list is independently reorderable, not just Up Next.
+    await drag(tester, find.byKey(const ValueKey('manual-queue-drag-1')),
+        const Offset(0, -160));
+    expect(player.manualMoves, isNotEmpty);
+    expect(player.manualMoves.last.$1, 1);
+    expect(player.manualMoves.last.$2, 0);
+    expect(player.manualIds.first, 'Manual1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sheet queue heading uses the same inset as upcoming tracks',
+      (tester) async {
+    await pump(tester, reorderDemo: true);
+    final titleX = tester.getTopLeft(find.text('QUEUE')).dx;
+    final upcomingX = tester.getTopLeft(find.text('Up next')).dx;
+    expect(titleX, closeTo(upcomingX, 1),
+        reason: 'Popup Queue title was too far left of the content');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('sheet adopts the active light palette', (tester) async {
     await pump(tester, theme: LokalThemeId.light);
     final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));

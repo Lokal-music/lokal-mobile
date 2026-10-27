@@ -304,4 +304,9 @@ The first real-Flutter bridge SDK check caught Swift 6 rejecting Flutter's
 imported mutable Objective-C `FlutterMethodNotImplemented` global. The private
 channel now returns an explicit `UNSUPPORTED_WIDGET_METHOD` error through its
 existing typed, main-queue reply path. No concurrency checks were disabled.
-The revised bridge still requires the next hosted SDK check.
+The revised bridge passes the actual Flutter framework check for both iOS 16
+SDK targets in [run 40481024530](https://github.com/lokal-music/lokal-mobile/actions/runs/40481024530),
+source `7fd28cf71417e7ea787b8df7e6cfcce4f26486c1`, tree
+`9bc8e5ba0eeff8610f7b7b1d47e527966002e5fc`. All 85 Flutter, 45 reader,
+20 storage and 14 publisher cases also pass. Full app channel execution,
+provisioned publication and extension rendering remain separate gates.

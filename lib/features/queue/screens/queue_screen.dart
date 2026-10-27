@@ -15,6 +15,17 @@ import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 
+/// Reorderable rows need identities independent of their *current position*.
+/// Index-suffixed keys unmount the dragged row on a drop. Duplicate songs
+/// remain unique via their occurrence ordinal in the section.
+List<String> queueRowIdentities(List<Song> songs, String section) {
+  final occurrences = <String, int>{};
+  return [
+    for (final song in songs)
+      '$section:${song.id}:${occurrences.update(song.id, (n) => n + 1, ifAbsent: () => 0)}',
+  ];
+}
+
 class QueueScreen extends StatelessWidget {
   const QueueScreen({super.key});
 
@@ -137,6 +148,8 @@ class _QueueListState extends ConsumerState<QueueList> {
     final upNext = ref.watch(upNextProvider);
     final autoplay = ref.watch(autoplayUpNextProvider);
     final currentSong = ref.watch(currentSongProvider);
+    final upcomingRowIds = queueRowIdentities(upNext, 'upnext');
+    final manualRowIds = queueRowIdentities(queue, 'manual');
     final embedded = widget.embedded;
     final hPad = embedded ? 0.0 : AppConstants.spacingLg;
 
@@ -181,24 +194,24 @@ class _QueueListState extends ConsumerState<QueueList> {
                           ),
                         ),
                       if (upNext.isNotEmpty || autoplay.isEmpty)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            hPad,
-                            0,
-                            hPad,
-                            AppConstants.spacingSm,
-                          ),
-                          child: Text(
-                            l10n.upNext,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  color: context.adaptiveTextSecondary,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              hPad,
+                              0,
+                              hPad,
+                              AppConstants.spacingSm,
+                            ),
+                            child: Text(
+                              l10n.upNext,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: context.adaptiveTextSecondary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
                           ),
                         ),
-                      ),
                       if (upNext.isEmpty && autoplay.isEmpty)
                         const SliverToBoxAdapter(child: _EmptyUpcomingState())
                       else
@@ -231,18 +244,16 @@ class _QueueListState extends ConsumerState<QueueList> {
                                 )
                               : SliverReorderableList(
                                   itemCount: upNext.length,
-                                  onReorder: (oldIndex, newIndex) async {
-                                    final targetIndex = newIndex > oldIndex
-                                        ? newIndex - 1
-                                        : newIndex;
+                                  onReorderItem: (oldIndex, newIndex) async {
                                     await ref
                                         .read(playerProvider.notifier)
-                                        .moveUpNextItem(oldIndex, targetIndex);
+                                        .moveUpNextItem(oldIndex, newIndex);
                                   },
                                   itemBuilder: (context, index) {
                                     final song = upNext[index];
                                     return _UpcomingTile(
-                                      key: ValueKey('upnext-${song.id}-$index'),
+                                      key: ValueKey(upcomingRowIds[index]),
+                                      rowIdentity: upcomingRowIds[index],
                                       song: song,
                                       index: index,
                                       glass: embedded,
@@ -326,18 +337,16 @@ class _QueueListState extends ConsumerState<QueueList> {
                                 )
                               : SliverReorderableList(
                                   itemCount: queue.length,
-                                  onReorder: (oldIndex, newIndex) async {
-                                    final targetIndex = newIndex > oldIndex
-                                        ? newIndex - 1
-                                        : newIndex;
+                                  onReorderItem: (oldIndex, newIndex) async {
                                     await ref
                                         .read(playerProvider.notifier)
-                                        .moveQueueItem(oldIndex, targetIndex);
+                                        .moveQueueItem(oldIndex, newIndex);
                                   },
                                   itemBuilder: (context, index) {
                                     final song = queue[index];
                                     return _QueueTile(
-                                      key: ValueKey('${song.id}-$index'),
+                                      key: ValueKey(manualRowIds[index]),
+                                      rowIdentity: manualRowIds[index],
                                       song: song,
                                       index: index,
                                       glass: embedded,
@@ -392,18 +401,24 @@ class _QueueListState extends ConsumerState<QueueList> {
                       if (autoplay.isNotEmpty && !_selectionMode)
                         SliverPadding(
                           padding: EdgeInsets.fromLTRB(
-                            hPad, 0, hPad, AppConstants.spacingLg,
+                            hPad,
+                            0,
+                            hPad,
+                            AppConstants.spacingLg,
                           ),
                           sliver: SliverList.builder(
                             itemCount: autoplay.length,
                             itemBuilder: (context, index) => _UpcomingTile(
-                              key: ValueKey('autoplay-${autoplay[index].id}-$index'),
+                              key: ValueKey(
+                                'autoplay-${autoplay[index].id}-$index',
+                              ),
                               song: autoplay[index],
                               index: index,
                               glass: embedded,
                               reorderable: false,
                               onTap: () async {
-                                await ref.read(playerProvider.notifier)
+                                await ref
+                                    .read(playerProvider.notifier)
                                     .playFromAutoplayIndex(index);
                                 if (mounted) _openPlayer();
                               },
@@ -521,7 +536,11 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: showBack ? AppConstants.spacingLg : AppConstants.spacingXs,
+        // Align the sheet heading with the rows/cards beneath it.
+        // Embedded full-player queues retain their compact player-chrome edge.
+        horizontal: sheet || showBack
+            ? AppConstants.spacingLg
+            : AppConstants.spacingXs,
         vertical: showBack ? AppConstants.spacingMd : AppConstants.spacingXs,
       ),
       child: Row(
@@ -720,6 +739,7 @@ class _NowPlayingCard extends StatelessWidget {
 class _UpcomingTile extends StatelessWidget {
   final Song song;
   final int index;
+  final String? rowIdentity;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onRemove;
@@ -732,6 +752,7 @@ class _UpcomingTile extends StatelessWidget {
     required this.song,
     required this.index,
     required this.onTap,
+    this.rowIdentity,
     this.onLongPress,
     this.onRemove,
     this.isSelectionMode = false,
@@ -776,14 +797,20 @@ class _UpcomingTile extends StatelessWidget {
                 ] else if (reorderable)
                   ReorderableDragStartListener(
                     index: index,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        right: AppConstants.spacingSm,
-                      ),
-                      child: Icon(
-                        LucideIcons.gripVertical,
-                        color: context.adaptiveTextTertiary,
-                        size: 18,
+                    child: SizedBox(
+                      key: ValueKey('upnext-drag-$index'),
+                      width: 44,
+                      height: 48,
+                      child: ColoredBox(
+                        color: Colors.transparent,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Icon(
+                            LucideIcons.gripVertical,
+                            color: context.adaptiveTextTertiary,
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ),
                   )
@@ -863,7 +890,7 @@ class _UpcomingTile extends StatelessWidget {
     if (isSelectionMode || onRemove == null) return tile;
 
     return Dismissible(
-      key: ValueKey('upnext-dismiss-$index-${song.id}'),
+      key: ValueKey('upnext-dismiss-${rowIdentity ?? '$index-${song.id}'}'),
       direction: DismissDirection.endToStart,
       background: Container(
         decoration: BoxDecoration(
@@ -884,6 +911,7 @@ class _UpcomingTile extends StatelessWidget {
 class _QueueTile extends StatelessWidget {
   final Song song;
   final int index;
+  final String? rowIdentity;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onRemove;
@@ -896,6 +924,7 @@ class _QueueTile extends StatelessWidget {
     required this.song,
     required this.index,
     required this.onTap,
+    this.rowIdentity,
     this.onLongPress = _noop,
     required this.onRemove,
     required this.onMoveToNext,
@@ -942,14 +971,20 @@ class _QueueTile extends StatelessWidget {
                 ] else
                   ReorderableDragStartListener(
                     index: index,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        right: AppConstants.spacingSm,
-                      ),
-                      child: Icon(
-                        LucideIcons.gripVertical,
-                        color: context.adaptiveTextTertiary,
-                        size: 18,
+                    child: SizedBox(
+                      key: ValueKey('manual-queue-drag-$index'),
+                      width: 44,
+                      height: 48,
+                      child: ColoredBox(
+                        color: Colors.transparent,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Icon(
+                            LucideIcons.gripVertical,
+                            color: context.adaptiveTextTertiary,
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1016,7 +1051,7 @@ class _QueueTile extends StatelessWidget {
     if (isSelectionMode) return tile;
 
     return Dismissible(
-      key: ValueKey('queue-dismiss-$index-${song.id}'),
+      key: ValueKey('queue-dismiss-${rowIdentity ?? '$index-${song.id}'}'),
       direction: DismissDirection.endToStart,
       background: Container(
         decoration: BoxDecoration(
