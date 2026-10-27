@@ -90,6 +90,46 @@ void main() {
     expect(player.upcomingMoves.single.$2, greaterThan(0));
   });
 
+  // The row, not merely its 44px visual grip, owns the long press.
+  for (final area in ['artwork', 'title', 'duration', 'more button', 'grip']) {
+    testWidgets('holding the $area starts reorder without a separate grip gesture',
+        (tester) async {
+      tester.view.physicalSize = const Size(440, 1024);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final player = _QueuePlayer();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [playerProvider.overrideWith(() => player)],
+        child: MaterialApp(
+          theme: LokalTheme.build(LokalTokens.themes[LokalThemeId.dark]!),
+          home: const Scaffold(body: QueueList()),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final row = find.byKey(const ValueKey('next:a:0'));
+      final bounds = tester.getRect(row);
+      final centerY = bounds.center.dy;
+      final point = switch (area) {
+        'artwork' => Offset(bounds.left + 45, centerY),
+        'title' => tester.getCenter(find.text('Track a')),
+        'duration' => Offset(bounds.right - 116, centerY),
+        'more button' => Offset(bounds.right - 68, centerY),
+        _ => Offset(bounds.right - 22, centerY),
+      };
+      final gesture = await tester.startGesture(point);
+      await tester.pump(const Duration(milliseconds: 600));
+      await gesture.moveBy(const Offset(0, 170));
+      await tester.pump(const Duration(milliseconds: 220));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(player.upcomingMoves, hasLength(1),
+          reason: 'Long pressing the $area must enter reorder mode');
+      expect(player.upcomingMoves.single.$1, 0);
+      expect(player.upcomingMoves.single.$2, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('the drag-start haptic fires once, never on release',
       (tester) async {
     AppHaptics.setEnabled(true);
