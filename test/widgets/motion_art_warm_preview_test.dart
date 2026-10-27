@@ -151,4 +151,70 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     suppression.dispose();
   });
+
+  testWidgets('memory pressure without any mounted view still gates new video',
+      (tester) async {
+    final previousPlatform = VideoPlayerPlatform.instance;
+    VideoPlayerPlatform.instance = _VideoPlatform();
+    addTearDown(() => VideoPlayerPlatform.instance = previousPlatform);
+
+    MotionArtMemoryPressure.instance.start();
+    final controller = _WarmController();
+    controller.value = const VideoPlayerValue(
+      duration: Duration(seconds: 8),
+      size: Size(200, 200),
+      isInitialized: true,
+    );
+    var created = 0;
+    final activations = <bool>[];
+    final pool = SharedMotionPlayback<VideoPlayerController>(
+      create: (_) async {
+        created++;
+        return controller;
+      },
+      activate: (_, active) async => activations.add(active),
+      dispose: (resource) async => resource.dispose(),
+    );
+    final key =
+        'player:unmounted|${movingCoverRevision.value}|${SecureSpotifyTokenStore.sessionRevision.value}|${AnimatedArtworkService.instance.revision.value}';
+    final warm = await pool.acquire(key, 'https://video.test/clip.mp4');
+    final suppression = ValueNotifier(false);
+
+    // The process observer must record this even before a MotionArtView exists.
+    tester.binding.handleMemoryPressure();
+    expect(MotionArtMemoryPressure.instance.isSuspended, isTrue);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox.square(
+          dimension: 200,
+          child: MotionArtView(
+            title: 'Song',
+            artist: 'Artist',
+            sharedPlaybackKey: 'player:unmounted',
+            sharedPlaybackOverride: pool,
+            suppressionOverride: suppression,
+            fallback: const Text('static cover'),
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(VideoPlayer), findsNothing);
+    expect(find.text('static cover'), findsOneWidget);
+    expect(created, 1);
+
+    await tester.pump(const Duration(minutes: 1, seconds: 59));
+    expect(find.byType(VideoPlayer), findsNothing);
+    expect(activations, isEmpty);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(MotionArtMemoryPressure.instance.isSuspended, isFalse);
+    expect(find.byKey(const ValueKey('decoded-frame')), findsOneWidget);
+    expect(created, 1);
+    expect(activations.last, isTrue);
+
+    await tester.pumpWidget(const SizedBox());
+    await warm.release(immediate: true);
+    suppression.dispose();
+  });
+
 }
