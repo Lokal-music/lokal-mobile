@@ -1,4 +1,5 @@
 import 'package:flick/core/utils/artist_credits.dart';
+import 'package:flick/core/utils/app_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flick/features/morneye/morneye_auth_sheet.dart';
 
@@ -1386,6 +1387,28 @@ String _canonicalOnlineSourceId(String sourceId, DiscoveryTrack track) {
   return sourceId == stable || sourceId == legacy ? stable : sourceId;
 }
 
+/// Classify without logging signed audio URLs or provider credentials.
+String _onlineFailureKind(Object error) {
+  final message = error.toString().toLowerCase();
+  final status = RegExp(r'http\s+(401|403|404|408|429|500|502|503|504)')
+      .firstMatch(message);
+  if (status != null) return 'http_${status.group(1)}';
+  if (message.contains('timeout') || message.contains('timed out')) {
+    return 'timeout';
+  }
+  if (message.contains('cancelled') || message.contains('canceled')) {
+    return 'cancelled';
+  }
+  if (message.contains('auth') || message.contains('token')) {
+    return 'authorization';
+  }
+  if (message.contains('verify')) return 'verification';
+  if (message.contains('network') || message.contains('connection')) {
+    return 'network';
+  }
+  return error.runtimeType.toString();
+}
+
 /// Gets [track], found earlier on the source [sourceId] (an [OnlineSource.id]),
 /// ready to play, with its own connection so it outlives the Search page:
 /// for a song queued from Search or saved to the library. [onStatus] hears
@@ -1446,6 +1469,12 @@ Future<Song> playOnlineTrack(
       );
     }
     return song;
+  } catch (error) {
+    AppLog.instance.add(
+      '[OnlineSource] playback failed source=$sourceId '
+      'stage=prepare reason=${_onlineFailureKind(error)}',
+    );
+    rethrow;
   } finally {
     if (owned) transport.close();
   }
@@ -1504,10 +1533,14 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
           duration: result.duration,
         ),
       );
-    } catch (_) {
+    } catch (error) {
       // A failed alternate query is not a source failure. Propagate a
       // cancellation even if a search completed at the same instant.
       checkCancelled?.call();
+      AppLog.instance.add(
+        '[OnlineSource] search failed source=${source.id} '
+        'reason=${_onlineFailureKind(error)}',
+      );
       return null;
     }
   }
@@ -1616,6 +1649,10 @@ Future<Song?> findDiscoverySong(
         } on DiscoveryException catch (error) {
           check();
           if (error.message == 'Request cancelled.') rethrow;
+          AppLog.instance.add(
+            '[OnlineSource] direct YouTube failed '
+            'reason=${_onlineFailureKind(error)}',
+          );
           // Public videos can be refused by one YouTube client as it rotates.
           // Try the other configured sources rather than treating the first
           // player response as proof the recording is unavailable in this region.
@@ -1623,8 +1660,12 @@ Future<Song?> findDiscoverySong(
           onStatus?.call(
             'YouTube Music could not start ${track.title}. Trying another source…',
           );
-        } catch (_) {
+        } catch (error) {
           check();
+          AppLog.instance.add(
+            '[OnlineSource] direct YouTube failed '
+            'reason=${_onlineFailureKind(error)}',
+          );
           failure = const DiscoveryException(
             'YouTube Music could not resolve this recording. Trying another source.',
           );
@@ -1657,6 +1698,10 @@ Future<Song?> findDiscoverySong(
         return song;
       } catch (error) {
         check();
+        AppLog.instance.add(
+          '[OnlineSource] source playback failed source=${source.id} '
+          'reason=${_onlineFailureKind(error)}',
+        );
         // An Atmos server timeout must not silently switch to stereo.
         if (found.atmosAvailable &&
             error is DiscoveryException &&
