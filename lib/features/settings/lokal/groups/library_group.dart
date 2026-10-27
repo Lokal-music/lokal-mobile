@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flick/features/settings/library_scan/library_scan_flow.dart';
+import 'package:flick/features/settings/screens/artwork_repair_screen.dart';
 import 'package:flick/features/settings/screens/duplicate_cleaner_screen.dart';
 import 'package:flick/features/settings/screens/library_settings_screen.dart';
 import 'package:flick/features/settings/screens/library_organizer_screen.dart';
@@ -106,6 +107,13 @@ List<LokalSettingsSection> librarySettings(
     LokalSettingsSection(
       title: lokalText('Covers'),
       children: [
+        LokalSettingLink(
+          label: lokalText('Refresh low-quality covers'),
+          description: lokalText(
+            'Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.',
+          ),
+          onTap: () => _push(context, const ArtworkRepairScreen()),
+        ),
         LokalSettingRow.toggle(
           label: lokalText('Stretch non-square covers'),
           description: lokalText(

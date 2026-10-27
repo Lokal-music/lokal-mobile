@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
@@ -10,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../models/song.dart';
 import '../player/widgets/player_artwork_quality.dart';
 import '../../services/metadata_editor_service.dart';
+import '../../services/artwork_pixel_validation.dart';
 import '../../src/rust/api/audio_api.dart' as native;
 import '../../src/rust/api/morneye_api.dart' as morneye;
 import '../../services/catalogue_quality.dart';
@@ -380,54 +382,58 @@ class DiscoveryPlaybackCache {
     final url = Uri.tryParse(track.artwork ?? '');
     if (url == null || url.scheme != 'https') return null;
     final file = File(coverPath(ready.path));
-    IOSink? sink;
-    try {
-      // YouTube's search thumbnails are usually only 120 pixels. Download
-      // the high-resolution *same artwork* instead of permanently embedding
-      // the tiny search rendition into the cached audio file.
-      var completed = false;
-      final coverDeadline = DateTime.now().add(const Duration(seconds: 15));
-      for (final candidate in PlayerArtworkQuality.candidates(track.artwork)) {
-        final remaining = coverDeadline.difference(DateTime.now());
-        if (remaining <= Duration.zero) break;
-        final image = Uri.tryParse(candidate);
-        if (image == null || image.scheme != 'https') continue;
-        try {
-          sink = file.openWrite();
-          await http.transfer(
-            image,
-            headers: const {'Accept': 'image/*'},
-            maxBytes: _maxCoverBytes,
-            deadline: remaining,
-            onChunk: sink!.add,
-          );
-          await sink!.close();
-          sink = null;
-          if (await file.length() == 0) {
-            throw const FileSystemException('Empty artwork');
-          }
-          completed = true;
-          break;
-        } catch (_) {
-          try { await sink?.close(); } catch (_) {}
-          sink = null;
-          if (await file.exists()) await file.delete();
+
+    // Providers can return a 200 status with a tiny placeholder for a missing
+    // max-res rendition. Compare actual decoded pixels, not URL dimensions.
+    Uint8List? bestBytes;
+    int bestShortSide = 0;
+    int bestArea = 0;
+    final coverDeadline = DateTime.now().add(const Duration(seconds: 15));
+    for (final candidate in PlayerArtworkQuality.candidates(track.artwork)) {
+      final remaining = coverDeadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) break;
+      final uri = Uri.tryParse(candidate);
+      if (uri == null || uri.scheme != 'https') continue;
+      try {
+        final output = BytesBuilder(copy: false);
+        await http.transfer(
+          uri,
+          headers: const {'Accept': 'image/*'},
+          maxBytes: _maxCoverBytes,
+          deadline: remaining,
+          onChunk: output.add,
+        );
+        final bytes = output.takeBytes();
+        // A valid JPEG signature alone is not enough: truncated and fake
+        // images must not become permanent embedded artwork.
+        final validated = await validateArtworkBytes(bytes, ensureJpeg: true);
+        if (validated == null) continue;
+        final shortSide = validated.shortSide;
+        final area = validated.width * validated.height;
+        if (shortSide > bestShortSide ||
+            (shortSide == bestShortSide && area > bestArea)) {
+          bestBytes = validated.bytes;
+          bestShortSide = shortSide;
+          bestArea = area;
         }
+        // No need to download more variants once this exact image is large
+        // enough for the player. Unknown/signed hosts have only one candidate.
+        if (shortSide >= 1000) break;
+      } catch (_) {
+        // A failed size variant must not discard an earlier valid cover.
       }
-      if (!completed) return null;
-      // Also embed it in the audio's tags, so the file keeps its cover if
-      // it is saved to the library.
+    }
+    if (bestBytes == null) return null;
+    try {
+      await file.writeAsBytes(bestBytes, flush: true);
+      // Preserve the selected full-resolution cover when the cached audio is
+      // copied into the user's library.
       try {
         if (embed) await _embedCover(ready.path, file.path);
       } catch (_) {}
       return file.path;
     } catch (_) {
-      try {
-        await sink?.close();
-      } catch (_) {}
-      try {
-        if (await file.exists()) await file.delete();
-      } catch (_) {}
+      try { if (await file.exists()) await file.delete(); } catch (_) {}
       return null;
     }
   }
