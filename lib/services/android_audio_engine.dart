@@ -887,6 +887,17 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> play() async {
+    final stem = _stemPlayer;
+    if (stem != null) {
+      unawaited(stem.play().catchError((Object _) {}));
+      if (_stemHandoffStarted && _player != null) {
+        unawaited(_player!.play().catchError((Object _) {}));
+      }
+      if (_secondary != null && _secondary!.volume > 0) {
+        unawaited(_secondary!.play().catchError((Object _) {}));
+      }
+      return;
+    }
     if (_sourceFailed && _loadedTrack != null) {
       await load(_loadedTrack!);
     }
@@ -925,6 +936,13 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> pause() async {
+    final stem = _stemPlayer;
+    if (stem != null) {
+      try { await stem.pause(); } catch (_) {}
+      try { await _player?.pause(); } catch (_) {}
+      try { await _secondary?.pause(); } catch (_) {}
+      return;
+    }
     final player = await _ensurePlayer();
     await player.pause();
     if (_crossfadeCommitted) {
@@ -1407,6 +1425,7 @@ class AndroidAudioEngine implements AudioEngine {
 
   Future<void> _cancelCrossfade() async {
     ++_crossfadeEpoch;
+    _disposeStemPlayer();
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     final wasArmed = _crossfadeArmed;
@@ -1436,6 +1455,7 @@ class AndroidAudioEngine implements AudioEngine {
   @override
   Future<void> dispose() async {
     ++_crossfadeEpoch;
+    _disposeStemPlayer();
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
