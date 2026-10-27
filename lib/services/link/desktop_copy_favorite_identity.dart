@@ -12,7 +12,7 @@ Map<String, String> desktopCopyFavoriteRedirects(Iterable<Song> songs) {
         song.remoteId!.isEmpty) {
       continue;
     }
-    final key = '\${song.remoteServerId}\u0000\${song.remoteId}';
+    final key = '${song.remoteServerId}\u0000${song.remoteId}';
     groups.putIfAbsent(key, () => <Song>[]).add(song);
   }
   final redirects = <String, String>{};
