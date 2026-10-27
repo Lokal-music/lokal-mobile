@@ -31,6 +31,15 @@ Widget _app(Widget child) => MaterialApp(
   home: Scaffold(body: Center(child: child)),
 );
 
+/// The transparent Cover Flow stage is the direct AnimatedBuilder child of
+/// its SizedBox, rather than a painted panel inside the Home gradient.
+Finder _flowStage() => find.descendant(
+  of: find.byType(LokalCoverFlow),
+  matching: find.byWidgetPredicate(
+    (widget) => widget is SizedBox && widget.child is AnimatedBuilder,
+  ),
+);
+
 void main() {
   final albums = [
     _album('First', [_track('1a', 'First'), _track('1b', 'First')]),
@@ -38,7 +47,7 @@ void main() {
     _album('Third', [_track('3a', 'Third')]),
   ];
 
-  testWidgets('Cover Flow stage tracks all Lokal theme backgrounds live', (
+  testWidgets('Cover Flow leaves the continuous Home gradient visible on every theme', (
     tester,
   ) async {
     final flow = LokalCoverFlow(
@@ -50,10 +59,26 @@ void main() {
     Element? originalElement;
     for (final themeId in LokalThemeId.values) {
       final tokens = LokalTokens.resolve(themeId);
+      // Reproduce the actual shell gradient rather than just its scaffold
+      // color: a flat tokens.bg stage covered up this gradient on Home.
+      final tint = Color.lerp(tokens.bg, tokens.accent, .13)!;
       await tester.pumpWidget(
         MaterialApp(
           theme: LokalTheme.build(tokens),
-          home: Scaffold(body: Center(child: flow)),
+          home: Scaffold(
+            body: DecoratedBox(
+              key: const ValueKey('test-home-gradient'),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [tint, tokens.bg],
+                  stops: const [0, .55],
+                ),
+              ),
+              child: Center(child: flow),
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -62,14 +87,19 @@ void main() {
       originalElement ??= flowElement;
       expect(identical(flowElement, originalElement), isTrue,
           reason: 'Theme changes must not remount Cover Flow');
-      final stage = tester.widgetList<ColoredBox>(
-        find.descendant(
-          of: find.byType(LokalCoverFlow),
-          matching: find.byType(ColoredBox),
-        ),
-      ).singleWhere((box) => box.child is AnimatedBuilder);
-      expect(stage.color, tokens.bg,
-          reason: '${themeId.name} stage must blend into Home background');
+
+      // A paint layer here, even one using tokens.bg, creates a visible
+      // horizontal stripe when the shell gradient is artwork tinted.
+      expect(_flowStage(), findsOneWidget,
+          reason: '${themeId.name} must have no opaque Cover Flow stage');
+      final stage = tester.widget<SizedBox>(_flowStage());
+      expect(stage.child, isA<AnimatedBuilder>());
+      final backdrop = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('test-home-gradient')),
+      );
+      final gradient = (backdrop.decoration as BoxDecoration).gradient!
+          as LinearGradient;
+      expect(gradient.colors, [tint, tokens.bg]);
       expect(Theme.of(flowElement).scaffoldBackgroundColor, tokens.bg);
       expect(tester.takeException(), isNull);
     }
@@ -272,9 +302,7 @@ void main() {
     )));
     final flow = find.byType(LokalCoverFlow);
     final size = math.min(250.0, tester.getSize(flow).width * .60);
-    final stage = find.byWidgetPredicate(
-      (widget) => widget is ColoredBox && widget.color == Colors.black,
-    );
+    final stage = _flowStage();
     expect(stage, findsOneWidget);
     final topLeft = tester.getTopLeft(stage);
     final stageWidth = tester.getSize(stage).width;

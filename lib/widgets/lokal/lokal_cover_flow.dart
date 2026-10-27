@@ -386,12 +386,11 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
                 child: SizedBox(
                   height: size * 1.18,
                   width: constraints.maxWidth,
-                  child: ColoredBox(
-                    color: t.bg, // Match the active Home background across every Lokal theme.
-                    child: AnimatedBuilder(
-                      animation: _animation,
-                      builder: (context, _) => _stage(size),
-                    ),
+                  // Leave the stage unpainted: Home's artwork-tinted gradient
+                  // must continue behind and between covers without a seam.
+                  child: AnimatedBuilder(
+                    animation: _animation,
+                    builder: (context, _) => _stage(size),
                   ),
                 ),
               ),

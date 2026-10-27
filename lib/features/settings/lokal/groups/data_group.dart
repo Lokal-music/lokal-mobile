@@ -104,7 +104,7 @@ List<LokalSettingsSection> dataSettings(
         child: const SpotifyAccountSettingsTile(),
       ),
       LokalSettingCustom(
-        label: lokalText('YouTube Music'),
+        label: lokalText('YouTube'),
         description: lokalText('Sign in to load your mixes, likes and history'),
         child: YoutubeMusicSettingsTile(),
       ),

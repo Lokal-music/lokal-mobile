@@ -76,7 +76,7 @@ class _YoutubeMusicSettingsTileState
     );
     final busy = _busy || session.isLoading;
     return LokalSettingRow(
-      label: 'YouTube Music',
+      label: 'YouTube',
       description: subtitle,
       onTap: busy ? null : _activate,
       trailing: busy
