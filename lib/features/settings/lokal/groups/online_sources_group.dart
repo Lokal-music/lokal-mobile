@@ -7,6 +7,7 @@ import 'package:flick/widgets/lokal/lokal_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flick/features/internet_radio/radio_providers.dart';
+import 'package:flick/providers/opt_in_source_provider.dart';
 import 'package:flick/features/settings/screens/network_sources_screen.dart';
 import 'package:flick/features/settings/widgets/http_addons_settings_panel.dart';
 import 'package:flick/features/settings/widgets/playback_source_priority_panel.dart';
@@ -29,9 +30,33 @@ List<LokalSettingsSection> onlineSourcesSettings(
   LokalSettingsSection(
     title: LokalOnlineSections.streaming,
     children: [
+      LokalSettingRow.toggle(
+        key: const ValueKey('monochrome-source-toggle'),
+        label: 'Monochrome',
+        description: lokalText('Search and stream FLAC from Monochrome.'),
+        value: ref.watch(monochromeEnabledProvider),
+        onChanged: (enabled) => unawaited(() async {
+          try {
+            await ref.read(monochromeEnabledProvider.notifier).set(enabled);
+          } catch (_) {
+            if (context.mounted) {
+              LokalToast.fromSnackBar(
+                context,
+                SnackBar(
+                  content: Text(
+                    lokalText('Could not save source settings. Try again.'),
+                  ),
+                ),
+              );
+            }
+          }
+        }()),
+      ),
       LokalSettingCustom(
         label: lokalText('Global search catalogue'),
-        description: lokalText('Choose the source of Global results; this does not affect playback source priority.'),
+        description: lokalText(
+          'Choose the source of Global results; this does not affect playback source priority.',
+        ),
         child: const GlobalCatalogueSelector(),
       ),
       LokalSettingCustom(
@@ -39,7 +64,9 @@ List<LokalSettingsSection> onlineSourcesSettings(
         description: lokalText(
           'Try sources from top to bottom when finding a song to play. Installed add-ons appear here too.',
         ),
-        child: const PlaybackSourcePriorityPanel(),
+        child: PlaybackSourcePriorityPanel(
+          key: ValueKey(ref.watch(monochromeEnabledProvider)),
+        ),
       ),
       LokalSettingLink(
         label: lokalText('Network servers'),
@@ -115,7 +142,8 @@ Future<void> _editCatalogUrl(BuildContext context, WidgetRef ref) async {
   final uri = Uri.tryParse(url.trim());
   if (url.trim().isNotEmpty && (uri == null || uri.scheme != 'https')) {
     if (!context.mounted) return;
-    LokalToast.fromSnackBar(context, 
+    LokalToast.fromSnackBar(
+      context,
       SnackBar(content: Text(lokalText('Use an https link to a JSON file.'))),
     );
     return;

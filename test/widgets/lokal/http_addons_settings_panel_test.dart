@@ -58,7 +58,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('http-addon-manifest-url')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('http-addon-manifest-url')),
+      findsOneWidget,
+    );
     expect(find.text('HTTP music add-ons'), findsOneWidget);
 
     await tester.enterText(
@@ -66,15 +69,23 @@ void main() {
       'https://music.example/library/manifest.json',
     );
     await tester.tap(find.byKey(const ValueKey('http-addon-add')));
-    // The progress spinner is an indeterminate animation; wait for persistence
-    // instead of waiting for every animation to settle.
+    // The mock HTTP stream crosses real and widget-test event queues. Drain
+    // both, then require actual persistence rather than a spinner timeout.
     for (var frame = 0; frame < 40 && store.saves == 0; frame++) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump(const Duration(milliseconds: 100));
     }
     await tester.pump();
 
     expect(requests, 1);
-    expect(store.saves, 1);
+    expect(
+      store.saves,
+      1,
+      reason: tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data)
+          .join(' | '),
+    );
     expect(store.settings.youtubeEnabled, isTrue);
     expect(store.settings.addons, hasLength(1));
     expect(
@@ -89,11 +100,74 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'installs a streaming-only BitChord addon without enabling saves',
+    (tester) async {
+      final store = _MemoryStore(const DiscoverySettings());
+      final client = MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(
+          request.url.toString(),
+          'https://bppcaf.bot-keep.xyz/manifest.json',
+        );
+        return http.Response(
+          jsonEncode({
+            'id': 'com.bitchord.qobuz',
+            'name': 'Qobuz',
+            'version': '1.0.0',
+            'resources': ['search', 'stream'],
+            'allowDownloads': 0,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      addTearDown(client.close);
+
+      await tester.pumpWidget(
+        _host(HttpAddonsSettingsPanel(store: store, client: client)),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('http-addon-manifest-url')),
+        'https://bppcaf.bot-keep.xyz/',
+      );
+      await tester.tap(find.byKey(const ValueKey('http-addon-add')));
+      // The mock HTTP stream crosses real and widget-test event queues. Drain
+      // both, then require actual persistence rather than a spinner timeout.
+      for (var frame = 0; frame < 40 && store.saves == 0; frame++) {
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pump();
+
+      expect(
+        store.saves,
+        1,
+        reason: tester
+            .widgetList<Text>(find.byType(Text))
+            .map((text) => text.data)
+            .join(' | '),
+      );
+      expect(store.settings.addons, hasLength(1));
+      expect(
+        store.settings.addons.single.endpoint,
+        'https://bppcaf.bot-keep.xyz',
+      );
+      expect(store.settings.addons.single.enabled, isTrue);
+      expect(store.settings.addons.single.displayName, 'Qobuz');
+      expect(find.text('Qobuz'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('rejects an invalid URL without contacting the server', (
     tester,
   ) async {
     final store = _MemoryStore(const DiscoverySettings());
-    final client = MockClient((_) async => fail('Invalid URL must not be sent'));
+    final client = MockClient(
+      (_) async => fail('Invalid URL must not be sent'),
+    );
     addTearDown(client.close);
 
     await tester.pumpWidget(
@@ -132,11 +206,13 @@ void main() {
     addTearDown(client.close);
 
     await tester.pumpWidget(
-      _host(HttpAddonsSettingsPanel(
-        initial: store.settings,
-        store: store,
-        client: client,
-      )),
+      _host(
+        HttpAddonsSettingsPanel(
+          initial: store.settings,
+          store: store,
+          client: client,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -158,22 +234,26 @@ void main() {
     final store = _MemoryStore(const DiscoverySettings());
     final client = MockClient((request) async {
       expect(request.url.path, '/private/manifest.json');
-      return http.Response(jsonEncode({
-        'id': 'qobuz',
-        'name': 'Qobuz [Heisenbergg]',
-        'resources': ['search', 'stream'],
-        'settings': [
-          {
-            'key': 'quality',
-            'default': 'LOSSLESS',
-            'options': [
-              {'value': 'LOSSLESS'},
-              {'value': 'HI_RES'},
-              {'value': 'HIGH'},
-            ],
-          },
-        ],
-      }), 200, headers: {'content-type': 'application/json'});
+      return http.Response(
+        jsonEncode({
+          'id': 'qobuz',
+          'name': 'Qobuz [Heisenbergg]',
+          'resources': ['search', 'stream'],
+          'settings': [
+            {
+              'key': 'quality',
+              'default': 'LOSSLESS',
+              'options': [
+                {'value': 'LOSSLESS'},
+                {'value': 'HI_RES'},
+                {'value': 'HIGH'},
+              ],
+            },
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
     });
     addTearDown(client.close);
     await tester.pumpWidget(
@@ -185,7 +265,10 @@ void main() {
       'https://music.example/private/manifest.json',
     );
     await tester.tap(find.byKey(const ValueKey('http-addon-add')));
+    // The mock HTTP stream crosses real and widget-test event queues. Drain
+    // both, then require actual persistence rather than a spinner timeout.
     for (var frame = 0; frame < 40 && store.saves == 0; frame++) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump(const Duration(milliseconds: 100));
     }
     await tester.pump();
@@ -194,6 +277,11 @@ void main() {
     expect(find.text('Qobuz [Heisenbergg]'), findsOneWidget);
     final id = store.settings.addons.single.id;
     await tester.tap(find.byKey(ValueKey('http-addon-settings-$id')));
+    for (var frame = 0; frame < 40 &&
+        find.byKey(const ValueKey('http-addon-setting-quality')).evaluate().isEmpty; frame++) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('http-addon-setting-quality')));
     await tester.pumpAndSettle();
@@ -208,5 +296,4 @@ void main() {
     expect(store.settings.addons.single.settings['quality'], 'HI_RES');
     expect(tester.takeException(), isNull);
   });
-
 }

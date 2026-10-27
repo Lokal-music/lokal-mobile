@@ -35,6 +35,7 @@ import 'package:flick/widgets/lokal/lokal_choice_sheet.dart';
 import 'package:flick/widgets/lokal/lokal_status_snack.dart';
 import 'package:flick/features/link/lokal_ghost_availability.dart';
 
+import 'artist_follow_store.dart';
 import 'lokal_library_groups.dart';
 import 'lokal_library_kit.dart';
 import 'lokal_online_catalogue.dart';
@@ -96,8 +97,6 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
   String get _identity =>
       '${widget.isArtist ? 'artist' : 'album'}:${recommendationKey(widget.artist)}:${recommendationKey(widget.title)}';
   String get _consentKey => 'lokal.catalogue.online.$_identity';
-  String get _followKey =>
-      'lokal.artist.follow.${recommendationKey(widget.artist)}';
 
   @override
   void initState() {
@@ -107,9 +106,10 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
 
   Future<void> _restore() async {
     final prefs = await SharedPreferences.getInstance();
+    await ArtistFollowStore.instance.load();
     if (!mounted) return;
     setState(() {
-      _followed = prefs.getBool(_followKey) ?? false;
+      _followed = ArtistFollowStore.instance.isFollowed(widget.artist);
     });
     if (widget.isArtist && Database.isInitialized) {
       try {
@@ -913,7 +913,7 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
 
   Future<void> _follow() async {
     final next = !_followed;
-    await (await SharedPreferences.getInstance()).setBool(_followKey, next);
+    await ArtistFollowStore.instance.setFollowed(widget.artist, next);
     if (mounted) setState(() => _followed = next);
   }
 
