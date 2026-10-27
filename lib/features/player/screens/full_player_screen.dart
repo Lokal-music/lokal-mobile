@@ -2496,7 +2496,8 @@ class _FlowingLyricsState extends State<_FlowingLyrics>
     _w = w;
     _h = h;
     final hs = <double>[], subs = <double>[];
-    for (final l in _lines) {
+    for (var i = 0; i < _lines.length; i++) {
+      final l = _lines[i];
       double lh;
       var sh = 0.0;
       if (l.text.trim().isEmpty) {
@@ -2510,7 +2511,13 @@ class _FlowingLyricsState extends State<_FlowingLyrics>
             _sub,
             math.max(w, 40),
           );
-          sh = _subGap + sp.height;
+          // LyricMotionLine reserves an additional 8 px for glyph motion;
+          // include it in scrolling geometry to prevent translated lines
+          // clipping or colliding with the following line.
+          final hasTimedSubline = widget.showTranslation &&
+              i < _timedSublines.length &&
+              _timedSublines[i]?.text == sub;
+          sh = _subGap + sp.height + (hasTimedSubline ? 8 : 0);
           sp.dispose();
         }
       }
