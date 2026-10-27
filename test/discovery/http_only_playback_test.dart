@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flick/features/discovery/discovery_models.dart';
+import 'package:flick/features/discovery/lastfm_discovery.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/discovery/discovery_settings.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
@@ -102,6 +103,27 @@ void main() {
       Uri.parse('https://cdn.example/audio.flac?sig=secret'));
     expect(requests, ['GET /library/search', 'GET /library/stream/song-1'],
       reason: 'Streaming must not stage full media or request native providers');
+  });
+
+  test('automatic Discovery searches HTTP when it is the only enabled source', () async {
+    final requests = <String>[];
+    final client = _client(requests);
+    addTearDown(client.close);
+    final played = await findDiscoverySong(
+      const LokalDiscoveryTrack(
+        title: 'Night Drive',
+        artist: 'Test Artist',
+      ),
+      client: client,
+      store: _MemorySettings(),
+    );
+    expect(played, isNotNull);
+    expect(played!.sourcePackage, 'konnekted.progressive');
+    expect(played.sourceDisplayName, 'HTTP source');
+    expect(DiscoveryProgressiveStreams.instance.resolve(played.filePath),
+      Uri.parse('https://cdn.example/audio.flac?sig=secret'));
+    expect(requests, ['GET /library/search', 'GET /library/stream/song-1'],
+      reason: 'Disabled native sources must not intercept HTTP-only Discovery');
   });
 
   test('old label-based queued source IDs still resolve after a rename', () async {
