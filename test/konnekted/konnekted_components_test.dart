@@ -11,6 +11,7 @@ import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/player_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,6 +48,37 @@ Song _track(String id) => Song(
 );
 
 void main() {
+  testWidgets('Home header tabs remain readable and screen-reader actionable', (
+    tester,
+  ) async {
+    final selected = <KonnektedHomeTab>[];
+    await tester.pumpWidget(
+      _app(
+        KonnektedHomeTopBar(
+          onSettings: () {},
+          onAppearance: () {},
+          selectedTab: KonnektedHomeTab.local,
+          onTabChanged: selected.add,
+        ),
+        scale: 2,
+      ),
+    );
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+    final discovery = find.bySemanticsLabel('Discovery');
+    expect(discovery, findsOneWidget);
+    // Never shrink the mode controls with FittedBox on a narrow device.
+    expect(tester.getSize(discovery).height, greaterThanOrEqualTo(44));
+    final node = tester.getSemantics(discovery);
+    expect(node.hasAction(SemanticsAction.tap), isTrue);
+    tester.binding.pipelineOwner.semanticsOwner!.performAction(
+      node.id, SemanticsAction.tap,
+    );
+    await tester.pump();
+    expect(selected, [KonnektedHomeTab.discovery]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Your Mixes play with their own queues', (tester) async {
     final mixes = [
       for (final name in ['Daily Mix', 'New Arrivals', 'Most Played'])
