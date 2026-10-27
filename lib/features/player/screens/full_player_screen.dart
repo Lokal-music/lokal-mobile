@@ -473,59 +473,59 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       context: context,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, refreshSheet) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.library_music_outlined),
-                title: const Text('Lyrics source'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  unawaited(_chooseImmersiveLyricsSource());
-                },
-              ),
-              if (source != null && hasUsableLyrics(source))
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 ListTile(
-                  leading: const Icon(LucideIcons.download),
-                  title: const Text('Save original lyrics'),
-                  enabled: !_savingLyricsFile,
+                  leading: const Icon(Icons.library_music_outlined),
+                  title: const Text('Lyrics source'),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    saveFromSheet(includeTranslation: false);
+                    unawaited(_chooseImmersiveLyricsSource());
                   },
                 ),
-              if (source != null && hasUsableLyrics(source))
-                ListTile(
-                  leading: const Icon(Icons.translate_rounded),
-                  title: const Text('Save with selected translation'),
-                  subtitle: const Text(
-                    'Includes the active translation or romanization.',
+                if (source != null && hasUsableLyrics(source))
+                  ListTile(
+                    leading: const Icon(LucideIcons.download),
+                    title: const Text('Save original lyrics'),
+                    enabled: !_savingLyricsFile,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      saveFromSheet(includeTranslation: false);
+                    },
                   ),
-                  enabled: !_savingLyricsFile &&
-                      _sublineLyrics?.lines.any((line) =>
-                          line.translation?.trim().isNotEmpty == true &&
-                          line.translation!.trim() != line.text.trim()) == true,
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    saveFromSheet(includeTranslation: true);
-                  },
-                ),
-              if (source != null)
-                LyricsSublineButtons(
-                  lyrics: source,
-                  onChanged: (updated) {
-                    if (mounted && identical(_lyrics, source)) {
-                      setState(() => _sublineLyrics = updated);
-                      refreshSheet(() {});
-                    }
-                  },
-                ),
-            ],
+                if (source != null && hasUsableLyrics(source))
+                  ListTile(
+                    leading: const Icon(Icons.translate_rounded),
+                    title: const Text('Save with selected translation'),
+                    subtitle: const Text(
+                      'Includes the active translation or romanization.',
+                    ),
+                    enabled: !_savingLyricsFile &&
+                        _sublineLyrics?.lines.any((line) =>
+                            line.translation?.trim().isNotEmpty == true &&
+                            line.translation!.trim() != line.text.trim()) == true,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      saveFromSheet(includeTranslation: true);
+                    },
+                  ),
+                if (source != null)
+                  LyricsSublineButtons(
+                    lyrics: source,
+                    onChanged: (updated) {
+                      if (mounted && identical(_lyrics, source)) {
+                        setState(() => _sublineLyrics = updated);
+                        refreshSheet(() {});
+                      }
+                    },
+                  ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
