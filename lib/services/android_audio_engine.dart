@@ -472,6 +472,9 @@ class AndroidAudioEngine implements AudioEngine {
         _sourceFailed ||
         !isTruncatedHttpAddonAudio(track, decodedDuration)) return false;
     _sourceFailed = true;
+    // Native auto-advance may have changed the item before the engine
+    // received its duration. Keep retry/error state on that actual item.
+    _loadedTrack = track;
     AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected: '
         'expectedMs=${track!.duration.inMilliseconds} '
         'decodedMs=${decodedDuration!.inMilliseconds}');
@@ -1133,7 +1136,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
-    if (_crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
+    if (_sourceFailed || _crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
     final cfg = _crossfadeConfigProvider();
     if (cfg.enabled) _prewarmStemCandidate(player, pos);
     final duration = player.duration;
