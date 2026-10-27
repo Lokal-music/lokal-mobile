@@ -1,4 +1,5 @@
 import 'link/link_journal.dart';
+import 'link/desktop_copy_favorite_identity.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -90,6 +91,63 @@ class FavoritesService {
 
   // Cached set of favorite IDs for quick lookup
   Set<String> _favoriteIds = {};
+  Map<String, String> _desktopCopyRedirects = const {};
+
+  String _canonicalId(String id) => _desktopCopyRedirects[id] ?? id;
+
+  /// Repair legacy double-likes without removing a song, playlist member, or
+  /// changing the link journal. The two database rows stay addressable.
+  Future<void> _repairDesktopCopyLikes() async {
+    List<Song> songs;
+    try {
+      songs = await _songRepository.getAllSongs();
+    } catch (_) {
+      return; // Never damage a saved favorite when the library is offline.
+    }
+    _desktopCopyRedirects = desktopCopyFavoriteRedirects(songs);
+    if (_desktopCopyRedirects.isEmpty) return;
+    final normalized = canonicalDesktopCopyFavoriteIds(
+      _favoriteIds, _desktopCopyRedirects,
+    );
+    if (normalized.length == _favoriteIds.length &&
+        normalized.containsAll(_favoriteIds)) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final ordered = prefs.getStringList(_favoritesKey) ?? const <String>[];
+    Map<String, dynamic> ranks = {};
+    try {
+      final raw = jsonDecode(prefs.getString(_likedOrderKey) ?? '{}');
+      if (raw is Map<String, dynamic>) ranks = raw;
+    } catch (_) {}
+    // Keep the earliest of the two original heart dates, including legacy
+    // insertion-order timestamps, instead of treating repair as a new like.
+    for (var i = 0; i < ordered.length; i++) {
+      final id = ordered[i];
+      final canonical = _canonicalId(id);
+      if (!normalized.contains(canonical)) continue;
+      final rank = (ranks[id] is num && (ranks[id] as num) > 0)
+          ? (ranks[id] as num).toInt() : i + 1;
+      final existing = ranks[canonical];
+      if (existing is! num || existing <= 0 || rank < existing) {
+        ranks[canonical] = rank;
+      }
+    }
+    ranks.removeWhere((key, _) => !normalized.contains(key));
+    await prefs.setString(_likedOrderKey, jsonEncode(ranks));
+    _favoriteIds = normalized;
+    // Baselines must be redirected too. Otherwise a later unrelated heart
+    // would journal a spurious remote unlike for the duplicate's old row.
+    final snapshot = canonicalDesktopCopyFavoriteIds(
+      prefs.getStringList('lokal.link.favorites_snapshot') ?? const <String>[],
+      _desktopCopyRedirects,
+    );
+    await prefs.setStringList('lokal.link.favorites_snapshot', snapshot.toList());
+    await _saveFavorites(captureLink: false);
+  }
+
+  /// Aliases are only populated from confirmed desktop server/track pairs.
+  Map<String, String> get desktopCopyRedirects =>
+      Map<String, String>.unmodifiable(_desktopCopyRedirects);
   // The classic player, modern player, notification actions and Riverpod
   // each own a service instance. Serialize writes across all instances to
   // avoid lost likes during rapid taps or simultaneous remote sync.
@@ -98,6 +156,7 @@ class FavoritesService {
   Future<T> _mutate<T>(Future<T> Function() action) {
     final result = _writeTail.then((_) async {
       _favoriteIds = await _readIds();
+      await _repairDesktopCopyLikes();
       return action();
     });
     _writeTail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
@@ -167,6 +226,9 @@ class FavoritesService {
 
   /// Get all favorite songs.
   Future<List<Song>> getFavorites() async {
+    // Called on initial Liked load: repair existing users once idempotently,
+    // before the provider reads IDs and ranks for the same snapshot.
+    await _mutate(() async {});
     final ids = await _readIds();
     if (ids.isEmpty) return [];
 
@@ -200,7 +262,8 @@ class FavoritesService {
   Future<bool> isFavorite(String songId) async {
     if (songId.startsWith('desktop:'))
       return (await remoteDelegate?.isFavorite(songId)) ?? false;
-    return (await _readIds()).contains(songId);
+    await _mutate(() async {});
+    return _favoriteIds.contains(_canonicalId(songId));
   }
 
   /// Add a song to favorites.
@@ -213,7 +276,7 @@ class FavoritesService {
     await _mutate(() async {
       if (song != null) await _rememberOnline(song);
       final before = Set<String>.of(_favoriteIds);
-      _favoriteIds.add(songId);
+      _favoriteIds.add(_canonicalId(songId));
       await _saveLikeRanks(before: before, after: _favoriteIds);
       await _saveFavorites();
     });
@@ -228,7 +291,7 @@ class FavoritesService {
     }
     await _mutate(() async {
       final before = Set<String>.of(_favoriteIds);
-      _favoriteIds.remove(songId);
+      _favoriteIds.remove(_canonicalId(songId));
       await _forgetOnline(songId);
       await _saveLikeRanks(before: before, after: _favoriteIds);
       await _saveFavorites();
@@ -244,9 +307,10 @@ class FavoritesService {
       return remote.toggleFavorite(songId);
     }
     return _mutate(() async {
-      if (_favoriteIds.contains(songId)) {
+      final canonicalId = _canonicalId(songId);
+      if (_favoriteIds.contains(canonicalId)) {
         final before = Set<String>.of(_favoriteIds);
-        _favoriteIds.remove(songId);
+        _favoriteIds.remove(canonicalId);
         await _forgetOnline(songId);
         await _saveLikeRanks(before: before, after: _favoriteIds);
         await _saveFavorites();
@@ -254,7 +318,7 @@ class FavoritesService {
       }
       if (song != null) await _rememberOnline(song);
       final before = Set<String>.of(_favoriteIds);
-      _favoriteIds.add(songId);
+      _favoriteIds.add(canonicalId);
       await _saveLikeRanks(before: before, after: _favoriteIds);
       await _saveFavorites();
       return true;
@@ -279,9 +343,10 @@ class FavoritesService {
     await _mutate(() async {
       final before = Set<String>.of(_favoriteIds);
       for (final entry in changes.entries) {
+        final id = _canonicalId(entry.key);
         entry.value
-            ? _favoriteIds.add(entry.key)
-            : _favoriteIds.remove(entry.key);
+            ? _favoriteIds.add(id)
+            : _favoriteIds.remove(id);
         if (!entry.value) await _forgetOnline(entry.key);
       }
       await _saveLikeRanks(before: before, after: _favoriteIds);
