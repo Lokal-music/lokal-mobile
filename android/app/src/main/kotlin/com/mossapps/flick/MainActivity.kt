@@ -165,7 +165,8 @@ class MainActivity: FlutterActivity() {
     private var lastObservedHardwareVolume: Double = Double.NaN
     /** Matches nativeGetRustDirectUsbHardwareMute: -1 unknown, 0/1; Int.MIN_VALUE = unset. */
     private var lastObservedHardwareMute: Int = Int.MIN_VALUE
-    private val priorityAnchorService by lazy { PriorityAnchorService(applicationContext) }
+    private val priorityAnchorDelegate = lazy { PriorityAnchorService(applicationContext) }
+    private val priorityAnchorService by priorityAnchorDelegate
     private var audioDeviceCallback: AudioDeviceCallback? = null
     // private var audioConverter: AudioConverter? = null
     // Coroutine scope for background tasks
@@ -5706,6 +5707,9 @@ class MainActivity: FlutterActivity() {
             }
         }
         audioDeviceCallback = null
+        // The anchor belongs to this Activity's method channel. Do not leave
+        // its silent AudioTrack alive if Android tears down the Activity.
+        if (priorityAnchorDelegate.isInitialized()) priorityAnchorService.stop()
         unregisterReceiverSafely(usbHotplugReceiver)
         unregisterReceiverSafely(usbPermissionReceiver)
         unregisterReceiverSafely(aclReceiver)
