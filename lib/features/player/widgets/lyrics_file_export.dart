@@ -101,7 +101,12 @@ LyricsFileExport prepareLyricsFileExport(
     (line) => line.translation?.trim().isNotEmpty == true &&
         line.translation!.trim() != line.text.trim(),
   );
-  final preserveOriginal = !withSubline && (xml || lrc);
+  // Plain text files should also survive a normal save byte-for-byte.
+  // Serialized desktop JSON is a model payload, not a portable lyric file.
+  final plainText = !lyrics.isSynchronized && raw.isNotEmpty &&
+      !((raw.startsWith('{') && raw.endsWith('}')) ||
+          (raw.startsWith('[') && raw.endsWith(']')));
+  final preserveOriginal = !withSubline && (xml || lrc || plainText);
   final wordTimed = lyrics.lines.any((line) => line.words?.isNotEmpty == true);
   final extension = preserveOriginal && xml
       ? (ttml ? 'ttml' : 'xml')
