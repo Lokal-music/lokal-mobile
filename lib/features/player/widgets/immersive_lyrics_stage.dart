@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'package:flick/features/player/widgets/lyric_motion_line.dart';
+import 'package:flick/features/player/widgets/lyrics_subline_timing.dart';
 import 'package:flick/services/lyrics_service.dart';
 
 /// Space is available only for genuinely timestamped lyrics.
@@ -273,19 +274,37 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
         ),
         if (line.translation?.trim().isNotEmpty == true) ...[
           const SizedBox(height: 5),
-          Text(
-            line.translation!.trim(),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: _font,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              height: 1.25,
-              color: Colors.white,
+          // Reuse the very same frame-interpolated playhead as the original.
+          // Without source syllables, leave the subline static.
+          if (line.words?.isNotEmpty == true)
+            LyricMotionLine(
+              line: projectLyricsSubline(line, line.translation!),
+              position: position,
+              textAlign: TextAlign.center,
+              lightweight: true,
+              style: const TextStyle(
+                fontFamily: _font,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                height: 1.25,
+              ),
+              sung: Colors.white,
+              unsung: Colors.white54,
+            )
+          else
+            Text(
+              line.translation!.trim(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: _font,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                height: 1.25,
+                color: Colors.white,
+              ),
             ),
-          ),
         ],
       ],
     );
