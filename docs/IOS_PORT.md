@@ -1388,3 +1388,22 @@ new persistence suite is included in the iPhone workflow. Changed files pass
 analysis with fatal infos. This establishes scheduling/storage behavior, not a
 measured physical-iPhone battery reduction. Paused-position and Rust foreground/
 background polling adaptations remain separate pending work.
+
+
+### Sharing regression pass
+
+Expanding log-persistence checks exposes a real card-preview startup fault:
+`precacheImage` reads inherited MediaQuery/image configuration while the sheet
+is still in `initState`, before dependencies are available. Start artwork/brand
+preparation once in `didChangeDependencies` instead. The unchanged preview/export
+path now completes and produces actual PNGs, including a fresh export after a
+failed native share/retry.
+
+All ten sharing cases pass: filtered UTF-8 log content, share errors, exact saved
+bytes/filename for file and document URIs, save cancellation, opt-in upload link,
+original song path and actual branded PNG/caption/retry. The saved-file test now
+checks #260's explicit exported-byte contract instead of assuming the picker
+destination is the shared file. Error-toast teardown is explicit in the test;
+native sheet failures remain visible in the product. Add this suite and its path
+trigger to the iPhone workflow. These host checks do not qualify the physical
+iPhone share sheet or photo-library permission flow.

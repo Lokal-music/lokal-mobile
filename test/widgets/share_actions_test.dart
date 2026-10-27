@@ -12,6 +12,7 @@ import 'package:flick/l10n/l10n.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/album_color_provider.dart';
 import 'package:flick/providers/favorites_provider.dart';
+import 'package:flick/widgets/lokal/lokal_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,8 +93,6 @@ void main() {
     FilePickerPlatform.instance = originalPicker;
     AppLog.instance.clear();
     await temp.delete(recursive: true);
-    final card = File('${Directory.systemTemp.path}/flick_share_${_song.id}.png');
-    if (await card.exists()) await card.delete();
   });
 
   Future<void> tapAndShare(WidgetTester tester, Finder finder) async {
@@ -141,10 +140,12 @@ void main() {
     await tester.pumpAndSettle();
     await tapAndShare(tester, find.byTooltip(l10n.share));
     expect(find.text(l10n.shareFailed(shareError!)), findsOneWidget);
+    LokalToast.dismiss();
+    await tester.pumpAndSettle();
   });
 
   for (final contentUri in [false, true]) {
-    testWidgets('saved logs share from ${contentUri ? 'content' : 'file'} URI', (
+    testWidgets('saved logs re-share exact export for ${contentUri ? 'content' : 'file'} URI', (
       tester,
     ) async {
       final destination = contentUri
@@ -166,15 +167,13 @@ void main() {
       final sharedPath = (args['paths'] as List).single as String;
       expect(args['subject'], 'Lokal logs');
       expect(args['mimeTypes'], ['text/plain']);
-      if (contentUri) {
-        expect(p.basename(sharedPath), picker.fileName);
-        expect(
-          await tester.runAsync(() => File(sharedPath).readAsBytes()),
-          picker.bytes,
-        );
-      } else {
-        expect(sharedPath, destination.toFilePath());
-      }
+      // Save destinations are platform document identifiers. Re-sharing uses
+      // the exact exported bytes/name for either kind of picker result (#260).
+      expect(p.basename(sharedPath), picker.fileName);
+      expect(
+        await tester.runAsync(() => File(sharedPath).readAsBytes()),
+        picker.bytes,
+      );
       expect(utf8.decode(picker.bytes!), contains('keep 夜曲'));
     });
   }
@@ -251,6 +250,10 @@ void main() {
           child: const ShareBottomSheet(song: _song),
         ),
       ));
+      await drainUntil(
+        tester,
+        () => find.byType(LinearProgressIndicator).evaluate().isEmpty,
+      );
       await tester.pumpAndSettle();
       await tapAndShare(tester, find.text(l10n.share).last);
       if (fail) {
@@ -262,9 +265,13 @@ void main() {
       }
       final args = shares.last.arguments as Map;
       final path = (args['paths'] as List).single as String;
-      expect(p.basename(path), 'flick_share_${_song.id}.png');
+      expect(p.basename(path), 'konnekted-card.png');
       expect(args['mimeTypes'], ['image/png']);
-      expect(args['text'], l10n.listeningToByOnFlick(_song.title, _song.artist));
+      expect(args['text'], '${_song.title} — ${_song.artist}\nKonnekted');
+      if (fail) {
+        final firstPath = (shares.first.arguments as Map)['paths'].single;
+        expect(path, isNot(firstPath), reason: 'Retry must use a fresh export');
+      }
       final bytes = await tester.runAsync(() => File(path).readAsBytes());
       expect(bytes!.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
       expect(find.byType(CircularProgressIndicator), findsNothing);
