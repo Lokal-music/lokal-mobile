@@ -1122,8 +1122,10 @@ fn log_usb_event(message: String) {
 fn observe_dsd_payload_audit(ok: bool) {
     let now = Instant::now();
     let mut latch = USB_DSD_PAYLOAD_LATCH.lock();
+    // observe() restarts the failure timer on a false transition; capture
+    // the elapsed failure before that reset for accurate field diagnostics.
+    let constant_for = latch.constant_for(now);
     if let Some(verified) = latch.observe(ok, now) {
-        let constant_for = latch.constant_for(now);
         drop(latch);
         log_payload_audit_transition("DSD", verified, constant_for);
     }
@@ -1132,8 +1134,8 @@ fn observe_dsd_payload_audit(ok: bool) {
 fn observe_pcm_payload_audit(ok: bool) {
     let now = Instant::now();
     let mut latch = USB_PCM_PAYLOAD_LATCH.lock();
+    let constant_for = latch.constant_for(now);
     if let Some(verified) = latch.observe(ok, now) {
-        let constant_for = latch.constant_for(now);
         drop(latch);
         log_payload_audit_transition("PCM", verified, constant_for);
     }
@@ -1267,10 +1269,10 @@ fn audit_dsd_payload(
 
 /// Verify the just-encoded PCM wire payload looks like real audio, not a stuck
 /// or dead pipeline. Mirrors audit_dsd_payload's gross-guard philosophy: decode
-/// channel-0 samples at the negotiated subslot width (little-endian signed, per
-/// UAC2 Type I PCM) and require at least two distinct values across the buffer.
-/// A real music transfer is effectively never sample-constant; a dead pipeline
-/// emits a constant (often all-zero or a fixed DC value).
+/// every channel at the negotiated subslot width (little-endian signed, per
+/// UAC2 Type I PCM) and require temporal variation in at least one channel.
+/// A perfectly silent left channel with music in the right is still live PCM.
+/// Fully constant channels remain a suspect stalled pipeline.
 // ponytail: statistical guard, not a bit-exact hash. Upgrade path: per-frame
 // hash comparison against decoded source bytes if a stronger claim is needed.
 fn audit_pcm_payload(buffer: &[u8], subslot_size: u8, channels: u16) -> bool {
@@ -1291,8 +1293,8 @@ fn audit_pcm_payload(buffer: &[u8], subslot_size: u8, channels: u16) -> bool {
             v
         }
     };
-    let decode = |i: usize| -> i64 {
-        let off = i * stride;
+    let decode = |i: usize, channel: usize| -> i64 {
+        let off = i * stride + channel * ss;
         let mut v: i64 = 0;
         for b in 0..ss {
             v |= (buffer[off + b] as i64) << (8 * b);
@@ -1300,8 +1302,10 @@ fn audit_pcm_payload(buffer: &[u8], subslot_size: u8, channels: u16) -> bool {
         sign_extend(v)
     };
     let limit = (buffer.len() / stride).min(1024);
-    let first = decode(0);
-    (1..limit).any(|i| decode(i) != first)
+    (0..ch).any(|channel| {
+        let first = decode(0, channel);
+        (1..limit).any(|i| decode(i, channel) != first)
+    })
 }
 
 pub fn set_android_direct_usb_enabled(enabled: bool) {
@@ -5223,11 +5227,18 @@ fn prepare_iso_transfer_payload(
             candidate.channels,
         ));
     } else {
-        observe_pcm_payload_audit(audit_pcm_payload(
+        let varying_samples = audit_pcm_payload(
             &transfer_buffer,
             candidate.subslot_size,
             candidate.channels,
-        ));
+        );
+        // Digital silence is valid PCM and not evidence of a lost USB path.
+        // Once non-constant samples verified this session, retain that claim
+        // through fully buffered silent passages. Only sustained underruns
+        // (no PCM available to feed the DAC) should fail the liveness latch.
+        // Never promote an unverified stream on silence alone.
+        let live_or_silent = varying_samples || (!underrun && usb_pcm_payload_verified());
+        observe_pcm_payload_audit(live_or_silent);
     }
 
     Ok(Some(IsoTransferPayload {
@@ -8163,6 +8174,27 @@ mod dsd_bitperfect_tests {
             0x01, 0x00, 0x00, 0x00, // L1 = 1
         ];
         assert!(audit_pcm_payload(&buf, 2, 2));
+    }
+
+    #[test]
+    fn audit_pcm_accepts_silent_left_channel_with_varying_right() {
+        let buf: [u8; 12] = [
+            0x00, 0x00, 0x01, 0x00, // L0 = 0, R0 = 1
+            0x00, 0x00, 0x02, 0x00, // L1 = 0, R1 = 2
+            0x00, 0x00, 0x03, 0x00, // L2 = 0, R2 = 3
+        ];
+        assert!(audit_pcm_payload(&buf, 2, 2));
+    }
+
+    #[test]
+    fn audit_pcm_rejects_two_different_but_constant_channels() {
+        // L is fixed DC=0, R is fixed DC=1: not changing over time.
+        let buf: [u8; 12] = [
+            0x00, 0x00, 0x01, 0x00,
+            0x00, 0x00, 0x01, 0x00,
+            0x00, 0x00, 0x01, 0x00,
+        ];
+        assert!(!audit_pcm_payload(&buf, 2, 2));
     }
 
     #[test]
