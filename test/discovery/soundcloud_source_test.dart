@@ -134,4 +134,42 @@ void main() {
       '{"apiClient":{"data":{"id":"abcdefghijklmnopqrstuvwxyz123456"}}}'),
       key);
   });
+
+  test('SoundCloud CDN audio redirects are followed only inside sndcdn.com', () async {
+    final visited = <String>[];
+    final client = MockClient((request) async {
+      visited.add(request.url.host);
+      if (request.url.host == 'cf-media.sndcdn.com') {
+        return http.Response('', 302, headers: {
+          'location': 'https://cf2-media.sndcdn.com/song.mp3',
+        });
+      }
+      return http.Response('audio', 200);
+    });
+    addTearDown(client.close);
+    final bytes = <int>[];
+    await DiscoveryHttp(client).transfer(
+      Uri.parse('https://cf-media.sndcdn.com/redirect'),
+      maxBytes: 100,
+      deadline: const Duration(seconds: 3),
+      followMediaRedirects: true,
+      onChunk: bytes.addAll,
+    );
+    expect(visited, ['cf-media.sndcdn.com', 'cf2-media.sndcdn.com']);
+    expect(utf8.decode(bytes), 'audio');
+  });
+
+  test('SoundCloud CDN redirects to other domains remain blocked', () async {
+    final client = MockClient((_) async => http.Response('', 302, headers: {
+      'location': 'https://example.com/private-audio',
+    }));
+    addTearDown(client.close);
+    await expectLater(DiscoveryHttp(client).transfer(
+      Uri.parse('https://cf-media.sndcdn.com/audio'),
+      maxBytes: 100,
+      deadline: const Duration(seconds: 3),
+      followMediaRedirects: true,
+      onChunk: (_) {},
+    ), throwsA(isA<DiscoveryException>()));
+  });
 }
