@@ -14,6 +14,7 @@ class AppPreferences {
   final bool showUsbVolumeOnMenu;
   final bool showUsbVolumeOnSettings;
   final bool crossfadeEnabled;
+  final bool automixStemClipsEnabled;
   final double crossfadeDurationSecs;
   final int crossfadeCurveIndex;
   final int crossfeedLevel;
@@ -137,6 +138,7 @@ class AppPreferences {
     this.showUsbVolumeOnMenu = true,
     this.showUsbVolumeOnSettings = false,
     this.crossfadeEnabled = false,
+    this.automixStemClipsEnabled = false,
     this.crossfadeDurationSecs = 3.0,
     this.crossfadeCurveIndex = 0,
     this.crossfeedLevel = 0,
@@ -257,6 +259,7 @@ class AppPreferences {
     bool? showUsbVolumeOnMenu,
     bool? showUsbVolumeOnSettings,
     bool? crossfadeEnabled,
+    bool? automixStemClipsEnabled,
     double? crossfadeDurationSecs,
     int? crossfadeCurveIndex,
     int? crossfeedLevel,
@@ -378,6 +381,7 @@ class AppPreferences {
       showUsbVolumeOnSettings:
           showUsbVolumeOnSettings ?? this.showUsbVolumeOnSettings,
       crossfadeEnabled: crossfadeEnabled ?? this.crossfadeEnabled,
+      automixStemClipsEnabled: automixStemClipsEnabled ?? this.automixStemClipsEnabled,
       crossfadeDurationSecs:
           crossfadeDurationSecs ?? this.crossfadeDurationSecs,
       crossfadeCurveIndex: crossfadeCurveIndex ?? this.crossfadeCurveIndex,
@@ -544,6 +548,7 @@ class AppPreferencesService {
   static const _showUsbVolumeOnMenuKey = 'menu_show_usb_volume';
   static const _showUsbVolumeOnSettingsKey = 'settings_show_usb_volume';
   static const _crossfadeEnabledKey = 'audio_crossfade_enabled';
+  static const automixStemClipsKey = 'audio_automix_stem_clips_enabled';
   static const _crossfadeDurationKey = 'audio_crossfade_duration_secs';
   static const _crossfadeCurveKey = 'audio_crossfade_curve_index';
   static const _crossfeedLevelKey = 'audio_crossfeed_level';
@@ -683,6 +688,7 @@ class AppPreferencesService {
       showUsbVolumeOnSettings:
           prefs.getBool(_showUsbVolumeOnSettingsKey) ?? false,
       crossfadeEnabled: prefs.getBool(_crossfadeEnabledKey) ?? false,
+      automixStemClipsEnabled: prefs.getBool(automixStemClipsKey) ?? false,
       crossfadeDurationSecs: prefs.getDouble(_crossfadeDurationKey) ?? 3.0,
       crossfadeCurveIndex: prefs.getInt(_crossfadeCurveKey) ?? 0,
       crossfeedLevel: prefs.getInt(_crossfeedLevelKey) ?? 0,
@@ -948,6 +954,11 @@ class AppPreferencesService {
   Future<void> setCrossfadeEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_crossfadeEnabledKey, value);
+  }
+
+  Future<void> setAutomixStemClipsEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(automixStemClipsKey, value);
   }
 
   Future<double> getCrossfadeDurationSecs() async {
