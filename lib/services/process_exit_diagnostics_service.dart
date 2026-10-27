@@ -50,9 +50,10 @@ class ProcessExitDiagnosticsService {
   /// Android's REASON_SIGNALED does not mean the app crashed. In
   /// particular SIGKILL (9) can be a system kill or user/OEM action, and
   /// should not be counted as a confirmed native crash without a trace.
-  /// SIGABRT (6) and SIGSEGV (11) provide stronger native crash evidence.
+  /// Fatal native signals (SIGILL, SIGTRAP, SIGABRT, SIGBUS, SIGFPE,
+  /// SIGSEGV) provide stronger crash evidence.
   static bool isLikelyCrash({required int reason, required int status}) {
-    if (reason == 2) return status == 6 || status == 11;
+    if (reason == 2) return {4, 5, 6, 7, 8, 11}.contains(status);
     return {3, 4, 5, 6, 7, 9, 12}.contains(reason);
   }
 
