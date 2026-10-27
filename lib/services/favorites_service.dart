@@ -92,6 +92,7 @@ class FavoritesService {
   // Cached set of favorite IDs for quick lookup
   Set<String> _favoriteIds = {};
   Map<String, String> _desktopCopyRedirects = const {};
+  static Map<String, String> _latestDesktopCopyRedirects = const {};
 
   String _canonicalId(String id) => _desktopCopyRedirects[id] ?? id;
 
@@ -105,6 +106,7 @@ class FavoritesService {
       return; // Never damage a saved favorite when the library is offline.
     }
     _desktopCopyRedirects = desktopCopyFavoriteRedirects(songs);
+    _latestDesktopCopyRedirects = _desktopCopyRedirects;
     if (_desktopCopyRedirects.isEmpty) return;
     final normalized = canonicalDesktopCopyFavoriteIds(
       _favoriteIds, _desktopCopyRedirects,
@@ -262,8 +264,11 @@ class FavoritesService {
   Future<bool> isFavorite(String songId) async {
     if (songId.startsWith('desktop:'))
       return (await remoteDelegate?.isFavorite(songId)) ?? false;
-    await _mutate(() async {});
-    return _favoriteIds.contains(_canonicalId(songId));
+    // Heart lookups happen on every rendered row. The full identity repair
+    // runs on the Liked load and on writes, not on every read-only lookup.
+    final ids = await _readIds();
+    return ids.contains(songId) ||
+        ids.contains(_latestDesktopCopyRedirects[songId] ?? songId);
   }
 
   /// Add a song to favorites.
