@@ -15,8 +15,8 @@ Widget heroApp({
 }) => MaterialApp(
   theme: LokalTheme.build(tokens),
   home: MediaQuery(
-    data: const MediaQueryData(
-      size: Size(320, 650),
+    data: MediaQueryData(
+      size: const Size(320, 650),
       disableAnimations: disableAnimations,
     ),
     child: Scaffold(
