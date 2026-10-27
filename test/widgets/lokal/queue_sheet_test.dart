@@ -93,7 +93,7 @@ void main() {
     if (reorderDemo) {
       player.initial = PlayerState(
         currentSong: song('Now'),
-        upNext: [song('Next0'), song('Next1'), song('Next2')],
+        upNext: [song('Next0'), song('Next1'), song('Next2'), song('Manual0'), song('Manual1'), song('Manual2')],
         queue: [song('Manual0'), song('Manual1'), song('Manual2')],
       );
     }
@@ -263,8 +263,9 @@ void main() {
   testWidgets('popup queue reorders playback Up Next by its grip',
       (tester) async {
     await pump(tester, reorderDemo: true);
-    expect(find.text('Track Manual0'), findsNothing,
-        reason: 'Manual entries are already included in the actual Up Next list');
+    expect(find.text('Track Manual0'), findsOneWidget,
+        reason: 'Manual queue songs are included once in Up Next');
+
     final handle = find.byKey(const ValueKey('queue-grip-0'));
     await tester.ensureVisible(handle);
     final gesture = await tester.startGesture(tester.getCenter(handle));
