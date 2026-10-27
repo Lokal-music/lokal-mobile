@@ -30,7 +30,7 @@ class AppLog extends ChangeNotifier {
   File? _logFile;
   bool _persistenceInitialized = false;
   Timer? _flushTimer;
-  bool _flushing = false;
+  Future<void>? _flushInProgress;
 
   // Idle applications should not wake the Dart isolate to inspect an empty
   // log queue. A timer exists only while there are unsaved entries.
@@ -104,27 +104,47 @@ class AppLog extends ChangeNotifier {
   Future<void> flushToDisk() async {
     _flushTimer?.cancel();
     _flushTimer = null;
-    if (_flushing) return;
+
+    // A lifecycle flush must wait for an in-flight disk write. The writer
+    // drains entries arriving during the write before it completes.
+    final active = _flushInProgress;
+    if (active != null) {
+      await active;
+      return;
+    }
+
     final file = _logFile;
     if (file == null || _pendingLines.isEmpty) return;
-    _flushing = true;
-    final lines = List<String>.of(_pendingLines);
-    _pendingLines.clear();
+    final flush = _drainPendingLines(file);
+    _flushInProgress = flush;
     try {
-      await file.writeAsString(
-        '${lines.join('\n')}\n',
-        mode: FileMode.append,
-        flush: true,
-      );
-      if (await file.length() > _maxFileBytes) {
-        await _trimFile(file);
-      }
-    } catch (error) {
-      _pendingLines.insertAll(0, lines);
-      debugPrint('AppLog flush failed: $error');
+      await flush;
     } finally {
-      _flushing = false;
+      _flushInProgress = null;
       _scheduleFlush();
+    }
+  }
+
+  Future<void> _drainPendingLines(File file) async {
+    while (_pendingLines.isNotEmpty) {
+      final lines = List<String>.of(_pendingLines);
+      _pendingLines.clear();
+      try {
+        await file.writeAsString(
+          '${lines.join('\n')}\n',
+          mode: FileMode.append,
+          flush: true,
+        );
+        if (await file.length() > _maxFileBytes) {
+          await _trimFile(file);
+        }
+      } catch (error) {
+        _pendingLines.insertAll(0, lines);
+        debugPrint('AppLog flush failed: $error');
+        // Avoid an immediate retry loop on a failing disk; _scheduleFlush
+        // retains the existing delayed retry behavior.
+        return;
+      }
     }
   }
 
