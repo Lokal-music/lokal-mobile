@@ -19,10 +19,31 @@ import ios_simulator
 
 LOCALES = ("en", "fr", "de", "es", "it", "pt-BR", "nl", "pl", "sv", "tr", "zh-Hans")
 BUNDLE = "app.lokal.widgetPreview"
+INVENTORY = ("xcrun", "simctl", "list", "devices", "available", "--json")
 
 
 def command(*args, timeout=60):
     return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT, timeout=timeout).strip()
+
+
+def boot_render_simulator():
+    """One cold-service recovery, strictly before the render app is installed."""
+    try:
+        ios_simulator.main()
+    except subprocess.TimeoutExpired as error:
+        # Only the first, pre-device inventory timeout qualifies. A runtime,
+        # boot, installation or rendering failure must not enter this path.
+        if tuple(error.cmd) != INVENTORY or os.environ.get("IOS_SIMULATOR_UDID"):
+            raise
+        developer = os.environ.get("DEVELOPER_DIR")
+        if not developer:
+            raise
+        print("Cold CoreSimulator inventory timed out before app installation; "
+              "preserving evidence and warming Simulator once", flush=True)
+        subprocess.run(["open", "-a", str(Path(developer) / "Applications/Simulator.app")],
+                       check=True, timeout=20)
+        os.environ["IOS_SIMULATOR_SESSION_SUFFIX"] = "widget-render-inventory-recovery"
+        ios_simulator.main()
 
 
 def verify(directory: Path):
@@ -88,7 +109,7 @@ def main():
     if info.get("CFBundleIdentifier") != BUNDLE:
         raise ValueError("Only the isolated native widget render app may run")
     args.output.mkdir(parents=True, exist_ok=False)
-    ios_simulator.main()
+    boot_render_simulator()
     udid = os.environ["IOS_SIMULATOR_UDID"]
     command("xcrun", "simctl", "install", udid, str(args.app), timeout=90)
     container = Path(command("xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"))

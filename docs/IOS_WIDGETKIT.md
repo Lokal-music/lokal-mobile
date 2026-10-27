@@ -547,3 +547,15 @@ smallest accessibility fallback keeps one visual title line and Open Lokal,
 while its combined VoiceOver label retains the complete recording metadata.
 No animation frames or automatic Home Screen placement are inferred from static
 rendered PNGs. This rendering continuation still needs its own hosted pass.
+
+
+Render run 17 (`40517573731`) passes all native/Flutter/bridge contracts and links
+both the extension and the isolated SwiftUI app. Its capture step stops before
+installation: CoreSimulator's first device inventory times out after 90 seconds.
+No rendered PNG or installed-widget pass is claimed. The startup correction
+allows one Simulator-service warm-up and a second bounded inventory only for
+that exact pre-device timeout. Both attempts retain separate evidence. Runtime
+selection/boot, app installation, rendering, matrix validation and second-attempt
+failures propagate normally; no app test is retried. Seven local gate-policy
+cases pass, including a real main-flow render-process error without another
+boot/launch. Hosted captures remain pending after this infrastructure correction.

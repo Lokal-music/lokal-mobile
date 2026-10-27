@@ -17,6 +17,7 @@ on:
       - 'ios/Widgets/PresentationTests/**'
       - 'ios/Widgets/RenderHarness/**'
       - 'tool/ios_widget_render.py'
+      - 'tool/test_ios_widget_render.py'
       - 'ios/Widgets/Timeline/**'
       - 'ios/Widgets/Extension/**'
       - 'ios/Widgets/Resources/**'
@@ -113,6 +114,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Verify render startup gate boundaries
+        run: python3 -m unittest discover -s tool -p test_ios_widget_render.py
       - name: Compile and exercise the actual Foundation reader
         run: |
           xcodebuild -version
@@ -198,5 +201,5 @@ jobs:
           path: |
             ${{ runner.temp }}/lokal-widget-preview.log
             ${{ runner.temp }}/lokal-widget-renders
-            ${{ runner.temp }}/ios-simulator-boot-18.6-widget-render
+            ${{ runner.temp }}/ios-simulator-boot-18.6-widget-render*
           retention-days: 14
