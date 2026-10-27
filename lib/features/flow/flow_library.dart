@@ -154,7 +154,7 @@ class FlowLibrary {
     return result.map((track) => byId[track.id]!).toList();
   }
 
-  List<Song> topUp(FlowData data) {
+  List<Song> topUp(FlowData data, {Iterable<String> trailingArtists = const []}) {
     if (!unlocked) return const [];
     final remaining = FlowRules.maxSessionTracks - data.session.trackIds.length;
     return const FlowEngine()
@@ -170,6 +170,7 @@ class FlowLibrary {
               math.max(0, data.session.trackIds.length - 3),
             ))
               if (byId[id] case final song?) song.artist,
+            ...trailingArtists,
           ],
           limit: remaining.clamp(0, FlowRules.topUpTracks),
         )
