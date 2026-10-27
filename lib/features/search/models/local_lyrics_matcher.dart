@@ -1,11 +1,38 @@
+import 'package:unorm_dart/unorm_dart.dart' as unorm;
+
 /// Unicode-aware matching for the *local* lyrics search in Library.
-///
-/// Dart has no built-in NFKC API. Fold the common full-width Latin/number
-/// forms without transliterating Chinese, Japanese or Indic characters.
-/// Preserve combining marks: Hindi matras and Punjabi vowel signs carry
-/// meaning and must not be stripped by ASCII-only "word" cleaners.
-final _lyricNonWord = RegExp(r'[^\p{L}\p{M}\p{N}]+', unicode: true);
+/// Preserve Indic vowel signs and emoji bases (symbols), while folding common
+/// full-width punctuation/Latin forms and canonical Unicode equivalents.
+final _lyricNonWord = RegExp(r'[^\p{L}\p{M}\p{N}\p{S}]+', unicode: true);
 final _lyricWhitespace = RegExp(r'\s+');
+final _lyricSearchable = RegExp(r'[\p{L}\p{N}\p{S}]', unicode: true);
+
+bool _isCjkRune(int rune) =>
+    (rune >= 0x3400 && rune <= 0x4dbf) || // CJK Extension A
+    (rune >= 0x4e00 && rune <= 0x9fff) || // CJK Unified
+    (rune >= 0xf900 && rune <= 0xfaff) || // Compatibility ideographs
+    (rune >= 0x20000 && rune <= 0x323af) || // Supplementary ideographs
+    (rune >= 0x3040 && rune <= 0x30ff) || // Hiragana / Katakana
+    (rune >= 0x31f0 && rune <= 0x31ff) || // Katakana extensions
+    (rune >= 0xac00 && rune <= 0xd7af); // Hangul syllables
+
+/// Treat separators *between* CJK characters as optional, but not separators
+/// in Latin/Indic text or between a CJK character and a different script.
+String _joinCjkPhrase(String value) {
+  final runes = value.runes.toList(growable: false);
+  final result = StringBuffer();
+  for (var i = 0; i < runes.length; i++) {
+    if (runes[i] == 0x20 &&
+        i > 0 &&
+        i + 1 < runes.length &&
+        _isCjkRune(runes[i - 1]) &&
+        _isCjkRune(runes[i + 1])) {
+      continue;
+    }
+    result.writeCharCode(runes[i]);
+  }
+  return result.toString();
+}
 
 String normalizeLocalLyricSearch(String value) {
   final out = StringBuffer();
@@ -14,17 +41,19 @@ String normalizeLocalLyricSearch(String value) {
     if (rune == 0x3000) rune = 0x20;
     out.writeCharCode(rune);
   }
-  return out.toString()
-      .toLowerCase()
+  // NFC makes precomposed and combining-mark spellings identical without
+  // deleting the marks required by Devanagari, Gurmukhi and Japanese.
+  return unorm.nfc(out.toString().toLowerCase())
       .replaceAll(_lyricNonWord, ' ')
       .replaceAll(_lyricWhitespace, ' ')
       .trim();
 }
 
-/// Compare lyric content and a user query by normalized phrase, not an
-/// ASCII-only tokenization or the raw input's punctuation/width.
+/// Match local lyric phrases without spurious matches on variation selectors.
 bool matchesLocalLyricLine(String line, String query) {
   final needle = normalizeLocalLyricSearch(query);
-  return needle.isNotEmpty &&
-      normalizeLocalLyricSearch(line).contains(needle);
+  if (!_lyricSearchable.hasMatch(needle)) return false;
+  final haystack = normalizeLocalLyricSearch(line);
+  return haystack.contains(needle) ||
+      _joinCjkPhrase(haystack).contains(_joinCjkPhrase(needle));
 }
