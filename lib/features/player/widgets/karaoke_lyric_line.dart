@@ -108,7 +108,12 @@ class _KaraokeLyricLineState extends State<KaraokeLyricLine>
   }
 
   void _resolveWords() {
-    final sourceLine = widget.lyrics.lines[widget.lineIndex];
+    // Project against resolved playback windows, not raw ELRC words whose
+    // end may equal their start until the next word/line is inspected.
+    // Leave the original vocal rendering path unchanged.
+    final sourceLine = widget.sublineText == null
+        ? widget.lyrics.lines[widget.lineIndex]
+        : widget.lyricsService.playbackLines(widget.lyrics)[widget.lineIndex];
     _displayLine = widget.sublineText == null
         ? sourceLine
         : projectLyricsSubline(sourceLine, widget.sublineText!);
