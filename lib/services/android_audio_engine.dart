@@ -564,7 +564,16 @@ class AndroidAudioEngine implements AudioEngine {
             });
           }
         }
-        _emit(_state.copyWith(isPlaying: state.playing && !_sourceFailed));
+        _emit(
+          _state.copyWith(
+            isPlaying: state.playing && !_sourceFailed,
+            isBuffering:
+                !_sourceFailed &&
+                (state.processingState == just_audio.ProcessingState.loading ||
+                    state.processingState ==
+                        just_audio.ProcessingState.buffering),
+          ),
+        );
       }),
     );
 

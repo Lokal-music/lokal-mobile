@@ -11,12 +11,14 @@ configurable Discovery shelves and theme-aware Cover Flow are included in the
 latest continuation. [The source audit](IOS_POST172_REVIEW.md) records the exact
 merged commits and platform adaptations.
 
-**This source is not a finalized release.** Build 34 remains the last complete
-pass of both native suites on iOS 18.6 and 26.0, at the older through-#217 source.
-Later runs build inspected unsigned engineering IPAs and pass ordinary playback,
-but expose recovery acceptance failures or simulator-host failures. The next
-candidate retains the native playback clock/frame gates while correcting a
-metadata-only seek in the controlled video fixture.
+**This source is not a finalized release.** Build 53 is the new complete pass
+of both native suites on iOS 18.6 and 26.0, through #246. Its generated WebKit
+fixture passes settled-seek, native-clock and newly delivered frame gates on
+explicit replay. Actual queue reorder and unconfigured widget-channel checks
+also pass. The inspected unsigned IPA, source, notices and matching symbols are
+preserved together. Later source still requires its own full acceptance; build
+56 exposes a different iOS 18.6 retirement/replacement timeout, with iOS 26 passing.
+The new probe retains phase/view/timing/native-document diagnostics for this gate.
 
 | Checkpoint | Accepted scope and limit |
 | --- | --- |
@@ -25,7 +27,9 @@ metadata-only seek in the controlled video fixture.
 | Builds 45–46 | Actual initial WebKit frame callbacks and clock progress pass; explicit replay fails. Blob transport alone did not resolve the stuck seek. |
 | Builds 47/49 | Engineering package builds; iOS 18.6 replay still fails and iOS 26 host boot times out before app acceptance. |
 | [Widget native run 7](https://github.com/lokal-music/lokal-mobile/actions/runs/40481024530) / PR #248 | Real Flutter bridge checks pass for iOS 16 arm64 device/simulator with Swift 6 warnings-as-errors, plus 85 Flutter, 45 reader, 20 store and 14 publisher cases. App Group provisioning, runtime sampling and WidgetKit UI are separate gates. |
-| Build 51 / PR #248 | Full app/channel and data-ready video recovery acceptance pending. The through-#246 continuation additionally introduces a real-service queue reorder probe. |
+| [Build 53](https://github.com/lokal-music/lokal-mobile/actions/runs/40483603986) / PR #252 | Complete iOS 18.6 and 26 acceptance through #246. Actual queue reorder and unavailable widget protocol checks pass. WebKit explicit replay advances bridge/native time and new frames. Preserved tree `eaa818198e4fe6988416ff8696f36dcb29738831`. |
+| [Widget run 14](https://github.com/lokal-music/lokal-mobile/actions/runs/40504214809) / PR #253 | 23 actual store cases, including 50×24-worker POSIX creation and 50×24-worker real publication/read rounds; 45 reader, 14 publisher and 88 Flutter cases plus both real Flutter bridge SDK checks pass. This later lock correction is outside the build-53 IPA. |
+| Build 56 / live-sampling candidate | iOS 18.6 times out awaiting paused WebKit replacement; iOS 26 passes. The candidate adds gate diagnostics and live widget sampling; full native acceptance remains pending. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
@@ -1176,3 +1180,50 @@ have no analysis issues; whole app/integration analysis has no errors (618
 warning/information items remain). Actionlint and diff checks pass. Latest-source
 native queue/video/channel acceptance and physical/device/provider qualification
 remain pending.
+
+
+### Live widget sampling candidate and preserved build 53
+
+Build 53's unsigned IPA SHA-256 is
+`516e630971e64619e3e70f1d8d32fb432601b93c9388c0ac61cb97fda7eabc88`.
+Its CI merge commit is `4823b8b28d30f4c18e9ecc4251d4243f61396c65`, equivalent
+to PR head `b77e98e8450ca1d843dced841588d0f3c1377ff8` at the exact tree above.
+The artifact archive, IPA/checksum, minimum iOS/build ID, source-archive commit
+and all 2203 exported source files are verified locally. Thirteen declared CRLF
+exports and four declared vendor export exclusions are accounted for explicitly.
+Twenty-six native symbol bundles and Dart AOT symbols accompany the source.
+These binaries predate the exclusive-lock correction and live sampler.
+
+The current candidate connects canonical player/theme events to the optional
+widget publisher, with no per-position writes or extra player ticker. Seek/state
+changes request reloads; existing events provide a limited metadata-only heartbeat.
+Only materialized files or existing image-cache entries under canonical app-owned
+roots can be read. Capability preflight precedes all artwork work. Completed cache
+writes notify the sampler for relevant sources; no artwork extraction or network
+request is introduced by publication. Background flushing preserves actual play
+state; explicit foreground retry rechecks a changed/repaired shared profile.
+
+Buffering is now a separate presentation fact in shared Dart playback state and
+the optional widget wire field. Requested playback remains available to controls,
+while Dart/Swift widget progress freezes during loading/buffering. This adds no
+native Rust API, decoder, DSP or USB changes. Flow/recommendation data still needs
+its existing-owner binding; the sampler never invents recommendations from the
+manual queue. WidgetKit target/layouts/actions and signed-group qualification
+remain open.
+
+Newly merged #247, #249 and #250 are queued for the next parity pass: inline Home
+header controls, the single authoritative queue redesign and a truly transparent
+Cover Flow stage with shorter YouTube labels. They are not counted in the
+57-PR source checkpoint until source review and integration complete.
+
+
+Validation of the live-sampling candidate: the exact expanded iPhone workflow
+selection plus all widget/Android-widget contracts passes **609 Flutter tests**.
+This includes actual filesystem ownership/quota/eviction checks, source-clock
+sampling and materialized-art events, unavailable-profile/no-I/O and retry/dispose
+cases, the expanded 48-case shared wire corpus, and both backend buffering events.
+Strict analysis of the new sampler/runtime/artwork code, shared Dart models,
+widget tests and recovery probe reports no issues. Whole app/integration analysis
+has no errors. Actionlint and diff checks pass. Actual Swift execution/SDK parity
+for the new buffering field, live-runtime app acceptance and the observed build-56
+retirement timeout remain separate hosted gates.

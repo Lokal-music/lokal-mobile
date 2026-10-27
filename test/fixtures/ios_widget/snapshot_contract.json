@@ -24,7 +24,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 4000,
       "stale": false,
@@ -74,7 +75,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 12000,
       "stale": false,
@@ -124,7 +126,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": true,
@@ -174,7 +177,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 12000,
       "stale": false,
@@ -224,7 +228,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -274,7 +279,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": true,
@@ -318,7 +324,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -341,7 +348,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -373,7 +381,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -405,7 +414,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -434,7 +444,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -484,7 +495,8 @@
         "accentArgb": 0,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -534,7 +546,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -584,7 +597,8 @@
         "accentArgb": 0,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -634,7 +648,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 12000,
       "stale": false,
@@ -684,7 +699,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -734,7 +750,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -778,7 +795,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": false,
@@ -816,7 +834,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": false,
@@ -860,7 +879,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": false,
@@ -910,7 +930,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -960,7 +981,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1010,7 +1032,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1060,7 +1083,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1110,7 +1134,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1160,7 +1185,8 @@
         "accentArgb": -1,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1212,7 +1238,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "İyi müzik · 音楽",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1262,7 +1289,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1404,7 +1432,8 @@
             "album": "Fixture album",
             "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
           }
-        ]
+        ],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1617,7 +1646,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1667,7 +1697,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1773,7 +1804,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": true,
@@ -1823,7 +1855,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": true,
@@ -1873,7 +1906,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -1917,7 +1951,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -1940,7 +1975,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -1963,7 +1999,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -1986,7 +2023,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -2009,7 +2047,8 @@
         "accentArgb": 0,
         "flowKind": "none",
         "flowStatus": "",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 0,
       "stale": true,
@@ -2038,7 +2077,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "[[[ {{{ \"quoted\" \\ ]]] }}}",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -2088,7 +2128,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -2138,7 +2179,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -2188,7 +2230,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -2238,7 +2281,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -2288,7 +2332,8 @@
         "accentArgb": -1,
         "flowKind": "flow",
         "flowStatus": "Ready",
-        "recommendations": []
+        "recommendations": [],
+        "isBuffering": false
       },
       "projectedPositionMs": 1000,
       "stale": false,
@@ -2313,6 +2358,162 @@
         "flowKind": "flow",
         "flowStatus": "Ready",
         "recommendations": []
+      }
+    },
+    {
+      "name": "buffering-freezes-requested-playing",
+      "nowMs": 1793059202000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [],
+        "isBuffering": true
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [],
+        "isBuffering": true
+      }
+    },
+    {
+      "name": "resumed-buffering-false-projects",
+      "nowMs": 1793059202000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [],
+        "isBuffering": false
+      },
+      "projectedPositionMs": 4000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [],
+        "isBuffering": false
+      }
+    },
+    {
+      "name": "buffering-string-is-not-a-boolean",
+      "nowMs": 1793059202000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [],
+        "isBuffering": false
+      },
+      "projectedPositionMs": 4000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [],
+        "isBuffering": "true"
       }
     }
   ]

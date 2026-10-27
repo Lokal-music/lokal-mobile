@@ -6,6 +6,7 @@ import 'package:flick/models/song.dart';
 class PlaybackState {
   final Song? currentTrack;
   final bool isPlaying;
+  final bool isBuffering;
   final Duration position;
   final Duration bufferedPosition;
   final Duration duration;
@@ -14,6 +15,7 @@ class PlaybackState {
   const PlaybackState({
     required this.currentTrack,
     required this.isPlaying,
+    this.isBuffering = false,
     required this.position,
     required this.bufferedPosition,
     required this.duration,
@@ -32,6 +34,7 @@ class PlaybackState {
   PlaybackState copyWith({
     Song? currentTrack,
     bool? isPlaying,
+    bool? isBuffering,
     Duration? position,
     Duration? bufferedPosition,
     Duration? duration,
@@ -41,6 +44,7 @@ class PlaybackState {
     return PlaybackState(
       currentTrack: clearTrack ? null : (currentTrack ?? this.currentTrack),
       isPlaying: isPlaying ?? this.isPlaying,
+      isBuffering: isBuffering ?? this.isBuffering,
       position: position ?? this.position,
       bufferedPosition: bufferedPosition ?? this.bufferedPosition,
       duration: duration ?? this.duration,
@@ -55,19 +59,20 @@ class PlaybackState {
           runtimeType == other.runtimeType &&
           other.currentTrack?.id == currentTrack?.id &&
           other.isPlaying == isPlaying &&
+          other.isBuffering == isBuffering &&
           other.position == position &&
           other.bufferedPosition == bufferedPosition &&
           other.duration == duration &&
           other.engine == engine;
 
   @override
-  int get hashCode =>
-      Object.hash(
-        currentTrack?.id,
-        isPlaying,
-        position,
-        bufferedPosition,
-        duration,
-        engine,
-      );
+  int get hashCode => Object.hash(
+    currentTrack?.id,
+    isPlaying,
+    isBuffering,
+    position,
+    bufferedPosition,
+    duration,
+    engine,
+  );
 }

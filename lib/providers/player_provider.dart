@@ -25,6 +25,7 @@ export '../models/playback_context.dart' show PlaybackContext, PlaybackSource;
 class PlayerState {
   final Song? currentSong;
   final bool isPlaying;
+  final bool isBuffering;
   final Duration position;
   final Duration duration;
   final Duration bufferedPosition;
@@ -41,6 +42,7 @@ class PlayerState {
   const PlayerState({
     this.currentSong,
     this.isPlaying = false,
+    this.isBuffering = false,
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
@@ -58,6 +60,7 @@ class PlayerState {
   PlayerState copyWith({
     Song? currentSong,
     bool? isPlaying,
+    bool? isBuffering,
     Duration? position,
     Duration? duration,
     Duration? bufferedPosition,
@@ -76,6 +79,7 @@ class PlayerState {
     return PlayerState(
       currentSong: clearSong ? null : (currentSong ?? this.currentSong),
       isPlaying: isPlaying ?? this.isPlaying,
+      isBuffering: isBuffering ?? this.isBuffering,
       position: position ?? this.position,
       duration: duration ?? this.duration,
       bufferedPosition: bufferedPosition ?? this.bufferedPosition,
@@ -142,6 +146,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
     final initial = PlayerState(
       currentSong: _service.currentSongNotifier.value,
       isPlaying: _service.isPlayingNotifier.value,
+      isBuffering: !_service.isCasting && _service.isBufferingNotifier.value,
       position: _service.positionNotifier.value,
       duration: _service.durationNotifier.value,
       bufferedPosition: _service.bufferedPositionNotifier.value,
@@ -196,6 +201,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
       state = state.copyWith(
         currentSong: latestSong,
         isPlaying: _service.isPlayingNotifier.value,
+        isBuffering: !_service.isCasting && _service.isBufferingNotifier.value,
         position: _service.positionNotifier.value,
         duration: _service.durationNotifier.value,
         bufferedPosition: _service.bufferedPositionNotifier.value,
@@ -281,6 +287,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
               : convert(remote.currentTrack!),
           clearSong: remote.currentTrack == null,
           isPlaying: remote.isPlaying,
+          isBuffering: false,
           position: Duration(milliseconds: (remote.progress * 1000).round()),
           duration: Duration(milliseconds: (remote.duration * 1000).round()),
           isShuffle: remote.shuffle,
@@ -303,6 +310,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
     // Add listeners
     _service.currentSongNotifier.addListener(syncState);
     _service.isPlayingNotifier.addListener(syncState);
+    _service.isBufferingNotifier.addListener(syncState);
     _service.positionNotifier.addListener(syncPosition);
     _service.durationNotifier.addListener(syncState);
     _service.bufferedPositionNotifier.addListener(syncPosition);
@@ -320,6 +328,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
     ref.onDispose(() {
       _service.currentSongNotifier.removeListener(syncState);
       _service.isPlayingNotifier.removeListener(syncState);
+      _service.isBufferingNotifier.removeListener(syncState);
       _service.positionNotifier.removeListener(syncPosition);
       _service.durationNotifier.removeListener(syncState);
       _service.bufferedPositionNotifier.removeListener(syncPosition);

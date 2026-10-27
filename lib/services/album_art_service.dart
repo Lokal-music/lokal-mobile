@@ -37,6 +37,18 @@ class AlbumArtService {
   final MusicFolderService _musicFolderService = MusicFolderService();
   final Map<String, Future<String?>> _inFlightResolutions = {};
   final Map<String, String> _resolvedPaths = {};
+  final _materializedArtwork = ValueNotifier<({String source, String path})?>(
+    null,
+  );
+
+  /// Observe only completed owned cache writes; listening never extracts art.
+  ValueListenable<({String source, String path})?> get materializedArtwork =>
+      _materializedArtwork;
+
+  void _rememberResolvedPath(String source, String path) {
+    _resolvedPaths[source] = path;
+    _materializedArtwork.value = (source: source, path: path);
+  }
 
   /// New/reordered cover cards can paint the already resolved desktop art on
   /// their first frame, instead of flashing a marker-scheme placeholder.
@@ -82,7 +94,7 @@ class AlbumArtService {
       final dir = await _ensureArtworkDir();
       final cachedFile = File('${dir.path}/$cacheKey');
       if (await _isUsableImagePath(cachedFile.path)) {
-        _resolvedPaths[audioSourcePath] = cachedFile.path;
+        _rememberResolvedPath(audioSourcePath, cachedFile.path);
         unawaited(_persistArtworkPath(audioSourcePath, cachedFile.path));
         unawaited(_pruneIfNeeded(dir));
         return cachedFile.path;
@@ -90,7 +102,7 @@ class AlbumArtService {
 
       final bytes = await _normalizeArtworkBytes(raw);
       await cachedFile.writeAsBytes(bytes, flush: true);
-      _resolvedPaths[audioSourcePath] = cachedFile.path;
+      _rememberResolvedPath(audioSourcePath, cachedFile.path);
 
       await _persistArtworkPath(audioSourcePath, cachedFile.path);
       unawaited(_pruneIfNeeded(dir));

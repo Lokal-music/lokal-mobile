@@ -62,6 +62,7 @@ class IosWidgetSnapshot {
       'current': current,
       'lastArtwork': current?['artwork'] ?? _artwork(data['lastArtwork']),
       'isPlaying': current != null && data['isPlaying'] == true,
+      'isBuffering': current != null && data['isBuffering'] == true,
       'positionMs': position,
       'durationMs': duration,
       'playbackRate': rate is num && rate.isFinite && rate >= .25 && rate <= 4
@@ -105,7 +106,10 @@ class IosWidgetSnapshot {
   int projectedPositionAt(int nowMs) {
     final position = _json['positionMs']! as int;
     final duration = _json['durationMs']! as int;
-    if (duration == 0 || _json['isPlaying'] != true || isStaleAt(nowMs)) {
+    if (duration == 0 ||
+        _json['isPlaying'] != true ||
+        _json['isBuffering'] == true ||
+        isStaleAt(nowMs)) {
       return position;
     }
     final elapsed = (nowMs - (_json['updatedAtMs']! as int)).clamp(

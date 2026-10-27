@@ -34,6 +34,29 @@ Future<void> probeIosWebKitReset(
     onMediaReset: video.retireForMediaReset,
   );
 
+  final clock = Stopwatch()..start();
+  final trace = <Map<String, Object?>>[];
+  Map<String, Object?> observation(String event) => {
+    'event': event,
+    'elapsed_ms': clock.elapsedMilliseconds,
+    'epoch': lifecycle.epoch.toString(),
+    'phase': lifecycle.phase.value.name,
+    'cleanup_error': lifecycle.cleanupError?.toString(),
+    'views': views.length,
+    'timing_available': video.timingAvailableNotifier.value,
+    'playing': video.playingNotifier.value,
+    'source_ms': video.sourcePosition.inMilliseconds,
+    'embed_error': video.embedErrorNotifier.value,
+  };
+  void changed() {
+    trace.add(observation('state'));
+    if (trace.length > 64) trace.removeAt(0);
+  }
+
+  lifecycle.phase.addListener(changed);
+  video.timingAvailableNotifier.addListener(changed);
+  binding.reportData!['media_reset_webkit_retirement_trace'] = trace;
+
   Future<void> until(FutureOr<bool> Function() ready, String reason) async {
     for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 250));
@@ -49,6 +72,22 @@ Future<void> probeIosWebKitReset(
       );
       if (await ready()) return;
     }
+    final diagnostics = observation(reason);
+    if (views.isNotEmpty) {
+      try {
+        diagnostics['native_sample'] = await views.last
+            .evaluateJavascript(
+              source: 'window.__lokalNativeVideoSnapshot && window.__lokalNativeVideoSnapshot()',
+            )
+            .timeout(const Duration(seconds: 2));
+        diagnostics['native_load_progress'] = await views.last
+            .getProgress()
+            .timeout(const Duration(seconds: 2));
+      } catch (error) {
+        diagnostics['native_probe_error'] = error.toString();
+      }
+    }
+    binding.reportData!['media_reset_webkit_gate_timeout'] = diagnostics;
     fail(reason);
   }
 
@@ -114,7 +153,11 @@ Future<void> probeIosWebKitReset(
     videoId: 'abcdefghijk',
     controller: video,
     document: nativeWebVideoFixtureDocument,
-    onViewCreated: views.add,
+    onViewCreated: (view) {
+      views.add(view);
+      trace.add(observation('view_created'));
+      if (trace.length > 64) trace.removeAt(0);
+    },
   );
 
   try {
@@ -235,6 +278,8 @@ Future<void> probeIosWebKitReset(
       await lease.release().timeout(const Duration(seconds: 12));
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
+      lifecycle.phase.removeListener(changed);
+      video.timingAvailableNotifier.removeListener(changed);
       video.dispose();
       space.dispose();
     }

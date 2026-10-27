@@ -1,6 +1,6 @@
 # iPhone widgets: shared data and implementation gates
 
-Status: native reader, atomic storage and host publication policy passed; host bridge candidate, 27 October 2026 (Europe/Paris).
+Status: native publication/bridge and first-create correction accepted; live sampler candidate, 27 October 2026 (Europe/Paris).
 The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
 [shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):
 45 shared cases plus native numeric/clock guards and 64 Dart contracts. The [storage run](https://github.com/lokal-music/lokal-mobile/actions/runs/40450346881)
@@ -9,8 +9,10 @@ device plus arm64 simulator SDK checks with Swift 6 warnings treated as errors.
 The [corrected publication run](https://github.com/lokal-music/lokal-mobile/actions/runs/40472952795)
 passes the reader's 45 cases, storage's 20 cases and publication's 14 cases,
 plus the actual iOS 16 SDK checks. The current candidate adds the host channel
-and Flutter coordinator. **No runtime state sampler, WidgetKit target,
-widget entitlement or iPhone widget UI is enabled yet.**
+and Flutter coordinator. The later run-14 correction passes 23 storage cases,
+50×24-worker POSIX and real-store rounds, 45 reader, 14 publisher and 88 Flutter
+cases plus both real bridge SDK checks. **Live runtime sampling is now a candidate;
+no WidgetKit target, widget entitlement or iPhone widget UI is enabled.**
 
 The product remains exactly three configurations—Now Playing, Flow / Radio and
 Cover Flow—with responsive small/medium/large families. Artwork, Dynamic Type,
@@ -400,3 +402,62 @@ symlink/hard-link/FIFO/directory locks. The old plain-create control's failing
 source/run remains linked as reproduction evidence; the regression gate now
 exercises the chosen exclusive-create protocol. All 23 storage cases, native
 SDK checks and actual execution of this correction remain pending.
+
+
+## Live sampler and owned artwork candidate
+
+The existing canonical player listener now supplies an iOS-only runtime owner.
+It publishes track/state/duration/rate/queue-count/theme changes and detected
+seeks, with a 60-second metadata-only heartbeat driven by existing events.
+There is no new position ticker or per-tick disk write. Theme and completed-art
+updates retain the actual source sample timestamp and position; artwork completion
+never reanchors the clock. A backwards wall-clock change safely republishes the
+new observed sample. Only explicitly supplied recommendations are accepted; live
+Flow/Radio/recommendation ownership remains a later binding.
+
+```mermaid
+flowchart LR
+  P[Existing canonical player events] --> S[Meaningful state / seek / heartbeat sampler]
+  T[Actual theme accent] --> S
+  A[Completed owned cache event] --> S
+  S --> C[Single-operation publication coordinator]
+  C --> G{Installed shared capability}
+  G -->|Unavailable| U[Typed reason; zero artwork reads]
+  G -->|Available| O[Bounded owned or existing-cache file reads]
+  O --> N[Native ImageIO + atomic store]
+  N --> R[Actual committed revision]
+```
+
+The artwork loader resolves app support/documents/temporary roots, rejects paths
+and symlinks escaping them, limits each source/aggregate byte read, and considers
+only current plus twelve referenced aliases. A missing/evicted pointer may use an
+already materialized owned replacement. HTTP image references use cache lookup
+only; no fetch or decoder/extractor is started. Native ImageIO remains responsible
+for validating/downsampling accepted PNG/JPEG bytes before group persistence.
+The lifecycle flush never invents a pause. Disposing the app runtime removes the
+owned-art listener and stops pending requests; later native results remain owned
+until completion under the coordinator's previously tested policy.
+
+Both playback adapters expose loading/buffering separately from requested play.
+The shared optional `isBuffering` field defaults false for legacy records and is
+strictly boolean. Dart and Swift freeze projected position during buffering while
+retaining `isPlaying` for controls. The shared corpus grows to 48 cases; all new
+Swift execution and SDK gates still need acceptance for this new source. No Rust
+API or audio transport behavior is changed by the presentation flag.
+
+Build 53 separately proves the actual unconfigured native channel in both full
+simulator suites. The first-create correction subsequently passes focused native
+run 14. Provisioned group access, extension rendering/actions and physical iPhone
+or Windows installation remain independent gates.
+
+
+Validation of the live-sampling candidate: the exact expanded iPhone workflow
+selection plus all widget/Android-widget contracts passes **609 Flutter tests**.
+This includes actual filesystem ownership/quota/eviction checks, source-clock
+sampling and materialized-art events, unavailable-profile/no-I/O and retry/dispose
+cases, the expanded 48-case shared wire corpus, and both backend buffering events.
+Strict analysis of the new sampler/runtime/artwork code, shared Dart models,
+widget tests and recovery probe reports no issues. Whole app/integration analysis
+has no errors. Actionlint and diff checks pass. Actual Swift execution/SDK parity
+for the new buffering field, live-runtime app acceptance and the observed build-56
+retirement timeout remain separate hosted gates.
