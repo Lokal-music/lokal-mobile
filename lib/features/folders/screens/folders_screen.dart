@@ -711,7 +711,6 @@ class _RootFolderCardState extends State<_RootFolderCard>
       ),
     );
   }
-
 }
 
 /// Recursive folder browser showing subfolders and songs at the current level.
@@ -1397,7 +1396,6 @@ class _SubfolderCardState extends State<_SubfolderCard>
       ),
     );
   }
-
 }
 
 class _SongTile extends StatelessWidget {
