@@ -452,18 +452,21 @@ class _Uac2PreferencesSectionsState
     AsyncValue<AudioEnginePreference> audioEngineAsync,
   ) async {
     final changed = value != enabled;
+    // Read the service while this ConsumerState is still mounted. The audio
+    // engine switch can navigate away from this screen before it completes.
+    final uac2Service = ref.read(uac2ServiceProvider);
     if (value) {
       final engine = audioEngineAsync.asData?.value;
       if (engine != null && engine != AudioEnginePreference.isochronousUsb) {
         await PlayerService().setAudioEnginePreference(
           AudioEnginePreference.isochronousUsb,
         );
+        if (!mounted) return;
         ref.invalidate(audioEnginePreferenceProvider);
       }
     }
-    final applied = await ref
-        .read(uac2ServiceProvider)
-        .setBitPerfectEnabled(value);
+    final applied = await uac2Service.setBitPerfectEnabled(value);
+    if (!mounted) return;
     ref.invalidate(uac2BitPerfectEnabledProvider);
     ref.invalidate(uac2ExclusiveDacModeProvider);
     ref.invalidate(killIsochronousUsbOnQuitProvider);
