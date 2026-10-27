@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 
@@ -104,8 +105,12 @@ class AutoMixAdvancedReport {
       if (portable == null || raw is! Map) return null;
       final source = raw['source'];
       if (source is! Map || source['sha256'] is! String) return null;
-      final hash = await sha256.bind(File(audioPath).openRead()).first;
-      return hash.toString() == source['sha256'] ? portable : null;
+      final expectedHash = source['sha256'] as String;
+      // Large lossless files can take appreciable CPU to hash. Never run
+      // source validation on Flutter's UI isolate.
+      final actualHash = await Isolate.run(() async =>
+          (await sha256.bind(File(audioPath).openRead()).first).toString());
+      return actualHash == expectedHash ? portable : null;
     } catch (_) {
       return null;
     }
