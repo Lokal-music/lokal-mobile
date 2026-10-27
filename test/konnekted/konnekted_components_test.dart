@@ -58,9 +58,12 @@ void main() {
 
     await tester.pumpWidget(
       _app(
-        KonnektedHomeTopBar(
-          onSettings: () {},
-          onAppearance: () {},
+        SafeArea(
+          bottom: false,
+          child: KonnektedHomeTopBar(
+            onSettings: () {},
+            onAppearance: () {},
+          ),
         ),
       ),
     );
