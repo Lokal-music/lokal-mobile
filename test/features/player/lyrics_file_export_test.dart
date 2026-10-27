@@ -157,7 +157,7 @@ void main() {
       _song, lyrics, includeDisplayedSubline: true,
     );
     expect(translated.extension, 'lrc');
-    expect(translated.content, '[00:01.00]日本語\\nJapanese\\n');
+    expect(translated.content, '[00:01.00]日本語\nJapanese\n');
   });
 
   test('translation export skips blank and duplicate sublines', () {
@@ -171,13 +171,13 @@ void main() {
           translation: ' Autre '),
       ],
       isSynchronized: false,
-      rawContent: 'Same\\nBlank\\nDifferent',
+      rawContent: 'Same\nBlank\nDifferent',
     );
     expect(prepareLyricsFileExport(_song, lyrics).content,
-      'Same\\nBlank\\nDifferent\\n');
+      'Same\nBlank\nDifferent\n');
     expect(prepareLyricsFileExport(
       _song, lyrics, includeDisplayedSubline: true,
-    ).content, 'Same\\nBlank\\nDifferent\\nAutre\\n');
+    ).content, 'Same\nBlank\nDifferent\nAutre\n');
   });
 
   test('rejects blank lines but keeps words-only lyric content', () async {
