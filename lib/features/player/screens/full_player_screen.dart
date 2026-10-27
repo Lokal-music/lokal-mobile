@@ -2004,7 +2004,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               unawaited(_player.previous());
             } else {
               _carouselKey.currentState?.animateToPrevious() ??
-                  unawaited(_player.previous());
+                  _player.previous();
             }
           },
           onNext: () {
