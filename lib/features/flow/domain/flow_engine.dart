@@ -12,6 +12,7 @@ class FlowEngine {
     required Set<String> favoriteIds,
     required FlowData data,
     Iterable<String> historyIds = const [],
+    Iterable<String> previousArtists = const [],
     Set<String> excludeIds = const {},
     int? seed,
     int limit = FlowRules.initialTracks,
@@ -84,16 +85,44 @@ class FlowEngine {
     });
     final pending = candidates.map((c) => c.track).toList();
     final result = <FlowTrack>[];
+    // Preserve the last artists across refills, not merely within this batch.
+    // The previous condition only spaced artists after an A/A repeat already
+    // happened; a three-track rolling window prevents A/B/A when alternatives
+    // exist, while retaining a fallback for libraries with few artists.
+    final recentArtists = previousArtists
+        .map(normalizeFlowText)
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (recentArtists.length > 3) {
+      recentArtists.removeRange(0, recentArtists.length - 3);
+    }
     while (pending.isNotEmpty && result.length < limit) {
-      var index = 0;
-      if (result.length >= 2 &&
-          result.last.artistKey == result[result.length - 2].artistKey) {
-        final different = pending.indexWhere(
-          (song) => song.artistKey != result.last.artistKey,
-        );
-        if (different >= 0) index = different;
+      var index = pending.indexWhere(
+        (song) =>
+            song.artistKey.isEmpty || !recentArtists.contains(song.artistKey),
+      );
+      if (index < 0) index = 0;
+      // Among similarly ranked eligible tracks, prefer a shared genre for
+      // a less jarring handoff. This is a soft preference, not a hard filter.
+      if (result.isNotEmpty && result.last.genres.isNotEmpty) {
+        final searchLimit = math.min(pending.length, math.max(6, index + 1));
+        for (var i = 0; i < searchLimit; i++) {
+          final next = pending[i];
+          if (i > index + 2) break;
+          if ((next.artistKey.isEmpty ||
+                  !recentArtists.contains(next.artistKey)) &&
+              next.genres.any(result.last.genres.contains)) {
+            index = i;
+            break;
+          }
+        }
       }
-      result.add(pending.removeAt(index));
+      final selected = pending.removeAt(index);
+      result.add(selected);
+      if (selected.artistKey.isNotEmpty) {
+        recentArtists.add(selected.artistKey);
+        if (recentArtists.length > 3) recentArtists.removeAt(0);
+      }
     }
     return result;
   }

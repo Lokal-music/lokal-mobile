@@ -237,7 +237,21 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
     final sources = _sources;
     if (sources == null || sources.isEmpty) return null;
     final wanted = _chosen ?? _remembered;
-    return sources.where((s) => s.id == wanted).firstOrNull ?? sources.first;
+    final exact = sources.where((s) => s.id == wanted).firstOrNull;
+    if (exact != null) return exact;
+    if (wanted?.startsWith('w-') == true) {
+      // Before HTTP providers had stable config IDs, Search remembered their
+      // mutable display labels. Do not silently switch a one-addon user back
+      // to native YouTube when the old selection is restored or renamed.
+      final label = wanted!.substring(2);
+      final byOldLabel = sources.where(
+        (s) => s.id.startsWith('w-') && s.name == label,
+      ).firstOrNull;
+      if (byOldLabel != null) return byOldLabel;
+      final httpSources = sources.where((s) => s.id.startsWith('w-')).toList();
+      if (httpSources.length == 1) return httpSources.single;
+    }
+    return sources.first;
   }
 
   Future<void> _choose(OnlineSource source) async {

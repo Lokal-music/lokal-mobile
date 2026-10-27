@@ -18,8 +18,7 @@ typedef StreamTrackLookup = Future<Song?> Function(
 /// with "Morneye stream expired" / "HTTP add-on stream expired".
 bool needsStreamReResolution(Song song) {
   final source = song.sourcePackage;
-  if (source == 'konnekted.morneye-live' ||
-      source == 'konnekted.progressive') {
+  if (source == 'konnekted.morneye-live' || source == 'konnekted.progressive') {
     // Reuse an active stream while the handle is still genuinely registered;
     // re-resolve as soon as its session expires.
     return !QueuePreResolver.isPlayableResolvedSource(song);
@@ -50,7 +49,8 @@ Song replayableStreamSong(
   // artist/title search; only repair persisted placeholders with no resolver.
   if (song.isPending && resolver.hasResolver(song.id)) return song;
   final resolve = lookup ?? findDiscoverySong;
-  final videoId = song.sourceDisplayName == 'YouTube Music' &&
+  final videoId =
+      song.sourceDisplayName == 'YouTube Music' &&
           song.remoteId != null &&
           RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(song.remoteId!)
       ? song.remoteId
@@ -73,11 +73,7 @@ Song replayableStreamSong(
     artwork: song.albumArt,
     duration: song.duration,
     resolve: ({onStatus, cancel}) async {
-      final resolved = await resolve(
-        track,
-        onStatus: onStatus,
-        cancel: cancel,
-      );
+      final resolved = await resolve(track, onStatus: onStatus, cancel: cancel);
       if (resolved == null) return null;
       // Do not silently substitute stereo when a liked source was verified
       // to contain Dolby Atmos (E-AC-3 JOC).
@@ -101,3 +97,31 @@ List<Song> replayableStreamQueue(
   for (final song in songs)
     replayableStreamSong(song, queueResolver: resolver, lookup: lookup),
 ];
+
+/// Refresh every expired HTTP/Morneye handle before an existing playback
+/// queue is submitted to Media3. A queue can remain open for hours, longer
+/// than its registered HTTP URL or live-transfer session. Keeping a stale
+/// resolved Song in a future slot bypasses the existing Likes-page repair.
+///
+/// [selected] remains authoritative when the user explicitly picks another
+/// recording/source for the same logical song ID.
+({Song selected, List<Song> queue}) replayableStreamSelection(
+  Song selected,
+  List<Song> queue, {
+  QueuePreResolver? resolver,
+  StreamTrackLookup? lookup,
+}) {
+  final prepared = replayableStreamSong(
+    selected,
+    queueResolver: resolver,
+    lookup: lookup,
+  );
+  final refreshed = <Song>[
+    for (final item in queue)
+      if (item.id == selected.id)
+        prepared
+      else
+        replayableStreamSong(item, queueResolver: resolver, lookup: lookup),
+  ];
+  return (selected: prepared, queue: refreshed);
+}

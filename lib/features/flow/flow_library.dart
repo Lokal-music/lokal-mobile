@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/recently_played_repository.dart';
 import '../../models/song.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/songs_provider.dart';
+import '../../services/online_radio_recommendations.dart';
 import 'domain/flow_engine.dart';
 import 'domain/flow_models.dart';
 
@@ -73,6 +76,64 @@ class FlowLibrary {
   final Set<String> _onlineIds = {};
   late final Map<String, Song> byId;
 
+  /// Apply Flow's hard user filters to fresh online suggestions, not only to
+  /// locally ranked songs. Radio providers can return alternate catalogue IDs
+  /// for the same recording or a track previously banned in the local library.
+  List<Song> eligibleOnline(
+    FlowData data,
+    Iterable<Song> suggestions, {
+    int limit = FlowRules.topUpTracks,
+  }) {
+    if (limit <= 0) return const [];
+    final blockedIds = <String>{
+      ...data.bannedIds,
+      for (final entry in data.skipCounts.entries)
+        if (entry.value >= 3) entry.key,
+    };
+    final seenRecordings = <String>{};
+    for (final id in {...data.session.trackIds, ...blockedIds}) {
+      final known = byId[id];
+      if (known != null) {
+        seenRecordings.add(radioRecordingKey(known.artist, known.title));
+      }
+    }
+    final candidates = <Song>[];
+    for (final song in suggestions) {
+      if (song.id.trim().isEmpty ||
+          song.artist.trim().isEmpty ||
+          song.title.trim().isEmpty ||
+          blockedIds.contains(song.id) ||
+          flowGenres(song.genre).any(data.config.excludedGenres.contains)) {
+        continue;
+      }
+      final identity = radioRecordingKey(song.artist, song.title);
+      if (!seenRecordings.add(identity)) continue;
+      candidates.add(song);
+    }
+    // Keep the provider's order unless an alternate artist can avoid an
+    // immediate repeat. This is the same 3-track lookback used for local
+    // Flow recommendations; it carries across online queue refills.
+    final recent = <String>[
+      for (final id in data.session.trackIds.skip(
+        math.max(0, data.session.trackIds.length - 3),
+      ))
+        if (byId[id] case final song?) normalizeFlowText(song.artist),
+    ];
+    if (recent.length > 3) recent.removeRange(0, recent.length - 3);
+    final result = <Song>[];
+    while (candidates.isNotEmpty && result.length < limit) {
+      var index = candidates.indexWhere(
+        (song) => !recent.contains(normalizeFlowText(song.artist)),
+      );
+      if (index < 0) index = 0; // all remaining songs share recent artists
+      final selected = candidates.removeAt(index);
+      result.add(selected);
+      recent.add(normalizeFlowText(selected.artist));
+      if (recent.length > 3) recent.removeAt(0);
+    }
+    return List.unmodifiable(result);
+  }
+
   void rememberOnline(Iterable<Song> recommendations) {
     for (final song in recommendations) {
       if (song.id.trim().isEmpty) continue;
@@ -80,12 +141,12 @@ class FlowLibrary {
       _onlineIds.add(song.id);
     }
   }
+
   late final List<FlowTrack> tracks;
   // Replayed online references must not inflate the original library
   // unlock threshold; only actual local library likes count.
-  int get favoriteCount => favoriteIds.intersection(
-    songs.map((song) => song.id).toSet(),
-  ).length;
+  int get favoriteCount =>
+      favoriteIds.intersection(songs.map((song) => song.id).toSet()).length;
   bool get unlocked => FlowRules.isUnlocked(favoriteCount);
 
   List<Song> mix(FlowData data, DateTime now) {
@@ -99,8 +160,8 @@ class FlowLibrary {
           if (byId[id] case final song?)
             if (allowedLocal.contains(id) ||
                 (_onlineIds.contains(id) &&
-                 !data.bannedIds.contains(id) &&
-                 (data.skipCounts[id] ?? 0) < 3))
+                    !data.bannedIds.contains(id) &&
+                    (data.skipCounts[id] ?? 0) < 3))
               song,
       ];
     }
@@ -113,7 +174,10 @@ class FlowLibrary {
     return result.map((track) => byId[track.id]!).toList();
   }
 
-  List<Song> topUp(FlowData data) {
+  List<Song> topUp(
+    FlowData data, {
+    Iterable<String> trailingArtists = const [],
+  }) {
     if (!unlocked) return const [];
     final remaining = FlowRules.maxSessionTracks - data.session.trackIds.length;
     return const FlowEngine()
@@ -123,6 +187,14 @@ class FlowLibrary {
           historyIds: historyIds,
           data: data,
           excludeIds: data.session.trackIds.toSet(),
+          // Continue artist spacing from the existing queue's tail.
+          previousArtists: [
+            for (final id in data.session.trackIds.skip(
+              math.max(0, data.session.trackIds.length - 3),
+            ))
+              if (byId[id] case final song?) song.artist,
+            ...trailingArtists,
+          ],
           limit: remaining.clamp(0, FlowRules.topUpTracks),
         )
         .map((track) => byId[track.id]!)

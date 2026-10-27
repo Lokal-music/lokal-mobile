@@ -268,6 +268,22 @@ void main() {
       net.close();
     });
 
+    test(
+      'Qobuz addon DNS stalls are bounded and never hang playback',
+      () async {
+        final pendingDns = Completer<List<InternetAddress>>();
+        final net = MorneyeNetwork(
+          const MorneyePermissions(network: ['qobuz.example']),
+          lookup: (_) => pendingDns.future,
+          requestTimeout: const Duration(milliseconds: 80),
+        );
+        addTearDown(net.close);
+        await expectLater(
+          net.request('https://qobuz.example/stream'),
+          throwsA(isA<TimeoutException>()),
+        );
+      },
+    );
     test('refuses private addresses that were not asked for', () async {
       final net = MorneyeNetwork(
         const MorneyePermissions(network: ['local.test'], allowHttp: true),
@@ -453,14 +469,19 @@ void main() {
   group('Mornye package file names', () {
     test('accepts official .spotiflac-ext packages and registry formats', () {
       for (final name in [
-        'extension.spotiflac-ext', 'EXTENSION.SPOTIFLAC-EXT',
-        'extension.sflx', 'extension.morneye-ext',
+        'extension.spotiflac-ext',
+        'EXTENSION.SPOTIFLAC-EXT',
+        'extension.sflx',
+        'extension.morneye-ext',
       ]) {
         expect(morneyeIsPackageFileName(name), isTrue, reason: name);
       }
       for (final name in [
-        'extension.zip', 'extension.json', 'extension.spotiflac-ext.zip',
-        'extension.spotiflac-ext/index.js', 'extension.spotiflac-ext.exe',
+        'extension.zip',
+        'extension.json',
+        'extension.spotiflac-ext.zip',
+        'extension.spotiflac-ext/index.js',
+        'extension.spotiflac-ext.exe',
       ]) {
         expect(morneyeIsPackageFileName(name), isFalse, reason: name);
       }

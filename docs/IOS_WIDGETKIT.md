@@ -1,11 +1,11 @@
 # iPhone widgets: shared data and implementation gates
 
-Status: atomic storage candidate, 27 October 2026 (Europe/Paris).
+Status: native atomic storage contracts passed, 27 October 2026 (Europe/Paris).
 The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
 [shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):
-45 shared cases plus native numeric/clock guards and 64 Dart contracts. The new
-storage/image candidate and its filesystem/process suite require their first passing
-hosted execution. **No WidgetKit target, host publisher, widget entitlement or
+45 shared cases plus native numeric/clock guards and 64 Dart contracts. The [storage run](https://github.com/lokal-music/lokal-mobile/actions/runs/40450346881)
+also passes 19 real filesystem/image/process cases and the actual iOS 16 arm64
+device plus arm64 simulator SDK checks with Swift 6 warnings treated as errors. **No WidgetKit target, host publisher, widget entitlement or
 iPhone widget UI is enabled by this change.**
 
 The product remains exactly three configurations—Now Playing, Flow / Radio and
@@ -149,8 +149,10 @@ cases, including independent native child processes, descriptor/path replacement
 symlinks, hard links, FIFOs, real permission denial, image decoding/metadata
 removal, incomplete assets, cache quotas and reference/grace retention. The
 workflow also type-checks the source with the actual iOS 16 device and simulator
-SDK targets. Until that run passes, this section describes the candidate and its
-acceptance design rather than a reported native storage pass.
+SDK targets. These gates pass in run `40450346881`, job `122011345223`, at
+source `e7ed8035126e1d645f17c1f23a6761ee05c5fb71`, tree
+`1be6c4c35decac65e9e16cf36fcddb98d09f43c5`. This is native storage evidence,
+not App Group entitlement or extension installation evidence.
 
 Atomic rename establishes reader visibility and failure behavior; physical
 power-loss durability, actual App Group sandbox access, protected-device reads,
@@ -165,5 +167,5 @@ checks, then stops at the iOS device SDK check: the SDK does not expose the
 verifies the reported Foundation attribute, reads that descriptor's actual class
 and applies it to the held owned-file descriptor. No private keybag constant is
 guessed. Probe failure stays explicit and is retried on a later publication;
-simulator code does not claim device protection. SDK and storage execution of
-this correction remain pending.
+simulator code does not claim device protection. The corrected device/simulator SDK checks and all nineteen storage cases
+pass in the hosted run above. Physical file-protection behavior remains pending.

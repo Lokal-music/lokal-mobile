@@ -1,8 +1,8 @@
 # iPhone review of mobile PRs after #172
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-The parity continuation carries **44 reviewed merged PRs through #225**, including
-merged source `56bb6629a55f79b56af556da94d4e6ed8d83ec30`. Build 34 passes both complete
+The parity continuation carries **47 reviewed merged PRs through #231**, including
+merged source `3484844e17d89b45d18d7f27d9a1d7371b3d4487`. Build 34 passes both complete
 iOS 18.6/26.0 native suites through #217. Later reset and lyrics changes require
 their own fresh native acceptance and do not borrow build-34 qualification.
 The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
@@ -640,3 +640,41 @@ layouts/commands and Windows extension signing remain acceptance gates. The
 Android publisher is unchanged and the iPhone widget feature stays unavailable
 until the actual extension is installed and usable. No newly reviewed upstream
 PR is counted by this foundation; the parity audit remains 44 through #225.
+
+
+### Parity through #231 — 27 October 2026
+
+Three further merged product changes bring the review to **47** PRs. This
+continuation is stacked on the WebKit frame-observation candidate; source inclusion
+does not inherit native acceptance from an earlier build.
+
+| PR / exact merged source | iPhone behavior and adaptation |
+| --- | --- |
+| [222](https://github.com/lokal-music/lokal-mobile/pull/222) / `c4aa462a47141a092e6cb29818557e7e3c6fdb53` | Flow begins with three tracks, keeps four ahead, spaces recent artists, respects bans, and avoids duplicate recordings across local/online sources. Shared waveform/LUFS metadata may be reused without decoding on the playback thread. Keep the iOS epoch/retirement fences throughout early two-player crossfade preparation. Offline model-cue cuts and the experimental third-decoder Demucs option remain Android-only; the iPhone settings omit that toggle and its engine never calls either lookup. |
+| [226](https://github.com/lokal-music/lokal-mobile/pull/226) / `d09f0ec70aaf8011467240b6739e9cb20732131c` | Automatic Discovery honors HTTP-only source configuration. Search remembers explicit sources by immutable add-on configuration ID; rename-safe priority migration accepts only unambiguous legacy labels. Queued selections retain their validated add-on identity and disabled sources fail explicitly. Preserve the port's independent Monochrome opt-in. |
+| [231](https://github.com/lokal-music/lokal-mobile/pull/231) / `3484844e17d89b45d18d7f27d9a1d7371b3d4487` | Re-arm expired HTTP/Morneye/Qobuz handles at actual playback, including future queue entries. An explicit recording selection overrides equal-ID stale entries; shuffled canonical and original queues are repaired in place. A prepared iPhone reset selection retains the refreshed descriptors without reshuffling or renewing an obsolete output request. DNS lookup now shares the bounded network request deadline. |
+
+The upstream AutoMix-only workflow is not enabled: relevant host regressions are
+included in the existing iPhone workflow. Android CI stays manually disabled.
+No native PCM/DSD/USB transport, Rust API or dependency lock changes accompany this
+integration. Physical listening, real provider expiry, iPhone suspension and signed
+Windows installation remain separate release gates.
+
+
+The integration also normalizes nullable AutoMix lookup futures before attaching
+fallback deadlines: a provider returning a valid non-nullable `Future<Profile>`
+previously rejected an `onTimeout: () => null` callback at runtime and silently
+skipped its profile. Actual profile/stem engine regressions cover this path.
+Widget tests stop the prepared/active decoders before Flutter checks timer
+ownership; queue cache retention uses a real temporary file and verifies that a
+deleted cache file is no longer retained.
+
+
+Validation of this source: the exact expanded iPhone workflow selection plus
+64 widget/Android-widget contracts passes **465 Flutter tests**. Whole app and
+integration analysis has no errors (602 warning/information items remain), all
+16 dependency/simulator/control Python tests pass, and actionlint plus diff
+checks pass. The latest shared-engine/queue subset passes 35 cases, including
+actual cached profiles/stem transitions on the Android test engine and disabled
+advanced lookups on the iPhone engine. Native acceptance of this 47-PR source
+is still required; no physical device or live provider result is claimed.

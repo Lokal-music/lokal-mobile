@@ -108,8 +108,9 @@ void main() {
           ),
         ),
         flowPlaybackProvider.overrideWithValue(playback),
-        flowRadioProvider.overrideWithValue((seed, existing, count) async =>
-            online.take(count).toList()),
+        flowRadioProvider.overrideWithValue(
+          (seed, existing, count) async => online.take(count).toList(),
+        ),
         playerProvider.overrideWith(() => player),
         playlistServiceProvider.overrideWithValue(playlists),
       ],
@@ -162,34 +163,35 @@ void main() {
     },
   );
 
-  test(
-    'queue prefetches while three tracks remain without replay or duplicates',
-    () async {
-      await controller.play();
-      final initial = [...playback.lastPlaylist];
-      await controller.grow(onlyWhenLast: true);
-      expect(playback.appended.length, 10, reason: 'prepare before queue is empty');
-      playback.state = playback.state.copyWith(
-        currentSong: initial.last,
-        upNext: [],
-      );
-      await controller.grow(onlyWhenLast: true);
-      expect(playback.appended.length, 20);
-      expect(playback.playCalls, 1);
-      expect(
-        playback.appended
-            .map((s) => s.id)
-            .toSet()
-            .intersection(initial.map((s) => s.id).toSet()),
-        isEmpty,
-      );
-      expect(FlowCodec.decode(stored).session.trackIds.length, 23);
-      playback.seed = -1;
-      playback.state = playback.state.copyWith(upNext: []);
-      await controller.grow(onlyWhenLast: true);
-      expect(playback.appended.length, 20);
-    },
-  );
+  test('queue prefetches while up to four tracks remain without replay or duplicates', () async {
+    await controller.play();
+    final initial = [...playback.lastPlaylist];
+    await controller.grow(onlyWhenLast: true);
+    expect(
+      playback.appended.length,
+      10,
+      reason: 'prepare before queue is empty',
+    );
+    playback.state = playback.state.copyWith(
+      currentSong: initial.last,
+      upNext: [],
+    );
+    await controller.grow(onlyWhenLast: true);
+    expect(playback.appended.length, 20);
+    expect(playback.playCalls, 1);
+    expect(
+      playback.appended
+          .map((s) => s.id)
+          .toSet()
+          .intersection(initial.map((s) => s.id).toSet()),
+      isEmpty,
+    );
+    expect(FlowCodec.decode(stored).session.trackIds.length, 23);
+    playback.seed = -1;
+    playback.state = playback.state.copyWith(upNext: []);
+    await controller.grow(onlyWhenLast: true);
+    expect(playback.appended.length, 20);
+  });
 
   test(
     'ban removes upcoming track and persists; explicit skip records only once',
@@ -248,49 +250,52 @@ void main() {
     },
   );
 
+  test('save uses inherited PlaylistService, preserves order and rejects duplicate names', () async {
+    await controller.play();
+    await controller.savePlaylist('  Evening Flow  ');
+    final saved = (await playlists.getPlaylists()).single;
+    expect(saved.name, 'Evening Flow');
+    expect(saved.songIds, playback.lastPlaylist.map((s) => s.id));
+    // A fresh inherited service reads the persisted playlist, not just memory.
+    expect(
+      (await PlaylistService().getPlaylists()).single.songIds,
+      saved.songIds,
+    );
+    await expectLater(
+      controller.savePlaylist('evening flow'),
+      throwsStateError,
+    );
+    expect((await playlists.getPlaylists()).length, 1);
+    expect(playback.appended, isEmpty);
+    expect(playback.playCalls, 1);
+  });
+
   test(
-    'save uses inherited PlaylistService, preserves order and rejects duplicate names',
+    'Flow prefers online suggestions and keeps their session identity',
     () async {
+      online.addAll([
+        for (var i = 0; i < 10; i++)
+          Song(
+            id: 'pending:radio-$i',
+            title: 'Online $i',
+            artist: 'New artist $i',
+            duration: const Duration(minutes: 3),
+            fileType: 'ONLINE',
+            sourcePackage: Song.pendingSourcePackage,
+          ),
+      ]);
       await controller.play();
-      await controller.savePlaylist('  Evening Flow  ');
-      final saved = (await playlists.getPlaylists()).single;
-      expect(saved.name, 'Evening Flow');
-      expect(saved.songIds, playback.lastPlaylist.map((s) => s.id));
-      // A fresh inherited service reads the persisted playlist, not just memory.
+      await controller.grow(onlyWhenLast: true);
+      expect(playback.appended, hasLength(10));
       expect(
-        (await PlaylistService().getPlaylists()).single.songIds,
-        saved.songIds,
+        playback.appended.every((song) => song.id.startsWith('pending:')),
+        isTrue,
       );
-      await expectLater(
-        controller.savePlaylist('evening flow'),
-        throwsStateError,
-      );
-      expect((await playlists.getPlaylists()).length, 1);
-      expect(playback.appended, isEmpty);
-      expect(playback.playCalls, 1);
+      final data = container.read(flowControllerProvider).requireValue;
+      expect(data.session.trackIds, hasLength(13));
+      expect(library.mix(data, DateTime.now()).length, 13);
     },
   );
-
-  test('Flow prefers online suggestions and keeps their session identity', () async {
-    online.addAll([
-      for (var i = 0; i < 10; i++)
-        Song(
-          id: 'pending:radio-$i',
-          title: 'Online $i',
-          artist: 'New artist $i',
-          duration: const Duration(minutes: 3),
-          fileType: 'ONLINE',
-          sourcePackage: Song.pendingSourcePackage,
-        ),
-    ]);
-    await controller.play();
-    await controller.grow(onlyWhenLast: true);
-    expect(playback.appended, hasLength(10));
-    expect(playback.appended.every((song) => song.id.startsWith('pending:')), isTrue);
-    final data = container.read(flowControllerProvider).requireValue;
-    expect(data.session.trackIds, hasLength(13));
-    expect(library.mix(data, DateTime.now()).length, 13);
-  });
 
   test(
     'adapter counts only playable local favorites and keeps network tracks out',

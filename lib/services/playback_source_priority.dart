@@ -19,13 +19,25 @@ abstract final class PlaybackSourcePriority {
 
   static Future<List<T>> order<T>(
     List<T> available,
-    String Function(T) id,
-  ) async {
+    String Function(T) id, {
+    // Stable provider ids supersede the old HTTP ids derived from display
+    // labels. A rename must not silently restore YouTube as first choice.
+    Map<String, String> aliases = const {},
+  }) async {
     final saved = await load();
     final sources = {for (final source in available) id(source): source};
+    final migrated = <String>[for (final key in saved) aliases[key] ?? key]
+        .toSet()
+        .toList();
+    if (migrated.join('\u0000') != saved.join('\u0000')) {
+      await (await SharedPreferences.getInstance()).setStringList(
+        key,
+        migrated,
+      );
+    }
     return [
-      for (final key in {...saved, ...sources.keys})
-        if (sources[key] case final source?) source,
+      for (final sourceId in {...migrated, ...sources.keys})
+        if (sources[sourceId] case final source?) source,
     ];
   }
 

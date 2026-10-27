@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/services/android_audio_engine.dart';
+import 'package:flick/services/automix_analysis_cache.dart';
 
 void main() {
   group('crossfadeInVolume', () {
@@ -54,6 +55,210 @@ void main() {
         expect(crossfadeInVolume(curve, -0.5), closeTo(0.0, 1e-9));
         expect(crossfadeInVolume(curve, 1.5), closeTo(1.0, 1e-9));
       }
+    });
+  });
+
+  group('shouldPrepareCrossfade', () {
+    const duration = Duration(minutes: 3);
+
+    test('starts preparation eight seconds before the configured fade', () {
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration - const Duration(seconds: 11),
+          fadeSecs: 3,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration - const Duration(milliseconds: 11001),
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldArmCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration - const Duration(seconds: 11),
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+    });
+
+    test('does not prepare invalid, completed or disabled sources', () {
+      for (final enabled in [true, false]) {
+        expect(
+          shouldPrepareCrossfade(
+            enabled: enabled,
+            duration: Duration.zero,
+            position: Duration.zero,
+            fadeSecs: 3,
+          ),
+          isFalse,
+        );
+      }
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: const Duration(seconds: 2),
+          position: Duration.zero,
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: duration,
+          position: duration,
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldPrepareCrossfade(
+          enabled: false,
+          duration: duration,
+          position: duration - const Duration(seconds: 3),
+          fadeSecs: 3,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('cached AutoMix timing', () {
+    const length = Duration(minutes: 3);
+    AutoMixProfile profile(double audibleEnd, {double duration = 180}) =>
+        AutoMixProfile(
+          durationSeconds: duration,
+          leadInSeconds: 0,
+          audibleEndSeconds: audibleEnd,
+          fadeOutStartSeconds: audibleEnd - 4,
+          entrances: const [],
+          exits: const [],
+          energy: .6,
+        );
+
+    test('moves overlap ahead of substantial terminal digital silence', () {
+      expect(
+        automixEffectiveAudibleEnd(length, profile(173)),
+        const Duration(seconds: 173),
+      );
+    });
+
+    test('rejects uncertain or implausibly long trimming', () {
+      expect(automixEffectiveAudibleEnd(length, null), length);
+      expect(automixEffectiveAudibleEnd(length, profile(179)), length);
+      expect(automixEffectiveAudibleEnd(length, profile(150)), length);
+      expect(
+        automixEffectiveAudibleEnd(length, profile(170, duration: 190)),
+        length,
+      );
+    });
+  });
+
+  group('32-beat native model overlap eligibility', () {
+    AutoMixProfile model(double bpm) => AutoMixProfile(
+      durationSeconds: 180,
+      leadInSeconds: 0,
+      audibleEndSeconds: 180,
+      fadeOutStartSeconds: 176,
+      entrances: const [],
+      exits: const [],
+      analyzedBpm: bpm,
+      modelExits: const [158],
+      modelEntrances: const [6],
+    );
+
+    test('prepares a matched 32-beat model phrase before the cue', () {
+      final outgoing = model(120);
+      final incoming = model(120.6);
+      final phrase = automixPhraseOverlapSeconds(outgoing);
+      expect(phrase, closeTo(16, 0.001));
+      expect(automixNativePhraseCompatible(outgoing, incoming), isTrue);
+      final end = automixModelEnd(
+        const Duration(minutes: 3),
+        outgoing,
+        phrase!,
+      );
+      expect(end, const Duration(seconds: 174));
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: end!,
+          position: const Duration(seconds: 149),
+          fadeSecs: phrase,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldPrepareCrossfade(
+          enabled: true,
+          duration: end,
+          position: const Duration(seconds: 150),
+          fadeSecs: phrase,
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'incompatible BPM, missing BPM and extreme BPM retain short fades',
+      () {
+        expect(automixNativePhraseCompatible(model(120), model(128)), isFalse);
+        expect(automixNativePhraseCompatible(model(120), null), isFalse);
+        expect(automixPhraseOverlapSeconds(model(60)), isNull);
+        expect(automixPhraseOverlapSeconds(model(double.nan)), isNull);
+        expect(automixPhraseOverlapSeconds(model(180)), closeTo(10.667, 0.001));
+        expect(
+          automixModelEnd(const Duration(minutes: 3), model(120), 16),
+          const Duration(seconds: 174),
+        );
+      },
+    );
+  });
+
+  group('offline CUE-DETR scheduling', () {
+    const duration = Duration(minutes: 3);
+    AutoMixProfile advanced(List<double> exits) => AutoMixProfile(
+      durationSeconds: 180,
+      leadInSeconds: 0,
+      audibleEndSeconds: 180,
+      fadeOutStartSeconds: 177,
+      entrances: const [],
+      exits: const [],
+      modelExits: exits,
+    );
+
+    test('uses a reported outgoing overlap start near the outro', () {
+      expect(
+        automixModelEnd(duration, advanced([158]), 3),
+        const Duration(seconds: 161),
+      );
+      expect(automixModelEnd(duration, advanced([140]), 3), isNull);
+    });
+
+    test('rejects implausible or mismatched report timings', () {
+      expect(automixModelEnd(duration, advanced([179]), 3), isNull);
+      expect(automixModelEnd(duration, advanced([]), 3), isNull);
+      expect(automixModelEnd(duration, advanced([158]), double.nan), isNull);
+      const invalid = AutoMixProfile(
+        durationSeconds: 195,
+        leadInSeconds: 0,
+        audibleEndSeconds: 195,
+        fadeOutStartSeconds: 190,
+        entrances: [],
+        exits: [],
+        modelExits: [158],
+      );
+      expect(automixModelEnd(duration, invalid, 3), isNull);
     });
   });
 
