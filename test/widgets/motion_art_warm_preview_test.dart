@@ -76,6 +76,25 @@ void main() {
     expect(created, 1);
     expect(controller.value.position, const Duration(seconds: 3));
     expect(tester.takeException(), isNull);
+
+    // A backgrounded app releases its motion-art view lease instead of
+    // retaining an invisible Android video surface. On resume, a still-live
+    // mini-player lease can supply its already decoded frame.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(find.byType(VideoPlayer), findsNothing);
+    expect(find.text('static cover'), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('decoded-frame')), findsOneWidget);
+    expect(created, 1);
+
+    // Memory pressure prioritizes the audio player and releases optional
+    // video immediately; a new decoder must not be started on this frame.
+    tester.binding.handleMemoryPressure();
+    await tester.pump();
+    expect(find.byType(VideoPlayer), findsNothing);
+    expect(find.text('static cover'), findsOneWidget);
     suppression.value = true;
     await tester.pump();
     expect(find.byType(VideoPlayer), findsNothing);
