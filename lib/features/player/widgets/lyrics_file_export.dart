@@ -39,7 +39,7 @@ String _timestamp(Duration time) {
   return '$minutes:$seconds.$centiseconds';
 }
 
-String _renderLyrics(LyricsData lyrics) {
+String _renderLyrics(LyricsData lyrics, {bool includeDisplayedSubline = false}) {
   final output = <String>[];
   for (final line in lyrics.lines) {
     if (lyrics.isSynchronized) {
@@ -51,8 +51,10 @@ String _renderLyrics(LyricsData lyrics) {
     } else {
       output.add(line.text);
     }
-    if (line.translation?.trim().isNotEmpty == true) {
-      output.add(line.translation!);
+    final translation = line.translation?.trim();
+    if (includeDisplayedSubline && translation != null &&
+        translation.isNotEmpty && translation != line.text.trim()) {
+      output.add(translation);
     }
   }
   return "${output.join('\n')}\n";
@@ -66,9 +68,9 @@ bool hasUsableLyrics(LyricsData lyrics) => lyrics.lines.any(
       (line.words?.any((word) => word.text.trim().isNotEmpty) ?? false),
 );
 
-/// Keep valid original LRC/ELRC/XML bytes unless the player is showing a
-/// translation or romanization that is not part of the original document.
-/// In that case export the selected rendered lines, not stale rawContent.
+/// Keep valid original LRC/ELRC/XML bytes for normal saves. Only an explicit
+/// translated save renders the selected sublines (which may not exist in raw
+/// source content), preserving original word timing wherever possible.
 LyricsFileExport prepareLyricsFileExport(
   Song song,
   LyricsData lyrics, {
@@ -95,12 +97,11 @@ LyricsFileExport prepareLyricsFileExport(
   final lrc = RegExp(r'\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]').hasMatch(raw);
   final enhanced = lrc &&
       RegExp(r'<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>').hasMatch(raw);
-  final missingSubline = lyrics.lines.any(
+  final withSubline = includeDisplayedSubline && lyrics.lines.any(
     (line) => line.translation?.trim().isNotEmpty == true &&
-        !raw.contains(line.translation!.trim()),
+        line.translation!.trim() != line.text.trim(),
   );
-  final preserveOriginal = !includeDisplayedSubline &&
-      !missingSubline && (xml || lrc);
+  final preserveOriginal = !withSubline && (xml || lrc);
   final wordTimed = lyrics.lines.any((line) => line.words?.isNotEmpty == true);
   final extension = preserveOriginal && xml
       ? (ttml ? 'ttml' : 'xml')
@@ -108,7 +109,9 @@ LyricsFileExport prepareLyricsFileExport(
           ? ((preserveOriginal && enhanced || !preserveOriginal && wordTimed)
               ? 'elrc' : 'lrc')
           : 'txt';
-  final content = preserveOriginal ? lyrics.rawContent : _renderLyrics(lyrics);
+  final content = preserveOriginal
+      ? lyrics.rawContent
+      : _renderLyrics(lyrics, includeDisplayedSubline: withSubline);
   final title = _safeFilePart(song.title);
   final artist = _safeFilePart(song.artist);
   final stem = [
