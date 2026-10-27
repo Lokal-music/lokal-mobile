@@ -115,22 +115,25 @@ do {
     try require(try revision(reader) == 2, "Rejected candidate replaced current state")
   }
   try check("separate instances serialize concurrent publishers and atomic readers") {
-    let root = try folder("concurrent")
-    _ = try LokalWidgetStore(container: root, createIfMissing: true)
-    let errors = Errors()
-    DispatchQueue.concurrentPerform(iterations: 24) { index in
-      do {
-        let store = try LokalWidgetStore(container: root)
-        do { try store.publish(candidate(index + 1, title: String(repeating: "x", count: 256))) }
-        catch LokalWidgetStoreError.staleRevision {}
-        if let snapshot = try store.readSnapshot() {
-          let title = (snapshot.json["current"] as? [String: Any])?["title"] as? String
-          try require(title == String(repeating: "x", count: 256), "Reader observed torn metadata")
-        }
-      } catch { errors.add(error) }
+    let rounds = min(100, max(1, Int(ProcessInfo.processInfo.environment["LOKAL_WIDGET_CONCURRENCY_ROUNDS"] ?? "1") ?? 1))
+    for round in 0..<rounds {
+      let root = try folder("concurrent-\(round)")
+      _ = try LokalWidgetStore(container: root, createIfMissing: true)
+      let errors = Errors()
+      DispatchQueue.concurrentPerform(iterations: 24) { index in
+        do {
+          let store = try LokalWidgetStore(container: root)
+          do { try store.publish(candidate(index + 1, title: String(repeating: "x", count: 256))) }
+          catch LokalWidgetStoreError.staleRevision {}
+          if let snapshot = try store.readSnapshot() {
+            let title = (snapshot.json["current"] as? [String: Any])?["title"] as? String
+            try require(title == String(repeating: "x", count: 256), "Reader observed torn metadata")
+          }
+        } catch { errors.add(error) }
+      }
+      try require(errors.empty, "Concurrent publication failed at round \(round): " + errors.summary)
+      try require(try revision(LokalWidgetStore(container: root)) == 24, "Highest revision did not win")
     }
-    try require(errors.empty, "Concurrent publication failed: " + errors.summary)
-    try require(try revision(LokalWidgetStore(container: root)) == 24, "Highest revision did not win")
   }
   try check("an atomically replaced snapshot remains readable through its held old descriptor") {
     let root = try folder("read-replaced-inode")

@@ -345,3 +345,21 @@ publication concurrency stays at one; late completions never publish stale
 acknowledgements. The full widget/Android-widget selection passes **88 Flutter
 tests**. These checks extend the 583-test parity checkpoint; they do not claim a
 new combined full-app native pass or make the runtime sampler available.
+
+
+## Intermittent store failure — investigation open
+
+[Native run 8](https://github.com/lokal-music/lokal-mobile/actions/runs/40483084962)
+passes the actual Flutter bridge SDK checks, 85 Flutter cases, 45 reader cases
+and 14 publisher cases, then fails the store's independent-instance concurrent
+publication case with `posix(2)` (ENOENT). Earlier runs 5 and 7 pass the complete
+store suite, so they do not establish absence of this intermittent failure.
+
+The diagnostic continuation labels the exact failing POSIX operation and captures
+errno before constructing diagnostic values. The focused native workflow now runs
+50 independent 24-worker publication/read rounds, keeping highest-revision and
+untorn-read assertions. It preserves all failure gates and the existing strict
+file protections. No guessed locking change, ignored ENOENT, weakened assertions
+or fixed-race claim accompanies this investigation. Swift execution and both SDK
+checks for the diagnostic source remain pending; widget runtime wiring remains
+blocked on resolving the failure.
