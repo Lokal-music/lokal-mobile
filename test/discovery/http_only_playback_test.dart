@@ -141,6 +141,18 @@ void main() {
     expect(requests, ['GET /library/stream/song-1']);
   });
 
+  test('mismatched HTTP source selection never plays another add-on', () async {
+    final requests = <String>[];
+    final client = _client(requests);
+    addTearDown(client.close);
+    await expectLater(
+      playOnlineTrack('w-other-source', _track(),
+        store: _MemorySettings(), client: client),
+      throwsA(isA<DiscoveryException>()),
+    );
+    expect(requests, isEmpty);
+  });
+
   test('disabled HTTP addon is not silently replaced by another source', () async {
     final requests = <String>[];
     final client = _client(requests);
