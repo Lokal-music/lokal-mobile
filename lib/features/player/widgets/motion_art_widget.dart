@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flick/services/motion_art/shared_motion_playback.dart';
+import 'package:flick/services/motion_art/motion_art_memory_pressure.dart';
 
 /// Renders Apple Music Motion Art for an album while falling back to [fallback]
 /// (typically the Ken Burns [AnimatedAlbumArt] or a static artwork widget).
@@ -146,12 +147,8 @@ class _MotionArtViewState extends State<MotionArtView>
   bool _routeIsCurrent = true;
   bool _tickerEnabled = true;
   bool _loading = false;
-  // One cooldown for the whole app: newly created artwork views must not
-  // reopen a video decoder while Android is reporting memory pressure.
-  static final ValueNotifier<bool> _memoryPressurePause = ValueNotifier(false);
-  static Timer? _memoryRecoveryTimer;
-  static const _memoryRecoveryDelay = Duration(minutes: 2);
-  bool get _suspendedForMemoryPressure => _memoryPressurePause.value;
+  bool get _suspendedForMemoryPressure =>
+      MotionArtMemoryPressure.instance.isSuspended;
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   bool get _canPlay =>
       widget.enabled &&
@@ -186,8 +183,13 @@ class _MotionArtViewState extends State<MotionArtView>
   @override
   void initState() {
     super.initState();
+    // The process observer is already registered at bootstrap; starting here
+    // also keeps isolated widget tests consistent.
+    MotionArtMemoryPressure.instance.start();
     WidgetsBinding.instance.addObserver(this);
-    _memoryPressurePause.addListener(_onMemoryPressureChanged);
+    MotionArtMemoryPressure.instance.suspended.addListener(
+      _onMemoryPressureChanged,
+    );
     movingCoverRevision.addListener(_onRevisionChanged);
     SecureSpotifyTokenStore.sessionRevision.addListener(_onRevisionChanged);
     if (widget.enabled) {
@@ -248,23 +250,13 @@ class _MotionArtViewState extends State<MotionArtView>
     _syncPlayback();
   }
 
-  @override
-  void didHaveMemoryPressure() {
-    // All mounted views receive this Android notification. Use a single
-    // process-wide cooldown so new views don't immediately reload decoders.
-    _memoryRecoveryTimer?.cancel();
-    _memoryPressurePause.value = true;
-    _memoryRecoveryTimer = Timer(_memoryRecoveryDelay, () {
-      _memoryRecoveryTimer = null;
-      _memoryPressurePause.value = false;
-    });
-  }
-
   void _onMemoryPressureChanged() {
     if (!mounted) return;
     if (_suspendedForMemoryPressure) {
       // Optional video decoding must release its buffers before music.
-      _teardown();
+      // Drop the shared lease immediately: the 500 ms handoff is only for
+      // normal mini/full-player transitions, not memory pressure.
+      _teardown(immediate: true);
     } else {
       _beginLoad();
     }
@@ -333,7 +325,9 @@ class _MotionArtViewState extends State<MotionArtView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _memoryPressurePause.removeListener(_onMemoryPressureChanged);
+    MotionArtMemoryPressure.instance.suspended.removeListener(
+      _onMemoryPressureChanged,
+    );
     movingCoverRevision.removeListener(_onRevisionChanged);
     SecureSpotifyTokenStore.sessionRevision.removeListener(_onRevisionChanged);
     AnimatedArtworkService.instance.revision.removeListener(_onRevisionChanged);
@@ -342,7 +336,7 @@ class _MotionArtViewState extends State<MotionArtView>
     super.dispose();
   }
 
-  void _teardown() {
+  void _teardown({bool immediate = false}) {
     _generation++;
     _loading = false;
     _timer?.cancel();
@@ -356,17 +350,20 @@ class _MotionArtViewState extends State<MotionArtView>
     final lease = _sharedLease;
     _controller = null;
     _sharedLease = null;
-    unawaited(_disposeVideo(controller, lease: lease));
+    unawaited(_disposeVideo(controller, lease: lease, immediate: immediate));
   }
 
   Future<void> _disposeVideo(
     VideoPlayerController? controller, {
     MotionPlaybackLease<VideoPlayerController>? lease,
+    bool immediate = false,
   }) async {
     if (controller == null) return;
     if (lease != null) {
       await lease.release(
         immediate:
+            immediate ||
+            _suspendedForMemoryPressure ||
             _suppressed ||
             _performance ||
             !widget.enabled ||
