@@ -583,3 +583,43 @@ and SwiftUI scene metadata, and rejects missing/invalid built orientations befor
 booting or installing. Eight local policy cases and actual project/plist parsing
 pass. Hosted launch/render acceptance is still required. This correction affects
 the CI-only app, not Runner or the separately linked extension.
+
+
+## Native render 20 accepted; visible-content correction
+
+[Run 20](https://github.com/lokal-music/lokal-mobile/actions/runs/40524454347)
+passes all four focused jobs at source `4e011ab2d8f9d712493c9374ab3b5dc9b80437b2`,
+tree `2acce62640442a531872d79dc683015e011ceffc`. The explicit manifest fixes the
+isolated app launch. **441 native PNGs** pass actual preferred-language, matrix
+and pixel-bound checks across all eleven locales/families/configurations, both
+appearances and normal/accessibility text, plus the five English state variants.
+All existing native/store/stress/publisher/Dart/real-SDK gates also pass. Artifact
+`12743706474` has verified archive SHA-256
+`5c9de16e4538e49e12dd67e9b929fd0bb09153da1ee3a555c042aa32f44a61cb`;
+the captures and source/checksum record are preserved with a filterable local
+review gallery. This remains shared-layout evidence from an actual iPhone
+simulator app, not signed Home Screen/App Group qualification.
+
+Visual review exposes a real issue that correct PNG dimensions cannot catch:
+medium Now Playing falls back too early, hiding art, artist and progress; medium
+Cover Flow similarly loses the three-cover strip. A gradient endpoint with alpha
+also leaves the light background dependent on the underlying compositor.
+
+The correction budgets normal-family spacing, metadata fonts and a four-point
+linear progress bar explicitly; medium recommendation art uses a bounded 56-point
+size. Large Cover Flow additionally shows two title lines and artist metadata.
+Flow status shares the footer instead of displacing the recording. The background
+has an opaque system surface beneath its accent wash. Combined VoiceOver retains
+complete metadata, Flow context and captured progress; accessibility-size layouts
+retain their existing prioritized fallback.
+
+The render matrix grows to **450** with nine independent pixel-content checks.
+Apple Vision OCR reads the actual English short-fixture PNGs: normal Now Playing
+and Flow require both recording and artist; medium/large Cover Flow require all
+three recommendation titles. The exported OCR observations are independently
+validated by Python. This deliberately fails the earlier title-only fallback;
+accessibility labels cannot substitute for text missing from rendered pixels.
+Partial images survive a failed capture for review. Eleven local Python startup/
+packaging/content-policy cases pass, with diff/actionlint checks. Swift linkage,
+the expanded native image/content gates and visual review of the corrected
+source remain pending until their own hosted run passes.

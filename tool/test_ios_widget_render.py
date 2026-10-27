@@ -91,5 +91,25 @@ class WidgetRenderStartupTest(unittest.TestCase):
                         command.assert_not_called()
 
 
+class WidgetVisibleContentTest(unittest.TestCase):
+    def case(self, kind, family, text):
+        return {"name": "actual-native-pixel-proof", "kind": kind,
+                "family": family, "recognized_text": text}
+
+    def test_title_alone_cannot_pass_required_artist_visibility(self):
+        for kind in ("nowPlaying", "flowRadio"):
+            with self.assertRaisesRegex(ValueError, "visible content"):
+                ios_widget_render.verify_visible_content(self.case(kind, "medium", ["SongA", "Open Lokal"]))
+
+    def test_medium_cover_flow_requires_all_three_recordings(self):
+        with self.assertRaisesRegex(ValueError, "visible content"):
+            ios_widget_render.verify_visible_content(self.case("coverFlow", "medium", ["SongB", "ArtistB"]))
+        ios_widget_render.verify_visible_content(self.case("coverFlow", "medium", ["Song B", "Song C", "Song D"]))
+
+    def test_ocr_word_spacing_and_case_preserve_content_identity(self):
+        ios_widget_render.verify_visible_content(self.case("nowPlaying", "small", ["SONG A", "Artist A"]))
+        ios_widget_render.verify_visible_content(self.case("coverFlow", "small", ["Song B", "Artist B"]))
+
+
 if __name__ == "__main__":
     unittest.main()

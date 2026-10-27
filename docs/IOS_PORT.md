@@ -1316,3 +1316,12 @@ integration analysis has no errors (621 warning/information items); actionlint
 and diff checks pass. Native, live-provider, installed-widget and physical-device
 acceptance remain separate gates for this source. Native audio interfaces,
 dependency locks and Android CI state are unchanged.
+
+
+The read-only native widget candidate now has accepted device/simulator linkage
+and 441 actual native layout captures (focused run 20). Reviewing those captures
+reveals normal-family content displaced by the first layout's sizing. A new
+correction preserves recording/artist/cover/progress context and opaque contrast,
+and expands the native matrix to 450 images with nine actual-pixel OCR gates.
+Those new gates still require their own hosted result; signed widgets/commands
+and the main app's native cleanup/replay gates remain separate.
