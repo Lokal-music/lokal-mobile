@@ -459,13 +459,17 @@ bool _isAddonPreviewStream(
 
   // Only stream-specific length claims can reject a longer catalogue track.
   // Unknown and genuinely short recordings are never rejected on length.
-  final reported = discoveryDuration(
-    response['streamDuration'] ??
-    response['stream_duration'] ??
-    response['durationSeconds'] ??
-    response['duration_seconds'] ??
-    response['duration'],
-  );
+  // Some sources send 0 or an invalid value in an earlier alias.
+  // Parse before falling back, rather than allowing that value to hide a
+  // later explicit 30-second sample duration.
+  Duration? reported;
+  for (final key in const [
+    'streamDuration', 'stream_duration',
+    'durationSeconds', 'duration_seconds', 'duration',
+  ]) {
+    reported = discoveryDuration(response[key]);
+    if (reported != null) break;
+  }
   return expectedDuration != null &&
       expectedDuration >= const Duration(seconds: 90) &&
       reported != null &&
