@@ -48,6 +48,9 @@ class KonnektedShell extends ConsumerStatefulWidget {
 class _KonnektedShellState extends ConsumerState<KonnektedShell>
     with ArtworkExtractionScrollGate {
   final _tab = ValueNotifier(KonnektedTab.listen);
+  // Explicit bottom-bar Search taps, including reselecting an open Search tab.
+  // The lazy Search page observes this without forcing a shell rebuild.
+  final _searchFocusRequests = ValueNotifier<int>(0);
   final _dockCollapsed = ValueNotifier(false);
   final _storage = PageStorageBucket();
   DateTime? _lastBack;
@@ -77,6 +80,7 @@ class _KonnektedShellState extends ConsumerState<KonnektedShell>
     nestedNavigatorKey.currentState?.popUntil((route) => route.isFirst);
     _tab.value = tab;
     _dockCollapsed.value = false;
+    if (tab == KonnektedTab.explore) _searchFocusRequests.value++;
   }
 
   /// Follow the first non-zero user scroll delta, including overscroll at
@@ -305,6 +309,7 @@ class _KonnektedShellState extends ConsumerState<KonnektedShell>
     _pull?.cancel();
     disposeArtworkGate();
     _tab.dispose();
+    _searchFocusRequests.dispose();
     _dockCollapsed.dispose();
     super.dispose();
   }
@@ -378,7 +383,9 @@ class _KonnektedShellState extends ConsumerState<KonnektedShell>
                                           onPlay: _play,
                                         ),
                                         KonnektedTab.explore =>
-                                          const SearchScreen(),
+                                          SearchScreen(
+                                            footerFocusRequests: _searchFocusRequests,
+                                          ),
                                         KonnektedTab.library =>
                                           KonnektedLibrary(
                                             onNavigate: _navigate,

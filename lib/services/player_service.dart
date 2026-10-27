@@ -7093,6 +7093,9 @@ class PlayerService {
       }
     }
     _insertQueuedEntriesAfterCurrent();
+    // The drag already updated the manual queue. Publish its new order
+    // immediately, not only after the audio-sequence rebuild debounce.
+    _notifyQueueChanged();
     _notifyUpNextChanged();
     _debounceQueueChanged();
   }
@@ -7128,14 +7131,30 @@ class PlayerService {
     if (oldIndex == newIndex) return;
 
     final playlistOldIndex = _currentIndex + 1 + oldIndex;
-    var playlistNewIndex = _currentIndex + 1 + newIndex;
-    if (playlistOldIndex < playlistNewIndex) playlistNewIndex -= 1;
-
+    final playlistNewIndex = _currentIndex + 1 + newIndex;
+    // SliverReorderableList's pre-removal drop index has ALREADY been
+    // normalized by QueueList. Subtracting a second time broke downward
+    // moves (including 0 -> 1, which became a no-op).
     final song = _playlist.removeAt(playlistOldIndex);
     final entryId = _playlistQueueEntryIds.removeAt(playlistOldIndex);
     _playlist.insert(playlistNewIndex, song);
     _playlistQueueEntryIds.insert(playlistNewIndex, entryId);
 
+    // Up Next includes manual queue entries. A drag here must update that
+    // backing order too, or the separate Manual Queue list looks unchanged
+    // and a subsequent manual edit silently resets what the user dragged.
+    final byId = {for (final entry in _queuedEntries) entry.id: entry};
+    final visibleQueueIds = _playlistQueueEntryIds.whereType<int>();
+    final reorderedEntries = [
+      for (final id in visibleQueueIds)
+        if (byId[id] case final entry?) entry,
+    ];
+    if (reorderedEntries.length == _queuedEntries.length) {
+      _queuedEntries
+        ..clear()
+        ..addAll(reorderedEntries);
+      _notifyQueueChanged();
+    }
     _notifyUpNextChanged();
     _debounceQueueChanged();
   }
