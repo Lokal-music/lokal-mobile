@@ -135,7 +135,7 @@ final class LokalWidgetStore: @unchecked Sendable {
   @discardableResult
   func publish(_ candidate: LokalWidgetSnapshot, artwork prepared: [LokalWidgetArtwork] = []) throws -> Int {
     try locked {
-      let writer = try openRegular("writer.lock", flags: O_RDWR | O_CREAT)
+      let writer = try openWriterLock()
       defer { Darwin.close(writer) }
       while flock(writer, LOCK_EX) != 0 {
         if errno != EINTR { let code = errno; throw LokalWidgetStoreError.posix(operation: "lock_writer", code: code) }
@@ -213,6 +213,16 @@ final class LokalWidgetStore: @unchecked Sendable {
     guard let data = try readBounded(name, limit: Self.maximumArtworkBytes) else { throw LokalWidgetStoreError.missingArtwork }
     guard !data.isEmpty, Self.digest(data) == String(name.prefix(64)) else { throw LokalWidgetStoreError.unsafeFile }
     return data
+  }
+
+  private func openWriterLock() throws -> Int32 {
+    // The hosted filesystem's concurrent plain O_CREAT path reproduced ENOENT
+    // with a live held directory. Use an explicit atomic first-create decision.
+    // Existing locks are opened in place, never replaced or silently recreated.
+    do { return try openRegular("writer.lock", flags: O_RDWR | O_CREAT | O_EXCL) }
+    catch LokalWidgetStoreError.posix(_, EEXIST) {
+      return try openRegular("writer.lock", flags: O_RDWR)
+    }
   }
 
   private func openRegular(_ name: String, flags: Int32, allowUnlinkedRead: Bool = false) throws -> Int32 {

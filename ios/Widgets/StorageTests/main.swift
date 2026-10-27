@@ -114,10 +114,9 @@ do {
     }
     try require(try revision(reader) == 2, "Rejected candidate replaced current state")
   }
-  try check("POSIX-only concurrent lock creation on stable directory descriptors") {
-    for exclusive in [false, true] {
-      for round in 0..<20 {
-        let root = try folder("posix-\(exclusive)-\(round)")
+  try check("POSIX-only exclusive first creation and existing-lock opens under contention") {
+    for round in 0..<50 {
+        let root = try folder("posix-\(round)")
         try manager.createDirectory(at: owned(root), withIntermediateDirectories: false)
         let ownedPath = owned(root).path
         let errors = Errors()
@@ -128,12 +127,12 @@ do {
           }
           guard directory >= 0 else { errors.add(Failure.check("Direct directory open \(directoryError)")); return }
           defer { Darwin.close(directory) }
-          let flags = O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | (exclusive ? O_EXCL : 0)
+          let flags = O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | O_EXCL
           var (file, code) = "writer.lock".withCString { path in
             let value = openat(directory, path, flags, 0o600)
             return (value, errno)
           }
-          if exclusive && file < 0 && code == EEXIST {
+          if file < 0 && code == EEXIST {
             (file, code) = "writer.lock".withCString { path in
               let value = openat(directory, path, O_RDWR | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
               return (value, errno)
@@ -142,13 +141,42 @@ do {
           guard file >= 0 else {
             var info = stat()
             let inspected = fstat(directory, &info)
-            errors.add(Failure.check("Direct lock open exclusive=\(exclusive), code=\(code), flags=\(flags), directory_stat=\(inspected), links=\(info.st_nlink)"))
+            errors.add(Failure.check("Direct exclusive lock open code=\(code), flags=\(flags), directory_stat=\(inspected), links=\(info.st_nlink)"))
             return
           }
           Darwin.close(file)
         }
         try require(errors.empty, "POSIX control round \(round): " + errors.summary)
+    }
+  }
+  try check("first-use publication preserves the existing writer-lock inode") {
+    let root = try folder("lock-identity")
+    let store = try LokalWidgetStore(container: root, createIfMissing: true)
+    try store.publish(candidate(1))
+    let lock = owned(root).appendingPathComponent("writer.lock")
+    var before = stat(), after = stat()
+    try require(lstat(lock.path, &before) == 0, "Missing first writer lock")
+    try LokalWidgetStore(container: root).publish(candidate(2))
+    try require(lstat(lock.path, &after) == 0, "Missing reused writer lock")
+    try require(before.st_dev == after.st_dev && before.st_ino == after.st_ino && after.st_nlink == 1,
+                "An existing lock was replaced or relinked")
+  }
+  try check("existing writer-lock symlinks, hard links, FIFOs and directories remain rejected") {
+    for kind in ["symlink", "hardlink", "fifo", "directory"] {
+      let root = try folder("unsafe-lock-" + kind)
+      let store = try LokalWidgetStore(container: root, createIfMissing: true)
+      let lock = owned(root).appendingPathComponent("writer.lock")
+      let sentinel = root.appendingPathComponent("sentinel")
+      try Data("unchanged".utf8).write(to: sentinel)
+      switch kind {
+      case "symlink": try manager.createSymbolicLink(at: lock, withDestinationURL: sentinel)
+      case "hardlink": try manager.linkItem(at: sentinel, to: lock)
+      case "fifo": try require(mkfifo(lock.path, 0o600) == 0, "Cannot create lock FIFO")
+      default: try manager.createDirectory(at: lock, withIntermediateDirectories: false)
       }
+      try rejects({ try store.publish(candidate(1)) }, "Accepted unsafe writer lock " + kind)
+      try require(try Data(contentsOf: sentinel) == Data("unchanged".utf8), "Altered unsafe lock target")
+      try require(try store.readSnapshot() == nil, "Committed through unsafe writer lock")
     }
   }
   try check("separate instances serialize concurrent publishers and atomic readers") {

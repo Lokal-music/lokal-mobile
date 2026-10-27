@@ -382,3 +382,21 @@ status/link count. A separate POSIX-only control uses stable directory descripto
 and compares ordinary concurrent O_CREAT with O_EXCL/EEXIST fallback, without the
 publisher, pruning, snapshots or locks. This isolates syscall/creation behavior
 before choosing a production correction; no resolution is claimed yet.
+
+
+### Lock-file first-create correction candidate
+
+[Native run 13](https://github.com/lokal-music/lokal-mobile/actions/runs/40503741762)
+reproduces ENOENT in the independent POSIX-only plain O_CREAT control, at round
+nine, with the expected flags and a valid held directory (`fstat == 0`, three
+links). The failure does not require publication, pruning, snapshots or flock.
+The production lock now attempts O_CREAT|O_EXCL and opens the unchanged existing
+file only for EEXIST. Other failures propagate; strict regular/single-link and
+no-follow validation remains. No lock inode is replaced to obtain a fresh lock.
+
+The corrected POSIX control runs 50 fresh 24-worker rounds, alongside 50 actual
+store rounds. New native cases verify lock inode reuse and refusal of existing
+symlink/hard-link/FIFO/directory locks. The old plain-create control's failing
+source/run remains linked as reproduction evidence; the regression gate now
+exercises the chosen exclusive-create protocol. All 23 storage cases, native
+SDK checks and actual execution of this correction remain pending.
