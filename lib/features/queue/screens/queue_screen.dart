@@ -132,6 +132,8 @@ class _QueueListState extends ConsumerState<QueueList> {
         (manualOnly ? manualQueue : upcoming);
     final ids = queueRowIdentities(songs, 'next');
     final t = context.lokal;
+    final textColor = widget.embedded ? Colors.white : t.text;
+    final mutedColor = widget.embedded ? Colors.white60 : t.muted;
     final h = widget.embedded ? 14.0 : 20.0;
     final count = songs.length + autoplay.length;
 
@@ -146,7 +148,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                 Text(lokalText('Queue'),
                     style: TextStyle(
                       fontSize: 23, fontWeight: FontWeight.w700,
-                      color: t.text, letterSpacing: -0.45,
+                      color: textColor, letterSpacing: -0.45,
                     )),
                 const SizedBox(height: 3),
                 Text(
@@ -154,7 +156,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                       ? lokalText('{arg0} selected',
                           args: {'arg0': _selected.length})
                       : l10n.upcomingSong(count),
-                  style: TextStyle(fontSize: 12.5, color: t.muted),
+                  style: TextStyle(fontSize: 12.5, color: mutedColor),
                 ),
               ],
             ),
@@ -190,7 +192,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                   await player.clearAllUpcoming();
                 }
               },
-              child: Text(l10n.clearAll, style: TextStyle(color: t.muted)),
+              child: Text(l10n.clearAll, style: TextStyle(color: mutedColor)),
             ),
           ],
           if (_selectionMode)
@@ -229,16 +231,16 @@ class _QueueListState extends ConsumerState<QueueList> {
                       children: [
                         Text(l10n.upNext,
                             style: TextStyle(
-                              color: t.muted, fontWeight: FontWeight.w700,
+                              color: mutedColor, fontWeight: FontWeight.w700,
                               fontSize: 12, letterSpacing: 1.2,
                             )),
                         const SizedBox(width: 8),
                         Text('${songs.length}',
-                            style: TextStyle(fontSize: 12, color: t.muted)),
+                            style: TextStyle(fontSize: 12, color: mutedColor)),
                         const Spacer(),
                         if (!_selectionMode)
                           Text(lokalText('Drag to reorder'),
-                              style: TextStyle(fontSize: 11, color: t.muted)),
+                              style: TextStyle(fontSize: 11, color: mutedColor)),
                       ],
                     ),
                   ),
@@ -253,6 +255,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                             key: ValueKey(ids[i]),
                             song: songs[i],
                             index: i,
+                            darkBackdrop: widget.embedded,
                             selected: _selected.contains(ids[i]),
                             selecting: true,
                             onTap: () => setState(() {
@@ -270,7 +273,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                           },
                           proxyDecorator: (child, index, animation) => Material(
                             elevation: 10,
-                            color: t.surface2,
+                            color: widget.embedded ? Colors.white.withValues(alpha: .1) : t.surface2,
                             borderRadius: BorderRadius.circular(14),
                             child: child,
                           ),
@@ -278,6 +281,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                             key: ValueKey(ids[i]),
                             song: songs[i],
                             index: i,
+                            darkBackdrop: widget.embedded,
                             onTap: () async {
                               final player = ref.read(playerProvider.notifier);
                               if (manualOnly) {
@@ -303,6 +307,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                   padding: EdgeInsets.all(h),
                   sliver: SliverToBoxAdapter(
                     child: _QueueEmpty(
+                      darkBackdrop: widget.embedded,
                       text: current == null
                           ? l10n.queueIsEmpty
                           : l10n.noUpcomingQueueItemsYet,
@@ -315,7 +320,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                   sliver: SliverToBoxAdapter(
                     child: Text('Autoplay',
                         style: TextStyle(
-                          color: t.muted, fontWeight: FontWeight.w700,
+                          color: mutedColor, fontWeight: FontWeight.w700,
                           fontSize: 12, letterSpacing: 1.2,
                         )),
                   ),
@@ -329,6 +334,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                       key: ValueKey('autoplay-${autoplay[i].id}-$i'),
                       song: autoplay[i],
                       index: i,
+                      darkBackdrop: widget.embedded,
                       autoplay: true,
                       onTap: () async {
                         await ref.read(playerProvider.notifier)
@@ -363,6 +369,7 @@ class _QueueRow extends StatelessWidget {
     this.selecting = false,
     this.selected = false,
     this.autoplay = false,
+    this.darkBackdrop = false,
   });
 
   final Song song;
@@ -372,14 +379,18 @@ class _QueueRow extends StatelessWidget {
   final bool selecting;
   final bool selected;
   final bool autoplay;
+  final bool darkBackdrop;
 
   @override
   Widget build(BuildContext context) {
     final t = context.lokal;
+    final textColor = darkBackdrop ? Colors.white : t.text;
+    final mutedColor = darkBackdrop ? Colors.white60 : t.muted;
+    final surface = darkBackdrop ? Colors.white.withValues(alpha: .085) : t.surface2;
     final content = Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Material(
-        color: selected ? t.accent.withValues(alpha: .14) : t.surface2,
+        color: selected ? t.accent.withValues(alpha: .14) : surface,
         borderRadius: BorderRadius.circular(12),
         child: Row(
           children: [
@@ -394,7 +405,7 @@ class _QueueRow extends StatelessWidget {
                       if (selecting) ...[
                         Icon(selected ? LucideIcons.check
                                       : LucideIcons.circle,
-                            color: selected ? t.accent : t.muted, size: 20),
+                            color: selected ? t.accent : mutedColor, size: 20),
                         const SizedBox(width: 10),
                       ],
                       _QueueArt(song: song, size: 46),
@@ -405,19 +416,19 @@ class _QueueRow extends StatelessWidget {
                           children: [
                             Text(song.title, maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: t.text, fontSize: 14,
+                              style: TextStyle(color: textColor, fontSize: 14,
                                 fontWeight: FontWeight.w600)),
                             const SizedBox(height: 3),
                             Text(song.artist, maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: t.muted, fontSize: 12)),
+                              style: TextStyle(color: mutedColor, fontSize: 12)),
                           ],
                         ),
                       ),
                       const SizedBox(width: 5),
                       Text(song.duration > Duration.zero
                           ? song.formattedDuration : (song.isPending ? '…' : '—'),
-                          style: TextStyle(color: t.muted, fontSize: 11)),
+                          style: TextStyle(color: mutedColor, fontSize: 11)),
                       const SizedBox(width: 4),
                     ],
                   ),
@@ -427,7 +438,7 @@ class _QueueRow extends StatelessWidget {
             if (!selecting && !autoplay) ...[
               IconButton(
                 tooltip: 'More',
-                icon: Icon(LucideIcons.ellipsis, color: t.muted, size: 19),
+                icon: Icon(LucideIcons.ellipsis, color: mutedColor, size: 19),
                 onPressed: () => SongActionsBottomSheet.show(
                   context,
                   song,
@@ -452,7 +463,7 @@ class _QueueRow extends StatelessWidget {
                     key: ValueKey('queue-grip-$index'),
                     width: 44,
                     height: 62,
-                    child: Icon(LucideIcons.gripVertical, color: t.muted,
+                    child: Icon(LucideIcons.gripVertical, color: mutedColor,
                         size: 22),
                   ),
                 ),
@@ -460,7 +471,7 @@ class _QueueRow extends StatelessWidget {
             ] else if (autoplay)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Icon(LucideIcons.sparkles, color: t.muted, size: 18),
+                child: Icon(LucideIcons.sparkles, color: mutedColor, size: 18),
               )
             else
               const SizedBox(width: 16),
@@ -548,19 +559,21 @@ class _NowPlayingRow extends StatelessWidget {
 }
 
 class _QueueEmpty extends StatelessWidget {
-  const _QueueEmpty({required this.text});
+  const _QueueEmpty({required this.text, this.darkBackdrop = false});
   final String text;
+  final bool darkBackdrop;
   @override
   Widget build(BuildContext context) {
     final t = context.lokal;
+    final muted = darkBackdrop ? Colors.white60 : t.muted;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 15),
       child: Column(
         children: [
-          Icon(LucideIcons.listMusic, color: t.muted, size: 36),
+          Icon(LucideIcons.listMusic, color: muted, size: 36),
           const SizedBox(height: 12),
           Text(text, textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: t.muted)),
+              style: TextStyle(fontSize: 14, color: muted)),
         ],
       ),
     );
