@@ -76,7 +76,7 @@ if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--publish",
     try store.publish(candidate(number))
     exit(0)
   } catch LokalWidgetStoreError.staleRevision { exit(3) }
-  catch { exit(1) }
+  catch { print("Widget store child failed: \(error)"); exit(1) }
 }
 
 do {
@@ -114,23 +114,91 @@ do {
     }
     try require(try revision(reader) == 2, "Rejected candidate replaced current state")
   }
-  try check("separate instances serialize concurrent publishers and atomic readers") {
-    let root = try folder("concurrent")
-    _ = try LokalWidgetStore(container: root, createIfMissing: true)
-    let errors = Errors()
-    DispatchQueue.concurrentPerform(iterations: 24) { index in
-      do {
-        let store = try LokalWidgetStore(container: root)
-        do { try store.publish(candidate(index + 1, title: String(repeating: "x", count: 256))) }
-        catch LokalWidgetStoreError.staleRevision {}
-        if let snapshot = try store.readSnapshot() {
-          let title = (snapshot.json["current"] as? [String: Any])?["title"] as? String
-          try require(title == String(repeating: "x", count: 256), "Reader observed torn metadata")
+  try check("POSIX-only exclusive first creation and existing-lock opens under contention") {
+    for round in 0..<50 {
+        let root = try folder("posix-\(round)")
+        try manager.createDirectory(at: owned(root), withIntermediateDirectories: false)
+        let ownedPath = owned(root).path
+        let errors = Errors()
+        DispatchQueue.concurrentPerform(iterations: 24) { _ in
+          let (directory, directoryError) = ownedPath.withCString { path in
+            let value = Darwin.open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            return (value, errno)
+          }
+          guard directory >= 0 else { errors.add(Failure.check("Direct directory open \(directoryError)")); return }
+          defer { Darwin.close(directory) }
+          let flags = O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | O_EXCL
+          var (file, code) = "writer.lock".withCString { path in
+            let value = openat(directory, path, flags, 0o600)
+            return (value, errno)
+          }
+          if file < 0 && code == EEXIST {
+            (file, code) = "writer.lock".withCString { path in
+              let value = openat(directory, path, O_RDWR | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+              return (value, errno)
+            }
+          }
+          guard file >= 0 else {
+            var info = stat()
+            let inspected = fstat(directory, &info)
+            errors.add(Failure.check("Direct exclusive lock open code=\(code), flags=\(flags), directory_stat=\(inspected), links=\(info.st_nlink)"))
+            return
+          }
+          Darwin.close(file)
         }
-      } catch { errors.add(error) }
+        try require(errors.empty, "POSIX control round \(round): " + errors.summary)
     }
-    try require(errors.empty, "Concurrent publication failed: " + errors.summary)
-    try require(try revision(LokalWidgetStore(container: root)) == 24, "Highest revision did not win")
+  }
+  try check("first-use publication preserves the existing writer-lock inode") {
+    let root = try folder("lock-identity")
+    let store = try LokalWidgetStore(container: root, createIfMissing: true)
+    try store.publish(candidate(1))
+    let lock = owned(root).appendingPathComponent("writer.lock")
+    var before = stat(), after = stat()
+    try require(lstat(lock.path, &before) == 0, "Missing first writer lock")
+    try LokalWidgetStore(container: root).publish(candidate(2))
+    try require(lstat(lock.path, &after) == 0, "Missing reused writer lock")
+    try require(before.st_dev == after.st_dev && before.st_ino == after.st_ino && after.st_nlink == 1,
+                "An existing lock was replaced or relinked")
+  }
+  try check("existing writer-lock symlinks, hard links, FIFOs and directories remain rejected") {
+    for kind in ["symlink", "hardlink", "fifo", "directory"] {
+      let root = try folder("unsafe-lock-" + kind)
+      let store = try LokalWidgetStore(container: root, createIfMissing: true)
+      let lock = owned(root).appendingPathComponent("writer.lock")
+      let sentinel = root.appendingPathComponent("sentinel")
+      try Data("unchanged".utf8).write(to: sentinel)
+      switch kind {
+      case "symlink": try manager.createSymbolicLink(at: lock, withDestinationURL: sentinel)
+      case "hardlink": try manager.linkItem(at: sentinel, to: lock)
+      case "fifo": try require(mkfifo(lock.path, 0o600) == 0, "Cannot create lock FIFO")
+      default: try manager.createDirectory(at: lock, withIntermediateDirectories: false)
+      }
+      try rejects({ try store.publish(candidate(1)) }, "Accepted unsafe writer lock " + kind)
+      try require(try Data(contentsOf: sentinel) == Data("unchanged".utf8), "Altered unsafe lock target")
+      try require(try store.readSnapshot() == nil, "Committed through unsafe writer lock")
+    }
+  }
+  try check("separate instances serialize concurrent publishers and atomic readers") {
+    let rounds = min(100, max(1, Int(ProcessInfo.processInfo.environment["LOKAL_WIDGET_CONCURRENCY_ROUNDS"] ?? "1") ?? 1))
+    for round in 0..<rounds {
+      let root = try folder("concurrent-\(round)")
+      _ = try LokalWidgetStore(container: root, createIfMissing: true)
+      let errors = Errors()
+      DispatchQueue.concurrentPerform(iterations: 24) { index in
+        do {
+          let store = try LokalWidgetStore(container: root)
+          do { try store.publish(candidate(index + 1, title: String(repeating: "x", count: 256))) }
+          catch LokalWidgetStoreError.staleRevision {}
+          if let snapshot = try store.readSnapshot() {
+            let title = (snapshot.json["current"] as? [String: Any])?["title"] as? String
+            try require(title == String(repeating: "x", count: 256), "Reader observed torn metadata")
+          }
+        } catch { errors.add(error) }
+      }
+      try require(errors.empty, "Concurrent publication failed at round \(round): " + errors.summary)
+      try require(try revision(LokalWidgetStore(container: root)) == 24, "Highest revision did not win")
+    }
   }
   try check("an atomically replaced snapshot remains readable through its held old descriptor") {
     let root = try folder("read-replaced-inode")
@@ -157,7 +225,7 @@ do {
       try child.run()
       return child
     }
-    for child in processes { child.waitUntilExit(); try require([0, 3].contains(child.terminationStatus), "Native child failed") }
+    for child in processes { child.waitUntilExit(); try require([0, 3].contains(child.terminationStatus), "Native child failed with status \(child.terminationStatus), reason \(child.terminationReason.rawValue)") }
     try require(try revision(LokalWidgetStore(container: root)) == 13, "Cross-process revision was overwritten")
   }
   try check("owned directory and metadata symlinks cannot escape the container") {

@@ -11,7 +11,7 @@ enum LokalWidgetStoreError: Error, Equatable {
   case missingArtwork
   case staleRevision
   case limitExceeded
-  case posix(Int32)
+  case posix(operation: String, code: Int32)
 }
 
 struct LokalWidgetArtwork: Sendable {
@@ -39,7 +39,7 @@ final class LokalWidgetStore: @unchecked Sendable {
     try Data([0]).write(to: probe, options: [.withoutOverwriting, .completeFileProtectionUntilFirstUserAuthentication])
     defer { try? FileManager.default.removeItem(at: probe) }
     let descriptor = Darwin.open(probe.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
-    guard descriptor >= 0 else { throw LokalWidgetStoreError.posix(errno) }
+    guard descriptor >= 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "open_protection_probe", code: code) }
     defer { Darwin.close(descriptor) }
     let attributes = try FileManager.default.attributesOfItem(atPath: probe.path)
     let policy = (attributes[.protectionKey] as? FileProtectionType)?.rawValue ?? attributes[.protectionKey] as? String
@@ -47,7 +47,7 @@ final class LokalWidgetStore: @unchecked Sendable {
       throw LokalWidgetStoreError.unavailable
     }
     let value = fcntl(descriptor, F_GETPROTECTIONCLASS)
-    guard value != -1 else { throw LokalWidgetStoreError.posix(errno) }
+    guard value != -1 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "get_protection_class", code: code) }
     guard value > 0 else { throw LokalWidgetStoreError.unavailable }
     return value
   }
@@ -60,13 +60,13 @@ final class LokalWidgetStore: @unchecked Sendable {
        afterReadOpenForTesting: (@Sendable (String) -> Void)? = nil) throws {
     guard container.isFileURL else { throw LokalWidgetStoreError.unavailable }
     let base = Darwin.open(container.standardizedFileURL.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-    guard base >= 0 else { throw LokalWidgetStoreError.posix(errno) }
+    guard base >= 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "open_container", code: code) }
     defer { Darwin.close(base) }
     if createIfMissing && mkdirat(base, Self.directoryName, 0o700) != 0 && errno != EEXIST {
-      throw LokalWidgetStoreError.posix(errno)
+      let code = errno; throw LokalWidgetStoreError.posix(operation: "create_owned_directory", code: code)
     }
     let owned = openat(base, Self.directoryName, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-    guard owned >= 0 else { throw LokalWidgetStoreError.posix(errno) }
+    guard owned >= 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "open_owned_directory", code: code) }
     directory = owned
     self.afterReadOpenForTesting = afterReadOpenForTesting
   }
@@ -135,10 +135,10 @@ final class LokalWidgetStore: @unchecked Sendable {
   @discardableResult
   func publish(_ candidate: LokalWidgetSnapshot, artwork prepared: [LokalWidgetArtwork] = []) throws -> Int {
     try locked {
-      let writer = try openRegular("writer.lock", flags: O_RDWR | O_CREAT)
+      let writer = try openWriterLock()
       defer { Darwin.close(writer) }
       while flock(writer, LOCK_EX) != 0 {
-        if errno != EINTR { throw LokalWidgetStoreError.posix(errno) }
+        if errno != EINTR { let code = errno; throw LokalWidgetStoreError.posix(operation: "lock_writer", code: code) }
       }
       defer { flock(writer, LOCK_UN) }
       let fields = candidate.json
@@ -215,9 +215,28 @@ final class LokalWidgetStore: @unchecked Sendable {
     return data
   }
 
+  private func openWriterLock() throws -> Int32 {
+    // The hosted filesystem's concurrent plain O_CREAT path reproduced ENOENT
+    // with a live held directory. Use an explicit atomic first-create decision.
+    // Existing locks are opened in place, never replaced or silently recreated.
+    do { return try openRegular("writer.lock", flags: O_RDWR | O_CREAT | O_EXCL) }
+    catch LokalWidgetStoreError.posix(_, EEXIST) {
+      return try openRegular("writer.lock", flags: O_RDWR)
+    }
+  }
+
   private func openRegular(_ name: String, flags: Int32, allowUnlinkedRead: Bool = false) throws -> Int32 {
-    let fd = openat(directory, name, flags | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
-    guard fd >= 0 else { throw LokalWidgetStoreError.posix(errno) }
+    let requested = flags | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC
+    let (fd, code) = name.withCString { path in
+      let value = openat(directory, path, requested, 0o600)
+      return (value, errno)
+    }
+    guard fd >= 0 else {
+      var directoryInfo = stat()
+      let inspected = fstat(directory, &directoryInfo)
+      let context = "open_regular:" + name + ":flags=\(requested):directory_stat=\(inspected):links=\(directoryInfo.st_nlink)"
+      throw LokalWidgetStoreError.posix(operation: context, code: code)
+    }
     if allowUnlinkedRead { afterReadOpenForTesting?(name) }
     var info = stat()
     guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
@@ -235,10 +254,10 @@ final class LokalWidgetStore: @unchecked Sendable {
     // Accept zero links only for this bounded read; hard links (>1), writers,
     // cleanup paths and all nonregular/symlink targets remain rejected.
     do { fd = try openRegular(name, flags: O_RDONLY, allowUnlinkedRead: true) }
-    catch LokalWidgetStoreError.posix(ENOENT) { return nil }
+    catch LokalWidgetStoreError.posix(_, ENOENT) { return nil }
     defer { Darwin.close(fd) }
     var info = stat()
-    guard fstat(fd, &info) == 0 else { throw LokalWidgetStoreError.posix(errno) }
+    guard fstat(fd, &info) == 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "stat_read", code: code) }
     guard info.st_size >= 0, info.st_size <= limit else { throw LokalWidgetStoreError.limitExceeded }
     var result = Data()
     var buffer = [UInt8](repeating: 0, count: min(limit + 1, 16_384))
@@ -247,7 +266,7 @@ final class LokalWidgetStore: @unchecked Sendable {
       let count = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, size) }
       if count < 0 {
         if errno == EINTR { continue }
-        throw LokalWidgetStoreError.posix(errno)
+        let code = errno; throw LokalWidgetStoreError.posix(operation: "read_bytes", code: code)
       }
       if count == 0 { break }
       result.append(contentsOf: buffer.prefix(count))
@@ -265,7 +284,7 @@ final class LokalWidgetStore: @unchecked Sendable {
     #if os(iOS) && !targetEnvironment(simulator)
     // NSFileProtectionCompleteUntilFirstUserAuthentication permits lock-screen
     // reads after the user's first unlock, including widgets during playback.
-    guard fcntl(fd, F_SETPROTECTIONCLASS, try Self.afterFirstUnlockClass()) != -1 else { throw LokalWidgetStoreError.posix(errno) }
+    guard fcntl(fd, F_SETPROTECTIONCLASS, try Self.afterFirstUnlockClass()) != -1 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "set_protection_class", code: code) }
     #endif
     try data.withUnsafeBytes { bytes in
       var written = 0
@@ -273,22 +292,22 @@ final class LokalWidgetStore: @unchecked Sendable {
         let count = Darwin.write(fd, bytes.baseAddress!.advanced(by: written), bytes.count - written)
         if count < 0 {
           if errno == EINTR { continue }
-          throw LokalWidgetStoreError.posix(errno)
+          let code = errno; throw LokalWidgetStoreError.posix(operation: "write_bytes", code: code)
         }
-        guard count > 0 else { throw LokalWidgetStoreError.posix(EIO) }
+        guard count > 0 else { let code = EIO; throw LokalWidgetStoreError.posix(operation: "write_zero", code: code) }
         written += count
       }
     }
-    guard fsync(fd) == 0 else { throw LokalWidgetStoreError.posix(errno) }
-    guard renameat(directory, temporary, directory, name) == 0 else { throw LokalWidgetStoreError.posix(errno) }
+    guard fsync(fd) == 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "sync_file", code: code) }
+    guard renameat(directory, temporary, directory, name) == 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "rename_commit", code: code) }
   }
 
   private func names() throws -> [String] {
     let copied = dup(directory)
-    guard copied >= 0 else { throw LokalWidgetStoreError.posix(errno) }
+    guard copied >= 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "dup_directory", code: code) }
     guard let stream = fdopendir(copied) else {
       Darwin.close(copied)
-      throw LokalWidgetStoreError.posix(errno)
+      let code = errno; throw LokalWidgetStoreError.posix(operation: "open_directory_stream", code: code)
     }
     defer { closedir(stream) }
     rewinddir(stream) // dup shares a directory offset with the original fd.
@@ -296,7 +315,7 @@ final class LokalWidgetStore: @unchecked Sendable {
     while true {
       errno = 0
       guard let entry = readdir(stream) else {
-        if errno != 0 { throw LokalWidgetStoreError.posix(errno) }
+        if errno != 0 { let code = errno; throw LokalWidgetStoreError.posix(operation: "read_directory_entry", code: code) }
         break
       }
       let name = withUnsafePointer(to: &entry.pointee.d_name) {
@@ -314,7 +333,7 @@ final class LokalWidgetStore: @unchecked Sendable {
       let fd = try openRegular(name, flags: O_RDONLY)
       defer { Darwin.close(fd) }
       var info = stat()
-      guard fstat(fd, &info) == 0 else { throw LokalWidgetStoreError.posix(errno) }
+      guard fstat(fd, &info) == 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "stat_cache_file", code: code) }
       guard info.st_size >= 0, info.st_size <= Self.maximumArtworkBytes else { throw LokalWidgetStoreError.limitExceeded }
       count += 1
       size += Int(info.st_size)
@@ -331,16 +350,16 @@ final class LokalWidgetStore: @unchecked Sendable {
       if name.hasPrefix("pending-"), UUID(uuidString: String(name.dropFirst(8))) != nil {
         let fd = try openRegular(name, flags: O_RDONLY)
         Darwin.close(fd)
-        guard unlinkat(directory, name, 0) == 0 else { throw LokalWidgetStoreError.posix(errno) }
+        guard unlinkat(directory, name, 0) == 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "unlink_abandoned_temporary", code: code) }
         continue
       }
       if !Self.isArtwork(name) || retained.contains(name) { continue }
       let fd = try openRegular(name, flags: O_RDONLY)
       defer { Darwin.close(fd) }
       var info = stat()
-      guard fstat(fd, &info) == 0 else { throw LokalWidgetStoreError.posix(errno) }
+      guard fstat(fd, &info) == 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "stat_prunable_artwork", code: code) }
       if TimeInterval(info.st_mtimespec.tv_sec) < deadline && unlinkat(directory, name, 0) != 0 {
-        throw LokalWidgetStoreError.posix(errno)
+        let code = errno; throw LokalWidgetStoreError.posix(operation: "unlink_old_artwork", code: code)
       }
     }
   }

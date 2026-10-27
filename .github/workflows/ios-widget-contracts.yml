@@ -52,15 +52,6 @@ jobs:
           flutter pub get --enforce-lockfile
           flutter analyze --no-pub --fatal-infos lib/models/ios_widget_snapshot.dart lib/services/ios_widget_snapshot_builder.dart lib/services/ios_widget_publication_coordinator.dart lib/services/ios_widget_method_channel_transport.dart test/widgets/ios
           flutter test --no-pub test/widgets/ios test/services/android_widget_contract_test.dart
-      - name: Compile and exercise the actual Foundation reader
-        run: |
-          xcodebuild -version
-          swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Tests/main.swift -o "$RUNNER_TEMP/lokal-widget-contracts"
-          "$RUNNER_TEMP/lokal-widget-contracts" test/fixtures/ios_widget/snapshot_contract.json
-      - name: Check iOS 16 device and simulator storage APIs
-        run: |
-          swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/Publication/LokalWidgetPublisher.swift
-          swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/Publication/LokalWidgetPublisher.swift
       - name: Type-check the real Flutter host bridge on both iOS 16 SDK targets
         run: |
           flutter precache --ios
@@ -94,7 +85,28 @@ jobs:
                               '-target', target, '-sdk', sdk_path, '-F', str(framework),
                               '-typecheck', *files], check=True)
           PYTHON
+
+  native:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compile and exercise the actual Foundation reader
+        run: |
+          xcodebuild -version
+          swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Tests/main.swift -o "$RUNNER_TEMP/lokal-widget-contracts"
+          "$RUNNER_TEMP/lokal-widget-contracts" test/fixtures/ios_widget/snapshot_contract.json
+      - name: Check iOS 16 device and simulator storage APIs
+        run: |
+          swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/Publication/LokalWidgetPublisher.swift
+          swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/Publication/LokalWidgetPublisher.swift
       - name: Exercise actual atomic storage, images and concurrent processes
+        env:
+          LOKAL_WIDGET_CONCURRENCY_ROUNDS: '50'
         run: |
           swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/StorageTests/main.swift -o "$RUNNER_TEMP/lokal-widget-store-contracts"
           "$RUNNER_TEMP/lokal-widget-store-contracts"

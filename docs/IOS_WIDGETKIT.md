@@ -345,3 +345,58 @@ publication concurrency stays at one; late completions never publish stale
 acknowledgements. The full widget/Android-widget selection passes **88 Flutter
 tests**. These checks extend the 583-test parity checkpoint; they do not claim a
 new combined full-app native pass or make the runtime sampler available.
+
+
+## Intermittent store failure — investigation open
+
+[Native run 8](https://github.com/lokal-music/lokal-mobile/actions/runs/40483084962)
+passes the actual Flutter bridge SDK checks, 85 Flutter cases, 45 reader cases
+and 14 publisher cases, then fails the store's independent-instance concurrent
+publication case with `posix(2)` (ENOENT). Earlier runs 5 and 7 pass the complete
+store suite, so they do not establish absence of this intermittent failure.
+
+The diagnostic continuation labels the exact failing POSIX operation and captures
+errno before constructing diagnostic values. The focused native workflow now runs
+50 independent 24-worker publication/read rounds, keeping highest-revision and
+untorn-read assertions. It preserves all failure gates and the existing strict
+file protections. No guessed locking change, ignored ENOENT, weakened assertions
+or fixed-race claim accompanies this investigation. Swift execution and both SDK
+checks for the diagnostic source remain pending; widget runtime wiring remains
+blocked on resolving the failure.
+
+Native run 9 also fails storage, this time at the separate-process case; its
+child wrapper previously discarded the underlying error. Diagnostics now retain
+the child's error, exit status and termination reason, and identify the fixed or
+opaque owned filename for failed regular-file opens. No private source path or
+credential is logged. The investigation remains open.
+
+The widget workflow now runs native Foundation/storage/image checks in an
+independent macOS job, alongside Dart and real-Flutter bridge checks. The failing
+filesystem probe no longer waits for Flutter setup/downloads. Both job outcomes
+remain required for overall workflow success; no storage or SDK gate is removed.
+
+Native run 12 localizes the thread-contention failure to `open_regular:writer.lock`
+with ENOENT at stress round six. The next source captures openat's result/errno
+inside the C-string lifetime and includes requested flags plus held-directory
+status/link count. A separate POSIX-only control uses stable directory descriptors
+and compares ordinary concurrent O_CREAT with O_EXCL/EEXIST fallback, without the
+publisher, pruning, snapshots or locks. This isolates syscall/creation behavior
+before choosing a production correction; no resolution is claimed yet.
+
+
+### Lock-file first-create correction candidate
+
+[Native run 13](https://github.com/lokal-music/lokal-mobile/actions/runs/40503741762)
+reproduces ENOENT in the independent POSIX-only plain O_CREAT control, at round
+nine, with the expected flags and a valid held directory (`fstat == 0`, three
+links). The failure does not require publication, pruning, snapshots or flock.
+The production lock now attempts O_CREAT|O_EXCL and opens the unchanged existing
+file only for EEXIST. Other failures propagate; strict regular/single-link and
+no-follow validation remains. No lock inode is replaced to obtain a fresh lock.
+
+The corrected POSIX control runs 50 fresh 24-worker rounds, alongside 50 actual
+store rounds. New native cases verify lock inode reuse and refusal of existing
+symlink/hard-link/FIFO/directory locks. The old plain-create control's failing
+source/run remains linked as reproduction evidence; the regression gate now
+exercises the chosen exclusive-create protocol. All 23 storage cases, native
+SDK checks and actual execution of this correction remain pending.
