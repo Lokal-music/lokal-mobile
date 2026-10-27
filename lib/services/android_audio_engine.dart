@@ -9,6 +9,7 @@ import 'package:flick/models/playback_state.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/audio_engine.dart';
 import 'package:flick/core/utils/dev_log.dart';
+import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/services/atmos_diagnostics.dart';
 import 'package:flick/services/automix_analysis_cache.dart';
 import 'package:flick/services/automix_stem_clip.dart';
@@ -541,7 +542,7 @@ class AndroidAudioEngine implements AudioEngine {
           if (isTruncatedHttpAddonAudio(_loadedTrack, player.duration)) {
             final rejected = _loadedTrack;
             _sourceFailed = true;
-            devLog('[Playback] HTTP add-on truncated audio rejected at EOF: '
+            AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected at EOF: '
                 'expectedMs=${rejected?.duration.inMilliseconds} '
                 'decodedMs=${player.duration?.inMilliseconds}');
             _emit(_state.copyWith(isPlaying: false));
@@ -718,7 +719,7 @@ class AndroidAudioEngine implements AudioEngine {
           .setAudioSource(source, initialIndex: initialIndex, preload: true)
           .timeout(const Duration(seconds: 30));
       if (isTruncatedHttpAddonAudio(_loadedTrack, player.duration)) {
-        devLog('[Playback] HTTP add-on truncated audio rejected at load: '
+        AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected at load: '
             'expectedMs=${_loadedTrack?.duration.inMilliseconds} '
             'decodedMs=${player.duration?.inMilliseconds}');
         throw const FormatException(
