@@ -1462,6 +1462,8 @@ class PlayerService {
   Future<void> onAppPaused() async {
     if (!Platform.isAndroid) return;
     _appInForeground = false;
+    // Background music continues; only hidden UI/FFI refreshes slow down.
+    _rustAudioService.setAppForeground(false);
     final enabled = await _appPreferencesService.getFloatingPlayerEnabled();
     if (!enabled) return;
     await _activateFloatingPlayer();
@@ -1469,6 +1471,7 @@ class PlayerService {
 
   Future<void> onAppResumed() async {
     _appInForeground = true;
+    _rustAudioService.setAppForeground(true);
     if (_floatingPlayerActive) {
       await _deactivateFloatingPlayer();
     }
@@ -5834,6 +5837,10 @@ class PlayerService {
   }
 
   Future<void> _pauseInternal() async {
+    // Keep the most recent position once at pause instead of rewriting the
+    // unchanged resume position to storage every five seconds indefinitely.
+    _positionSaveTimer?.cancel();
+    _positionSaveTimer = null;
     if (_castingService.isActive) {
       await _castingService.delegatePause();
       return;
@@ -5858,6 +5865,7 @@ class PlayerService {
     } catch (e) {
       _debugLog('Pause failed: $e');
     }
+    await _savePosition();
     await _refreshAudioOutputDiagnostics(
       reason: 'playback paused',
       activeSong: currentSongNotifier.value,
