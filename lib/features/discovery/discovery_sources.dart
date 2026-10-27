@@ -428,6 +428,55 @@ String? providerAudioCodec(Map<String, dynamic> row) {
   return null;
 }
 
+/// A valid Qobuz sample CDN URL is not a full-length stream.
+class _PreviewOnlyAddonStream extends DiscoveryException {
+  const _PreviewOnlyAddonStream()
+      : super('The HTTP addon returned a preview instead of full-length audio.');
+}
+
+bool _isAddonPreviewStream(
+  Map<String, dynamic> response,
+  Uri uri,
+  Duration? expectedDuration,
+) {
+  for (final key in const [
+    'preview', 'isPreview', 'is_preview',
+    'previewOnly', 'preview_only', 'sample', 'isSample',
+  ]) {
+    if (response[key] == true || response[key] == 'true') return true;
+  }
+  if (response['fullTrack'] == false ||
+      response['full_track'] == false ||
+      response['isFullTrack'] == false) return true;
+
+  // Qobuz may respond with HTTP 200 and a 30-second sample URL when
+  // full-track access is unavailable.
+  final host = uri.host.toLowerCase();
+  if (host.endsWith('.qobuz.com') &&
+      RegExp(r'^sample\d*$').hasMatch(host.split('.').first)) {
+    return true;
+  }
+
+  // Only stream-specific length claims can reject a longer catalogue track.
+  // Unknown and genuinely short recordings are never rejected on length.
+  // Some sources send 0 or an invalid value in an earlier alias.
+  // Parse before falling back, rather than allowing that value to hide a
+  // later explicit 30-second sample duration.
+  Duration? reported;
+  for (final key in const [
+    'streamDuration', 'stream_duration',
+    'durationSeconds', 'duration_seconds', 'duration',
+  ]) {
+    reported = discoveryDuration(response[key]);
+    if (reported != null) break;
+  }
+  return expectedDuration != null &&
+      expectedDuration >= const Duration(seconds: 90) &&
+      reported != null &&
+      reported <= const Duration(seconds: 60) &&
+      reported.inMilliseconds * 2 < expectedDuration.inMilliseconds;
+}
+
 /// Reference-compatible, deliberately limited progressive-audio addon client.
 /// See README.md for the exact supported protocol and credential boundary.
 class DiscoveryAddon {
@@ -620,12 +669,26 @@ class DiscoveryAddon {
         );
       }
     }
+    // A search result can embed a Qobuz sample URL. Discard only recognized
+    // previews and request a fresh full stream from the add-on endpoint.
+    // Unsafe, encrypted or DRM inline responses still fail closed.
+    if (track.inlineStream case final inline?) {
+      try {
+        return parseStream(inline, expectedDuration: track.duration);
+      } on _PreviewOnlyAddonStream {
+        // Give the full stream endpoint one opportunity to replace a preview.
+      }
+    }
     return parseStream(
-      track.inlineStream ?? await _get(['stream', track.id], query: settings, cancel: cancel),
+      await _get(['stream', track.id], query: settings, cancel: cancel),
+      expectedDuration: track.duration,
     );
   }
 
-  ResolvedDiscoveryAudio parseStream(Map<String, dynamic> json) {
+  ResolvedDiscoveryAudio parseStream(
+    Map<String, dynamic> json, {
+    Duration? expectedDuration,
+  }) {
     if (json['error'] != null) {
       throw const DiscoveryException(
         'The addon could not resolve this recording.',
@@ -652,6 +715,9 @@ class DiscoveryAddon {
       throw const DiscoveryException('The addon returned no playable URL.');
     }
     final uri = requireHttps(url);
+    if (_isAddonPreviewStream(json, uri, expectedDuration)) {
+      throw const _PreviewOnlyAddonStream();
+    }
     for (final key in [
       'manifest',
       'mediaType',
