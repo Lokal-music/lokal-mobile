@@ -149,7 +149,8 @@ typedef NativeAcceptanceVideoDocument = String Function({
 class MusicVideoSurface extends StatefulWidget {
   const MusicVideoSurface({super.key, required this.videoId, this.controller})
     : _acceptanceDocument = null,
-      _onAcceptanceViewCreated = null;
+      _onAcceptanceViewCreated = null,
+      _onAcceptanceNavigationEvent = null;
 
   /// Runs the production owner/bridge against controlled local media in debug
   /// acceptance. Product routes always use the official document above.
@@ -160,14 +161,19 @@ class MusicVideoSurface extends StatefulWidget {
     this.controller,
     required NativeAcceptanceVideoDocument document,
     required void Function(InAppWebViewController) onViewCreated,
+    void Function(InAppWebViewController, String, int?)? onNavigationEvent,
   }) : _acceptanceDocument = document,
        _onAcceptanceViewCreated = onViewCreated,
+       _onAcceptanceNavigationEvent = onNavigationEvent,
        assert(kDebugMode);
 
   final String videoId;
   final Media3MusicVideoController? controller;
   final NativeAcceptanceVideoDocument? _acceptanceDocument;
   final void Function(InAppWebViewController)? _onAcceptanceViewCreated;
+  // Debug evidence only: event names/progress, never URLs or page contents.
+  final void Function(InAppWebViewController, String, int?)?
+      _onAcceptanceNavigationEvent;
 
   @override
   State<MusicVideoSurface> createState() => _MusicVideoSurfaceState();
@@ -660,10 +666,27 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
                     supportMultipleWindows: false,
                     useHybridComposition: false,
                   ),
-                  onLoadStop: (_, __) {
+                  onLoadStart: (view, _) => widget._onAcceptanceNavigationEvent
+                      ?.call(view, 'load_start', null),
+                  onProgressChanged: (view, progress) => widget
+                      ._onAcceptanceNavigationEvent
+                      ?.call(view, 'load_progress', progress),
+                  onWebContentProcessDidTerminate: (view) => widget
+                      ._onAcceptanceNavigationEvent
+                      ?.call(view, 'web_content_process_terminated', null),
+                  onLoadStop: (view, _) {
+                    widget._onAcceptanceNavigationEvent
+                        ?.call(view, 'load_stop', null);
                     if (_isCurrent(output)) setState(() => _loading = false);
                   },
-                  onReceivedError: (_, request, __) {
+                  onReceivedError: (view, request, _) {
+                    widget._onAcceptanceNavigationEvent?.call(
+                      view,
+                      request.isForMainFrame == true
+                          ? 'main_frame_load_error'
+                          : 'resource_load_error',
+                      null,
+                    );
                     if (!_isCurrent(output)) return;
                     final url = request.url;
                     final embedFailed =
