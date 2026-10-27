@@ -241,6 +241,10 @@ class Uac2Service {
   bool _lastKnownHasSong = false;
   bool? _lastDirectUsbPlaybackActive;
   int _playbackStatusSyncGeneration = 0;
+  // Unlike playback-triggered syncs, attach/route/preferences refreshes were
+  // unguarded. A slow old getRouteStatus could publish a 96 kHz snapshot after
+  // a new 44.1 kHz track, flipping the visible path/bit-perfect state.
+  int _androidRouteStatusRefreshGeneration = 0;
   Timer? _androidRouteRefreshDebounceTimer;
 
   Uac2DeviceStatus? get currentDeviceStatus => _currentDeviceStatus;
@@ -1323,6 +1327,8 @@ Future<void> stopPriorityAnchor() async {
     AudioEngineType? playbackMode,
   }) async {
     final syncGeneration = ++_playbackStatusSyncGeneration;
+    // Retire any device-event refresh still awaiting Android's method channel.
+    ++_androidRouteStatusRefreshGeneration;
     final hasActiveSong = song != null;
     _lastKnownFormat = formatOverride;
     _lastKnownIsPlaying = isPlaying;
@@ -1415,18 +1421,21 @@ Future<void> stopPriorityAnchor() async {
     bool? hasActiveSong,
     int? syncGeneration,
   }) async {
+    final refreshGeneration = ++_androidRouteStatusRefreshGeneration;
     final resolvedPreferredDevice = await _resolvePreferredAndroidDevice(
       preferredDevice,
     );
-    if (syncGeneration != null &&
-        !_isCurrentPlaybackStatusSync(syncGeneration)) {
+    if (refreshGeneration != _androidRouteStatusRefreshGeneration ||
+        (syncGeneration != null &&
+            !_isCurrentPlaybackStatusSync(syncGeneration))) {
       return;
     }
     final routeStatus = await _getAndroidRouteStatus(
       preferredDevice: resolvedPreferredDevice,
     );
-    if (syncGeneration != null &&
-        !_isCurrentPlaybackStatusSync(syncGeneration)) {
+    if (refreshGeneration != _androidRouteStatusRefreshGeneration ||
+        (syncGeneration != null &&
+            !_isCurrentPlaybackStatusSync(syncGeneration))) {
       return;
     }
     final effectiveFormat = formatOverride ?? _lastKnownFormat;
