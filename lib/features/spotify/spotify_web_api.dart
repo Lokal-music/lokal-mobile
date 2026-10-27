@@ -11,6 +11,7 @@ import 'spotify_http.dart';
 import 'spotify_models.dart';
 import 'spotify_oauth.dart';
 import 'spotify_storage.dart';
+import 'package:flick/services/graceful_http_client.dart';
 
 /// Cookie sessions use the same Pathfinder operations as desktop, rather than
 /// OAuth-only REST shelves that reject WebPlayer tokens with 403/429.
@@ -21,7 +22,7 @@ class SpotifyWebApi implements SpotifyLibraryApi {
     http.Client? client,
     this.likesSince,
   }) : _http = SpotifyHttp(
-         client ?? http.Client(),
+         client ?? GracefulHttpClient(),
          timeout: const Duration(seconds: 15),
        );
   final SpotifyTokenStore store;
