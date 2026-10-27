@@ -1,4 +1,7 @@
 import 'package:flick/widgets/lokal/lokal_page_geometry.dart';
+import 'package:flick/widgets/lokal/lokal_discord_button.dart';
+import 'package:flick/widgets/lokal/lokal_glass.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flick/core/theme/lokal_theme.dart';
@@ -6,6 +9,51 @@ import 'package:flick/core/theme/lokal_tokens.dart';
 
 /// Shared tab header geometry keeps the settings button stationary on navigation.
 const konnektedTopBarPadding = LokalPageGeometry.barPadding;
+
+/// Identical trailing header actions across Home, Library and You.
+///
+/// Keeping Discord and Settings as the final fixed-width buttons means their
+/// screen coordinates remain unchanged even when the middle content scrolls.
+class KonnektedHeaderActions extends StatelessWidget {
+  const KonnektedHeaderActions({
+    super.key,
+    required this.onSettings,
+    this.onEditProfile,
+  });
+
+  final VoidCallback onSettings;
+  final VoidCallback? onEditProfile;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (onEditProfile != null) ...[
+        Tooltip(
+          message: lokalText('Edit profile'),
+          excludeFromSemantics: true,
+          child: LokalGlassButton(
+            semanticLabel: lokalText('Edit profile'),
+            onPressed: onEditProfile,
+            child: Icon(Icons.edit_rounded, color: context.lokal.text),
+          ),
+        ),
+        const SizedBox(width: 10),
+      ],
+      const LokalDiscordButton(),
+      const SizedBox(width: 10),
+      Tooltip(
+        message: lokalText('Settings'),
+        excludeFromSemantics: true,
+        child: LokalGlassButton(
+          semanticLabel: lokalText('Settings'),
+          onPressed: onSettings,
+          child: Icon(Icons.settings_rounded, color: context.lokal.text),
+        ),
+      ),
+    ],
+  );
+}
 
 class KonnektedHeading extends StatelessWidget {
   const KonnektedHeading({
