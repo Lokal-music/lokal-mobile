@@ -387,7 +387,7 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
                   height: size * 1.18,
                   width: constraints.maxWidth,
                   child: ColoredBox(
-                    color: Colors.black, // Keep iTunes' dark cover stage, without reflections.
+                    color: t.bg, // Match the active Home background across every Lokal theme.
                     child: AnimatedBuilder(
                       animation: _animation,
                       builder: (context, _) => _stage(size),
