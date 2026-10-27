@@ -72,7 +72,12 @@ void main() {
     final homeSettings = tester.getRect(find.byTooltip('Settings'));
 
     await tester.pumpWidget(
-      _app(KonnektedLibrary(onNavigate: (_) {})),
+      ProviderScope(
+        overrides: [
+          konnektedLibraryProvider.overrideWithValue(const AsyncData([])),
+        ],
+        child: _app(KonnektedLibrary(onNavigate: (_) {})),
+      ),
     );
     await tester.pump();
     final libraryDiscord = tester.getRect(find.byTooltip('Discord'));
