@@ -220,6 +220,23 @@ class _MotionArtViewState extends State<MotionArtView>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _lifecycle = state;
+    // Pausing a video is not enough when Android backgrounds Lokal: ExoPlayer
+    // still owns its decoder and buffers while the music service keeps
+    // playing. Release that memory and recreate the visual on resume.
+    // "inactive" is transient (notification shade, permission dialogs), so
+    // only tear down once the app is actually hidden or backgrounded.
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (_controller != null ||
+          _loading ||
+          _timer != null ||
+          _retryTimer != null) {
+        _teardown();
+        if (mounted) setState(() {});
+      }
+      return;
+    }
     _syncPlayback();
   }
 
