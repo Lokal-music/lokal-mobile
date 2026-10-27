@@ -10,6 +10,7 @@ import 'package:flick/src/rust/api/audio_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:image/image.dart' as image;
 import 'package:path/path.dart' as p;
 
 // Header fixtures exercise staging; native probing is injected here, not faked
@@ -113,7 +114,7 @@ void main() {
     await source.create(recursive: true);
     await source.writeAsBytes(flacHeader);
     final cacheDir = Directory(p.join(directory.path, 'cache'));
-    final cover = [0xff, 0xd8, 0xff, 0xe0, 1, 2, 3];
+    final cover = image.encodeJpg(image.Image(width: 512, height: 512));
     final cache = DiscoveryPlaybackCache(
       http: DiscoveryHttp(
         MockClient((request) async {
@@ -131,6 +132,50 @@ void main() {
     );
     expect(song.albumArt, DiscoveryPlaybackCache.coverPath(song.filePath!));
     expect(await File(song.albumArt!).readAsBytes(), cover);
+  });
+
+  test('missing high-res rendition returning HTTP 200 does not defeat a better original', () async {
+    final source = File(p.join(directory.path, 'audio.flac'))
+      ..writeAsBytesSync(flacHeader);
+    final cacheDir = Directory(p.join(directory.path, 'cache'));
+    final tiny = image.encodeJpg(image.Image(width: 120, height: 120));
+    final larger = image.encodeJpg(image.Image(width: 640, height: 640));
+    final requests = <String>[];
+    final cache = DiscoveryPlaybackCache(
+      http: DiscoveryHttp(MockClient((request) async {
+        requests.add(request.url.toString());
+        return http.Response.bytes(
+          request.url.toString().contains('w1200-h1200') ? tiny : larger,
+          200,
+        );
+      })),
+      directory: () async => cacheDir,
+      probe: (_) async => const AudioProbeFormat(sampleRate: 44100, channels: 2),
+    );
+    final song = await cache.adopt(
+      fixtureTrack.withArtwork('https://lh3.googleusercontent.com/album=w120-h120'),
+      source,
+    );
+    expect(requests.length, 2);
+    expect(song.albumArt, isNotNull);
+    final result = image.decodeImage(await File(song.albumArt!).readAsBytes());
+    expect(result!.width, 640);
+    expect(result.height, 640);
+  });
+
+  test('an invalid cover response is not embedded or cached', () async {
+    final source = File(p.join(directory.path, 'invalid-audio.flac'))
+      ..writeAsBytesSync(flacHeader);
+    final cache = DiscoveryPlaybackCache(
+      http: DiscoveryHttp(MockClient((_) async =>
+          http.Response.bytes([0xff, 0xd8, 0xff, 0x00], 200))),
+      directory: () async => Directory(p.join(directory.path, 'cache')),
+      probe: (_) async => const AudioProbeFormat(sampleRate: 44100, channels: 2),
+    );
+    final song = await cache.adopt(
+      fixtureTrack.withArtwork('https://img.example/invalid.jpg'), source,
+    );
+    expect(song.albumArt, isNull);
   });
 
   test('a cover that won\'t load leaves the song playable', () async {
@@ -200,7 +245,8 @@ void main() {
       ),
     );
     expect(asked, ['0-19', '20-39', '40-${file.length - 1}']);
-    expect(song.fileType, 'M4A');
+    // Container bytes are known; this fixture supplies no verified codec.
+    expect(song.fileType, 'ONLINE');
   });
 
   test(
@@ -511,7 +557,10 @@ void main() {
       return http.Response.bytes(
         bytes.sublist(parts[0], parts[1] + 1),
         206,
-        headers: {'content-type': 'audio/mp4'},
+        headers: {
+          'content-type': 'audio/mp4',
+          'content-range': 'bytes ${parts[0]}-${parts[1]}/${bytes.length}',
+        },
       );
     });
     addTearDown(client.close);
@@ -528,7 +577,7 @@ void main() {
     );
     final song = await cache.prepare(fixtureTrack, stream);
     expect(requested, ['bytes=0-19', 'bytes=20-39', 'bytes=40-${bytes.length - 1}']);
-    expect(song.fileType, 'M4A');
+    expect(song.fileType, 'ONLINE');
   });
 
 

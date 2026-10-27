@@ -40,6 +40,11 @@ Keep the license files distributed with `rust/vendor`, `rust_builder/cargokit`, 
 
 No affiliation with or endorsement by Google, YouTube, Spotify, Tidal, Deezer, Discord, Last.fm or ListenBrainz is implied.
 
+Unicode normalization for local lyrics search uses `unorm_dart` 0.3.2
+(Copyright © 2018 Yasuhiro Shimizu), under the MIT License. Its original
+`LICENSE` is retained by the package and Flutter's bundled license registry;
+the exact source archive digest is pinned in `pubspec.lock`.
+
 ## Google Cast iOS SDK
 
 The iPhone build links Google's unmodified Google Cast SDK 4.8.6 static binary.

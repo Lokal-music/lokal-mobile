@@ -65,10 +65,18 @@ class SharedMotionPlayback<T> {
         entry.users.remove(token);
         if (entry.users.isNotEmpty) {
           await _sync(entry);
-        } else if (immediate) {
-          await _remove(id, entry);
         } else {
-          entry.timer = Timer(handoff, () => unawaited(_remove(id, entry)));
+          // No view needs frames now. Pause immediately, even when retaining
+          // the decoder briefly for a mini/full-player handoff. Otherwise
+          // ExoPlayer continues rendering a video nobody can see.
+          final pause = _sync(entry);
+          if (immediate) {
+            await pause.catchError((Object _) {});
+            await _remove(id, entry);
+          } else {
+            entry.timer = Timer(handoff, () => unawaited(_remove(id, entry)));
+            await pause.catchError((Object _) {});
+          }
         }
       },
     );

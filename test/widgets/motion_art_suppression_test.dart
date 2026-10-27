@@ -61,4 +61,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.byType(VideoPlayer), findsNothing);
   });
+  testWidgets('background lifecycle cancels pending motion art and resumes safely', (tester) async {
+    final suppression = ValueNotifier<bool>(false);
+    addTearDown(suppression.dispose);
+    await tester.pumpWidget(_host(suppression));
+    await tester.pump(const Duration(milliseconds: 50));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byType(VideoPlayer), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.text('fallback'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
 }

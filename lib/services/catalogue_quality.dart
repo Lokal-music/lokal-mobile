@@ -274,7 +274,8 @@ String? measuredLossyBitrate({
       : (fileBytes != null && fileBytes > 0 && seconds >= 5)
           ? fileBytes * 8 / seconds : null;
   if (observed == null || !observed.isFinite) return null;
-  return '${(observed / 1000).round()} kbps';
+  final kbps = (observed / 1000).round();
+  return kbps > 0 ? '$kbps kbps' : null;
 }
 
 /// A requested Morneye setting is a helpful Search hint, not the actual
