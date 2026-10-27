@@ -57,18 +57,24 @@ class LyricsSaveButton extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onLongPress: saving ? null : () => _showOptions(context),
-    child: IconButton(
-      tooltip: 'Save lyrics to file (hold for options)',
-      visualDensity: VisualDensity.compact,
-      icon: saving
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(LucideIcons.download, color: iconColor, size: 19),
-      onPressed: saving ? null : onSaveOriginal,
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Save lyrics to file (hold for options)',
+    // IconButton's default long-press Tooltip competes in the gesture
+    // arena and can swallow the long-press that should open this menu.
+    // Manual mode retains hover/semantics without a touch recognizer.
+    triggerMode: TooltipTriggerMode.manual,
+    child: GestureDetector(
+      onLongPress: saving ? null : () => _showOptions(context),
+      child: IconButton(
+        visualDensity: VisualDensity.compact,
+        icon: saving
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(LucideIcons.download, color: iconColor, size: 19),
+        onPressed: saving ? null : onSaveOriginal,
+      ),
     ),
   );
 }
