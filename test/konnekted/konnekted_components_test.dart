@@ -49,6 +49,115 @@ Song _track(String id) => Song(
 );
 
 void main() {
+  testWidgets('Home and Library use identical trailing header coordinates', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _app(
+        SafeArea(
+          bottom: false,
+          child: KonnektedHomeTopBar(onSettings: () {}, onAppearance: () {}),
+        ),
+      ),
+    );
+    await tester.pump();
+    final homeDiscord = tester.getRect(find.byTooltip('Discord'));
+    final homeSettings = tester.getRect(find.byTooltip('Settings'));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        key: UniqueKey(),
+        overrides: [
+          konnektedLibraryProvider.overrideWithValue(const AsyncData([])),
+        ],
+        child: _app(KonnektedLibrary(onNavigate: (_) {})),
+      ),
+    );
+    await tester.pump();
+    final libraryDiscord = tester.getRect(find.byTooltip('Discord'));
+    final librarySettings = tester.getRect(find.byTooltip('Settings'));
+    expect(libraryDiscord.center, homeDiscord.center);
+    expect(librarySettings.center, homeSettings.center);
+    expect(find.text('Library'), findsOneWidget);
+    final addButton = tester.getRect(
+      find.bySemanticsLabel('Add music, playlists and folders'),
+    );
+    final title = tester.getRect(find.text('Library'));
+    expect(title.left, closeTo(20, .1));
+    expect(title.right, lessThanOrEqualTo(addButton.left));
+    expect(addButton.right + 10, closeTo(libraryDiscord.left, .1));
+    expect((title.center.dy - addButton.center.dy).abs(), lessThan(2));
+    await tester.tap(find.bySemanticsLabel('Add music, playlists and folders'));
+    await tester.pumpAndSettle();
+    expect(find.text('New playlist'), findsOneWidget);
+    expect(find.text('Import a playlist link'), findsOneWidget);
+    expect(find.text('Import M3U'), findsOneWidget);
+    expect(find.text('Add a music folder'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('2x text keeps Library title visible and Home actions aligned', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _app(
+        SafeArea(
+          bottom: false,
+          child: KonnektedHomeTopBar(onSettings: () {}, onAppearance: () {}),
+        ),
+        scale: 2,
+      ),
+    );
+    await tester.pump();
+    final homeDiscord = tester.getRect(find.byTooltip('Discord'));
+    final homeSettings = tester.getRect(find.byTooltip('Settings'));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        key: UniqueKey(),
+        overrides: [
+          konnektedLibraryProvider.overrideWithValue(const AsyncData([])),
+        ],
+        child: _app(KonnektedLibrary(onNavigate: (_) {}), scale: 2),
+      ),
+    );
+    await tester.pump();
+    final title = tester.getRect(find.text('Library'));
+    final row = tester.getRect(
+      find.ancestor(of: find.text('Library'), matching: find.byType(Row)).first,
+    );
+    expect(row.height, greaterThan(44));
+    expect(title.height, greaterThan(44));
+    expect(title.top, greaterThanOrEqualTo(row.top));
+    expect(title.bottom, lessThanOrEqualTo(row.bottom));
+    expect(title.left, closeTo(20, .1));
+    final add = tester.getRect(
+      find.bySemanticsLabel('Add music, playlists and folders'),
+    );
+    final discord = tester.getRect(find.byTooltip('Discord'));
+    expect(add.right + 10, closeTo(discord.left, .1));
+    expect(title.right, lessThanOrEqualTo(add.left));
+    expect(
+      tester.getRect(find.byTooltip('Discord')).center,
+      homeDiscord.center,
+    );
+    expect(
+      tester.getRect(find.byTooltip('Settings')).center,
+      homeSettings.center,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   setUpAll(() async {
     for (final (family, asset) in [
       (LokalTheme.sans, 'assets/fonts/DMSans-Regular.ttf'),
@@ -119,8 +228,10 @@ void main() {
     expect(flow.left, greaterThanOrEqualTo(logo.right));
     expect(flow.right, lessThanOrEqualTo(discord.left));
     expect(flow.height, greaterThanOrEqualTo(44));
-    expect(tester.getRect(find.text('Header greeting')).top,
-        greaterThan(flow.bottom));
+    expect(
+      tester.getRect(find.text('Header greeting')).top,
+      greaterThan(flow.bottom),
+    );
 
     final semantics = tester.ensureSemantics();
     final node = tester.getSemantics(find.bySemanticsLabel('Flow'));
@@ -134,7 +245,6 @@ void main() {
     semantics.dispose();
     expect(tester.takeException(), isNull);
   });
-
 
   testWidgets('Home header tabs remain readable and screen-reader actionable', (
     tester,
@@ -163,7 +273,8 @@ void main() {
     final node = tester.getSemantics(discovery);
     expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
     tester.binding.pipelineOwner.semanticsOwner!.performAction(
-      node.id, SemanticsAction.tap,
+      node.id,
+      SemanticsAction.tap,
     );
     await tester.pump();
     expect(selected, [KonnektedHomeTab.discovery]);
@@ -206,50 +317,54 @@ void main() {
     expect(find.text('4 songs'), findsNWidgets(3));
   });
 
-  testWidgets('Cover Flow has no redundant heading; a tap plays with it queued', (
-    tester,
-  ) async {
-    final recent = [_track('r1'), _track('r2'), _track('r3')];
-    const mix = LokalMix(
-      id: 'm',
-      name: 'Daily Mix',
-      type: LokalMixType.daily,
-      tracks: [],
-    );
-    Song? played;
-    List<Song>? queue;
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          konnektedMadeForYouProvider.overrideWithValue(
-            AsyncData([
-              for (final song in recent)
-                LokalMadeForYouPick(song: song, mix: mix),
-            ]),
-          ),
-        ],
-        child: _app(
-          KonnektedCoverFlowSection(
-            onPlay: (song, shelf) {
-              played = song;
-              queue = shelf;
-            },
+  testWidgets(
+    'Cover Flow has no redundant heading; a tap plays with it queued',
+    (tester) async {
+      final recent = [_track('r1'), _track('r2'), _track('r3')];
+      const mix = LokalMix(
+        id: 'm',
+        name: 'Daily Mix',
+        type: LokalMixType.daily,
+        tracks: [],
+      );
+      Song? played;
+      List<Song>? queue;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            konnektedMadeForYouProvider.overrideWithValue(
+              AsyncData([
+                for (final song in recent)
+                  LokalMadeForYouPick(song: song, mix: mix),
+              ]),
+            ),
+          ],
+          child: _app(
+            KonnektedCoverFlowSection(
+              onPlay: (song, shelf) {
+                played = song;
+                queue = shelf;
+              },
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('MADE FOR YOU'), findsNothing);
-    expect(find.text('RECENT'), findsNothing);
-    expect(find.text('NEW'), findsNothing);
-    expect(find.text('Track r2'), findsOneWidget); // The shelf starts in the middle.
-    final stage = find.bySemanticsLabel(RegExp('^Cover Flow'));
-    await tester.tapAt(tester.getCenter(stage) + const Offset(150, 0));
-    await tester.pumpAndSettle();
-    expect(played?.id, 'r3');
-    expect(queue?.map((s) => s.id), ['r1', 'r2', 'r3']);
-    expect(tester.takeException(), isNull);
-  });
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('MADE FOR YOU'), findsNothing);
+      expect(find.text('RECENT'), findsNothing);
+      expect(find.text('NEW'), findsNothing);
+      expect(
+        find.text('Track r2'),
+        findsOneWidget,
+      ); // The shelf starts in the middle.
+      final stage = find.bySemanticsLabel(RegExp('^Cover Flow'));
+      await tester.tapAt(tester.getCenter(stage) + const Offset(150, 0));
+      await tester.pumpAndSettle();
+      expect(played?.id, 'r3');
+      expect(queue?.map((s) => s.id), ['r1', 'r2', 'r3']);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('no mixes, no sections', (tester) async {
     await tester.pumpWidget(
@@ -310,8 +425,16 @@ void main() {
         KonnektedDestination.settings,
         const KonnektedDestination.settingsAt(LokalSettingsGroup.themeAccent),
       ]);
-      await tester.scrollUntilVisible(find.text('Add your music'), 180,
-        scrollable: find.descendant(of: find.byType(CustomScrollView).first, matching: find.byType(Scrollable)).first);
+      await tester.scrollUntilVisible(
+        find.text('Add your music'),
+        180,
+        scrollable: find
+            .descendant(
+              of: find.byType(CustomScrollView).first,
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add your music'));
       expect(

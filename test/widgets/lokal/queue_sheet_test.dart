@@ -296,7 +296,7 @@ void main() {
     final handle = find.byKey(const ValueKey('queue-grip-0'));
     await tester.ensureVisible(handle);
     final gesture = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump(const Duration(milliseconds: 60));
+    await tester.pump(const Duration(milliseconds: 600));
     await gesture.moveBy(const Offset(0, 180));
     await tester.pump(const Duration(milliseconds: 220));
     await gesture.up();
@@ -319,7 +319,7 @@ void main() {
       final handle = find.byKey(const ValueKey('queue-grip-0'));
       await tester.ensureVisible(handle);
       final gesture = await tester.startGesture(tester.getCenter(handle));
-      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pump(const Duration(milliseconds: 600));
       await gesture.moveBy(const Offset(0, 180));
       await tester.pump(const Duration(milliseconds: 220));
       await gesture.up();

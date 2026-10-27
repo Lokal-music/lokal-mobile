@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flick/core/theme/adaptive_color_provider.dart';
+import 'package:flick/core/utils/app_haptics.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/l10n/l10n.dart';
@@ -23,13 +24,6 @@ List<String> queueRowIdentities(List<Song> songs, String section) {
       '$section:${song.id}:${seen.update(song.id, (n) => n + 1, ifAbsent: () => 0)}',
   ];
 }
-
-/// One post-removal target index for both queue screens and player backends.
-/// SliverReorderableList sends the destination BEFORE the old row is removed.
-int queueDropIndex(int oldIndex, int newIndex, int length) =>
-    (newIndex > oldIndex ? newIndex - 1 : newIndex)
-        .clamp(0, length - 1)
-        .toInt();
 
 class QueueScreen extends StatelessWidget {
   const QueueScreen({super.key});
@@ -303,7 +297,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                         ),
                         if (!_selectionMode)
                           Text(
-                            lokalText('Drag to reorder'),
+                            lokalText('Hold to reorder'),
                             style: TextStyle(fontSize: 11, color: mutedColor),
                           ),
                       ],
@@ -337,14 +331,10 @@ class _QueueListState extends ConsumerState<QueueList> {
                         )
                       : SliverReorderableList(
                           itemCount: songs.length,
-                          // The platform and sheet scroll gestures no longer
-                          // compete with nested Dismissible/second reorder lists.
-                          onReorder: (from, destination) {
-                            final to = queueDropIndex(
-                              from,
-                              destination,
-                              songs.length,
-                            );
+                          onReorderStart: (_) => AppHaptics.selection(),
+                          // Flutter already normalizes the removed row for this
+                          // callback. Do not subtract from the target again.
+                          onReorderItem: (from, to) {
                             unawaited(_move(from, to, songs, manualOnly));
                           },
                           proxyDecorator: (child, index, animation) => Material(
@@ -353,29 +343,38 @@ class _QueueListState extends ConsumerState<QueueList> {
                             borderRadius: BorderRadius.circular(14),
                             child: child,
                           ),
-                          itemBuilder: (context, i) => _QueueRow(
-                            key: ValueKey(ids[i]),
-                            song: songs[i],
-                            index: i,
-                            darkBackdrop: widget.embedded,
-                            onTap: () async {
-                              final player = ref.read(playerProvider.notifier);
-                              if (manualOnly) {
-                                await player.playFromQueueIndex(i);
-                              } else {
-                                await player.playFromUpNextIndex(i);
-                              }
-                              _openPlayer();
-                            },
-                            onRemove: () async {
-                              final player = ref.read(playerProvider.notifier);
-                              if (manualOnly) {
-                                await player.removeFromQueue(i);
-                              } else {
-                                await player.removeFromUpNext(i);
-                              }
-                            },
-                          ),
+                          itemBuilder: (context, i) =>
+                              ReorderableDelayedDragStartListener(
+                                key: ValueKey(ids[i]),
+                                index: i,
+                                enabled: !_reordering,
+                                child: _QueueRow(
+                                  song: songs[i],
+                                  index: i,
+                                  darkBackdrop: widget.embedded,
+                                  onTap: () async {
+                                    final player = ref.read(
+                                      playerProvider.notifier,
+                                    );
+                                    if (manualOnly) {
+                                      await player.playFromQueueIndex(i);
+                                    } else {
+                                      await player.playFromUpNextIndex(i);
+                                    }
+                                    _openPlayer();
+                                  },
+                                  onRemove: () async {
+                                    final player = ref.read(
+                                      playerProvider.notifier,
+                                    );
+                                    if (manualOnly) {
+                                      await player.removeFromQueue(i);
+                                    } else {
+                                      await player.removeFromUpNext(i);
+                                    }
+                                  },
+                                ),
+                              ),
                         ),
                 ),
               ] else
@@ -441,8 +440,9 @@ class _QueueListState extends ConsumerState<QueueList> {
 }
 
 /// A minimal queue row: artwork, title, secondary artist, duration, actions,
-/// and a dedicated immediate drag handle. No nested Dismissible/GestureDetector
-/// competes for the vertical drag arena.
+/// and a visual grip hint. The whole row is wrapped in a delayed drag
+/// recognizer, so a long press works on artwork, title, duration and actions.
+/// Ordinary taps and vertical scrolling remain unchanged.
 class _QueueRow extends StatelessWidget {
   const _QueueRow({
     super.key,
@@ -537,33 +537,33 @@ class _QueueRow extends StatelessWidget {
               ),
             ),
             if (!selecting && !autoplay) ...[
-              IconButton(
-                tooltip: 'More',
-                icon: Icon(LucideIcons.ellipsis, color: mutedColor, size: 19),
-                onPressed: () => SongActionsBottomSheet.show(
-                  context,
-                  song,
-                  queueActions: false,
-                  extras: [
-                    if (onRemove != null)
-                      LokalSongMenuAction(
-                        icon: Icons.playlist_remove_rounded,
-                        label: 'Remove from queue',
-                        destructive: true,
-                        onTap: onRemove!,
-                      ),
-                  ],
+              Tooltip(
+                message: lokalText('More'),
+                triggerMode: TooltipTriggerMode.manual,
+                child: IconButton(
+                  icon: Icon(LucideIcons.ellipsis, color: mutedColor, size: 19),
+                  onPressed: () => SongActionsBottomSheet.show(
+                    context,
+                    song,
+                    queueActions: false,
+                    extras: [
+                      if (onRemove != null)
+                        LokalSongMenuAction(
+                          icon: Icons.playlist_remove_rounded,
+                          label: 'Remove from queue',
+                          destructive: true,
+                          onTap: onRemove!,
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              ReorderableDragStartListener(
-                index: index,
-                child: Semantics(
-                  button: true,
-                  label: 'Reorder ${song.title}',
-                  child: SizedBox(
-                    key: ValueKey('queue-grip-$index'),
-                    width: 44,
-                    height: 62,
+              ExcludeSemantics(
+                child: SizedBox(
+                  key: ValueKey('queue-grip-$index'),
+                  width: 44,
+                  height: 62,
+                  child: Center(
                     child: Icon(
                       LucideIcons.gripVertical,
                       color: mutedColor,

@@ -8,6 +8,8 @@ import 'spotify_oauth.dart';
 import 'spotify_storage.dart';
 import 'spotify_http.dart';
 
+import 'package:flick/services/graceful_http_client.dart';
+
 class SpotifyApiException implements Exception {
   const SpotifyApiException(this.message, {this.statusCode});
 
@@ -43,7 +45,7 @@ class SpotifyApi implements SpotifyLibraryApi {
     http.Client? client,
     SpotifyDelay? delay,
   }) : _delay = delay ?? ((duration) => Future<void>.delayed(duration)),
-       _http = SpotifyHttp(client ?? http.Client());
+       _http = SpotifyHttp(client ?? GracefulHttpClient());
 
   static final apiOrigin = Uri.parse('https://api.spotify.com');
   static const _pageSize = 50;
@@ -53,7 +55,8 @@ class SpotifyApi implements SpotifyLibraryApi {
   /// Construct a read-only catalogue client using the existing encrypted
   /// Spotify cookie-backed session and the same refresh implementation.
   static SpotifyApi withCredentials(
-    SpotifyTokenStore store, SpotifyOAuthService oauth,
+    SpotifyTokenStore store,
+    SpotifyOAuthService oauth,
   ) => SpotifyApi(tokenStore: store, oauth: oauth);
 
   void close() => _http.client.close();
@@ -69,8 +72,7 @@ class SpotifyApi implements SpotifyLibraryApi {
   Future<Map<String, dynamic>> getJson(
     Uri url, {
     SpotifyCancellation? cancellation,
-  }) =>
-      _getJson(url, cancellation: cancellation);
+  }) => _getJson(url, cancellation: cancellation);
 
   @override
   Future<List<SpotifyPlaylist>> getPlaylists({

@@ -1,4 +1,3 @@
-import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/features/flow/flow_screen.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
@@ -242,45 +241,38 @@ class KonnektedHomeTopBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Semantics(
-                button: true,
-                label: lokalText('Appearance'),
-                excludeSemantics: true,
-                onTap: onAppearance,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    onAppearance();
-                  },
-                  child: const LokalLogo(size: 32),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HomeModeSelector(
-                  selectedTab: selectedTab,
-                  onTabChanged: onTabChanged,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const LokalDiscordButton(),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: lokalText('Settings'),
-                excludeFromSemantics: true,
-                child: LokalGlassButton(
-                  semanticLabel: lokalText('Settings'),
-                  onPressed: onSettings,
-                  child: Icon(
-                    Icons.settings_rounded,
-                    color: context.lokal.text,
+          SizedBox(
+            height: konnektedHeaderHeight(context),
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 44,
+                  child: Semantics(
+                    button: true,
+                    label: lokalText('Appearance'),
+                    excludeSemantics: true,
+                    onTap: onAppearance,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        onAppearance();
+                      },
+                      child: const Center(child: LokalLogo(size: 32)),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _HomeModeSelector(
+                    selectedTab: selectedTab,
+                    onTabChanged: onTabChanged,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                KonnektedHeaderActions(onSettings: onSettings),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           // Desktop's greeting: a salutation, then a line from your listening.
@@ -412,7 +404,7 @@ class _HomeModeSelectorState extends State<_HomeModeSelector> {
           child: LokalGlass.capsule(
             thickness: LokalGlassThickness.thin,
             shadow: false,
-            padding: const EdgeInsets.all(3),
+            padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
