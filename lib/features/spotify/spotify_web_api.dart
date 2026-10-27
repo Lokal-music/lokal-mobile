@@ -102,6 +102,12 @@ class SpotifyWebApi implements SpotifyLibraryApi {
           'Spotify is limiting requests. Try again later.',
           statusCode: 429,
         );
+      if (response.statusCode == 401)
+        throw const SpotifyApiException(
+          'Spotify rejected the saved session after a refresh. '
+          'Reconnect Spotify in Data → Accounts.',
+          statusCode: 401,
+        );
       if (response.statusCode != 200)
         throw SpotifyApiException(
           'Spotify returned HTTP ${response.statusCode}.',
