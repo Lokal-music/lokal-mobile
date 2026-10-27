@@ -60,6 +60,7 @@ class AudioSessionManager {
   Future<void>? _initializeInFlight;
   Future<void>? _routeSyncInFlight;
   VoidCallback? _deviceInfoListener;
+  String? _lastSelectedUsbDeviceKey;
   final Map<String, String> _exclusiveUnavailableUsbDeviceReasons =
       <String, String>{};
 
@@ -168,10 +169,11 @@ class AudioSessionManager {
     required String reason,
   }) async {
     final info = await _deviceService.refresh();
-    final deviceKey = _currentUsbExperimentalDeviceKey(info);
-    if (deviceKey == null) {
-      return;
-    }
+    // LIBUSB_NO_DEVICE may coincide with Android temporarily losing the
+    // entire route. Retain the last *selected* DAC identity for suppression.
+    final deviceKey = _currentUsbExperimentalDeviceKey(info) ??
+        _lastSelectedUsbDeviceKey;
+    if (deviceKey == null) return;
 
     _exclusiveUnavailableUsbDeviceReasons[deviceKey] = reason;
     if (selectedMode == AudioEngineType.usbDacExperimental) {
@@ -393,6 +395,7 @@ class AudioSessionManager {
         );
         return AudioEngineType.normalAndroid;
       }
+      _lastSelectedUsbDeviceKey = _currentUsbExperimentalDeviceKey(info);
       _debugLog(
         '[Session] Selected USB_DAC_EXPERIMENTAL because an external USB DAC '
         'is attached (${info.routeLabel ?? info.routeType ?? 'unknown'}; '

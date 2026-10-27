@@ -347,6 +347,23 @@ class LokalDesktopSource extends NetworkSourceService {
       var entity = existing == null
           ? null
           : await Database.songs.get(int.parse(existing.id));
+      // The merge may already have created a streamable desktop row. Reuse
+      // its local ID (and hence its likes/playlists/history) on original copy.
+      // The preview's 'existing' can be null when the copy plan was refreshed.
+      if (entity == null) {
+        final matching = await Database.songs
+            .filter()
+            .remoteServerIdEqualTo(server.id)
+            .remoteIdEqualTo(id)
+            .findAll();
+        for (final candidate in matching) {
+          if (isDownloadedDesktopOriginal(candidate)) {
+            entity = candidate;
+            break;
+          }
+        }
+        entity ??= matching.isEmpty ? null : matching.first;
+      }
       entity ??= SongEntity()..dateAdded = DateTime.now();
       entity.filePath = file.path;
       entity.title = track['title'] as String? ?? 'Unknown track';

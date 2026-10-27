@@ -1474,6 +1474,7 @@ Future<void> stopPriorityAnchor() async {
         routeStatus['preferredUsbDeviceDetected'] == true;
     final directUsbRegistered = routeStatus['directUsbRegistered'] == true;
     final volumeMode = directUsbRegistered &&
+            !isBitPerfectEnabledSync &&
             _volumeModeFromString(routeStatus['volumeMode'] as String?) ==
                 Uac2VolumeMode.unavailable
         ? Uac2VolumeMode.software

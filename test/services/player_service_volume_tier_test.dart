@@ -6,6 +6,7 @@ VolumeTier tier({
   bool bitPerfectPath = true,
   Uac2VolumeMode? mode,
   bool hwFailed = false,
+  bool hardwareWritable = true,
   bool dop = false,
   bool autoSwitch = false,
   bool passthrough = true,
@@ -13,6 +14,7 @@ VolumeTier tier({
 }) => determineVolumeTier(
   isBitPerfectVolumePath: bitPerfectPath,
   volumeMode: mode,
+  volumeControlWritable: hardwareWritable,
   hwVolumeFailed: hwFailed,
   isDoP: dop,
   autoSwitchDsdForVolume: autoSwitch,
@@ -33,6 +35,16 @@ void main() {
         tier(mode: Uac2VolumeMode.hardware, hwFailed: true),
         VolumeTier.unavailable,
       );
+    });
+
+    test('bit-perfect PCM: only writable verified hardware volume works', () {
+      expect(tier(mode: Uac2VolumeMode.hardware), VolumeTier.hardware);
+      expect(tier(mode: Uac2VolumeMode.hardware, hardwareWritable: false),
+          VolumeTier.unavailable);
+      expect(tier(mode: Uac2VolumeMode.software), VolumeTier.unavailable);
+      expect(tier(mode: Uac2VolumeMode.unavailable), VolumeTier.unavailable);
+      expect(tier(bitPerfectPath: false, mode: Uac2VolumeMode.unavailable),
+          VolumeTier.software);
     });
 
     test('no DAC hardware volume: DSP path keeps software gain', () {

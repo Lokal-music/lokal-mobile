@@ -455,6 +455,9 @@ class _Uac2PreferencesSectionsState
     // Read the service while this ConsumerState is still mounted. The audio
     // engine switch can navigate away from this screen before it completes.
     final uac2Service = ref.read(uac2ServiceProvider);
+    // An engine switch can deactivate this settings subtree before an await
+    // completes. Container invalidation does not touch an unmounted widget ref.
+    final container = ProviderScope.containerOf(context, listen: false);
     if (value) {
       final engine = audioEngineAsync.asData?.value;
       if (engine != null && engine != AudioEnginePreference.isochronousUsb) {
@@ -462,14 +465,14 @@ class _Uac2PreferencesSectionsState
           AudioEnginePreference.isochronousUsb,
         );
         if (!mounted) return;
-        ref.invalidate(audioEnginePreferenceProvider);
+        container.invalidate(audioEnginePreferenceProvider);
       }
     }
     final applied = await uac2Service.setBitPerfectEnabled(value);
     if (!mounted) return;
-    ref.invalidate(uac2BitPerfectEnabledProvider);
-    ref.invalidate(uac2ExclusiveDacModeProvider);
-    ref.invalidate(killIsochronousUsbOnQuitProvider);
+    container.invalidate(uac2BitPerfectEnabledProvider);
+    container.invalidate(uac2ExclusiveDacModeProvider);
+    container.invalidate(killIsochronousUsbOnQuitProvider);
     if (!context.mounted) return;
     if (!applied && value) {
       LokalToast.fromSnackBar(context, SnackBar(content: Text(l10n.bitPerfectUsbDacCouldNot)));
