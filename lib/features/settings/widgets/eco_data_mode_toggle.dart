@@ -42,9 +42,11 @@ class _EcoDataModeToggleState extends State<EcoDataModeToggle> {
   }
 
   @override
-  Widget build(BuildContext context) => Switch.adaptive(
-    value: _enabled,
-    onChanged: _busy ? null : _change,
-    semanticLabel: lokalText('Eco Data Mode'),
+  Widget build(BuildContext context) => Semantics(
+    label: lokalText('Eco Data Mode'),
+    child: Switch.adaptive(
+      value: _enabled,
+      onChanged: _busy ? null : _change,
+    ),
   );
 }
