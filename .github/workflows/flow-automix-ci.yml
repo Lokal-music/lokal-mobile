@@ -1,0 +1,46 @@
+name: Mobile Flow and AutoMix regressions
+
+on:
+  pull_request:
+    paths:
+      - 'lib/features/flow/**'
+      - 'lib/services/android_audio_engine.dart'
+      - 'lib/services/automix_*.dart'
+      - 'lib/services/player_service.dart'
+      - 'test/flow/**'
+      - 'test/services/automix_*.dart'
+      - 'test/services/android_audio_*.dart'
+      - '.github/workflows/flow-automix-ci.yml'
+  push:
+    paths:
+      - 'lib/features/flow/**'
+      - 'lib/services/android_audio_engine.dart'
+      - 'lib/services/automix_*.dart'
+      - 'lib/services/player_service.dart'
+      - 'test/flow/**'
+      - 'test/services/automix_*.dart'
+      - 'test/services/android_audio_*.dart'
+      - '.github/workflows/flow-automix-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-flutter:
+    name: Flow and Android AutoMix tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/android-toolchain
+      - name: Compile and test model cue cache, Android handoffs and Flow
+        run: >-
+          flutter test --no-pub
+          test/flow
+          test/services/automix_analysis_cache_test.dart
+          test/services/automix_advanced_report_test.dart
+          test/services/android_audio_engine_crossfade_test.dart
+          test/services/android_audio_failed_source_test.dart
