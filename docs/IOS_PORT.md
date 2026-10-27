@@ -32,6 +32,8 @@ The new probe retains phase/view/timing/native-document diagnostics for this gat
 | [Widget run 14](https://github.com/lokal-music/lokal-mobile/actions/runs/40504214809) / PR #253 | 23 actual store cases, including 50×24-worker POSIX creation and 50×24-worker real publication/read rounds; 45 reader, 14 publisher and 88 Flutter cases plus both real Flutter bridge SDK checks pass. This later lock correction is outside the build-53 IPA. |
 | Build 56 / live-sampling candidate | iOS 18.6 times out awaiting paused WebKit replacement; iOS 26 passes. The candidate adds gate diagnostics and live widget sampling; full native acceptance remains pending. |
 | [Build 59](https://github.com/lokal-music/lokal-mobile/actions/runs/40510204116) / PR #259 | Complete iOS 18.6 pass for the live-sampler source; iOS 26 explicit replay reaches source end but presents only two new frames after its settled baseline, failing the unchanged three-frame gate. This is not a complete dual-runtime acceptance. |
+| [Widget run 21](https://github.com/lokal-music/lokal-mobile/actions/runs/40553935455) / PR #271 | All four focused native jobs pass: device/simulator extension linkage, contracts and 450 actual images in eleven locales, including nine independent OCR checks of visible recording/artist/recommendation text. Static layout evidence does not qualify live timer drawing, installed Home Screen behavior or signed shared access. |
+| [Build 66](https://github.com/lokal-music/lokal-mobile/actions/runs/40524454354) / PR #265 | iOS 18.6 reaches an initial native view but no local decoder/JavaScript readiness; release cleanup also times out. iOS 26 fails its control/recovery boot before app acceptance. This source has no complete dual-runtime acceptance. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
@@ -1325,3 +1327,41 @@ correction preserves recording/artist/cover/progress context and opaque contrast
 and expands the native matrix to 450 images with nine actual-pixel OCR gates.
 Those new gates still require their own hosted result; signed widgets/commands
 and the main app's native cleanup/replay gates remain separate.
+
+
+### Native widget content accepted; WebKit failure isolation
+
+Focused widget run 21 accepts the corrected layout at source
+`81385f95d49a4596f39f05bf5a9cb41b82724d9f`, tree
+`a5b0319364e5ee88236ce250e87dff103c8525aa`. All four jobs succeed, including
+device/simulator extension linkage, native/storage/stress/bridge contracts and
+**450 actual PNGs with nine independent pixel OCR checks**. Archive
+`12756433357` verifies SHA-256
+`78c5117a9ba06ab026fb61a7c35df78b806bca5aa5d4603c5bf22a3cc860d0f0`.
+The complete matrix is independently rechecked after extraction. Visual review
+confirms medium recording artwork/artist, three recommendations and an opaque
+light background. ImageRenderer shows an unsupported-view placeholder for the
+live timer bar; these captures do not qualify timer drawing or animation. The
+filterable local gallery and source/checksum record preserve that limitation.
+
+Main-app build 66 has a different failure from build 59. On iOS 18.6 the first
+native WebKit view is created, but never supplies decoder readiness; its bounded
+JavaScript query times out. The failure screenshot shows the loading surface.
+Final native release then exceeds its twelve-second diagnostic allowance and
+masks the original exception in the console. On iOS 26 the minimal Flutter
+control/recovery boot fails before app acceptance. Neither result establishes a
+new complete native checkpoint or a production WebKit root cause.
+
+The continuation preserves the original exception and stack, records each
+cleanup failure separately and still attempts all cleanup stages. Cleanup failure
+also fails an otherwise successful body; a bounded wait does not acknowledge,
+cancel or replace pending native output. Native load progress is sampled even
+when JavaScript fails, and the debug acceptance seam records a bounded trace of
+load start/progress/stop, coarse load errors and WebContent-process termination.
+It records no navigation URL or response body. Native snapshot requests have a
+bounded wait; polling errors preserve their original failure plus gate context
+and screenshot. Existing seek, real-clock, newly delivered frame and ownership
+gates remain unchanged. Local music-video/owner regression coverage passes
+**41 cases**, including original-error/stack retention across multiple cleanup
+failures, cleanup failure after a successful body, and actual lease exclusion
+until a late native acknowledgement. Hosted main-app acceptance is still needed.

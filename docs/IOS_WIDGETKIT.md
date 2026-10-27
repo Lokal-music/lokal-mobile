@@ -623,3 +623,27 @@ Partial images survive a failed capture for review. Eleven local Python startup/
 packaging/content-policy cases pass, with diff/actionlint checks. Swift linkage,
 the expanded native image/content gates and visual review of the corrected
 source remain pending until their own hosted run passes.
+
+
+## Native render 21: corrected visible content accepted
+
+[Run 21](https://github.com/lokal-music/lokal-mobile/actions/runs/40553935455)
+passes all four focused jobs at source
+`81385f95d49a4596f39f05bf5a9cb41b82724d9f`, tree
+`a5b0319364e5ee88236ce250e87dff103c8525aa`. The actual extension links for
+device/simulator; existing native/store/concurrency/publisher/Flutter/real-SDK
+contracts pass. All **450 native images**, actual bundle-language checks and
+**nine pixel OCR checks** pass. Exported OCR identifies recording and artist
+for each normal Now Playing/Flow family and all three Cover Flow recommendation
+titles in medium/large layouts. The complete matrix and OCR observations are
+independently reverified after archive extraction.
+
+Artifact `12756433357` verifies archive SHA-256
+`78c5117a9ba06ab026fb61a7c35df78b806bca5aa5d4603c5bf22a3cc860d0f0`.
+The actual images, a filterable review gallery and source/checksum record are
+preserved locally. Visual inspection confirms the medium content and opaque
+light-surface fixes. The live timer bar displays an ImageRenderer unsupported-view
+placeholder; the static capture path does not establish correct timer drawing
+or animation. Validate that separately in a hosted view and installed widget.
+Signed App Group access, Home Screen installation/scheduling, application-language
+binding and commands remain separate unfinished gates.

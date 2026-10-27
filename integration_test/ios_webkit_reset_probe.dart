@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../test/fixtures/native_web_video_document.dart';
+import 'native_probe_cleanup.dart';
 
 /// Real WKWebView, generated H.264/AAC and the exact production iframe bridge.
 /// This establishes local decoder/retirement behavior, not YouTube acceptance.
@@ -58,21 +59,31 @@ Future<void> probeIosWebKitReset(
   binding.reportData!['media_reset_webkit_retirement_trace'] = trace;
 
   Future<void> until(FutureOr<bool> Function() ready, String reason) async {
-    for (var i = 0; i < 60; i++) {
-      await tester.pump(const Duration(milliseconds: 250));
-      expect(
-        lifecycle.phase.value,
-        isNot(LocalAudioPhase.blocked),
-        reason: '$reason: ${lifecycle.cleanupError}',
-      );
-      expect(
-        video.embedErrorNotifier.value,
-        isNull,
-        reason: '$reason: generated local media did not become playable',
-      );
-      if (await ready()) return;
+    Object? pollingError;
+    StackTrace? pollingStack;
+    try {
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(
+          lifecycle.phase.value,
+          isNot(LocalAudioPhase.blocked),
+          reason: '$reason: ${lifecycle.cleanupError}',
+        );
+        expect(
+          video.embedErrorNotifier.value,
+          isNull,
+          reason: '$reason: generated local media did not become playable',
+        );
+        if (await ready()) return;
+      }
+    } catch (error, stack) {
+      pollingError = error;
+      pollingStack = stack;
     }
     final diagnostics = observation(reason);
+    if (pollingError != null) {
+      diagnostics['polling_error'] = pollingError.toString();
+    }
     if (views.isNotEmpty) {
       try {
         diagnostics['native_sample'] = await views.last
@@ -80,11 +91,17 @@ Future<void> probeIosWebKitReset(
               source: 'window.__lokalNativeVideoSnapshot && window.__lokalNativeVideoSnapshot()',
             )
             .timeout(const Duration(seconds: 2));
+      } catch (error) {
+        diagnostics['native_probe_error'] = error.toString();
+      }
+      // Native load progress remains useful when the WebContent process never
+      // answers JavaScript. One failed diagnostic must not skip the other.
+      try {
         diagnostics['native_load_progress'] = await views.last
             .getProgress()
             .timeout(const Duration(seconds: 2));
       } catch (error) {
-        diagnostics['native_probe_error'] = error.toString();
+        diagnostics['native_load_progress_error'] = error.toString();
       }
     }
     binding.reportData!['media_reset_webkit_gate_timeout'] = diagnostics;
@@ -95,13 +112,18 @@ Future<void> probeIosWebKitReset(
     } catch (error) {
       diagnostics['failure_screenshot_error'] = error.toString();
     }
+    if (pollingError != null) {
+      Error.throwWithStackTrace(pollingError, pollingStack!);
+    }
     fail(reason);
   }
 
   Future<Map> nativeSnapshot() async {
-    final value = await views.last.evaluateJavascript(
-      source: 'window.__lokalNativeVideoSnapshot && window.__lokalNativeVideoSnapshot()',
-    );
+    final value = await views.last
+        .evaluateJavascript(
+          source: 'window.__lokalNativeVideoSnapshot && window.__lokalNativeVideoSnapshot()',
+        )
+        .timeout(const Duration(seconds: 2));
     expect(value, isA<Map>());
     return value as Map;
   }
@@ -165,130 +187,143 @@ Future<void> probeIosWebKitReset(
       trace.add(observation('view_created'));
       if (trace.length > 64) trace.removeAt(0);
     },
+    onNavigationEvent: (view, event, progress) {
+      trace.add({
+        ...observation(event),
+        'native_view': views.indexOf(view) + 1,
+        'load_progress': ?progress,
+      });
+      if (trace.length > 64) trace.removeAt(0);
+    },
   );
 
-  try {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: Scaffold(
-          body: IosAudioRecoveryHost(
-            child: ValueListenableBuilder(
-              valueListenable: space,
-              builder: (context, active, _) => active
-                  ? VideoSpaceLayout(
-                      player: surface(),
-                      subtitles: const Text('Generated local video'),
-                      onExit: () => space.value = false,
-                      onOptions: () {},
-                    )
-                  : Center(
-                      child: SizedBox(
-                        width: 320,
-                        height: 320,
-                        child: surface(),
+  await runNativeProbeWithCleanup(
+    name: 'media_reset_webkit',
+    report: binding.reportData!,
+    body: () async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: IosAudioRecoveryHost(
+              child: ValueListenableBuilder(
+                valueListenable: space,
+                builder: (context, active, _) => active
+                    ? VideoSpaceLayout(
+                        player: surface(),
+                        subtitles: const Text('Generated local video'),
+                        onExit: () => space.value = false,
+                        onOptions: () {},
+                      )
+                    : Center(
+                        child: SizedBox(
+                          width: 320,
+                          height: 320,
+                          child: surface(),
+                        ),
                       ),
-                    ),
+              ),
             ),
           ),
         ),
-      ),
-    );
-    await until(
-      () => video.timingAvailableNotifier.value && views.length == 1,
-      'Production video bridge did not observe the local decoder',
-    );
-    final initialProgress = await progress('initial');
-    final presentation = key.currentState;
-    space.value = true;
-    await tester.pump();
-    expect(key.currentState, same(presentation));
-    expect(
-      views,
-      hasLength(1),
-      reason: 'Space must retain the same native view',
-    );
-    final before = video.sourcePosition;
-    final oldView = views.single;
-    await const MethodChannel('lokal/ios')
-        .invokeMethod<void>('postMediaServicesResetForIntegrationTest');
-    await until(
-      () =>
-          lifecycle.phase.value == LocalAudioPhase.paused &&
-          views.length == 2 &&
-          video.timingAvailableNotifier.value,
-      'WebKit reset did not acknowledge retirement and create a paused replacement',
-    );
-    expect(views.last, isNot(same(oldView)));
-    expect(key.currentState, same(presentation));
-    expect(space.value, isTrue);
-    expect(
-      lease.isReleased,
-      isFalse,
-      reason: 'Retain selected video ownership',
-    );
-    expect(
-      video.sourcePosition.inMilliseconds,
-      inInclusiveRange(
-        (before.inMilliseconds - 350).clamp(0, 12000),
-        before.inMilliseconds + 1000,
-      ),
-    );
-    expect(video.playingNotifier.value, isFalse);
-    final pausedAt = video.sourcePosition;
-    await tester.pump(const Duration(milliseconds: 750));
-    expect(video.playingNotifier.value, isFalse);
-    expect(
-      (video.sourcePosition - pausedAt).abs(),
-      lessThan(const Duration(milliseconds: 100)),
-    );
-    binding.reportData!['media_reset_webkit_paused_native_sample'] =
-        Map<String, dynamic>.from(await nativeSnapshot());
-    await binding.takeScreenshot('ios-webkit-reset-paused-space');
-    await video.command('play');
-    final replayProgress = await progress('explicit-replay');
-    expect(lifecycle.phase.value, LocalAudioPhase.ready);
+      );
+      await until(
+        () => video.timingAvailableNotifier.value && views.length == 1,
+        'Production video bridge did not observe the local decoder',
+      );
+      final initialProgress = await progress('initial');
+      final presentation = key.currentState;
+      space.value = true;
+      await tester.pump();
+      expect(key.currentState, same(presentation));
+      expect(
+        views,
+        hasLength(1),
+        reason: 'Space must retain the same native view',
+      );
+      final before = video.sourcePosition;
+      final oldView = views.single;
+      await const MethodChannel('lokal/ios')
+          .invokeMethod<void>('postMediaServicesResetForIntegrationTest');
+      await until(
+        () =>
+            lifecycle.phase.value == LocalAudioPhase.paused &&
+            views.length == 2 &&
+            video.timingAvailableNotifier.value,
+        'WebKit reset did not acknowledge retirement and create a paused replacement',
+      );
+      expect(views.last, isNot(same(oldView)));
+      expect(key.currentState, same(presentation));
+      expect(space.value, isTrue);
+      expect(
+        lease.isReleased,
+        isFalse,
+        reason: 'Retain selected video ownership',
+      );
+      expect(
+        video.sourcePosition.inMilliseconds,
+        inInclusiveRange(
+          (before.inMilliseconds - 350).clamp(0, 12000),
+          before.inMilliseconds + 1000,
+        ),
+      );
+      expect(video.playingNotifier.value, isFalse);
+      final pausedAt = video.sourcePosition;
+      await tester.pump(const Duration(milliseconds: 750));
+      expect(video.playingNotifier.value, isFalse);
+      expect(
+        (video.sourcePosition - pausedAt).abs(),
+        lessThan(const Duration(milliseconds: 100)),
+      );
+      binding.reportData!['media_reset_webkit_paused_native_sample'] =
+          Map<String, dynamic>.from(await nativeSnapshot());
+      await binding.takeScreenshot('ios-webkit-reset-paused-space');
+      await video.command('play');
+      final replayProgress = await progress('explicit-replay');
+      expect(lifecycle.phase.value, LocalAudioPhase.ready);
 
-    await video.command('pause');
-    await until(
-      () => !video.playingNotifier.value,
-      'Native video Pause not observed',
-    );
-    final pausedBeforeSecondReset = video.sourcePosition;
-    await const MethodChannel('lokal/ios')
-        .invokeMethod<void>('postMediaServicesResetForIntegrationTest');
-    await until(
-      () =>
-          lifecycle.phase.value == LocalAudioPhase.paused &&
-          views.length == 3 &&
-          video.timingAvailableNotifier.value,
-      'Repeated paused video reset did not reconstruct the selected source',
-    );
-    expect(key.currentState, same(presentation));
-    expect(video.playingNotifier.value, isFalse);
-    expect(
-      (video.sourcePosition - pausedBeforeSecondReset).abs(),
-      lessThan(const Duration(milliseconds: 350)),
-    );
-    expect(player.isPlayingNotifier.value, isFalse);
-    binding.reportData!['media_reset_webkit_local_video'] = {
-      'scope': 'Generated H.264/AAC decoded by real WKWebView; controlled provider API, not YouTube or a daemon restart',
-      'native_views_created': views.length,
-      'initial_progress_ms': initialProgress,
-      'explicit_replay_progress_ms': replayProgress,
-      'space_and_selected_video_retained': true,
-      'playing_and_paused_reset_preserved': true,
-      'native_cleanup_acknowledged': true,
-    };
-  } finally {
-    try {
-      await lease.release().timeout(const Duration(seconds: 12));
-    } finally {
-      await tester.pumpWidget(const SizedBox.shrink());
-      lifecycle.phase.removeListener(changed);
-      video.timingAvailableNotifier.removeListener(changed);
-      video.dispose();
-      space.dispose();
-    }
-  }
+      await video.command('pause');
+      await until(
+        () => !video.playingNotifier.value,
+        'Native video Pause not observed',
+      );
+      final pausedBeforeSecondReset = video.sourcePosition;
+      await const MethodChannel('lokal/ios')
+          .invokeMethod<void>('postMediaServicesResetForIntegrationTest');
+      await until(
+        () =>
+            lifecycle.phase.value == LocalAudioPhase.paused &&
+            views.length == 3 &&
+            video.timingAvailableNotifier.value,
+        'Repeated paused video reset did not reconstruct the selected source',
+      );
+      expect(key.currentState, same(presentation));
+      expect(video.playingNotifier.value, isFalse);
+      expect(
+        (video.sourcePosition - pausedBeforeSecondReset).abs(),
+        lessThan(const Duration(milliseconds: 350)),
+      );
+      expect(player.isPlayingNotifier.value, isFalse);
+      binding.reportData!['media_reset_webkit_local_video'] = {
+        'scope': 'Generated H.264/AAC decoded by real WKWebView; controlled provider API, not YouTube or a daemon restart',
+        'native_views_created': views.length,
+        'initial_progress_ms': initialProgress,
+        'explicit_replay_progress_ms': replayProgress,
+        'space_and_selected_video_retained': true,
+        'playing_and_paused_reset_preserved': true,
+        'native_cleanup_acknowledged': true,
+      };
+    },
+    cleanup: {
+      'native_release': () =>
+          lease.release().timeout(const Duration(seconds: 12)),
+      'unmount': () => tester.pumpWidget(const SizedBox.shrink()),
+      'remove_lifecycle_listener': () async =>
+          lifecycle.phase.removeListener(changed),
+      'remove_timing_listener': () async =>
+          video.timingAvailableNotifier.removeListener(changed),
+      'dispose_video': () async => video.dispose(),
+      'dispose_space': () async => space.dispose(),
+    },
+  );
 }
