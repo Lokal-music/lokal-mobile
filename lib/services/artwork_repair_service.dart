@@ -164,13 +164,20 @@ class ArtworkRepairService {
           try {
             if (!await File(song.filePath!).exists()) {
               skipped++;
+              checked++;
             } else {
               final side = await _existingShortSide(song);
-              if (side != null && side < 640) low.add((song, side));
-              else skipped++;
+              if (side != null && side < 640) {
+                low.add((song, side));
+              } else {
+                skipped++;
+                checked++;
+              }
             }
-          } catch (_) { failed++; }
-          checked++;
+          } catch (_) {
+            failed++;
+            checked++;
+          }
           report();
         }
         if (_cancel || low.isEmpty) continue;
@@ -179,29 +186,41 @@ class ArtworkRepairService {
           candidate = exactRepairCandidate(
             low.first.$1, await _importer.searchOnlineCandidates(low.first.$1));
         } catch (_) { /* Offline catalogue: leave originals untouched. */ }
-        if (candidate == null) { skipped += low.length; continue; }
+        if (candidate == null) {
+          skipped += low.length;
+          checked += low.length;
+          report();
+          continue;
+        }
         final bytes = await _fetchArtwork(candidate.imageUrl);
-        if (bytes == null) { failed += low.length; continue; }
+        if (bytes == null) {
+          failed += low.length;
+          checked += low.length;
+          report();
+          continue;
+        }
         final newSide = (await validateArtworkBytes(bytes))?.shortSide ?? 0;
         for (final (song, currentSide) in low) {
           if (_cancel) break;
-          if (!isCoverUpgrade(
-              currentShortSide: currentSide, newShortSide: newSide)) {
-            skipped++;
-            continue;
-          }
           try {
-            // Verify that an external tag editor or another scan did not
-            // change the cover during the network request.
-            if (_importer.isCustomArtworkPath(song.albumArt) ||
-                await _existingShortSide(song) != currentSide) {
+            if (!isCoverUpgrade(
+                currentShortSide: currentSide, newShortSide: newSide)) {
               skipped++;
-              continue;
+            } else if (_importer.isCustomArtworkPath(song.albumArt) ||
+                await _existingShortSide(song) != currentSide) {
+              // Another editor/scan may have changed the cover since the
+              // selection, so do not overwrite that newer state.
+              skipped++;
+            } else {
+              await _importer.applyImageBytesToSong(song: song, bytes: bytes);
+              updated++;
             }
-            await _importer.applyImageBytesToSong(song: song, bytes: bytes);
-            updated++;
-          } catch (_) { failed++; }
-          report();
+          } catch (_) {
+            failed++;
+          } finally {
+            checked++;
+            report();
+          }
         }
         // One album request at a time, to avoid provider rate-limit bursts.
         await Future<void>.delayed(const Duration(milliseconds: 350));
