@@ -57,6 +57,85 @@ void main() {
       await (FontLoader(family)..addFont(rootBundle.load(asset))).load();
     }
   });
+  testWidgets('Home modes share the logo and header actions row', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(393, 852)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        KonnektedHomeTopBar(
+          onSettings: () {},
+          onAppearance: () {},
+          selectedTab: KonnektedHomeTab.discovery,
+          greeting: const LokalHomeMessages('Header greeting', 'Listening now'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final logo = tester.getRect(find.bySemanticsLabel('Appearance'));
+    final mode = tester.getRect(find.bySemanticsLabel('Discovery'));
+    final discord = tester.getRect(find.bySemanticsLabel('Discord'));
+    final settings = tester.getRect(find.bySemanticsLabel('Settings'));
+    final greeting = tester.getRect(find.text('Header greeting'));
+
+    expect(mode.left, greaterThanOrEqualTo(logo.right));
+    expect(mode.right, lessThanOrEqualTo(discord.left));
+    expect(discord.right, lessThan(settings.left));
+    expect((mode.center.dy - logo.center.dy).abs(), lessThan(2));
+    expect((mode.center.dy - settings.center.dy).abs(), lessThan(2));
+    expect(greeting.top, greaterThan(mode.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Compact header reveals selected mode without shrinking tabs', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(320, 568)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tabs = <KonnektedHomeTab>[];
+    await tester.pumpWidget(
+      _app(
+        KonnektedHomeTopBar(
+          onSettings: () {},
+          onAppearance: () {},
+          selectedTab: KonnektedHomeTab.flow,
+          onTabChanged: tabs.add,
+          greeting: const LokalHomeMessages('Header greeting', 'Listening now'),
+        ),
+        scale: 2,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final logo = tester.getRect(find.bySemanticsLabel('Appearance'));
+    final flow = tester.getRect(find.bySemanticsLabel('Flow'));
+    final discord = tester.getRect(find.bySemanticsLabel('Discord'));
+    expect(flow.left, greaterThanOrEqualTo(logo.right));
+    expect(flow.right, lessThanOrEqualTo(discord.left));
+    expect(flow.height, greaterThanOrEqualTo(44));
+    expect(tester.getRect(find.text('Header greeting')).top,
+        greaterThan(flow.bottom));
+
+    final semantics = tester.ensureSemantics();
+    final node = tester.getSemantics(find.bySemanticsLabel('Flow'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    tester.binding.pipelineOwner.semanticsOwner!.performAction(
+      node.id,
+      SemanticsAction.tap,
+    );
+    await tester.pump();
+    expect(tabs, [KonnektedHomeTab.flow]);
+    semantics.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
+
   testWidgets('Home header tabs remain readable and screen-reader actionable', (
     tester,
   ) async {

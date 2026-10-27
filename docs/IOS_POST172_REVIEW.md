@@ -751,3 +751,34 @@ have no analysis issues; whole app/integration analysis has no errors (618
 warning/information items remain). Actionlint and diff checks pass. Latest-source
 native queue/video/channel acceptance and physical/device/provider qualification
 remain pending.
+
+
+### Parity through #250 — 27 October 2026
+
+Three further merged product PRs bring the reviewed total to **60**. The earlier
+through-#246 checkpoint above remains historical; #247 has since merged. Pin
+this continuation to the following exact sources, rather than assuming an older
+IPA includes them.
+
+| PR / exact merged source | iPhone behavior and adaptation |
+| --- | --- |
+| [247](https://github.com/lokal-music/lokal-mobile/pull/247) / `bd1bce960d3bed7a7b9c39c307e4d2cd6cfed1c1` | Local / Discovery / Flow share the header row between the logo and account/settings actions. Only the middle mode selector scrolls when needed; it reveals the current selection with coalesced post-frame updates and retains 44-point touch targets. Preserve the port's nested scrolling behavior for Flow. |
+| [249](https://github.com/lokal-music/lokal-mobile/pull/249) / `fcc454f3d99caa84e5789bab90bec3d545eacf8c` | Replace the duplicate manual/Up Next presentation from #243 with one authoritative playback-order sliver. Manual-only queues remain editable and autoplay stays separate. Dedicated 44×62 immediate grips avoid row/swipe gesture competition; drops show an optimistic order and reconcile with the actual player. Rejected moves restore actual rows, show localized feedback and permit retry. Adapt header actions and section labels to wrap at narrow widths/large text, retaining accessible tooltips and theme-derived colors. Retain the earlier normalized player-service updates and native queue probe. |
+| [250](https://github.com/lokal-music/lokal-mobile/pull/250) / `dd91ee774a1acf59ba503f64cda322c4df308b8d` | Remove the opaque Cover Flow stage added by #245 so the actual artwork/shell gradient remains visible. Live theme changes retain the same mounted flow and gestures. Shorten source/account/settings labels to YouTube without changing source IDs, endpoints or authentication. |
+
+The Android APK workflow introduced by #249 is deliberately excluded: Android
+CI remains manually disabled. Its queue regressions and the changed account/data
+labels join the existing iPhone workflow selection. No dependency lock or native
+audio interface changes are required. Full native acceptance of this continuation,
+physical iPhone listening and live providers remain separate gates.
+
+
+Validation of the through-#250 continuation: the exact expanded iPhone workflow
+selection plus all widget/Android-widget contracts passes **624 Flutter tests**.
+The queue cases cover standalone, embedded and sheet drag order, manual-only and
+autoplay queues, rejected-move recovery, and all 11 locales at 200% text on a
+320px layout in both ordinary and selection modes. Home mode geometry/semantics,
+actual source/account labels and unpainted Cover Flow behavior also pass.
+Whole app/integration analysis has no errors (620 warning/information items).
+Actionlint and diff checks pass. Hosted native acceptance of this new source
+remains pending; no physical installation or live-provider result is inferred.

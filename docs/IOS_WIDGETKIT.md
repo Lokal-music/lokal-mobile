@@ -11,8 +11,11 @@ passes the reader's 45 cases, storage's 20 cases and publication's 14 cases,
 plus the actual iOS 16 SDK checks. The current candidate adds the host channel
 and Flutter coordinator. The later run-14 correction passes 23 storage cases,
 50×24-worker POSIX and real-store rounds, 45 reader, 14 publisher and 88 Flutter
-cases plus both real bridge SDK checks. **Live runtime sampling is now a candidate;
-no WidgetKit target, widget entitlement or iPhone widget UI is enabled.**
+cases plus both real bridge SDK checks. The [live-sampler contract run 15](https://github.com/lokal-music/lokal-mobile/actions/runs/40510204249)
+passes 48 reader cases, the same 23 store cases and both stress controls, 14
+publisher cases, 109 Flutter contracts and both real Flutter bridge SDK checks.
+**Full runtime sampling acceptance remains pending; no WidgetKit target, widget
+entitlement or iPhone widget UI is enabled.**
 
 The product remains exactly three configurations—Now Playing, Flow / Radio and
 Cover Flow—with responsive small/medium/large families. Artwork, Dynamic Type,
