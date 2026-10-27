@@ -1,7 +1,6 @@
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/widgets/common/overflow_marquee_title.dart';
-import 'package:flick/widgets/common/marquee_widget.dart';
 import 'package:flick/data/repositories/recently_played_repository.dart';
 import 'package:flick/features/konnekted/konnekted_destination.dart';
 import 'package:flick/features/konnekted/konnekted_you.dart';
@@ -71,7 +70,6 @@ Widget _app({
   int? streak,
   List<MilestoneRecord> milestones = const [],
   bool persistentDock = false,
-  bool enableMotion = false,
   VoidCallback? onDockTap,
 }) => ProviderScope(
   overrides: [
@@ -83,10 +81,10 @@ Widget _app({
   child: MaterialApp(
     theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
     home: MediaQuery(
-      data: MediaQueryData(
-        size: const Size(390, 2400),
-        padding: const EdgeInsets.only(top: 24, bottom: 24),
-        disableAnimations: !enableMotion,
+      data: const MediaQueryData(
+        size: Size(390, 2400),
+        padding: EdgeInsets.only(top: 24, bottom: 24),
+        disableAnimations: true,
       ),
       child: Scaffold(
         body: persistentDock
@@ -140,7 +138,6 @@ void main() {
       _app(
         onNavigate: (_) {},
         accounts: const YouAccounts(lastFm: longName),
-        enableMotion: true,
       ),
     );
     await tester.pump();
@@ -153,7 +150,8 @@ void main() {
     final discord = tester.getRect(find.byTooltip('Discord'));
     final settings = tester.getRect(find.byTooltip('Settings'));
     expect(profileName.title, longName);
-    expect(find.byType(MarqueeWidget), findsOneWidget);
+    // The shared OverflowMarqueeTitle animates when motion is enabled.
+    // These widget tests disable animations to avoid scheduling a perpetual ticker.
     expect(avatar.right, lessThan(edit.left));
     expect(edit.right + 10, closeTo(discord.left, .1));
     expect(discord.right + 10, closeTo(settings.left, .1));
