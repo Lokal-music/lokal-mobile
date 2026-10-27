@@ -157,6 +157,51 @@ void main() {
     });
   });
 
+  group('32-beat native model overlap eligibility', () {
+    AutoMixProfile model(double bpm) => AutoMixProfile(
+      durationSeconds: 180, leadInSeconds: 0,
+      audibleEndSeconds: 180, fadeOutStartSeconds: 176,
+      entrances: const [], exits: const [],
+      analyzedBpm: bpm, modelExits: const [158],
+      modelEntrances: const [6],
+    );
+
+    test('prepares a matched 32-beat model phrase before the cue', () {
+      final outgoing = model(120);
+      final incoming = model(120.6);
+      final phrase = automixPhraseOverlapSeconds(outgoing);
+      expect(phrase, closeTo(16, 0.001));
+      expect(automixNativePhraseCompatible(outgoing, incoming), isTrue);
+      final end = automixModelEnd(
+        const Duration(minutes: 3), outgoing, phrase!,
+      );
+      expect(end, const Duration(seconds: 174));
+      expect(shouldPrepareCrossfade(
+        enabled: true,
+        duration: end!,
+        position: const Duration(seconds: 149),
+        fadeSecs: phrase,
+      ), isFalse);
+      expect(shouldPrepareCrossfade(
+        enabled: true,
+        duration: end,
+        position: const Duration(seconds: 150),
+        fadeSecs: phrase,
+      ), isTrue);
+    });
+
+    test('incompatible BPM, missing BPM and extreme BPM retain short fades', () {
+      expect(automixNativePhraseCompatible(model(120), model(128)), isFalse);
+      expect(automixNativePhraseCompatible(model(120), null), isFalse);
+      expect(automixPhraseOverlapSeconds(model(60)), isNull);
+      expect(automixPhraseOverlapSeconds(model(double.nan)), isNull);
+      expect(automixPhraseOverlapSeconds(model(180)), closeTo(10.667, 0.001));
+      expect(automixModelEnd(
+        const Duration(minutes: 3), model(120), 16,
+      ), const Duration(seconds: 174));
+    });
+  });
+
   group('offline CUE-DETR scheduling', () {
     const duration = Duration(minutes: 3);
     AutoMixProfile advanced(List<double> exits) => AutoMixProfile(
