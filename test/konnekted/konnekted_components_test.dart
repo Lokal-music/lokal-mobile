@@ -51,6 +51,10 @@ void main() {
   testWidgets('Home header tabs remain readable and screen-reader actionable', (
     tester,
   ) async {
+    tester.view
+      ..physicalSize = const Size(320, 568)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final selected = <KonnektedHomeTab>[];
     await tester.pumpWidget(
       _app(
