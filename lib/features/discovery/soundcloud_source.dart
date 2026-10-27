@@ -42,7 +42,7 @@ class SoundCloudSource {
     if (!fresh && _keyCache != null) return _keyCache!;
     final html = await _getText(Uri.https('soundcloud.com', '/'));
     final inline = clientIdIn(html);
-    if (inline != null) return _keyCache = inline;
+    if (inline != null) { _keyCache = inline; return inline; }
     final assets = RegExp(r'https://a-v2\.sndcdn\.com/assets/[A-Za-z0-9_.-]+\.js')
         .allMatches(html).map((match) => match.group(0)!).toSet().toList();
     for (final asset in assets.reversed.take(15)) {
@@ -50,7 +50,7 @@ class SoundCloudSource {
         final script = await _getText(Uri.parse(asset),
             headers: const {'Range': 'bytes=0-65535'});
         final found = clientIdIn(script);
-        if (found != null) return _keyCache = found;
+        if (found != null) { _keyCache = found; return found; }
       } on DiscoveryException {
         // Not every bundle contains the public frontend key.
       }
@@ -156,8 +156,18 @@ class SoundCloudSource {
               mediaUrl.host.endsWith('.sndcdn.com') ||
               mediaUrl.host == 'soundcloud.com' ||
               mediaUrl.host.endsWith('.soundcloud.com'))) continue;
-      final mime = format is Map ? format['mime_type']?.toString() ?? '' : '';
-      final codec = mime.contains('mpeg') ? 'MP3' : 'AAC';
+      final mime = format is Map
+          ? (format['mime_type']?.toString() ?? '').toLowerCase() : '';
+      // Show the *chosen stream* codec, not a guessed bitrate or the
+      // uploader's original lossless format.
+      final codec = mime.contains('mpeg') || mime.contains('mp3')
+          ? 'MP3'
+          : mime.contains('mp4a') || mime.contains('aac') || mime.contains('mp4')
+              ? 'AAC'
+              : mime.contains('opus')
+                  ? 'OPUS'
+                  : mime.contains('vorbis') ? 'VORBIS' : null;
+      if (codec == null) continue;
       return ResolvedDiscoveryAudio(mediaUrl, codec: codec, quality: codec);
     }
     throw DiscoveryException(forDownload
