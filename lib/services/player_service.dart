@@ -1547,8 +1547,9 @@ class PlayerService {
   }
 
   Future<void> onAppPaused() async {
-    if (!Platform.isAndroid) return;
     _appInForeground = false;
+    _rustAudioService.setAppForeground(false);
+    if (!Platform.isAndroid) return;
     final enabled = await _appPreferencesService.getFloatingPlayerEnabled();
     if (!enabled) return;
     await _activateFloatingPlayer();
@@ -1556,10 +1557,19 @@ class PlayerService {
 
   Future<void> onAppResumed() async {
     _appInForeground = true;
+    _rustAudioService.setAppForeground(true);
     if (_floatingPlayerActive) {
       await _deactivateFloatingPlayer();
     }
     unawaited(_restoreBitPerfectEngineAfterForeground());
+  }
+
+  Future<void> onAppDetached() async {
+    // Preserve the established Android overlay/route cleanup. An iPhone with
+    // no attached UI keeps the background observation budget.
+    if (!Platform.isIOS) return onAppResumed();
+    _appInForeground = false;
+    _rustAudioService.setAppForeground(false);
   }
 
   /// One UI suspends userspace USB transfers while the app is backgrounded,

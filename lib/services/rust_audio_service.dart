@@ -7,16 +7,10 @@ import 'package:flick/src/rust/api/audio_api.dart' as rust_audio;
 import 'package:flick/src/rust/audio/engine.dart' show AudioApiPreference;
 import 'package:flick/services/uac2_preferences_service.dart';
 import 'package:flick/core/utils/dev_log.dart';
+import 'rust_audio_polling.dart';
+import 'rust_playback_state.dart';
 
-/// Playback state enum matching the Rust engine states.
-enum RustPlaybackState {
-  idle,
-  playing,
-  paused,
-  buffering,
-  crossfading,
-  stopped,
-}
+export 'rust_playback_state.dart';
 
 /// Service that wraps the Rust audio engine API.
 ///
@@ -58,12 +52,22 @@ class RustAudioService {
   void Function(String path)? onNextTrackReady;
   void Function(String message)? onError;
 
-  Timer? _progressTimer;
-  Timer? _eventPollTimer;
+  late final _polling = RustAudioPolling(
+    state: () => stateNotifier.value,
+    progress: _updateProgress,
+    events: _pollEvents,
+  );
   bool _initialized = false;
   bool _highResModeEnabled = false;
   String? _currentPath;
   String? _nextPath;
+
+  /// Hidden UI needs fewer FFI samples; this never initializes an engine or
+  /// restarts polling that retirement/shutdown has already stopped.
+  void setAppForeground(bool foreground) => _polling.setForeground(foreground);
+
+  @visibleForTesting
+  ({int progress, int events}) get debugPollingCounts => _polling.debugCounts;
 
   /// Check if native audio engine is available on this platform.
   bool get isNativeAvailable => rust_audio.audioIsNativeAvailable();
@@ -318,7 +322,9 @@ class RustAudioService {
     _currentPath = path;
     // Also sync from Rust engine to ensure accuracy
     _currentPath = rust_audio.audioGetCurrentPath() ?? path;
-    _startProgressUpdates(fast: true);
+    _updateState();
+    _startProgressUpdates();
+    _startEventPolling(until: () => isPlaying);
   });
 
   /// Play a remote audio stream directly over HTTP (range-based, no cache
@@ -343,7 +349,9 @@ class RustAudioService {
       ),
     );
     _currentPath = rust_audio.audioGetCurrentPath() ?? url;
-    _startProgressUpdates(fast: true);
+    _updateState();
+    _startProgressUpdates();
+    _startEventPolling(until: () => isPlaying);
   });
 
   /// Queue the next track for gapless playback.
@@ -441,10 +449,11 @@ class RustAudioService {
     await IosLocalAudioRequests.wait(
       rust_audio.audioPause(requestEpoch: IosLocalAudioRequests.epoch),
     );
-    // Switch to slower updates when paused to reduce CPU usage while keeping UI synced
-    _startProgressUpdates(fast: false);
-    // Force immediate state update for responsive UI
-    _updateState();
+    // Pause acknowledgement precedes the final sample. A stationary source
+    // needs no periodic progress FFI calls; seek still refreshes it explicitly.
+    _stopProgressUpdates();
+    _updateProgress(forceLabel: true);
+    _startEventPolling();
   });
 
   /// Resume playback.
@@ -454,9 +463,9 @@ class RustAudioService {
       rust_audio.audioResume(requestEpoch: IosLocalAudioRequests.epoch),
     );
     // Resume fast updates for smooth progress bar
-    _startProgressUpdates(fast: true);
-    // Force immediate state update
     _updateState();
+    _startProgressUpdates();
+    _startEventPolling(until: () => isPlaying);
   });
 
   /// Stop playback completely.
@@ -468,6 +477,10 @@ class RustAudioService {
     _stopProgressUpdates();
     _currentPath = null;
     _nextPath = null;
+    _updateState();
+    _startEventPolling(until: () =>
+      stateNotifier.value == RustPlaybackState.stopped ||
+      stateNotifier.value == RustPlaybackState.idle);
   });
 
   /// Seek to a position in seconds.
@@ -479,6 +492,9 @@ class RustAudioService {
         positionSecs: position.inMilliseconds / 1000.0,
       ),
     );
+    _updateProgress(forceLabel: true);
+    _startEventPolling(until: () =>
+      (positionNotifier.value - position).abs() < const Duration(milliseconds: 100));
   });
 
   /// Set the volume (0.0 to 2.0; values >1.0 apply extended gain).
@@ -663,27 +679,13 @@ class RustAudioService {
   /// cheap read-only operations that return cached state - no blocking I/O.
   /// If progress updates ever cause frame drops, the Rust side should batch
   /// state into a single struct to reduce FFI call overhead.
-  void _startProgressUpdates({bool fast = true}) {
-    _stopProgressUpdates();
-
-    // Update progress every 50ms for smooth UI updates when playing
-    // Update slower (250ms) when paused to keep UI in sync without waste
-    final interval = fast
-        ? const Duration(milliseconds: 50)
-        : const Duration(milliseconds: 250);
-    _progressTimer = Timer.periodic(interval, (_) {
-      _updateProgress();
-    });
-  }
+  void _startProgressUpdates() => _polling.startProgress();
 
   /// Stop progress updates.
-  void _stopProgressUpdates() {
-    _progressTimer?.cancel();
-    _progressTimer = null;
-  }
+  void _stopProgressUpdates() => _polling.stopProgress();
 
   /// Update progress from the Rust engine.
-  void _updateProgress() {
+  void _updateProgress({bool forceLabel = false}) {
     final progress = rust_audio.audioGetProgress();
     if (progress != null) {
       final positionSecs = progress.positionSecs;
@@ -697,12 +699,12 @@ class RustAudioService {
       // Only update if position actually changed (skip no-op updates)
       if (newPositionMs != currentPositionMs) {
         positionNotifier.value = Duration(milliseconds: newPositionMs);
-
-        // Update label notifier at lower rate (every 500ms)
-        if (newPositionMs - _lastPositionLabelMs >= 500) {
-          positionLabelNotifier.value = positionNotifier.value;
-          _lastPositionLabelMs = newPositionMs;
-        }
+      }
+      // Explicit pause/seek and backward seeks refresh labels immediately.
+      if (forceLabel || newPositionMs < _lastPositionLabelMs ||
+          newPositionMs - _lastPositionLabelMs >= 500) {
+        positionLabelNotifier.value = positionNotifier.value;
+        _lastPositionLabelMs = newPositionMs;
       }
 
       if (progress.durationSecs != null &&
@@ -752,24 +754,16 @@ class RustAudioService {
   }
 
   /// Start polling for events from the Rust engine.
-  void _startEventPolling() {
-    _stopEventPolling();
-
-    // Poll for events every 50ms
-    _eventPollTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      _pollEvents();
-    });
+  void _startEventPolling({bool Function()? until}) {
+    if (_initialized) _polling.startEvents(until: until);
   }
 
   /// Stop event polling.
-  void _stopEventPolling() {
-    _eventPollTimer?.cancel();
-    _eventPollTimer = null;
-  }
+  void _stopEventPolling() => _polling.stopEvents();
 
   /// Poll for events from the Rust engine.
   void _pollEvents() {
-    while (true) {
+    while (_polling.observingEvents) {
       final event = rust_audio.audioPollEvent();
       if (event == null) break;
 
@@ -784,6 +778,11 @@ class RustAudioService {
           if (newState == RustPlaybackState.stopped ||
               newState == RustPlaybackState.idle) {
             _stopProgressUpdates();
+          } else if (newState == RustPlaybackState.paused) {
+            _stopProgressUpdates();
+            // Seek is queued, and may return before its source has moved.
+            // The native Paused event supplies the final settled snapshot.
+            if (_polling.observingEvents) _updateProgress(forceLabel: true);
           }
         },
         progress: (positionSecs, durationSecs, bufferLevel) {
@@ -794,7 +793,8 @@ class RustAudioService {
             positionNotifier.value = Duration(milliseconds: newPositionMs);
 
             // Update label notifier at lower rate
-            if (newPositionMs - _lastPositionLabelMs >= 500) {
+            if (newPositionMs < _lastPositionLabelMs ||
+                newPositionMs - _lastPositionLabelMs >= 500) {
               positionLabelNotifier.value = positionNotifier.value;
               _lastPositionLabelMs = newPositionMs;
             }
