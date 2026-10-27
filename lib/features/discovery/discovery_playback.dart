@@ -5,13 +5,13 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:image/image.dart' as image;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../models/song.dart';
 import '../player/widgets/player_artwork_quality.dart';
 import '../../services/metadata_editor_service.dart';
+import '../../services/artwork_pixel_validation.dart';
 import '../../src/rust/api/audio_api.dart' as native;
 import '../../src/rust/api/morneye_api.dart' as morneye;
 import '../../services/catalogue_quality.dart';
@@ -406,19 +406,13 @@ class DiscoveryPlaybackCache {
         final bytes = output.takeBytes();
         // A valid JPEG signature alone is not enough: truncated and fake
         // images must not become permanent embedded artwork.
-        final decoded = image.decodeImage(bytes);
-        if (decoded == null) continue;
-        final shortSide = math.min(decoded.width, decoded.height);
-        final area = decoded.width * decoded.height;
-        if (shortSide < 32) continue;
+        final validated = await validateArtworkBytes(bytes, ensureJpeg: true);
+        if (validated == null) continue;
+        final shortSide = validated.shortSide;
+        final area = validated.width * validated.height;
         if (shortSide > bestShortSide ||
             (shortSide == bestShortSide && area > bestArea)) {
-          // The cache path has a .jpg suffix and is later embedded in tags:
-          // normalize PNG/WebP to JPEG, but retain original JPEG bytes.
-          bestBytes = bytes.length >= 3 &&
-                  bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff
-              ? bytes
-              : Uint8List.fromList(image.encodeJpg(decoded, quality: 92));
+          bestBytes = validated.bytes;
           bestShortSide = shortSide;
           bestArea = area;
         }
