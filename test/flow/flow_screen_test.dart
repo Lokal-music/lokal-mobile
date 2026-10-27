@@ -58,10 +58,12 @@ void main() {
         ],
         // The desktop-style infinity orb animates indefinitely in production.
         // Disable motion here so pumpAndSettle can exercise loading states.
-        child: const MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(disableAnimations: true),
-            child: FlowScreen(),
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: const FlowScreen(),
+            ),
           ),
         ),
       ),
