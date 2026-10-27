@@ -521,7 +521,11 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: showBack ? AppConstants.spacingLg : AppConstants.spacingXs,
+        // Align the sheet heading with the rows/cards beneath it.
+        // Embedded full-player queues retain their compact player-chrome edge.
+        horizontal: sheet || showBack
+            ? AppConstants.spacingLg
+            : AppConstants.spacingXs,
         vertical: showBack ? AppConstants.spacingMd : AppConstants.spacingXs,
       ),
       child: Row(
@@ -776,14 +780,17 @@ class _UpcomingTile extends StatelessWidget {
                 ] else if (reorderable)
                   ReorderableDragStartListener(
                     index: index,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        right: AppConstants.spacingSm,
-                      ),
-                      child: Icon(
-                        LucideIcons.gripVertical,
-                        color: context.adaptiveTextTertiary,
-                        size: 18,
+                    child: SizedBox(
+                      key: ValueKey('upnext-drag-$index'),
+                      width: 42,
+                      height: 48,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Icon(
+                          LucideIcons.gripVertical,
+                          color: context.adaptiveTextTertiary,
+                          size: 20,
+                        ),
                       ),
                     ),
                   )
@@ -942,14 +949,17 @@ class _QueueTile extends StatelessWidget {
                 ] else
                   ReorderableDragStartListener(
                     index: index,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        right: AppConstants.spacingSm,
-                      ),
-                      child: Icon(
-                        LucideIcons.gripVertical,
-                        color: context.adaptiveTextTertiary,
-                        size: 18,
+                    child: SizedBox(
+                      key: ValueKey('manual-queue-drag-$index'),
+                      width: 42,
+                      height: 48,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Icon(
+                          LucideIcons.gripVertical,
+                          color: context.adaptiveTextTertiary,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
