@@ -713,6 +713,7 @@ class PlayerService {
   // State Notifiers
   final ValueNotifier<Song?> currentSongNotifier = _MutableValueNotifier(null);
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> isBufferingNotifier = ValueNotifier(false);
   final ValueNotifier<Duration> positionNotifier = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> durationNotifier = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> bufferedPositionNotifier = ValueNotifier(
@@ -3882,6 +3883,9 @@ class PlayerService {
           (_playlist.isNotEmpty ? currentSongNotifier.value : null);
       if (currentSongNotifier.value != incomingTrack) {
         currentSongNotifier.value = incomingTrack;
+      }
+      if (isBufferingNotifier.value != state.isBuffering) {
+        isBufferingNotifier.value = state.isBuffering;
       }
       if (isPlayingNotifier.value != state.isPlaying) {
         isPlayingNotifier.value = state.isPlaying;
@@ -8158,6 +8162,7 @@ class PlayerService {
 
     currentSongNotifier.dispose();
     isPlayingNotifier.dispose();
+    isBufferingNotifier.dispose();
     onlinePlaybackError.dispose();
     positionNotifier.dispose();
     durationNotifier.dispose();

@@ -21,6 +21,7 @@ class _Player implements ja.AudioPlayer {
   final errors = StreamController<ja.PlayerException>.broadcast(sync: true);
   List<ja.IndexedAudioSource> sources = [];
   final positions = StreamController<Duration>.broadcast(sync: true);
+  final playerStates = StreamController<ja.PlayerState>.broadcast(sync: true);
   // Own idle streams so every subscription can be cleaned up explicitly.
   final idleStreams = <StreamController<dynamic>>[];
   Stream<T> idle<T>() {
@@ -50,7 +51,7 @@ class _Player implements ja.AudioPlayer {
   @override
   Stream<ja.PlayerException> get errorStream => errors.stream;
   @override
-  Stream<ja.PlayerState> get playerStateStream => idle<ja.PlayerState>();
+  Stream<ja.PlayerState> get playerStateStream => playerStates.stream;
   @override
   Stream<ja.PlaybackEvent> get playbackEventStream => idle<ja.PlaybackEvent>();
   @override
@@ -129,6 +130,7 @@ class _Player implements ja.AudioPlayer {
     await Future.wait([
       errors.close(),
       positions.close(),
+      playerStates.close(),
       for (final controller in idleStreams) controller.close(),
     ]);
   }
@@ -183,6 +185,34 @@ void main() {
     shouldSuppressTrackSync: () => false,
     shouldIgnoreTrack: (_) => false,
     shouldFastStartCurrentTrackOnly: () => false,
+  );
+
+  test(
+    'buffering is a separate presentation fact from requested playback',
+    () async {
+      final player = _Player();
+      final engine = guarded(() async => player);
+      final states = <dynamic>[];
+      final subscription = engine.playbackStateStream.listen(states.add);
+      try {
+        await engine.load(resetSong);
+        await engine.play();
+        player.playerStates.add(
+          ja.PlayerState(true, ja.ProcessingState.buffering),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(states.last.isPlaying, true);
+        expect(states.last.isBuffering, true);
+        player.playerStates.add(ja.PlayerState(true, ja.ProcessingState.ready));
+        await Future<void>.delayed(Duration.zero);
+        expect(states.last.isPlaying, true);
+        expect(states.last.isBuffering, false);
+      } finally {
+        await subscription.cancel();
+        await engine.dispose();
+        await player.closeFixture();
+      }
+    },
   );
 
   testWidgets(

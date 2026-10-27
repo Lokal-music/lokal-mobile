@@ -17,6 +17,16 @@ on:
       - 'lib/services/ios_widget_snapshot_builder.dart'
       - 'lib/services/ios_widget_publication_coordinator.dart'
       - 'lib/services/ios_widget_method_channel_transport.dart'
+      - 'lib/services/ios_widget_state_sampler.dart'
+      - 'lib/services/ios_widget_owned_artwork.dart'
+      - 'lib/services/ios_widget_runtime.dart'
+      - 'lib/models/playback_state.dart'
+      - 'lib/providers/player_provider.dart'
+      - 'lib/services/player_service.dart'
+      - 'lib/services/album_art_service.dart'
+      - 'lib/services/widget_sync_service.dart'
+      - 'lib/services/android_audio_engine.dart'
+      - 'lib/services/rust_audio_engine.dart'
       - 'test/widgets/ios/**'
       - 'test/services/android_widget_contract_test.dart'
       - 'test/fixtures/ios_widget/**'
@@ -50,7 +60,7 @@ jobs:
       - name: Check the Dart writer against the shared corpus
         run: |
           flutter pub get --enforce-lockfile
-          flutter analyze --no-pub --fatal-infos lib/models/ios_widget_snapshot.dart lib/services/ios_widget_snapshot_builder.dart lib/services/ios_widget_publication_coordinator.dart lib/services/ios_widget_method_channel_transport.dart test/widgets/ios
+          flutter analyze --no-pub --fatal-infos lib/models/ios_widget_snapshot.dart lib/services/ios_widget_snapshot_builder.dart lib/services/ios_widget_publication_coordinator.dart lib/services/ios_widget_method_channel_transport.dart lib/services/ios_widget_state_sampler.dart lib/services/ios_widget_owned_artwork.dart lib/services/ios_widget_runtime.dart test/widgets/ios
           flutter test --no-pub test/widgets/ios test/services/android_widget_contract_test.dart
       - name: Type-check the real Flutter host bridge on both iOS 16 SDK targets
         run: |

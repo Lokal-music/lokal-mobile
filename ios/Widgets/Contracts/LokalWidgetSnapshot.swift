@@ -54,6 +54,7 @@ struct LokalWidgetSnapshot {
       "current": current as Any? ?? NSNull(),
       "lastArtwork": lastArtwork as Any? ?? NSNull(),
       "isPlaying": current != nil && Self.boolean(data["isPlaying"]),
+      "isBuffering": current != nil && Self.boolean(data["isBuffering"]),
       "positionMs": duration > 0 ? min(position, duration) : position,
       "durationMs": duration,
       "playbackRate": rate,
@@ -77,7 +78,7 @@ struct LokalWidgetSnapshot {
   func projectedPosition(at nowMs: Int) -> Int {
     let position = fields["positionMs"] as? Int ?? 0
     let duration = fields["durationMs"] as? Int ?? 0
-    guard duration > 0, fields["isPlaying"] as? Bool == true, !isStale(at: nowMs) else { return position }
+    guard duration > 0, fields["isPlaying"] as? Bool == true, fields["isBuffering"] as? Bool != true, !isStale(at: nowMs) else { return position }
     let updated = fields["updatedAtMs"] as? Int ?? 0
     let elapsed = min(max(nowMs - updated, 0), Self.staleAfterMs)
     let rate = fields["playbackRate"] as? Double ?? 1.0

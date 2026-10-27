@@ -44,6 +44,7 @@ IosWidgetSnapshot buildIosWidgetSnapshot(
     'current': state.currentSong == null ? null : track(state.currentSong!),
     'lastArtwork': lastArtwork,
     'isPlaying': state.isPlaying,
+    'isBuffering': state.isBuffering,
     'positionMs': state.position.inMilliseconds,
     'durationMs': state.duration.inMilliseconds,
     'playbackRate': state.playbackSpeed,

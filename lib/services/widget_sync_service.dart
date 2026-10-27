@@ -8,6 +8,8 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/app_preferences_service.dart';
 import 'widget_recommendation_service.dart';
+import 'ios_widget_runtime.dart';
+import '../core/theme/lokal_tokens.dart';
 
 import 'package:flick/core/utils/dev_log.dart';
 
@@ -18,16 +20,39 @@ class WidgetSyncService {
   static final WidgetSyncService instance = WidgetSyncService._();
 
   int? _lastLokalAccent;
+  IosWidgetRuntime? _iosRuntime;
+  int _iosAccent = LokalTokens.resolve(LokalThemeId.dark).accent.toARGB32();
+
+  void attachIosRuntime() {
+    if (Platform.isIOS) {
+      _iosRuntime ??= IosWidgetRuntime.system(accentArgb: _iosAccent);
+    }
+  }
+
+  void detachIosRuntime() {
+    _iosRuntime?.dispose();
+    _iosRuntime = null;
+  }
+
+  Future<void> retryIosPublication() async {
+    if (Platform.isIOS) await _iosRuntime?.retry();
+  }
 
   /// App accent is stored separately so explicit per-widget overrides survive.
   Future<void> setLokalAccent(int color) async {
+    if (Platform.isIOS) {
+      _iosAccent = color;
+      _iosRuntime?.setAccent(color);
+      return;
+    }
     if (!Platform.isAndroid || _lastLokalAccent == color) return;
     _lastLokalAccent = color;
     try {
       await _ensureInit();
       // Unsigned Dart ARGB values otherwise become Long preferences on Android.
       await HomeWidget.saveWidgetData<int>(
-        'lokal_widget_accent_argb', color.toSigned(32),
+        'lokal_widget_accent_argb',
+        color.toSigned(32),
       );
       await _updateAll();
     } catch (_) {
@@ -90,9 +115,12 @@ class WidgetSyncService {
   String? _artRaw;
   String _cachedArt = '';
 
-  String _coverFor(Song? song) => song?.id == _artSongId &&
-          song?.albumArt == _artRaw && _cachedArt.isNotEmpty
-      ? _cachedArt : _resolveLocalArt(song?.albumArt);
+  String _coverFor(Song? song) =>
+      song?.id == _artSongId &&
+          song?.albumArt == _artRaw &&
+          _cachedArt.isNotEmpty
+      ? _cachedArt
+      : _resolveLocalArt(song?.albumArt);
 
   Future<void> _refreshArtwork(Song song, String? path) async {
     final art = await WidgetRecommendationService.resolveTrackArtwork(song);
@@ -100,19 +128,22 @@ class WidgetSyncService {
     _cachedArt = art;
     _savedData.remove(keyAlbumArt);
     final latest = _lastKnownState;
-    if (latest != null && latest.currentSong?.id == song.id) schedulePush(latest);
+    if (latest != null && latest.currentSong?.id == song.id) {
+      schedulePush(latest);
+    }
   }
 
   Future<void> setFlowStatus(String status) async {
     if (Platform.isIOS) return;
     try {
       await _ensureInit();
-      await HomeWidget.saveWidgetData<String>('flick_widget_flow_status', status);
+      await HomeWidget.saveWidgetData<String>(
+        'flick_widget_flow_status',
+        status,
+      );
       await HomeWidget.updateWidget(qualifiedAndroidName: flowProvider);
     } catch (_) {}
   }
-
-
 
   Future<void> _ensureInit() async {
     if (_initialized) return;
@@ -149,7 +180,10 @@ class WidgetSyncService {
   }
 
   void schedulePush(PlayerState state) {
-    if (Platform.isIOS) return;
+    if (Platform.isIOS) {
+      _iosRuntime?.observe(state);
+      return;
+    }
     _pendingState = state;
     _lastKnownState = state;
     final song = state.currentSong;
@@ -267,7 +301,10 @@ class WidgetSyncService {
   /// playing when the user returns to the launcher. Never falsify the player
   /// state simply because Flutter's activity lost focus.
   Future<void> pushPaused() async {
-    if (Platform.isIOS) return;
+    if (Platform.isIOS) {
+      await _iosRuntime?.flush();
+      return;
+    }
     try {
       final latest = _lastKnownState;
       if (latest != null) {
@@ -282,7 +319,10 @@ class WidgetSyncService {
   }
 
   Future<void> pushKilled() async {
-    if (Platform.isIOS) return;
+    if (Platform.isIOS) {
+      await _iosRuntime?.flush();
+      return;
+    }
     _savedData.remove(keyIsPlaying);
     try {
       await _ensureInit();
@@ -407,6 +447,7 @@ class WidgetSyncService {
 }
 
 ProviderSubscription<PlayerState> installWidgetSync(WidgetRef ref) {
+  WidgetSyncService.instance.attachIosRuntime();
   unawaited(WidgetSyncService.instance.pushInitialCustomization());
   return ref.listenManual<PlayerState>(
     playerProvider,

@@ -85,6 +85,17 @@ void main() {
     service.close();
   });
 
+  test('Rust buffering retains requested play while reporting a frozen source clock', () async {
+    service.stateNotifier.value = RustPlaybackState.buffering;
+    await Future<void>.delayed(Duration.zero);
+    expect(states.last.isPlaying, true);
+    expect(states.last.isBuffering, true);
+    service.stateNotifier.value = RustPlaybackState.playing;
+    await Future<void>.delayed(Duration.zero);
+    expect(states.last.isPlaying, true);
+    expect(states.last.isBuffering, false);
+  });
+
   test('iPhone pause waits for acknowledgement and rejects stale playing/buffering events', () async {
     var completed = false;
     final pause = engine.pause().then((_) => completed = true);

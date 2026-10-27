@@ -96,7 +96,13 @@ class RustAudioEngine implements AudioEngine {
           (rustState == RustPlaybackState.playing ||
               rustState == RustPlaybackState.crossfading ||
               rustState == RustPlaybackState.buffering);
-      _emit(_state.copyWith(isPlaying: isPlaying));
+      _emit(
+        _state.copyWith(
+          isPlaying: isPlaying,
+          isBuffering:
+              !_pauseRequested && rustState == RustPlaybackState.buffering,
+        ),
+      );
     });
 
     addListener(_rustAudioService.positionNotifier, () {
