@@ -38,6 +38,43 @@ void main() {
     _album('Third', [_track('3a', 'Third')]),
   ];
 
+  testWidgets('Cover Flow stage tracks all Lokal theme backgrounds live', (
+    tester,
+  ) async {
+    final flow = LokalCoverFlow(
+      albums: albums,
+      initialIndex: 1,
+      cover: (_) => const ColoredBox(color: Colors.blueGrey),
+      onPlay: (_, _) {},
+    );
+    Element? originalElement;
+    for (final themeId in LokalThemeId.values) {
+      final tokens = LokalTokens.resolve(themeId);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: LokalTheme.build(tokens),
+          home: Scaffold(body: Center(child: flow)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final flowElement = tester.element(find.byType(LokalCoverFlow));
+      originalElement ??= flowElement;
+      expect(identical(flowElement, originalElement), isTrue,
+          reason: 'Theme changes must not remount Cover Flow');
+      final stage = tester.widgetList<ColoredBox>(
+        find.descendant(
+          of: find.byType(LokalCoverFlow),
+          matching: find.byType(ColoredBox),
+        ),
+      ).singleWhere((box) => box.child is AnimatedBuilder);
+      expect(stage.color, tokens.bg,
+          reason: '${themeId.name} stage must blend into Home background');
+      expect(Theme.of(flowElement).scaffoldBackgroundColor, tokens.bg);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('iTunes reference triangles match four projected corners on both sides', (tester) async {
     final five = [
       ...albums,
