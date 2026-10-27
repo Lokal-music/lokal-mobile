@@ -73,7 +73,7 @@ void main() {
       {
         'musicTwoRowItemRenderer': {
           'title': {'simpleText': 'New Album'},
-          'subtitle': {'simpleText': 'Some Artist'},
+          'subtitle': {'simpleText': 'Single • Some Artist'},
           'navigationEndpoint': {
             'browseEndpoint': {'browseId': 'MPREb1234'},
           },
@@ -83,6 +83,7 @@ void main() {
     final categories = parseYoutubeMusicHomeCategories(root);
     expect(categories.single.id, 'newReleases');
     expect(categories.single.albums.single.title, 'New Album');
+    expect(categories.single.albums.single.artist, 'Some Artist');
     expect(categories.single.tracks, isEmpty);
   });
 
