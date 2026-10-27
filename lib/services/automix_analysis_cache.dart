@@ -61,6 +61,9 @@ class AutoMixProfile {
     'entrances': entrances,
     'exits': exits,
     'energy': energy,
+    'modelEntrances': modelEntrances,
+    'modelExits': modelExits,
+    'analyzedBpm': analyzedBpm,
   };
 
   static AutoMixProfile? fromJson(Object? value) {
@@ -91,10 +94,19 @@ class AutoMixProfile {
     if (entrances == null || exits == null) return null;
     final energy = value['energy'] == null ? null : number(value['energy']);
     if (energy != null && (energy < 0 || energy > 1)) return null;
+    final modelEntrances = cues(value['modelEntrances'] ?? const []);
+    final modelExits = cues(value['modelExits'] ?? const []);
+    if (modelEntrances == null || modelExits == null) return null;
+    final analyzedBpm = value['analyzedBpm'] == null
+        ? null : number(value['analyzedBpm']);
+    if (value['analyzedBpm'] != null &&
+        (analyzedBpm == null || analyzedBpm < 50 || analyzedBpm > 220)) return null;
     return AutoMixProfile(
       durationSeconds: duration, leadInSeconds: start,
       audibleEndSeconds: end, fadeOutStartSeconds: fade,
       entrances: entrances, exits: exits, energy: energy,
+      modelEntrances: modelEntrances, modelExits: modelExits,
+      analyzedBpm: analyzedBpm,
     );
   }
 
@@ -249,6 +261,10 @@ class AutoMixAnalysisCache {
         }
         if (profile == null) {
           try { await file.delete(); } catch (_) {}
+        } else if (profile.analyzedBpm != null) {
+          // This profile was previously verified against the same source
+          // and sidecar revision. Avoid re-hashing large imported files.
+          return _remember(identity, profile);
         }
       }
       if (profile == null && songId != null) {
@@ -258,25 +274,14 @@ class AutoMixAnalysisCache {
         try { cached = await _loadWaveform(songId); } catch (_) {}
         if (cached != null && cached.version == 1 && cached.peaks.isNotEmpty &&
             cached.computedAt >= stamp.modified.millisecondsSinceEpoch) {
-          profile = AutoMixProfile.fromWaveform(cached.peaks, duration, lufs: cached.lufs);
-          if (profile != null) {
-            await directory.create(recursive: true);
-            final temp = File('${file.path}.${_nonce++}.tmp');
-            try {
-              await temp.writeAsString(jsonEncode(profile.toJson()), flush: true);
-              await temp.rename(file.path);
-            } finally {
-              if (await temp.exists()) await temp.delete();
-            }
-            if (++_writes == 1 || _writes % 32 == 0) unawaited(_prune(directory));
-          }
+          profile = AutoMixProfile.fromWaveform(
+            cached.peaks, duration, lufs: cached.lufs,
+          );
         }
       }
       final advanced = await AutoMixAdvancedReport.read(path, stamp, duration);
       if (advanced != null) {
-        // A separately prepared report works even before a local waveform
-        // scan; do not persist these cues in the heuristic JSON (their
-        // lifecycle follows the fingerprinted sidecar instead).
+        // The model remains optional and independent of waveform scanning.
         profile ??= AutoMixProfile(
           durationSeconds: duration.inMilliseconds / 1000,
           leadInSeconds: 0,
@@ -286,7 +291,23 @@ class AutoMixAnalysisCache {
         );
         profile = profile.withAdvanced(advanced);
       }
-      return profile == null ? null : _remember(identity, profile);
+      if (profile == null) return null;
+      // The cache identity incorporates the source file AND sidecar stamp.
+      // Persist the validated model overlay so this same fingerprint never
+      // requires a second full-file hash after restart or LRU eviction.
+      // Do not let storage failure turn a valid music source into an error.
+      try {
+        await directory.create(recursive: true);
+        final temp = File('${file.path}.${_nonce++}.tmp');
+        try {
+          await temp.writeAsString(jsonEncode(profile.toJson()), flush: true);
+          await temp.rename(file.path);
+        } finally {
+          if (await temp.exists()) await temp.delete();
+        }
+        if (++_writes == 1 || _writes % 32 == 0) unawaited(_prune(directory));
+      } catch (_) {}
+      return _remember(identity, profile);
     } catch (_) {
       // Storage unavailable, corrupted or locked: preserve normal playback.
       return null;
