@@ -11,8 +11,9 @@ abstract final class EcoDataMode {
   static Future<bool> enabled() async =>
       (await SharedPreferences.getInstance()).getBool(key) ?? false;
 
-  static Future<void> setEnabled(bool value) async =>
-      (await SharedPreferences.getInstance()).setBool(key, value);
+  static Future<void> setEnabled(bool value) async {
+    await (await SharedPreferences.getInstance()).setBool(key, value);
+  }
 
   static bool isCellularOnly(List<ConnectivityResult> transports) =>
       transports.contains(ConnectivityResult.mobile) &&
