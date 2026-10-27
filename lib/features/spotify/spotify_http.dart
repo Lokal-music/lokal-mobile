@@ -46,8 +46,10 @@ class SpotifyHttp {
   }) async {
     cancellation?.check();
     final abort = Completer<void>();
+    var finished = false;
+    var succeeded = false;
     void stop() {
-      if (!abort.isCompleted) abort.complete();
+      if (!finished && !abort.isCompleted) abort.complete();
     }
 
     final timer = Timer(timeout, stop);
@@ -88,11 +90,13 @@ class SpotifyHttp {
         }
       }
       cancellation?.check();
-      return http.Response.bytes(
+      final completed = http.Response.bytes(
         bytes.takeBytes(),
         response.statusCode,
         headers: response.headers,
       );
+      succeeded = true;
+      return completed;
     } catch (error) {
       cancellation?.check();
       if (error is SpotifyFailure) rethrow;
@@ -101,7 +105,11 @@ class SpotifyHttp {
       );
     } finally {
       timer.cancel();
-      stop();
+      finished = true;
+      // AbortableRequest shares this signal with dart:io's active socket.
+      // Cancelling after a successful response can race with the connection
+      // returning to the pool and produce _HttpClient._returnConnection errors.
+      if (!succeeded && !abort.isCompleted) abort.complete();
       await chunks?.cancel();
     }
   }
