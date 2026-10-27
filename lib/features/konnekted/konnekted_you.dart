@@ -301,7 +301,7 @@ class _KonnektedYouState extends ConsumerState<KonnektedYou> {
                   onTap: () => navigate(_scrobblingSection),
                 ),
                 _AccountChip(
-                  label: lokalText('YouTube Music'),
+                  label: lokalText('YouTube'),
                   connected: accounts.youtubeMusic,
                   onTap: () => navigate(_accountsSection),
                 ),

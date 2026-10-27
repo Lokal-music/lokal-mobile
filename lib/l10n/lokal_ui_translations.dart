@@ -1,5 +1,6 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Could not reorder queue. Try again.": "Impossible de réorganiser la file. Réessayez.",
   "Choose sections to show and drag to reorder.": "Choisissez les sections à afficher et faites-les glisser pour les réorganiser.",
   "From the community": "De la communauté",
   "New releases": "Nouveautés",
@@ -594,6 +595,7 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Could not reorder queue. Try again.": "Warteschlange konnte nicht sortiert werden. Versuche es erneut.",
   "Choose sections to show and drag to reorder.": "Wähle sichtbare Bereiche und ziehe sie zum Sortieren.",
   "From the community": "Aus der Community",
   "New releases": "Neuerscheinungen",
@@ -1181,6 +1183,7 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Could not reorder queue. Try again.": "No se pudo reordenar la cola. Inténtalo de nuevo.",
   "Choose sections to show and drag to reorder.": "Elige las secciones que se mostrarán y arrástralas para ordenarlas.",
   "From the community": "De la comunidad",
   "New releases": "Novedades",
@@ -1776,6 +1779,7 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Could not reorder queue. Try again.": "Impossibile riordinare la coda. Riprova.",
   "Choose sections to show and drag to reorder.": "Scegli le sezioni da mostrare e trascinale per riordinarle.",
   "From the community": "Dalla community",
   "New releases": "Nuove uscite",
@@ -2373,6 +2377,7 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Could not reorder queue. Try again.": "Não foi possível reordenar a fila. Tente novamente.",
   "Choose sections to show and drag to reorder.": "Escolha as seções e arraste para reordenar.",
   "From the community": "Da comunidade",
   "New releases": "Lançamentos",
@@ -2965,6 +2970,7 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Could not reorder queue. Try again.": "De wachtrij kon niet worden gesorteerd. Probeer opnieuw.",
   "Choose sections to show and drag to reorder.": "Kies welke secties je wilt zien en sleep ze om te sorteren.",
   "From the community": "Uit de community",
   "New releases": "Nieuwe releases",
@@ -3569,6 +3575,7 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Could not reorder queue. Try again.": "Nie udało się zmienić kolejności. Spróbuj ponownie.",
   "Choose sections to show and drag to reorder.": "Wybierz widoczne sekcje i przeciągnij, aby zmienić kolejność.",
   "From the community": "Od społeczności",
   "New releases": "Nowości",
@@ -4163,6 +4170,7 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Could not reorder queue. Try again.": "Kunde inte ändra köns ordning. Försök igen.",
   "Choose sections to show and drag to reorder.": "Välj vilka avsnitt som visas och dra för att ändra ordning.",
   "From the community": "Från gemenskapen",
   "New releases": "Nya släpp",
@@ -4763,6 +4771,7 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Could not reorder queue. Try again.": "无法调整播放队列顺序，请重试。",
   "Choose sections to show and drag to reorder.": "选择要显示的栏目，拖动可调整顺序。",
   "From the community": "来自社区",
   "New releases": "新发行",
@@ -5362,6 +5371,7 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Could not reorder queue. Try again.": "Kuyruk yeniden sıralanamadı. Tekrar deneyin.",
   "Choose sections to show and drag to reorder.": "Gösterilecek bölümleri seçin ve sıralamak için sürükleyin.",
   "From the community": "Topluluktan",
   "New releases": "Yeni çıkanlar",

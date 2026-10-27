@@ -5,11 +5,12 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **57 reviewed merged
-mobile PRs after #172 through #246**. Search keyboard behavior, queue reordering,
-configurable Discovery shelves and theme-aware Cover Flow are included in the
-latest continuation. [The source audit](IOS_POST172_REVIEW.md) records the exact
-merged commits and platform adaptations.
+app for the iOS 16+ port. The current parity source includes **60 reviewed merged
+mobile PRs after #172 through #250**. Search keyboard behavior, the single
+authoritative queue, inline Home modes, configurable Discovery shelves and
+transparent Cover Flow are included in the latest continuation.
+[The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
+and platform adaptations.
 
 **This source is not a finalized release.** Build 53 is the new complete pass
 of both native suites on iOS 18.6 and 26.0, through #246. Its generated WebKit
@@ -1211,10 +1212,10 @@ its existing-owner binding; the sampler never invents recommendations from the
 manual queue. WidgetKit target/layouts/actions and signed-group qualification
 remain open.
 
-Newly merged #247, #249 and #250 are queued for the next parity pass: inline Home
-header controls, the single authoritative queue redesign and a truly transparent
-Cover Flow stage with shorter YouTube labels. They are not counted in the
-57-PR source checkpoint until source review and integration complete.
+The following through-#250 continuation integrates merged #247, #249 and #250:
+inline Home controls, one authoritative queue list, a transparent Cover Flow
+stage and shorter YouTube labels. The audit now records 60 merged product PRs.
+The build-53 binaries remain the independently verified through-#246 checkpoint.
 
 
 Validation of the live-sampling candidate: the exact expanded iPhone workflow
@@ -1224,6 +1225,19 @@ sampling and materialized-art events, unavailable-profile/no-I/O and retry/dispo
 cases, the expanded 48-case shared wire corpus, and both backend buffering events.
 Strict analysis of the new sampler/runtime/artwork code, shared Dart models,
 widget tests and recovery probe reports no issues. Whole app/integration analysis
-has no errors. Actionlint and diff checks pass. Actual Swift execution/SDK parity
-for the new buffering field, live-runtime app acceptance and the observed build-56
+has no errors. Actionlint and diff checks pass. [Focused native run 15](https://github.com/lokal-music/lokal-mobile/actions/runs/40510204249)
+passes all 48 shared reader cases, 23 actual store cases, both 50×24-worker stress
+controls, 14 publisher cases, 109 Flutter contracts and the real Flutter bridge
+with both iOS 16 SDKs. Full runtime acceptance and the observed build-56
 retirement timeout remain separate hosted gates.
+
+
+Validation of the through-#250 continuation: the exact expanded iPhone workflow
+selection plus all widget/Android-widget contracts passes **624 Flutter tests**.
+The queue cases cover standalone, embedded and sheet drag order, manual-only and
+autoplay queues, rejected-move recovery, and all 11 locales at 200% text on a
+320px layout in both ordinary and selection modes. Home mode geometry/semantics,
+actual source/account labels and unpainted Cover Flow behavior also pass.
+Whole app/integration analysis has no errors (620 warning/information items).
+Actionlint and diff checks pass. Hosted native acceptance of this new source
+remains pending; no physical installation or live-provider result is inferred.

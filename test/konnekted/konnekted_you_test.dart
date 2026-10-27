@@ -216,7 +216,7 @@ void main() {
     await tester.tap(find.byTooltip('Settings'));
     await tester.tap(find.bySemanticsLabel('Last.fm, not connected'));
     await tester.tap(find.bySemanticsLabel('ListenBrainz, not connected'));
-    await tester.tap(find.bySemanticsLabel('YouTube Music, not connected'));
+    await tester.tap(find.bySemanticsLabel('YouTube, not connected'));
     await tester.tap(find.text('Full history'));
     await tester.tap(find.text('Help'));
     await tester.tap(find.text('About'));

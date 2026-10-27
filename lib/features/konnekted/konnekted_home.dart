@@ -119,9 +119,7 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
               )
             else ...[
               SliverToBoxAdapter(
-                child: KonnektedCoverFlowSection(
-                  onPlay: onPlay,
-                ),
+                child: KonnektedCoverFlowSection(onPlay: onPlay),
               ),
               SliverToBoxAdapter(
                 child: library.when(
@@ -260,9 +258,16 @@ class KonnektedHomeTopBar extends StatelessWidget {
                   child: const LokalLogo(size: 32),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _HomeModeSelector(
+                  selectedTab: selectedTab,
+                  onTabChanged: onTabChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
               const LokalDiscordButton(),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Tooltip(
                 message: lokalText('Settings'),
                 excludeFromSemantics: true,
@@ -276,31 +281,6 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          // Keep the Home mode switch in the header, but give it its own
-          // horizontal space instead of shrinking tap targets beside actions.
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: LokalGlass.capsule(
-                thickness: LokalGlassThickness.thin,
-                shadow: false,
-                padding: const EdgeInsets.all(3),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final tab in KonnektedHomeTab.values)
-                      _ShelfChip(
-                        label: lokalText(tab.label),
-                        selected: tab == selectedTab,
-                        onTap: () => onTabChanged?.call(tab),
-                      ),
-                  ],
-                ),
-              ),
-            ),
           ),
           const SizedBox(height: 14),
           // Desktop's greeting: a salutation, then a line from your listening.
@@ -335,12 +315,128 @@ class KonnektedHomeTopBar extends StatelessWidget {
   }
 }
 
+/// Three Home modes share the top header with the logo and the two actions.
+///
+/// Narrow screens keep 44dp tap targets and allow the center segment to scroll
+/// rather than scaling text or moving the switch below the greeting.
+class _HomeModeSelector extends StatefulWidget {
+  const _HomeModeSelector({
+    required this.selectedTab,
+    required this.onTabChanged,
+  });
+
+  final KonnektedHomeTab selectedTab;
+  final ValueChanged<KonnektedHomeTab>? onTabChanged;
+
+  @override
+  State<_HomeModeSelector> createState() => _HomeModeSelectorState();
+}
+
+class _HomeModeSelectorState extends State<_HomeModeSelector> {
+  final _scrollController = ScrollController();
+  bool _revealScheduled = false;
+  final _viewportKey = GlobalKey();
+  final _tabKeys = {
+    for (final tab in KonnektedHomeTab.values) tab: GlobalKey(),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _revealSelected();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _revealSelected();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeModeSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedTab != widget.selectedTab) _revealSelected();
+  }
+
+  void _revealSelected() {
+    if (_revealScheduled) return;
+    _revealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealScheduled = false;
+      if (!mounted || !_scrollController.hasClients) return;
+      final tab = _tabKeys[widget.selectedTab]?.currentContext
+          ?.findRenderObject();
+      final viewport = _viewportKey.currentContext?.findRenderObject();
+      if (tab is! RenderBox ||
+          viewport is! RenderBox ||
+          !tab.attached ||
+          !viewport.attached) {
+        return;
+      }
+      final left = tab.localToGlobal(Offset.zero, ancestor: viewport).dx;
+      final offset =
+          (_scrollController.offset +
+                  left +
+                  tab.size.width / 2 -
+                  viewport.size.width / 2)
+              .clamp(0.0, _scrollController.position.maxScrollExtent);
+      if ((offset - _scrollController.offset).abs() < 1) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _scrollController.jumpTo(offset);
+      } else {
+        _scrollController.animateTo(
+          offset,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      key: _viewportKey,
+      controller: _scrollController,
+      scrollDirection: Axis.horizontal,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minWidth: constraints.maxWidth),
+        child: Align(
+          alignment: Alignment.center,
+          child: LokalGlass.capsule(
+            thickness: LokalGlassThickness.thin,
+            shadow: false,
+            padding: const EdgeInsets.all(3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final tab in KonnektedHomeTab.values)
+                  KeyedSubtree(
+                    key: _tabKeys[tab],
+                    child: _ShelfChip(
+                      label: lokalText(tab.label),
+                      selected: tab == widget.selectedTab,
+                      onTap: () => widget.onTabChanged?.call(tab),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Local Cover Flow. One tap plays the selected album with the shelf queued.
 class KonnektedCoverFlowSection extends ConsumerStatefulWidget {
-  const KonnektedCoverFlowSection({
-    super.key,
-    required this.onPlay,
-  });
+  const KonnektedCoverFlowSection({super.key, required this.onPlay});
 
   final void Function(Song song, List<Song> shelf) onPlay;
 
@@ -417,7 +513,7 @@ class _ShelfChip extends StatelessWidget {
           curve: Curves.easeOutCubic,
           constraints: const BoxConstraints(minHeight: 44, minWidth: 56),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: selected
                 ? (t.isLight
