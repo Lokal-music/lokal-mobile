@@ -24,6 +24,7 @@ import 'package:flick/providers/providers.dart';
 import 'package:flick/widgets/lokal/lokal_status_snack.dart';
 import 'package:flick/widgets/lokal/lokal_quality.dart';
 import 'package:flick/services/catalogue_quality.dart';
+import 'package:flick/services/graceful_http_client.dart';
 import 'package:flick/features/discovery/youtube_audio.dart';
 import 'package:flick/services/queue_pre_resolver.dart';
 import 'package:flick/services/atmos_playback_support.dart';
@@ -117,7 +118,7 @@ class OnlineSearchSection extends ConsumerStatefulWidget {
 class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
   static String? _remembered; // The chosen source, for the app's lifetime.
 
-  final _client = http.Client();
+  final _client = GracefulHttpClient();
   late final _progress = LokalStatusSnack(
     () => mounted ? context : null,
   );
