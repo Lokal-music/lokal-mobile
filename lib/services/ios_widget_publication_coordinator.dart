@@ -91,6 +91,8 @@ class IosWidgetPublicationCoordinator {
   Timer? _timer;
   Future<void>? _worker;
   Future<Map<String, Uint8List>>? _ownedArtwork;
+  Future<IosWidgetPublicationCapability>? _ownedCapability;
+  Future<IosWidgetPublicationReceipt>? _ownedPublication;
   IosWidgetPublicationCapability? _capability;
   IosWidgetPublicationReceipt? _lastReceipt;
   _PublicationRequest? _pending;
@@ -143,9 +145,25 @@ class IosWidgetPublicationCoordinator {
   }
 
   Future<void> _drain() async {
+    if (_ownedPublication != null) {
+      _blockedRequest = _pending;
+      _setPhase(IosWidgetPublicationPhase.failed);
+      return;
+    }
     if (_capability == null) {
       try {
-        final value = await transport.capability().timeout(operationTimeout);
+        var checking = _ownedCapability;
+        if (checking == null) {
+          checking = Future<IosWidgetPublicationCapability>.sync(
+            transport.capability,
+          );
+          _ownedCapability = checking;
+          final owned = checking;
+          _observeCompletion(owned, () {
+            if (identical(_ownedCapability, owned)) _ownedCapability = null;
+          });
+        }
+        final value = await checking.timeout(operationTimeout);
         if (_disposed) return;
         if (value.committedRevision < 0 ||
             value.committedRevision > maximumRevision) {
@@ -167,6 +185,13 @@ class IosWidgetPublicationCoordinator {
       return;
     }
     while (!_disposed && _pending != null) {
+      // A deadline only limits our wait. It cannot cancel native I/O. Keep
+      // the real operation owned and avoid queueing another write or art job.
+      if (_ownedPublication != null) {
+        _blockedRequest = _pending;
+        _setPhase(IosWidgetPublicationPhase.failed);
+        return;
+      }
       final request = _pending!;
       _pending = null;
       _blockedRequest = null;
@@ -235,13 +260,20 @@ class IosWidgetPublicationCoordinator {
           bounded[entry.key] = Uint8List.fromList(entry.value)
               .asUnmodifiableView();
         }
-        final receipt = await transport
-            .publish(
-              metadata,
-              Map.unmodifiable(bounded),
-              reloadTimelines: request.reload,
-            )
-            .timeout(operationTimeout);
+        final publishing = Future<IosWidgetPublicationReceipt>.sync(
+          () => transport.publish(
+            metadata,
+            Map.unmodifiable(bounded),
+            reloadTimelines: request.reload,
+          ),
+        );
+        _ownedPublication = publishing;
+        _observeCompletion(publishing, () {
+          if (identical(_ownedPublication, publishing)) {
+            _ownedPublication = null;
+          }
+        });
+        final receipt = await publishing.timeout(operationTimeout);
         if (_disposed) return;
         if (receipt.revision != revision ||
             receipt.artworkByAlias.entries.any(
@@ -265,6 +297,18 @@ class IosWidgetPublicationCoordinator {
         return;
       }
     }
+  }
+
+  // Consume late success/errors without exposing a stale receipt or notifying
+  // disposed listeners. Retained failures still require an explicit retry or
+  // a fresh meaningful source update; completion alone creates no retry loop.
+  static void _observeCompletion(Future<Object?> work, VoidCallback release) {
+    unawaited(
+      work.then<void>(
+        (_) => release(),
+        onError: (Object _, StackTrace _) => release(),
+      ),
+    );
   }
 
   static bool _artworkName(String name) =>
