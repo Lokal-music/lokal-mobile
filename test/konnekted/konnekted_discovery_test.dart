@@ -547,4 +547,34 @@ void main() {
     expect(find.text('Fresh Finds'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('long-press provider opens persisted shelf customization', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(412, 915)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(SingleChildScrollView(
+        child: KonnektedDiscoveryView(
+          onNavigate: (_) {},
+          onPlay: (_, _) {},
+        ),
+      )),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Albums For You'), findsOneWidget);
+    await tester.longPress(find.text('Last.fm'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose sections to show and drag to reorder.'),
+        findsOneWidget);
+    expect(find.byType(ReorderableListView), findsOneWidget);
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Albums For You'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+
 }
