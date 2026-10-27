@@ -303,10 +303,129 @@ void main() {
 
     clock.value = const Duration(milliseconds: 1600);
     await tester.pump();
-    expect(find.byType(LyricMotionLine), findsOneWidget);
+    // The previous voice remains briefly for its exit animation.
+    expect(find.byType(LyricMotionLine), findsNWidgets(2));
     expect(find.byKey(survivingKey), findsOneWidget);
     expect(identical(tester.state(find.byKey(survivingKey)), survivingState),
         isTrue, reason: 'The remaining lyric should not remount on shift');
+    await tester.pump(const Duration(milliseconds: 330));
+    await tester.pump(); // Flush AnimatedBuilder's completion/removal callback.
+    expect(find.byType(LyricMotionLine), findsOneWidget);
+    expect(find.byKey(survivingKey), findsOneWidget);
+    expect(identical(tester.state(find.byKey(survivingKey)), survivingState),
+        isTrue, reason: 'Exiting the previous voice must preserve the current painter');
+  });
+
+  testWidgets('Space smoothly pushes an ongoing voice up as a new voice joins',
+      (tester) async {
+    final clock = ValueNotifier<Duration>(const Duration(milliseconds: 850));
+    addTearDown(clock.dispose);
+    const overlapping = LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [
+        LyricsLine(
+          timestamp: Duration.zero,
+          text: 'First sustained vocal',
+          words: [
+            LyricsWord(text: 'First sustained vocal',
+              start: Duration.zero, end: Duration(seconds: 3)),
+          ],
+          translation: 'First translated line',
+        ),
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: 'Second overlapping voice',
+          words: [
+            LyricsWord(text: 'Second overlapping voice',
+              start: Duration(seconds: 1), end: Duration(seconds: 4)),
+          ],
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Stack(children: [
+          Positioned(
+            bottom: 60, left: 0, right: 0,
+            child: ImmersiveLyricsSubtitle(
+              lyrics: overlapping, position: clock,
+            ),
+          ),
+        ]),
+      ),
+    ));
+    const firstKey = ValueKey('space-line:0:0');
+    const secondKey = ValueKey('space-line:1000:1');
+    expect(find.byKey(firstKey), findsOneWidget);
+    expect(find.byKey(secondKey), findsNothing);
+    final originalState = tester.state(find.byKey(firstKey));
+    final initialTop = tester.getTopLeft(find.byKey(firstKey)).dy;
+
+    clock.value = const Duration(milliseconds: 1150);
+    await tester.pump();
+    expect(find.byKey(secondKey), findsOneWidget);
+    final initialOverlapTop = tester.getTopLeft(find.byKey(firstKey)).dy;
+    expect(initialOverlapTop, closeTo(initialTop, 1.5),
+        reason: 'The old lyric must not teleport when the new lyric appears');
+    expect(identical(tester.state(find.byKey(firstKey)), originalState), isTrue);
+
+    await tester.pump(const Duration(milliseconds: 140));
+    final midpoint = tester.getTopLeft(find.byKey(firstKey)).dy;
+    expect(midpoint, lessThan(initialTop - 2),
+        reason: 'The original voice should glide upward during overlap');
+    await tester.pump(const Duration(milliseconds: 180));
+    final finalTop = tester.getTopLeft(find.byKey(firstKey)).dy;
+    expect(finalTop, lessThan(midpoint),
+        reason: 'The upward reflow should animate rather than jump');
+    expect(identical(tester.state(find.byKey(firstKey)), originalState), isTrue,
+        reason: 'Syllable and translated glyph layouts should remain mounted');
+    expect(find.byKey(secondKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Space honors reduced-motion preferences when voices overlap',
+      (tester) async {
+    final clock = ValueNotifier<Duration>(const Duration(milliseconds: 850));
+    addTearDown(clock.dispose);
+    const overlapping = LyricsData(
+      isSynchronized: true,
+      rawContent: '',
+      lines: [
+        LyricsLine(
+          timestamp: Duration.zero, text: 'Original voice',
+          words: [LyricsWord(text: 'Original voice',
+            start: Duration.zero, end: Duration(seconds: 3))],
+        ),
+        LyricsLine(
+          timestamp: Duration(seconds: 1), text: 'New voice',
+          words: [LyricsWord(text: 'New voice',
+            start: Duration(seconds: 1), end: Duration(seconds: 4))],
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: Scaffold(
+          body: Stack(children: [
+            Positioned(
+              bottom: 40, left: 0, right: 0,
+              child: ImmersiveLyricsSubtitle(lyrics: overlapping, position: clock),
+            ),
+          ]),
+        ),
+      ),
+    ));
+    const originalKey = ValueKey('space-line:0:0');
+    final before = tester.getTopLeft(find.byKey(originalKey)).dy;
+    clock.value = const Duration(milliseconds: 1200);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('space-line:1000:1')), findsOneWidget);
+    expect(tester.getTopLeft(find.byKey(originalKey)).dy, lessThan(before),
+        reason: 'With reduced motion, the new layout should appear without a glide');
+    expect(tester.takeException(), isNull);
   });
 
   test('overlapping word end remains visible after next line starts', () {
