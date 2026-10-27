@@ -41,7 +41,7 @@ void main() {
     expect(spotify.showLikesSync, isTrue);
 
     final youtubeEntry = accounts[1] as LokalSettingCustom;
-    expect(youtubeEntry.label, 'YouTube Music');
+    expect(youtubeEntry.label, 'YouTube');
     expect(youtubeEntry.child, isA<YoutubeMusicSettingsTile>());
 
     // Don't reintroduce a second account tile when moving or adding controls.
