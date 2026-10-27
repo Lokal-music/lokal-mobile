@@ -906,6 +906,11 @@ class AndroidAudioEngine implements AudioEngine {
       }
       unawaited(stem.play().catchError((Object _) {}));
       if (_stemHandoffStarted && _player != null) {
+        final pending = _stemHandoffFuture;
+        if (pending != null) {
+          try { await pending.timeout(const Duration(milliseconds: 300)); }
+          catch (_) {}
+        }
         unawaited(_player!.play().catchError((Object _) {}));
       }
       if (_secondary != null && _secondary!.volume > 0) {
@@ -1368,7 +1373,8 @@ class AndroidAudioEngine implements AudioEngine {
             final pendingHandoff = () async {
               try {
                 await incoming.seek(resume);
-                if (epoch != _crossfadeEpoch || !identical(_stemPlayer, clipPlayer)) return;
+                if (epoch != _crossfadeEpoch || _stemPausedByUser ||
+                    !identical(_stemPlayer, clipPlayer)) return;
                 await incoming.setVolume(0);
                 unawaited(incoming.play());
               } catch (_) {}
@@ -1402,7 +1408,8 @@ class AndroidAudioEngine implements AudioEngine {
     just_audio.AudioPlayer outgoing, just_audio.AudioPlayer incoming,
     just_audio.AudioPlayer mixed,
   ) async {
-    if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed)) return;
+    if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed) ||
+        _stemPausedByUser) return;
     _stemTimer?.cancel();
     _stemTimer = null;
     _stemPlayer = null;
@@ -1415,7 +1422,10 @@ class AndroidAudioEngine implements AudioEngine {
       try { await pendingHandoff.timeout(const Duration(milliseconds: 300)); }
       catch (_) {}
     }
-    if (epoch != _crossfadeEpoch) return;
+    if (epoch != _crossfadeEpoch) {
+      try { await mixed.dispose(); } catch (_) {}
+      return;
+    }
     final hadHandoff = _stemHandoffStarted;
     _stemHandoffStarted = false;
     _stemPausedByUser = false;
