@@ -1067,6 +1067,8 @@ class AndroidAudioEngine implements AudioEngine {
           await Future<void>.delayed(const Duration(milliseconds: 80));
         }
         if (!valid()) { releaseIfOwned(); return; }
+        // Volume may change while the incoming decoder is buffering.
+        _rampUserVolume = outgoing.volume;
 
         final physicalRemainingMs =
             ((outgoing.duration ?? outgoingTrack.duration) - outgoing.position)
