@@ -627,3 +627,16 @@ Whole lib/integration analysis has no errors (571 warnings/information).
 Native code, API 141 bindings and dependency locks are unchanged from the
 315-Rust-test checkpoint. Native/source-account/Files acceptance for this
 continuation is pending; the new provider is not contacted by default.
+
+
+## WidgetKit contract continuation — 27 October 2026
+
+The three-configuration specification above now has a [concrete versioned wire
+contract and implementation plan](IOS_WIDGETKIT.md). Canonical PlayerState feeds
+a metadata-only allowlist with stable hashed IDs and owned cover filenames;
+Swift/Foundation consumes the same 45-case corpus as Dart. The full new Dart
+selection passes 54 tests. Swift execution, atomic group persistence, native
+layouts/commands and Windows extension signing remain acceptance gates. The
+Android publisher is unchanged and the iPhone widget feature stays unavailable
+until the actual extension is installed and usable. No newly reviewed upstream
+PR is counted by this foundation; the parity audit remains 44 through #225.

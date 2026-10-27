@@ -1,0 +1,2319 @@
+{
+  "scope": "Synthetic metadata contract; no widget installation or App Group acceptance",
+  "cases": [
+    {
+      "name": "accepted-playing-and-system-clock",
+      "nowMs": 1793059202000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 4000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "progress-caps-at-duration",
+      "nowMs": 1793059210000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 12000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "stale-timeline-holds-last-position",
+      "nowMs": 1793060100001,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": true,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "stale-boundary-is-inclusive",
+      "nowMs": 1793060100000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 12000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "future-clock-tolerance-holds-position",
+      "nowMs": 1793058900000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "future-dated-clock-is-stale",
+      "nowMs": 1793058899999,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": true,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "missing-schema",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "input": {}
+    },
+    {
+      "name": "unknown-new-schema",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "input": {
+        "schemaVersion": 2,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        }
+      }
+    },
+    {
+      "name": "boolean-version",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "input": {
+        "schemaVersion": true,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        }
+      }
+    },
+    {
+      "name": "wrong-root",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "input": []
+    },
+    {
+      "name": "legacy-integral-numbers-and-unsigned-color",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1.0,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3.0,
+        "accentArgb": 4294967295.0,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "boolean-is-not-numeric",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 0,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": true,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": false,
+        "durationMs": true,
+        "playbackRate": true,
+        "queueCount": true,
+        "accentArgb": true,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "numeric-playing-is-not-a-boolean",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": false,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": 1,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "fractional-or-huge-values-fall-back-independently",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 0,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1e+100,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1e+100,
+        "durationMs": -1,
+        "playbackRate": 5,
+        "queueCount": 1.25,
+        "accentArgb": 1e+100,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "position-caps-without-losing-recording",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 12000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 12000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 50000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "unknown-duration-does-not-invent-progress",
+      "nowMs": 1793059202000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 0,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 0,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "paused-does-not-progress",
+      "nowMs": 1793059202000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": false,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": false,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "missing-current-cannot-be-playing",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": null,
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "raw-url-id-is-not-exportable",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "https://provider.invalid/media?token=DO_NOT_EXPORT",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "newline-id-is-not-accepted-by-anchor",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "absolute-artwork-path",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "/private/Library/user.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "traversal-artwork",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "../bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "remote-artwork",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "https://provider.invalid/cover.jpg?token=DO_NOT_EXPORT"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "content-artwork",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "content://private/cover"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "newline-artwork",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png\n"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "independent-corrupt-labels-and-flow-kind",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "",
+          "album": "",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": false,
+          "album": [],
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "execute",
+        "flowStatus": {
+          "url": "private"
+        },
+        "recommendations": []
+      }
+    },
+    {
+      "name": "unicode-scalar-and-control-bounds",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+          "artist": "AB",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "İyi müzik · 音楽",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+          "artist": "  A\u0000B  ",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "  İyi müzik · 音楽  ",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "unknown-private-fields-never-round-trip",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+          "filePath": "/private/song",
+          "headers": {
+            "secret": "DO_NOT_EXPORT"
+          },
+          "remoteId": "private"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [],
+        "authorization": "Bearer DO_NOT_EXPORT",
+        "url": "https://private.invalid"
+      }
+    },
+    {
+      "name": "recommendations-drop-corrupt-and-duplicate-rows-and-cap",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Generated song",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "title": "Recommendation 0",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000001",
+            "title": "Recommendation 1",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000002",
+            "title": "Recommendation 2",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000003",
+            "title": "Recommendation 3",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000004",
+            "title": "Recommendation 4",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000005",
+            "title": "Recommendation 5",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000006",
+            "title": "Recommendation 6",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000007",
+            "title": "Recommendation 7",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000008",
+            "title": "Recommendation 8",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000009",
+            "title": "Recommendation 9",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "000000000000000000000000000000000000000000000000000000000000000a",
+            "title": "Recommendation 10",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          }
+        ]
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [
+          null,
+          {
+            "id": "url",
+            "title": "Generated song",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Generated song",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Generated song",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "title": "Recommendation 0",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000001",
+            "title": "Recommendation 1",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000002",
+            "title": "Recommendation 2",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000003",
+            "title": "Recommendation 3",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000004",
+            "title": "Recommendation 4",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000005",
+            "title": "Recommendation 5",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000006",
+            "title": "Recommendation 6",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000007",
+            "title": "Recommendation 7",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000008",
+            "title": "Recommendation 8",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000009",
+            "title": "Recommendation 9",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "000000000000000000000000000000000000000000000000000000000000000a",
+            "title": "Recommendation 10",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "000000000000000000000000000000000000000000000000000000000000000b",
+            "title": "Recommendation 11",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "000000000000000000000000000000000000000000000000000000000000000c",
+            "title": "Recommendation 12",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "000000000000000000000000000000000000000000000000000000000000000d",
+            "title": "Recommendation 13",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "000000000000000000000000000000000000000000000000000000000000000e",
+            "title": "Recommendation 14",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "000000000000000000000000000000000000000000000000000000000000000f",
+            "title": "Recommendation 15",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000010",
+            "title": "Recommendation 16",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000011",
+            "title": "Recommendation 17",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000012",
+            "title": "Recommendation 18",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000013",
+            "title": "Recommendation 19",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "corrupt-recommendations-retain-current",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": "wrong"
+      }
+    },
+    {
+      "name": "bounded-candidate-work",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Generated song",
+            "artist": "Fixture artist",
+            "album": "Fixture album",
+            "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "zero-timestamp-is-stale",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 0,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": true,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 0,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "invalid-now-is-stale",
+      "nowMs": -1,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": true,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "upper-timestamp-bound-is-safe",
+      "nowMs": 4102444800000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 4102444800000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 4102444800000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "malformed-json",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "document": "{\"schemaVersion\":1,"
+    },
+    {
+      "name": "too-deep",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "document": "[[[[[[[[[0]]]]]]]]]"
+    },
+    {
+      "name": "unpaired-utf16",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "document": "{\"schemaVersion\":1,\"current\":{\"id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"title\":\"\\ud800\"}}"
+    },
+    {
+      "name": "nonfinite-json",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "document": "{\"schemaVersion\":1,\"current\":{\"id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"title\": \"Generated song\", \"artist\": \"Fixture artist\", \"album\": \"Fixture album\", \"artwork\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg\"},\"unknown\":1e999}"
+    },
+    {
+      "name": "oversized-document",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 0,
+        "current": null,
+        "isPlaying": false,
+        "positionMs": 0,
+        "durationMs": 0,
+        "playbackRate": 1.0,
+        "queueCount": 0,
+        "accentArgb": 0,
+        "flowKind": "none",
+        "flowStatus": "",
+        "recommendations": []
+      },
+      "projectedPositionMs": 0,
+      "stale": true,
+      "document": "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 {}"
+    },
+    {
+      "name": "brackets-inside-escaped-strings-are-not-nesting",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "[[[ {{{ \"quoted\" \\ ]]] }}}",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "[[[ {{{ \"quoted\" \\ ]]] }}}",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "last-good-cover-survives-pending-new-cover",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.png",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.png",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "current-cover-replaces-last-good-cover",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.png",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "invalid-last-good-cover-is-dropped",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": null,
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "../private.png",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": null
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "max-safe-revision-is-retained",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 9007199254740991,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 9007199254740991,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    },
+    {
+      "name": "unsafe-revision-falls-back",
+      "nowMs": 1793059200000,
+      "expected": {
+        "schemaVersion": 1,
+        "revision": 0,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      },
+      "projectedPositionMs": 1000,
+      "stale": false,
+      "input": {
+        "schemaVersion": 1,
+        "revision": 9007199254740992,
+        "lastArtwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "updatedAtMs": 1793059200000,
+        "current": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Generated song",
+          "artist": "Fixture artist",
+          "album": "Fixture album",
+          "artwork": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"
+        },
+        "isPlaying": true,
+        "positionMs": 1000,
+        "durationMs": 12000,
+        "playbackRate": 1.5,
+        "queueCount": 3,
+        "accentArgb": -1,
+        "flowKind": "flow",
+        "flowStatus": "Ready",
+        "recommendations": []
+      }
+    }
+  ]
+}

@@ -66,8 +66,10 @@ flowchart LR
 The [Cast sender transport](IOS_CAST_TRANSPORT.md) now has a pinned real SDK,
 native channel adapter, confirmed commands and a guarded local/remote handoff.
 Its standalone native device/simulator linkage and integrated application tests
-pass; actual receiver acceptance remains pending. WidgetKit, Discord feasibility and resumable
-background transfers remain open work. Native desktop Bonjour discovery
+pass; actual receiver acceptance remains pending. WidgetKit extension delivery, Discord feasibility and resumable
+background transfers remain open work. The [widget metadata foundation](IOS_WIDGETKIT.md)
+now defines the canonical-state writer, bounded shared JSON and tolerant Swift
+reader; App Group persistence, actual widget UI and signing remain pending. Native desktop Bonjour discovery
 passes its controlled service/HTTP checks on build 18 / iOS 18.6. Live add-on stream handles currently
 retain the system streaming adapter and explicitly report Rust DSP bypass;
 DSP support for those sources remains open rather than attempting to open an
@@ -1016,3 +1018,17 @@ Late native failures remain observed and cannot publish stale gain; unrelated
 current errors remain failures. This correction and the new actual WebKit/session
 gates require another complete native run. Production reset observation remains
 deferred; Build 34 remains the latest complete dual-runtime checkpoint.
+
+
+### WidgetKit shared-data foundation
+
+The optional extension now has a versioned metadata boundary, a canonical
+PlayerState builder with opaque track aliases, and a standalone Foundation
+reader. The 45-case cross-language corpus covers malformed/oversized/deep input,
+legacy/signed colors, safe numeric conversion, Unicode, independent field
+fallbacks, last-good owned cover names and stale/paused/rate-aware progress.
+The complete new Dart selection passes 54 tests. New files analyze without
+warnings or errors; the Swift 6 macOS contract workflow still requires its first
+execution. This work does not enable an extension, an App Group, widget controls
+or any additional online request. See [wire rules, architecture and remaining
+rendering/provisioning gates](IOS_WIDGETKIT.md).

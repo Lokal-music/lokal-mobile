@@ -83,7 +83,9 @@ void main() {
     ).readAsStringSync();
     expect(cover, contains('R.drawable.widget_art_placeholder'));
     expect(cover, contains('View.INVISIBLE'));
-    expect(cover, contains('Open Lokal'));
+    expect(cover, contains('R.string.widget_open_app'));
+    final strings = File('$root/res/values/widget_strings.xml').readAsStringSync();
+    expect(strings, contains('<string name="widget_open_app">Open Lokal</string>'));
     expect(cover, contains('count / 2'));
     for (final variant in ['widget_recommended_flow', 'widget_recommended_flow_small']) {
       final xml = File('$root/res/layout/$variant.xml').readAsStringSync();
