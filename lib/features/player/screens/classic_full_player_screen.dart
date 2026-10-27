@@ -283,8 +283,10 @@ class _ClassicFullPlayerScreenState
   Future<void> _animateToPreviousSong() async {
     _dismissVolumePopup?.call();
     _dismissVolumePopup = null;
-    // Button: restart if >3s, else slide to previous track
-    if (_playerService.positionNotifier.value.inSeconds > 3) {
+    // Button: restart after ten seconds; swiping artwork still changes tracks.
+    if (shouldRestartCurrentTrackOnPrevious(
+      _playerService.positionNotifier.value,
+    )) {
       await _playerService.previous(allowRestart: true);
       return;
     }
@@ -305,7 +307,7 @@ class _ClassicFullPlayerScreenState
   Future<void> _handleCarouselPrevious() async {
     _dismissVolumePopup?.call();
     _dismissVolumePopup = null;
-    // Swipe/slide: always go to previous track, ignoring >3s restart rule
+    // Swipe/slide: always go to previous track, ignoring the 10s restart rule
     await _playerService.previous(allowRestart: false);
   }
 
@@ -1534,9 +1536,7 @@ class _OutputDevicePopupState extends State<OutputDevicePopup> {
                             children: [
                               IconButton(
                                 onPressed: () => unawaited(
-                                  widget.playerService.previous(
-                                    allowRestart: false,
-                                  ),
+                                  widget.playerService.previous(),
                                 ),
                                 icon: const Icon(LucideIcons.skipBack),
                                 color: context.lokal.text,

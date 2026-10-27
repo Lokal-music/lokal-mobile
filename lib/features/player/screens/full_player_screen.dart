@@ -1995,7 +1995,17 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               }
               return;
             }
-            _carouselKey.currentState?.animateToPrevious() ?? _player.previous();
+            // A transport-button tap restarts the current song once it has
+            // played for ten seconds. Only early taps animate to the
+            // preceding artwork; a cover swipe still always changes tracks.
+            if (shouldRestartCurrentTrackOnPrevious(
+              _player.positionNotifier.value,
+            )) {
+              unawaited(_player.previous());
+            } else {
+              _carouselKey.currentState?.animateToPrevious() ??
+                  _player.previous();
+            }
           },
           onNext: () {
             if (_videoActive) {

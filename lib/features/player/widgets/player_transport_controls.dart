@@ -107,11 +107,35 @@ class _PlayerTransportControlsState extends ConsumerState<PlayerTransportControl
         onTap: widget.onPlayPause,
         label: widget.playing ? l10n.pause : l10n.play,
         child: unboxed
-            ? _AppleTransportGlyph(
+            ? SizedBox.square(
                 key: const ValueKey('apple-play-pause'),
-                glyph: widget.playing ? _AppleGlyph.pause : _AppleGlyph.play,
-                size: lerpDouble(62, 44, l)!,
-                color: FullPlayerVisuals.primaryText,
+                dimension: lerpDouble(62, 44, l)!,
+                child: AnimatedSwitcher(
+                  // Only animate the glyph, never introduce a button box.
+                  // A short fade/scale reads as a play/pause morph without
+                  // running a continuous animation between interactions.
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 240),
+                  reverseDuration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: .88, end: 1).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: _AppleTransportGlyph(
+                    key: ValueKey(widget.playing ? 'apple-pause' : 'apple-play'),
+                    glyph: widget.playing ? _AppleGlyph.pause : _AppleGlyph.play,
+                    size: lerpDouble(62, 44, l)!,
+                    color: FullPlayerVisuals.primaryText,
+                  ),
+                ),
               )
             : AnimatedIcon(
                 icon: AnimatedIcons.play_pause,

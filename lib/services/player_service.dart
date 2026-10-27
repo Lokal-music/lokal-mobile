@@ -60,6 +60,15 @@ import 'package:flick/services/casting/casting_service.dart';
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/core/utils/dev_log.dart';
 
+/// Standard Previous-button behavior across the full and mini players.
+/// At ten seconds or later restart the active song; earlier presses select
+/// the previous queue entry. Artwork swipes always navigate between tracks.
+const Duration previousButtonRestartThreshold = Duration(seconds: 10);
+
+@visibleForTesting
+bool shouldRestartCurrentTrackOnPrevious(Duration position) =>
+    position >= previousButtonRestartThreshold;
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -6369,7 +6378,7 @@ class PlayerService {
     );
   }
 
-  /// Swipe/slide to previous: always goes to previous track, ignoring >3s restart rule.
+  /// Swipe/slide to previous: always goes to previous track, ignoring the 10s restart rule.
   /// Use this for carousel swipe gestures.
   Future<void> previousBySwipe() => previous(allowRestart: false);
 
@@ -6384,7 +6393,8 @@ class PlayerService {
       return;
     }
 
-    if (allowRestart && positionNotifier.value.inSeconds > 3) {
+    if (allowRestart &&
+        shouldRestartCurrentTrackOnPrevious(positionNotifier.value)) {
       await seek(Duration.zero);
       return;
     }
@@ -6440,7 +6450,7 @@ class PlayerService {
     if (_playlist.isEmpty) return null;
     // For swipe/slide (previousBySwipe / allowRestart=false) the peek always
     // shows the previous track so the carousel can slide. For the control
-    // button (allowRestart=true) the 3s restart is handled inside
+    // button (allowRestart=true) the 10s restart is handled inside
     // _previousInternal and FullPlayerScreen avoids animating when it would
     // restart, so peek remains unconditional for the slide gesture.
     if (_currentIndex > 0) return _playlist[_currentIndex - 1];
