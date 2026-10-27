@@ -29,6 +29,20 @@ class AppLog extends ChangeNotifier {
   final List<String> _pendingLines = [];
   File? _logFile;
   bool _persistenceInitialized = false;
+  Timer? _flushTimer;
+  bool _flushing = false;
+
+  // Idle applications should not wake the Dart isolate to inspect an empty
+  // log queue. A timer exists only while there are unsaved entries.
+  void _scheduleFlush() {
+    if (_logFile == null || _pendingLines.isEmpty || _flushTimer != null) {
+      return;
+    }
+    _flushTimer = Timer(_flushInterval, () {
+      _flushTimer = null;
+      unawaited(flushToDisk());
+    });
+  }
 
   List<LogEntry> get entries => _entries;
 
@@ -44,6 +58,7 @@ class AppLog extends ChangeNotifier {
         's': source.name,
         'm': message,
       }));
+      _scheduleFlush();
     }
     notifyListeners();
   }
@@ -59,10 +74,7 @@ class AppLog extends ChangeNotifier {
       }
       _logFile = File(p.join(directory.path, 'flick_log.jsonl'));
       await _replayPersisted();
-      Timer.periodic(
-        _flushInterval,
-        (_) => unawaited(flushToDisk()),
-      );
+      _scheduleFlush();
     } catch (error) {
       debugPrint('AppLog persistence unavailable: $error');
     }
@@ -90,8 +102,12 @@ class AppLog extends ChangeNotifier {
   }
 
   Future<void> flushToDisk() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    if (_flushing) return;
     final file = _logFile;
     if (file == null || _pendingLines.isEmpty) return;
+    _flushing = true;
     final lines = List<String>.of(_pendingLines);
     _pendingLines.clear();
     try {
@@ -106,6 +122,9 @@ class AppLog extends ChangeNotifier {
     } catch (error) {
       _pendingLines.insertAll(0, lines);
       debugPrint('AppLog flush failed: $error');
+    } finally {
+      _flushing = false;
+      _scheduleFlush();
     }
   }
 
@@ -141,6 +160,8 @@ class AppLog extends ChangeNotifier {
   void clear() {
     _entries.clear();
     _pendingLines.clear();
+    _flushTimer?.cancel();
+    _flushTimer = null;
     final file = _logFile;
     if (file != null) {
       unawaited(_deleteFile(file));
