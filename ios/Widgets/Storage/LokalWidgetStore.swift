@@ -31,6 +31,27 @@ final class LokalWidgetStore: @unchecked Sendable {
   static let maximumCacheBytes = 16 * 1024 * 1024
   static let maximumArtworkFiles = 32
   private static let artworkGraceSeconds: TimeInterval = 600
+  #if os(iOS) && !targetEnvironment(simulator)
+  /// Ask Foundation for the public protection policy, then read its descriptor
+  /// class. Do not guess private keybag constants absent from the public SDK.
+  private static func afterFirstUnlockClass() throws -> Int32 {
+    let probe = FileManager.default.temporaryDirectory.appendingPathComponent("lokal-widget-protection-" + UUID().uuidString)
+    try Data([0]).write(to: probe, options: [.withoutOverwriting, .completeFileProtectionUntilFirstUserAuthentication])
+    defer { try? FileManager.default.removeItem(at: probe) }
+    let descriptor = Darwin.open(probe.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    guard descriptor >= 0 else { throw LokalWidgetStoreError.posix(errno) }
+    defer { Darwin.close(descriptor) }
+    let attributes = try FileManager.default.attributesOfItem(atPath: probe.path)
+    let policy = (attributes[.protectionKey] as? FileProtectionType)?.rawValue ?? attributes[.protectionKey] as? String
+    guard policy == FileProtectionType.completeUntilFirstUserAuthentication.rawValue else {
+      throw LokalWidgetStoreError.unavailable
+    }
+    let value = fcntl(descriptor, F_GETPROTECTIONCLASS)
+    guard value != -1 else { throw LokalWidgetStoreError.posix(errno) }
+    guard value > 0 else { throw LokalWidgetStoreError.unavailable }
+    return value
+  }
+  #endif
   private let directory: Int32
   private let mutex = NSLock()
 
@@ -235,7 +256,7 @@ final class LokalWidgetStore: @unchecked Sendable {
     #if os(iOS) && !targetEnvironment(simulator)
     // NSFileProtectionCompleteUntilFirstUserAuthentication permits lock-screen
     // reads after the user's first unlock, including widgets during playback.
-    guard fcntl(fd, F_SETPROTECTIONCLASS, PROTECTION_CLASS_C) != -1 else { throw LokalWidgetStoreError.posix(errno) }
+    guard fcntl(fd, F_SETPROTECTIONCLASS, try Self.afterFirstUnlockClass()) != -1 else { throw LokalWidgetStoreError.posix(errno) }
     #endif
     try data.withUnsafeBytes { bytes in
       var written = 0

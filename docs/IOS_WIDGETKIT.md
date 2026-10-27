@@ -4,7 +4,7 @@ Status: atomic storage candidate, 27 October 2026 (Europe/Paris).
 The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
 [shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):
 45 shared cases plus native numeric/clock guards and 64 Dart contracts. The new
-storage/image candidate and its filesystem/process suite require their first
+storage/image candidate and its filesystem/process suite require their first passing
 hosted execution. **No WidgetKit target, host publisher, widget entitlement or
 iPhone widget UI is enabled by this change.**
 
@@ -156,3 +156,14 @@ Atomic rename establishes reader visibility and failure behavior; physical
 power-loss durability, actual App Group sandbox access, protected-device reads,
 background execution and WidgetKit timelines still require their own acceptance.
 The existing Android publisher and playback/transport code are unchanged.
+
+
+The first storage workflow passes the unchanged 45-case Swift reader and Dart
+checks, then stops at the iOS device SDK check: the SDK does not expose the
+`PROTECTION_CLASS_C` alias. The correction uses Foundation's public
+`completeFileProtectionUntilFirstUserAuthentication` policy on a private probe,
+verifies the reported Foundation attribute, reads that descriptor's actual class
+and applies it to the held owned-file descriptor. No private keybag constant is
+guessed. Probe failure stays explicit and is retried on a later publication;
+simulator code does not claim device protection. SDK and storage execution of
+this correction remain pending.
