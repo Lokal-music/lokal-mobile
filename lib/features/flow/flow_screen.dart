@@ -111,7 +111,13 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
           ? const Center(
               child: CircularProgressIndicator(semanticsLabel: 'Loading Flow'),
             )
-          : _content(data, library, playback.song, playback.isPlaying, backgroundError),
+          : _content(
+              data,
+              library,
+              playback.song,
+              playback.isPlaying,
+              backgroundError,
+            ),
     );
     if (widget.embedded) return body;
     return Scaffold(
