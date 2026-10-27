@@ -268,6 +268,19 @@ void main() {
       net.close();
     });
 
+    test('Qobuz addon DNS stalls are bounded and never hang playback', () async {
+      final pendingDns = Completer<List<InternetAddress>>();
+      final net = MorneyeNetwork(
+        const MorneyePermissions(network: ['qobuz.example']),
+        lookup: (_) => pendingDns.future,
+        requestTimeout: const Duration(milliseconds: 80),
+      );
+      addTearDown(net.close);
+      await expectLater(
+        net.request('https://qobuz.example/stream'),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
     test('refuses private addresses that were not asked for', () async {
       final net = MorneyeNetwork(
         const MorneyePermissions(network: ['local.test'], allowHttp: true),
