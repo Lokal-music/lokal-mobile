@@ -4043,7 +4043,12 @@ class PlayerService {
     await _savePosition();
     _positionSaveTimer?.cancel();
     _clearReplayTracking();
-    _updatePriorityAnchor();
+    // Release even if the engine fails to publish its final stopped state.
+    if (_priorityAnchorActive) {
+      _priorityAnchorActive = false;
+      AppLog.instance.add('[PriorityAnchor] stop requested; playback stopped');
+      unawaited(_uac2Service.stopPriorityAnchor());
+    }
     try {
       await _playbackManager.stop();
     } catch (e) {
