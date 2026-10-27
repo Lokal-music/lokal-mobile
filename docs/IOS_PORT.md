@@ -1108,3 +1108,20 @@ extension or Windows sideload qualification is implied by host tests.
 The expanded regression selection plus widget contracts passes 504 Flutter
 tests; 23 further lyric/Space cases pass after the theme check. Whole app and
 integration analysis reports no errors. This is host evidence only.
+
+
+### Widget host channel and native replay continuation
+
+The native widget publication policy passes Swift 6 / iOS 16 device+simulator
+SDK checks, 45 shared reader cases, 20 actual storage cases and 14 actual host
+publication cases. The candidate now adds a bounded Flutter coordinator and
+registered native host channel, with explicit unconfigured-installation behavior.
+The expanded app/widget regression selection passes 525 Flutter tests; the 85
+widget cases analyze without issues. Runtime sampling, actual shared-container
+signing, WidgetKit layouts/actions and physical/Windows acceptance remain open.
+
+Build 46 still fails local-fixture video replay on both runtimes. Native reports
+show the restored seek beginning at metadata-only readiness and staying pending
+while frames decode. The updated fixture defers cue until data is ready; the
+probe requires actual seek completion before measuring progress. This is a
+pending native experiment, with the existing progress/frame gates retained.

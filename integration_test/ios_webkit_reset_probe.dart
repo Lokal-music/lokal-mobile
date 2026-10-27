@@ -61,6 +61,19 @@ Future<void> probeIosWebKitReset(
   }
 
   Future<int> progress(String stage) async {
+    // A retained seek target is an intent, not elapsed playback. Establish
+    // progress baselines only after the actual native seek has completed.
+    await until(() async {
+      final sample = await nativeSnapshot();
+      binding.reportData!['media_reset_webkit_seek_observation'] = {
+        'stage': stage,
+        'native_sample': Map<String, dynamic>.from(sample),
+      };
+      return sample['seeking'] == false &&
+          sample['pendingSeekSeconds'] == null &&
+          ((sample['readyState'] as num?) ?? 0) >= 3 &&
+          sample['state'] == 1;
+    }, 'Native WebKit seek must complete before playback progress is measured');
     final before = video.sourcePosition;
     final initialFrame = await nativeSnapshot();
     final beforeFrames = (initialFrame['frames'] as num?) ?? 0;

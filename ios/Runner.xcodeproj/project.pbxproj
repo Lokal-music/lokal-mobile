@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A74000000000000000000001 /* LokalWidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74000000000000000000002 /* LokalWidgetBridge.swift */; };
+		A73000000000000000000001 /* LokalWidgetPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73000000000000000000002 /* LokalWidgetPublisher.swift */; };
+		A72000000000000000000001 /* LokalWidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72000000000000000000002 /* LokalWidgetStore.swift */; };
+		A71000000000000000000001 /* LokalWidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71000000000000000000002 /* LokalWidgetSnapshot.swift */; };
 		A60000000000000000000001 /* LokalAudioLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000002 /* LokalAudioLifecycle.swift */; };
 		A50000000000000000000001 /* LokalCastBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000002 /* LokalCastBridge.swift */; };
 		A40000000000000000000001 /* LokalCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000002 /* LokalCastController.swift */; };
@@ -48,6 +52,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A74000000000000000000002 /* LokalWidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LokalWidgetBridge.swift"; sourceTree = "<group>"; };
+		A73000000000000000000002 /* LokalWidgetPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Widgets/Publication/LokalWidgetPublisher.swift"; sourceTree = "<group>"; };
+		A72000000000000000000002 /* LokalWidgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Widgets/Storage/LokalWidgetStore.swift"; sourceTree = "<group>"; };
+		A71000000000000000000002 /* LokalWidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Widgets/Contracts/LokalWidgetSnapshot.swift"; sourceTree = "<group>"; };
 		A60000000000000000000002 /* LokalAudioLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokalAudioLifecycle.swift; sourceTree = "<group>"; };
 		A50000000000000000000002 /* LokalCastBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokalCastBridge.swift; sourceTree = "<group>"; };
 		A40000000000000000000002 /* LokalCastController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokalCastController.swift; sourceTree = "<group>"; };
@@ -135,6 +143,10 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				A10000000000000000000002 /* LokalPlatform.swift */,
+				A74000000000000000000002 /* LokalWidgetBridge.swift */,
+				A73000000000000000000002 /* LokalWidgetPublisher.swift */,
+				A72000000000000000000002 /* LokalWidgetStore.swift */,
+				A71000000000000000000002 /* LokalWidgetSnapshot.swift */,
 				A60000000000000000000002 /* LokalAudioLifecycle.swift */,
 				A20000000000000000000002 /* LokalSpotifySession.swift */,
 				A40000000000000000000002 /* LokalCastController.swift */,
@@ -301,6 +313,10 @@
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				A10000000000000000000001 /* LokalPlatform.swift in Sources */,
+				A74000000000000000000001 /* LokalWidgetBridge.swift in Sources */,
+				A73000000000000000000001 /* LokalWidgetPublisher.swift in Sources */,
+				A72000000000000000000001 /* LokalWidgetStore.swift in Sources */,
+				A71000000000000000000001 /* LokalWidgetSnapshot.swift in Sources */,
 				A60000000000000000000001 /* LokalAudioLifecycle.swift in Sources */,
 				A20000000000000000000001 /* LokalSpotifySession.swift in Sources */,
 				A40000000000000000000001 /* LokalCastController.swift in Sources */,

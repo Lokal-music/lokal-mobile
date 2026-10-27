@@ -1,12 +1,16 @@
 # iPhone widgets: shared data and implementation gates
 
-Status: native atomic storage contracts passed, 27 October 2026 (Europe/Paris).
+Status: native reader, atomic storage and host publication policy passed; host bridge candidate, 27 October 2026 (Europe/Paris).
 The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
 [shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):
 45 shared cases plus native numeric/clock guards and 64 Dart contracts. The [storage run](https://github.com/lokal-music/lokal-mobile/actions/runs/40450346881)
 also passes 19 real filesystem/image/process cases and the actual iOS 16 arm64
-device plus arm64 simulator SDK checks with Swift 6 warnings treated as errors. **No WidgetKit target, host publisher, widget entitlement or
-iPhone widget UI is enabled by this change.**
+device plus arm64 simulator SDK checks with Swift 6 warnings treated as errors.
+The [corrected publication run](https://github.com/lokal-music/lokal-mobile/actions/runs/40472952795)
+passes the reader's 45 cases, storage's 20 cases and publication's 14 cases,
+plus the actual iOS 16 SDK checks. The current candidate adds the host channel
+and Flutter coordinator. **No runtime state sampler, WidgetKit target,
+widget entitlement or iPhone widget UI is enabled yet.**
 
 The product remains exactly three configurations—Now Playing, Flow / Radio and
 Cover Flow—with responsive small/medium/large families. Artwork, Dynamic Type,
@@ -23,7 +27,7 @@ flowchart LR
   Corpus[Shared malformed / legacy / progress corpus] --> Contract
   Contract --> Reader[Swift Foundation tolerant reader]
   Reader --> Store[Descriptor-relative atomic snapshot / owned artwork store]
-  Store --> Future[Next: provisioned host publisher + WidgetKit timelines]
+  Store --> Future[Next: runtime state sampler + WidgetKit timelines]
   Future --> Action[Next: validated app-owned command inbox]
   Action --> Coordinator[Existing app playback coordinator]
 ```
@@ -220,8 +224,8 @@ reads, duplicate covers, invalid images, distinct-track fallback, stale writers,
 unreferenced images, aggregate quotas, bad schema/documents, allowlist privacy,
 full-cache metadata fallback and concurrent publication. The hosted workflow
 compiles the same policy with Swift 6 warnings-as-errors and both iOS 16 SDK
-targets before running those cases. Swift is unavailable locally: **execution
-and SDK acceptance of this new policy are pending**. The preceding reader/store
+targets before running those cases. These policy checks subsequently passed in
+run 40472952795; the initial pending status is superseded by that native result. The preceding reader/store
 passes remain scoped to their original source; no app bridge, WidgetKit layout,
 App Group provisioning, timeline or physical-device acceptance is inferred.
 
@@ -244,5 +248,60 @@ and before its fstat: the held read must return complete revision one, and the
 next read complete revision two. The test hook is absent by default. Native
 storage now has twenty cases and logs the actual concurrency errors if any
 recur. The publication suite runs independently after prior failures while the
-workflow retains every failing gate. Acceptance of this correction remains
-pending until its hosted SDK and actual execution checks pass.
+workflow retains every failing gate. Run 40472952795 subsequently passed all
+20 storage cases, 14 publication cases, 45 reader cases, 64 Flutter cases and
+both iOS 16 SDK checks for source `1cfc1ae59f47b95368afcda863c04fda5bc34b5b`.
+
+
+## Host channel and request coordinator candidate
+
+`LokalWidgetBridge` registers `lokal/widgets` in the actual Runner; its shared
+contract/store/publication sources are explicit Xcode target members. A serial
+utility queue owns image preparation and storage. Results and any requested
+WidgetKit reload return on the main queue, only after a real commit. A timeline
+reload request is not proof of rendering or guaranteed scheduling.
+
+The bridge resolves only the installed bundle's optional `LokalWidgetAppGroup`
+configuration. **Setting an identifier does not grant an entitlement.** The
+standalone IPA leaves that key absent. It returns `notConfigured` without opening
+any container; an inaccessible configured group is explicitly unavailable.
+Corrupt storage reports repair required. No private app-container fallback,
+caller-provided group identifier, source path or second audio owner is created.
+A native integration probe exercises this exact unconfigured bridge and its
+rejected publication, before continuing ordinary app/playback acceptance; that
+new native app probe still requires its first hosted execution. The focused
+macOS workflow also checks the real bridge against the downloaded Flutter
+framework for both iOS 16 SDK targets with Swift 6 warnings-as-errors. Its
+one-shot reply wrapper transfers typed sendable payloads across queues and
+invokes Flutter callbacks on the main queue; no mock Flutter API stands in for
+the actual framework during this check.
+
+`IosWidgetPublicationCoordinator` accepts already sampled canonical snapshots.
+It coalesces pending requests, serializes acknowledged writes, reads the stored
+revision on preflight, preserves the supplied source timestamp/position, and
+discards obsolete artwork results and receipts. Counters cannot wrap or reuse a
+failed operation's revision. A timed-out image future remains owned until its
+real completion, so another stuck image job cannot pile up. Fresh metadata can
+still be published without new images. Explicit retry rechecks availability;
+retained failed work does not create a retry/polling loop. A request submitted
+while a failure notification is being delivered is scheduled exactly once.
+
+The method-channel transport validates native wire types/revisions, allows
+image keys only for referenced opaque aliases, and bounds image count/aggregate
+bytes. The coordinator validates receipt identity and owned filenames before
+exposing them. Fourteen asynchronous coordinator cases plus seven actual-codec
+method-channel cases pass; the complete widget selection now passes **85 Flutter
+contracts** with strict analysis reporting no issues. The expanded app selection
+plus these cases passes **525 Flutter tests**. Host analysis has no errors.
+
+The runtime sampler still needs to bind canonical player/theme/Flow state,
+read materialized owned artwork, and budget state/seek/heartbeat updates. Do not
+submit every position tick or replace sampling timestamps with image completion
+time. Actual shared-profile publication, extension rendering/actions and the
+Windows install/upgrade/refresh path remain independent qualification gates.
+
+The first real-Flutter bridge SDK check caught Swift 6 rejecting Flutter's
+imported mutable Objective-C `FlutterMethodNotImplemented` global. The private
+channel now returns an explicit `UNSUPPORTED_WIDGET_METHOD` error through its
+existing typed, main-queue reply path. No concurrency checks were disabled.
+The revised bridge still requires the next hosted SDK check.

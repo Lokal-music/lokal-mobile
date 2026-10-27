@@ -23,6 +23,18 @@ const media = document.getElementById('media');
 // until native view retirement; no network, provider URL or synthetic clock.
 const mediaBytes = Uint8Array.from(atob('$iosNativeVideoFixtureBase64'), function(c) { return c.charCodeAt(0); });
 media.src = URL.createObjectURL(new Blob([mediaBytes], {type: 'video/mp4'}));
+let pendingSeekSeconds = null;
+function applyPendingSeek() {
+  // WebKit can leave a seek pending forever if it is issued at metadata-only
+  // readiness. A provider cue must wait for decoded future data; the raw
+  // currentTime getter below remains the actual media clock throughout.
+  if (pendingSeekSeconds === null || media.readyState < 3) return;
+  const position = pendingSeekSeconds;
+  pendingSeekSeconds = null;
+  media.currentTime = position;
+}
+for (const name of ['loadeddata', 'canplay'])
+  media.addEventListener(name, function() { applyPendingSeek(); report('data'); });
 let presentedFrames = 0;
 let frameCallbacks = 0;
 let presentedMediaTime = 0;
@@ -57,7 +69,8 @@ function report(kind) {
     frameCallbackSupported: callbackSupported,
     videoWidth: media.videoWidth, videoHeight: media.videoHeight,
     readyState: media.readyState,
-    seeking: media.seeking, paused: media.paused, ended: media.ended,
+    seeking: media.seeking, pendingSeekSeconds: pendingSeekSeconds,
+    paused: media.paused, ended: media.ended,
     playbackRate: media.playbackRate,
     seekable: ranges(media.seekable), buffered: ranges(media.buffered),
     resourceKind: media.currentSrc.startsWith('blob:') ? 'blob' : 'other'}, '*');
@@ -69,11 +82,15 @@ media.addEventListener('error', function() { report('error'); });
 window.addEventListener('message', function(event) {
   if (event.source !== parent || !event.data || event.data.fixture !== 'lokal-native-video') return;
   const command = event.data;
-  if (command.method === 'play') media.play().catch(function() { report('error'); });
+  if (command.method === 'play') {
+    applyPendingSeek();
+    media.play().catch(function() { report('error'); });
+  }
   else if (command.method === 'pause') media.pause();
   else if (command.method === 'seek' || command.method === 'cue') {
     if (command.method === 'cue') media.pause();
-    media.currentTime = command.position;
+    pendingSeekSeconds = command.position;
+    applyPendingSeek();
   }
   report('state');
 });
