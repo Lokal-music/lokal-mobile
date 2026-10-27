@@ -18,6 +18,7 @@ import 'package:flick/features/player/widgets/lyrics_alignment.dart';
 
 import 'picked_lyrics_file.dart';
 import 'lyrics_file_export.dart';
+import 'lyrics_save_button.dart';
 import 'lyrics_subline_buttons.dart';
 
 import 'package:flick/features/player/widgets/online_lyrics_search_sheet.dart';
@@ -184,6 +185,21 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
     } finally {
       if (mounted) setState(() => _savingLyricsFile = false);
     }
+  }
+
+  VoidCallback? _saveTranslatedLyricsAction() {
+    final selected = _sublineLyrics;
+    if (selected == null ||
+        !selected.lines.any((line) =>
+            line.translation?.trim().isNotEmpty == true &&
+            line.translation!.trim() != line.text.trim())) {
+      return null;
+    }
+    // Capture the selected result; a subsequent translation change must not
+    // silently replace the version chosen in the save options sheet.
+    return () => unawaited(
+      _saveLyricsFile(selected, includeDisplayedSubline: true),
+    );
   }
 
   Future<void> _importLyricsFile() async {
@@ -450,22 +466,11 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
         children: [
           if (_lyricsData case final lyrics?
               when hasUsableLyrics(_sublineLyrics ?? lyrics))
-            IconButton(
+            LyricsSaveButton(
               key: const ValueKey('save-inline-lyrics-file'),
-              tooltip: 'Save lyrics to file',
-              visualDensity: VisualDensity.compact,
-              icon: _savingLyricsFile
-                  ? const SizedBox(
-                      height: 18, width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(LucideIcons.download, size: 19),
-              onPressed: _savingLyricsFile
-                  ? null
-                  : () => unawaited(_saveLyricsFile(
-                      _sublineLyrics ?? lyrics,
-                      includeDisplayedSubline: _sublineLyrics != null,
-                    )),
+              saving: _savingLyricsFile,
+              onSaveOriginal: () => unawaited(_saveLyricsFile(lyrics)),
+              onSaveWithTranslation: _saveTranslatedLyricsAction(),
             ),
           if (_lyricsData case final lyrics?)
             LyricsSublineButtons(
