@@ -56,22 +56,26 @@ Future<void> _drag(WidgetTester tester, String key, double dy) async {
 }
 
 void main() {
-  test('reorder row identities survive moves and distinguish duplicate tracks', () {
+  test('queue drop positions use one pre-removal normalization', () {
+    expect(queueDropIndex(0, 2, 3), 1);
+    expect(queueDropIndex(0, 3, 3), 2);
+    expect(queueDropIndex(2, 0, 3), 0);
+    expect(queueDropIndex(1, 1, 3), 1);
+  });
+
+  test('row keys remain unique across moves and repeated songs', () {
     final songs = [_track('a'), _track('b'), _track('a'), _track('c')];
-    final before = queueRowIdentities(songs, 'upnext');
-    final reordered = [songs[1], songs[0], songs[2], songs[3]];
-    final after = queueRowIdentities(reordered, 'upnext');
-    expect(before.toSet(), hasLength(4));
-    expect(after.toSet(), hasLength(4));
-    expect(before[0], after[1],
-        reason: 'Original first song must retain its key after moving');
-    expect(before[1], after[0]);
-    expect(before[2], after[2],
-        reason: 'Repeated song IDs cannot collide within a list');
+    final first = queueRowIdentities(songs, 'next');
+    final moved = queueRowIdentities([songs[1], songs[0], songs[2], songs[3]], 'next');
+    expect(first.toSet(), hasLength(4));
+    expect(moved.toSet(), hasLength(4));
+    expect(first[0], moved[1]);
+    expect(first[1], moved[0]);
+    expect(first[2], moved[2]);
   });
 
   for (final embedded in [false, true]) {
-    testWidgets('${embedded ? 'full-player embedded' : 'full-screen'} queue supports drag in both sections',
+    testWidgets('${embedded ? 'full-player' : 'standalone'} queue drags playback order in both directions',
         (tester) async {
       tester.view.physicalSize = const Size(440, 1024);
       tester.view.devicePixelRatio = 1;
@@ -81,25 +85,49 @@ void main() {
         overrides: [playerProvider.overrideWith(() => player)],
         child: MaterialApp(
           theme: LokalTheme.build(LokalTokens.themes[LokalThemeId.dark]!),
-          home: Scaffold(
-            body: QueueList(embedded: embedded),
-          ),
+          home: Scaffold(body: QueueList(embedded: embedded)),
         ),
       ));
       await tester.pumpAndSettle();
-
-      await _drag(tester, 'upnext-drag-0', 190);
+      expect(find.text('Queue'), findsOneWidget);
+      expect(find.text('Manual queue'), findsNothing,
+          reason: 'Manual songs must not appear a second time below Up Next');
+      expect(find.byType(SliverReorderableList), findsOneWidget);
+      await _drag(tester, 'queue-grip-0', 180);
       expect(player.upcomingMoves, isNotEmpty);
       expect(player.upcomingMoves.last.$1, 0);
       expect(player.upcomingMoves.last.$2, greaterThan(0));
       expect(player.upcomingIds.first, isNot('a'));
 
-      await _drag(tester, 'manual-queue-drag-2', -180);
-      expect(player.manualMoves, isNotEmpty);
-      expect(player.manualMoves.last.$1, 2);
-      expect(player.manualMoves.last.$2, lessThan(2));
-      expect(player.manualIds.last, isNot('f'));
+      await _drag(tester, 'queue-grip-2', -180);
+      expect(player.upcomingMoves.length, 2);
+      expect(player.upcomingMoves.last.$1, 2);
+      expect(player.upcomingMoves.last.$2, lessThan(2));
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('manual queue with no active playback is reorderable',
+      (tester) async {
+    tester.view.physicalSize = const Size(440, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final player = _ManualOnlyPlayer();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [playerProvider.overrideWith(() => player)],
+      child: MaterialApp(
+        theme: LokalTheme.build(LokalTokens.themes[LokalThemeId.dark]!),
+        home: const Scaffold(body: QueueList()),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await _drag(tester, 'queue-grip-0', 180);
+    expect(player.manualMoves, [(0, 1)]);
+    expect(player.manualIds, ['e', 'd', 'f']);
+  });
+}
+
+class _ManualOnlyPlayer extends _QueuePlayer {
+  @override
+  PlayerState build() => PlayerState(queue: [_track('d'), _track('e'), _track('f')]);
 }
