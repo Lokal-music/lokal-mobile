@@ -1,6 +1,6 @@
 # iPhone widgets: shared data and implementation gates
 
-Status: native publication/bridge and first-create correction accepted; live sampler candidate, 27 October 2026 (Europe/Paris).
+Status: native publication/sampler contracts and standalone extension linkage accepted; rendering candidate, 27 October 2026 (Europe/Paris).
 The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
 [shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):
 45 shared cases plus native numeric/clock guards and 64 Dart contracts. The [storage run](https://github.com/lokal-music/lokal-mobile/actions/runs/40450346881)
@@ -14,8 +14,8 @@ and Flutter coordinator. The later run-14 correction passes 23 storage cases,
 cases plus both real bridge SDK checks. The [live-sampler contract run 15](https://github.com/lokal-music/lokal-mobile/actions/runs/40510204249)
 passes 48 reader cases, the same 23 store cases and both stress controls, 14
 publisher cases, 109 Flutter contracts and both real Flutter bridge SDK checks.
-**Full runtime sampling acceptance remains pending; no WidgetKit target, widget
-entitlement or iPhone widget UI is enabled.**
+**Full runtime sampling acceptance remains pending. The standalone WidgetKit
+candidate is not embedded or provisioned in the main IPA.**
 
 The product remains exactly three configurations—Now Playing, Flow / Radio and
 Cover Flow—with responsive small/medium/large families. Artwork, Dynamic Type,
@@ -464,3 +464,109 @@ widget tests and recovery probe reports no issues. Whole app/integration analysi
 has no errors. Actionlint and diff checks pass. Actual Swift execution/SDK parity
 for the new buffering field, live-runtime app acceptance and the observed build-56
 retirement timeout remain separate hosted gates.
+
+
+## Standalone read-only WidgetKit candidate
+
+`ios/Widgets/LokalWidgets.xcodeproj`, shared scheme `LokalWidgets`, builds an
+independent extension containing exactly Now Playing, Flow / Radio and Cover
+Flow, each supporting small/medium/large. It is deliberately not a dependency or
+embedded product of Runner. Neither product acquires an entitlement or an App
+Group identifier from this change. The extension's absent `LokalWidgetAppGroup`
+key produces an explicit unavailable display; it never substitutes an app-private
+container, creates a store, writes a snapshot, fetches art or starts playback.
+A future optional package must configure the same real group in both products
+and prove the signed Windows workflow before embedding the extension.
+
+The native view uses the captured accent, system contrast surfaces and Dynamic
+Type. `ViewThatFits` prioritizes track/open content at accessibility sizes;
+VoiceOver retains complete recording metadata. Static artwork and layouts add no
+animation. Cover Flow displays up to three actual recommendation records; missing
+recommendations and inactive Flow retain an honest open-app state. Current art
+can fall back to the explicitly retained owned last-good filename. Reads use the
+existing descriptor-relative store and an eight-MiB aggregate display budget.
+Before UIKit decodes an image, ImageIO rechecks complete single PNG/JPEG content,
+compressed size and the host's 600px per-axis downsample bound. Damaged/evicted art
+falls back independently from valid metadata. Labels have all 11 app languages;
+widget language follows the extension's iOS localization selection for now.
+The app's explicit language preference still needs a shared-language binding.
+
+All entry values crossing WidgetKit completion are typed `Sendable` values.
+Timeline planning creates at most four entries: now, a valid future source start,
+recording end and strict freshness expiry when relevant. Progress uses the system
+`ProgressView(timerInterval:)`; scaling both endpoints respects playback rate.
+Paused, buffering, completed, invalid-clock and stale samples do not animate.
+There is no wall-clock elapsed label that could misstate audio time at another
+rate. At freshness expiry a static stale entry requests a reread; that request is
+at most once per 15-minute source window while playing, and never a recurring
+extension timer. WidgetKit may defer requests according to its budget. The stale
+fallback remains necessary; a system schedule is not a promise of continuous
+rendering. Paused/empty/unavailable snapshots rely on subsequent committed host
+reloads rather than repeated polling.
+
+The entire widget opens `konnekted://widget`, using the installed app scheme.
+This is an open-app entry only: there is no unvalidated play/toggle/seek URL, no
+track ID in a deep link and no claim of background control. AppIntent/inbox
+commands and Flow/recommendation owner binding remain separate implementation
+gates. A read-only extension is not full widget feature parity.
+
+The focused workflow now compiles the presentation/timeline executable against
+the shared 48-case corpus and additional native clock/rate/state/image cases,
+and separately links the actual extension for device and simulator at iOS 16
+with Swift 6 strict concurrency and warnings-as-errors. Local project-reference,
+scheme, resource completeness, actionlint and diff checks pass. Hosted compilation,
+rendered family/large-text snapshots, actual WidgetKit scheduling, signed group
+access and installed-device behavior remain pending for this new source.
+
+
+### Native linkage accepted; render harness continuation
+
+[Focused run 16](https://github.com/lokal-music/lokal-mobile/actions/runs/40516346438)
+accepts the first standalone source, tree `0eef6ff8246789cc3585e7e2b7ffd4bc5e81a906`,
+at PR head `a28426426ea3d2a1402bb992ef72abe19145f74b`: 18 additional native
+presentation/timeline/image cases plus the shared corpus pass, and the actual
+extension links for both iOS 16 device and simulator targets. Reader, real store
+with both 50×24-worker controls and publisher contracts also pass. The Flutter
+metadata/bridge job is tracked separately until it completes.
+
+The next continuation adds the independent `LokalWidgetPreview` app target and
+`tool/ios_widget_render.py`. It builds and launches a real native SwiftUI app,
+then renders the exact shared layout and surface at explicit family bounds.
+The harness supplies normal-app margins; it does not pretend to install a widget
+on SpringBoard or exercise WidgetKit container/background scheduling. Runner and
+the extension have no dependency on this simulator-only app.
+
+The requested matrix is **441 PNGs**: all three configurations/families, all 11
+locales, normal/accessibility-5 text, light/dark appearance, plus English paused,
+buffering, stale, empty and unavailable cases. Each locale launches a fresh
+process with its actual preferred bundle language and asserts that selection.
+Images and per-case JSON are exported from the owned app container; CI verifies
+case completeness and exact PNG pixel bounds. Captures remain available for
+visual inspection, rather than calling a linker pass a rendering pass. The
+smallest accessibility fallback keeps one visual title line and Open Lokal,
+while its combined VoiceOver label retains the complete recording metadata.
+No animation frames or automatic Home Screen placement are inferred from static
+rendered PNGs. This rendering continuation still needs its own hosted pass.
+
+
+Render run 17 (`40517573731`) passes all native/Flutter/bridge contracts and links
+both the extension and the isolated SwiftUI app. Its capture step stops before
+installation: CoreSimulator's first device inventory times out after 90 seconds.
+No rendered PNG or installed-widget pass is claimed. The startup correction
+allows one Simulator-service warm-up and a second bounded inventory only for
+that exact pre-device timeout. Both attempts retain separate evidence. Runtime
+selection/boot, app installation, rendering, matrix validation and second-attempt
+failures propagate normally; no app test is retried. Seven local gate-policy
+cases pass, including a real main-flow render-process error without another
+boot/launch. Hosted captures remain pending after this infrastructure correction.
+
+
+Run 18 (`40519562953`, source tree `48bfa0de0503e9c3c19013aa0480d9b8db3c75b0`)
+passes the seven startup-policy cases and all existing native/metadata/bridge/
+extension gates. The render app links; this time inventory and the full boot
+complete, but first installation times out at 90 seconds. No native image pass is
+inferred. The continuation uses the same 120-second installation allowance as
+the already validated main-app harness and records the exact failing phase,
+partial command output, installer/SpringBoard logs, device inventory and a
+failure screenshot. Installation/render failures still propagate without retry.
+This is a diagnostic/readiness correction, not proof of a packaging fix.

@@ -1241,3 +1241,19 @@ actual source/account labels and unpainted Cover Flow behavior also pass.
 Whole app/integration analysis has no errors (620 warning/information items).
 Actionlint and diff checks pass. Hosted native acceptance of this new source
 remains pending; no physical installation or live-provider result is inferred.
+
+
+The next widget candidate has a standalone read-only WidgetKit project with all
+three configurations and families, native system progress/timeline planning,
+11-language labels and bounded existing-art display reads. It is not embedded in
+the engineering IPA and enables no entitlement. The new focused workflow must
+link it on both actual iOS 16 SDK targets; rendering, App Group provisioning,
+validated commands and signed Windows installation remain separate gates.
+See the [candidate boundaries](IOS_WIDGETKIT.md#standalone-read-only-widgetkit-candidate).
+
+
+Widget run 16 accepts the first standalone source's native presentation tests
+and actual iOS 16 device/simulator extension linkage. The continuation adds a
+simulator-only native render app and a 441-image language/family/accessibility
+matrix. Rendering, installed WidgetKit behavior and physical signing remain
+separate from the accepted linker/test result.
