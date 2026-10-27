@@ -190,7 +190,13 @@ void main() {
       previousArtists: tail,
       limit: 6,
     );
-    expect(result.first.artistKey, isNot(isIn(tail.map(normalizeFlowText))));
+    final artists = [...tail.map(normalizeFlowText), ...result.map((s) => s.artistKey)];
+    for (var i = 3; i < artists.length; i++) {
+      for (var previous = 1; previous <= 3; previous++) {
+        expect(artists[i], isNot(artists[i - previous]),
+            reason: 'artist repeated within three picks at position $i');
+      }
+    }
   });
 
   test('top-ups exclude previous IDs and duplicate recordings', () {
