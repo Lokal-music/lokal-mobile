@@ -150,6 +150,30 @@ Duration automixEffectiveAudibleEnd(
       : duration;
 }
 
+/// The upstream model identifies the start of a 32-beat phrase. Native
+/// Android playback currently has no independent pitch-locked stem mixer,
+/// so a long overlap is safe only when the two beat rates already match
+/// closely. Otherwise retain the configured short crossfade.
+@visibleForTesting
+double? automixPhraseOverlapSeconds(AutoMixProfile? outgoing) {
+  final bpm = outgoing?.analyzedBpm;
+  if (bpm == null || !bpm.isFinite || bpm < 85 || bpm > 200) return null;
+  final seconds = 32 * 60 / bpm;
+  return seconds >= 9 && seconds <= 22 ? seconds : null;
+}
+
+@visibleForTesting
+bool automixNativePhraseCompatible(
+  AutoMixProfile? outgoing, AutoMixProfile? incoming,
+) {
+  final first = outgoing?.analyzedBpm;
+  final second = incoming?.analyzedBpm;
+  return first != null && second != null &&
+      first.isFinite && second.isFinite &&
+      first > 0 && second > 0 &&
+      ((first / second) - 1).abs() <= 0.01;
+}
+
 @visibleForTesting
 Duration? automixModelEnd(
   Duration decoderDuration, AutoMixProfile? profile, double fadeSecs,
@@ -957,8 +981,10 @@ class AndroidAudioEngine implements AudioEngine {
     final cfg = _crossfadeConfigProvider();
     final duration = player.duration;
     final audibleDuration = _audibleTransitionEnd(duration);
+    final phraseSecs = automixPhraseOverlapSeconds(_currentAutoMixProfile);
     final modelEnd = automixModelEnd(
-      duration ?? Duration.zero, _currentAutoMixProfile, cfg.durationSecs,
+      duration ?? Duration.zero, _currentAutoMixProfile,
+      phraseSecs ?? cfg.durationSecs,
     );
     // If the model cue passed during a seek or late analysis, revert to
     // the ordinary end-of-track transition instead of disabling AutoMix.
@@ -968,16 +994,17 @@ class AndroidAudioEngine implements AudioEngine {
       enabled: cfg.enabled,
       duration: targetEnd,
       position: pos,
-      fadeSecs: cfg.durationSecs,
+      fadeSecs: usableModelEnd != null && phraseSecs != null
+          ? phraseSecs : cfg.durationSecs,
     )) {
       return;
     }
     _armCrossfade(cfg, (cfg.durationSecs * 1000).round(),
-        audibleDuration, usableModelEnd);
+        audibleDuration, usableModelEnd, phraseSecs);
   }
 
   void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs,
-      Duration normalMixEnd, Duration? modelMixEnd) {
+      Duration normalMixEnd, Duration? modelMixEnd, double? phraseSecs) {
     // The preparation phase is independent of the fade itself: streams may
     // require several seconds to buffer. Skips/stops/route changes invalidate
     // this attempt and cannot start an obsolete successor after an await.
@@ -1027,7 +1054,17 @@ class AndroidAudioEngine implements AudioEngine {
         final modelEntry = upcomingProfile?.modelEntrances.where((t) =>
             t.isFinite && t >= 0 && t <= 45 &&
             t <= upcomingProfile!.durationSeconds - 20).firstOrNull;
-        final modelPair = modelMixEnd != null && modelEntry != null;
+        final hasPairedCues = modelMixEnd != null && modelEntry != null;
+        // The longer 32-beat window is not safe without pitch-preserving
+        // tempo correction; only accept essentially matched rates.
+        final phraseCompatible = phraseSecs != null &&
+            automixNativePhraseCompatible(
+              _currentAutoMixProfile, upcomingProfile,
+            );
+        final modelPair = hasPairedCues &&
+            (phraseSecs == null || phraseCompatible);
+        final overlapMs = modelPair && phraseCompatible
+            ? (phraseSecs! * 1000).round() : fadeMs;
         final mixEnd = modelPair ? modelMixEnd! : normalMixEnd;
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
@@ -1063,7 +1100,7 @@ class AndroidAudioEngine implements AudioEngine {
           // A slow add-on may become ready after the *analysed* audible end
           // while the media element is still playing its silent tail. Start
           // immediately in that case, but never start while paused.
-          if (outgoing.playing && remainingMs <= fadeMs) break;
+          if (outgoing.playing && remainingMs <= overlapMs) break;
           await Future<void>.delayed(const Duration(milliseconds: 80));
         }
         if (!valid()) { releaseIfOwned(); return; }
@@ -1082,8 +1119,9 @@ class AndroidAudioEngine implements AudioEngine {
         // physically available silence rather than abandon the transition.
         // Never schedule a ramp past the actual decoder's end.
         final activeFadeMs = math.min(
-          fadeMs, remainingMs > 0 ? math.min(remainingMs, physicalRemainingMs)
-                                 : physicalRemainingMs,
+          overlapMs, remainingMs > 0
+              ? math.min(remainingMs, physicalRemainingMs)
+              : physicalRemainingMs,
         );
         unawaited(
           incoming.play().catchError((Object error, StackTrace stackTrace) {
