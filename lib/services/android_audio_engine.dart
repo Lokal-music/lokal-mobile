@@ -1321,7 +1321,7 @@ class AndroidAudioEngine implements AudioEngine {
       }
       // Capture a non-null decoder for periodic callbacks after this async
       // setup; the mutable nullable handle is used only for failure cleanup.
-      final clipPlayer = mixed;
+      final just_audio.AudioPlayer clipPlayer = mixed!;
       _stemPlayer = clipPlayer;
       _stemHandoffStarted = false;
       _stemPausedByUser = false;
