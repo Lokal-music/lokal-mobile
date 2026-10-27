@@ -15,6 +15,7 @@ import 'package:flick/core/theme/lokal_appearance.dart';
 
 import '../widgets/lyrics_source_button.dart';
 import '../widgets/lyrics_file_export.dart';
+import '../widgets/lyrics_save_button.dart';
 import '../widgets/player_panel_stage.dart';
 import '../widgets/motion_art_widget.dart';
 
@@ -431,6 +432,19 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     } finally {
       if (mounted) setState(() => _savingLyricsFile = false);
     }
+  }
+
+  VoidCallback? _saveTranslatedLyricsAction(Song song) {
+    final selected = _sublineLyrics;
+    if (selected == null ||
+        !selected.lines.any((line) =>
+            line.translation?.trim().isNotEmpty == true &&
+            line.translation!.trim() != line.text.trim())) {
+      return null;
+    }
+    return () => unawaited(
+      _saveLyricsFile(song, selected, includeDisplayedSubline: true),
+    );
   }
 
   void _showSpaceOptions() {
@@ -1752,25 +1766,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               ),
             ),
             if (display != null && hasUsableLyrics(display))
-              IconButton(
+              LyricsSaveButton(
                 key: const ValueKey('save-current-lyrics-file'),
-                tooltip: 'Save lyrics to file',
-                visualDensity: VisualDensity.compact,
-                icon: _savingLyricsFile
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(LucideIcons.download,
-                        color: Colors.white70, size: 19),
-                onPressed: _savingLyricsFile
-                    ? null
-                    : () => unawaited(_saveLyricsFile(
-                        song,
-                        display,
-                        includeDisplayedSubline: _sublineLyrics != null,
-                      )),
+                saving: _savingLyricsFile,
+                iconColor: Colors.white70,
+                onSaveOriginal: () => unawaited(_saveLyricsFile(song, data!)),
+                onSaveWithTranslation: _saveTranslatedLyricsAction(song),
               ),
             if (hasImmersiveLyrics(data))
               IconButton(
