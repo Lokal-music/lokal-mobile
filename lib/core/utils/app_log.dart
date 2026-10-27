@@ -30,7 +30,7 @@ class AppLog extends ChangeNotifier {
   File? _logFile;
   bool _persistenceInitialized = false;
   Timer? _flushTimer;
-  Future<void>? _flushInProgress;
+  Future<bool>? _flushInProgress;
 
   // Idle applications should not wake the Dart isolate to inspect an empty
   // log queue. A timer exists only while there are unsaved entries.
@@ -109,7 +109,12 @@ class AppLog extends ChangeNotifier {
     // drains entries arriving during the write before it completes.
     final active = _flushInProgress;
     if (active != null) {
-      await active;
+      final succeeded = await active;
+      // The writer normally drains additions itself, but a log can arrive
+      // just as it finishes. Honor this explicit flush request too.
+      if (succeeded && _pendingLines.isNotEmpty) {
+        await flushToDisk();
+      }
       return;
     }
 
@@ -125,7 +130,7 @@ class AppLog extends ChangeNotifier {
     }
   }
 
-  Future<void> _drainPendingLines(File file) async {
+  Future<bool> _drainPendingLines(File file) async {
     while (_pendingLines.isNotEmpty) {
       final lines = List<String>.of(_pendingLines);
       _pendingLines.clear();
@@ -143,9 +148,10 @@ class AppLog extends ChangeNotifier {
         debugPrint('AppLog flush failed: $error');
         // Avoid an immediate retry loop on a failing disk; _scheduleFlush
         // retains the existing delayed retry behavior.
-        return;
+        return false;
       }
     }
+    return true;
   }
 
   Future<void> _trimFile(File file) async {
