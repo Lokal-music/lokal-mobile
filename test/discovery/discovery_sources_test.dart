@@ -326,6 +326,17 @@ void main() {
         }, expectedDuration: const Duration(seconds: 224)),
         throwsA(isA<DiscoveryException>()),
       );
+      // A zero/invalid early alias must not mask a later 30-second preview.
+      for (final firstClaim in [0, -1, 'invalid', null]) {
+        expect(
+          () => addon.parseStream({
+            'url': 'https://cdn.example/audio.mp3',
+            'streamDuration': firstClaim,
+            'duration': 30,
+          }, expectedDuration: const Duration(seconds: 220)),
+          throwsA(isA<DiscoveryException>()),
+        );
+      }
       // A real short recording is not a preview just because it is short.
       expect(
         addon.parseStream({
