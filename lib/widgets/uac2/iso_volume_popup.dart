@@ -199,7 +199,8 @@ class _IsoVolumePopupOverlayState extends ConsumerState<_IsoVolumePopupOverlay>
         (!hardwareAuthority || deviceStatus.volumeControlWritable) &&
         !_muteUpdateInFlight;
     final showDb =
-        isSoftwareVolume || deviceStatus.volumeMode == Uac2VolumeMode.hardware;
+        isSoftwareVolume || deviceStatus.volumeMode == Uac2VolumeMode.hardware ||
+        (!hardwareAuthority && isAvailable);
 
     final isLeft = widget.buttonPosition.dx < widget.screenSize.width / 2;
     final popupLeft = isLeft ? widget.buttonPosition.dx : null;
