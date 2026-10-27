@@ -60,7 +60,7 @@ void main() {
     expect(file.content, raw);
   });
 
-  test('exports selected translations rather than stale raw LRC', () async {
+  test('exports selected translation only when explicitly requested', () async {
     const raw = '[00:01.00]こんにちは';
     const lyrics = LyricsData(
       lines: [
@@ -73,9 +73,14 @@ void main() {
       isSynchronized: true,
       rawContent: raw,
     );
-    final file = prepareLyricsFileExport(_song, lyrics);
-    expect(file.extension, 'lrc');
-    expect(file.content, '[00:01.00]こんにちは\nHello\n');
+    final original = prepareLyricsFileExport(_song, lyrics);
+    expect(original.extension, 'lrc');
+    expect(original.content, raw);
+    final translated = prepareLyricsFileExport(
+      _song, lyrics, includeDisplayedSubline: true,
+    );
+    expect(translated.extension, 'lrc');
+    expect(translated.content, '[00:01.00]こんにちは\nHello\n');
     expect(await saveCurrentLyricsFile(
       song: _song,
       lyrics: lyrics,
@@ -130,6 +135,49 @@ void main() {
     final file = prepareLyricsFileExport(_song, lyrics);
     expect(file.extension, 'lrc');
     expect(file.content, raw);
+  });
+
+  test('normal save preserves TTML despite an available translation', () {
+    const raw = '<tt><body><p begin="1s">日本語</p></body></tt>';
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: '日本語',
+          translation: 'Japanese',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: raw,
+    );
+    final original = prepareLyricsFileExport(_song, lyrics);
+    expect(original.extension, 'ttml');
+    expect(original.content, raw);
+    final translated = prepareLyricsFileExport(
+      _song, lyrics, includeDisplayedSubline: true,
+    );
+    expect(translated.extension, 'lrc');
+    expect(translated.content, '[00:01.00]日本語\nJapanese\n');
+  });
+
+  test('translation export skips blank and duplicate sublines', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(timestamp: Duration.zero, text: 'Same',
+          translation: 'Same'),
+        LyricsLine(timestamp: Duration.zero, text: 'Blank',
+          translation: '  '),
+        LyricsLine(timestamp: Duration.zero, text: 'Different',
+          translation: ' Autre '),
+      ],
+      isSynchronized: false,
+      rawContent: 'Same\nBlank\nDifferent',
+    );
+    expect(prepareLyricsFileExport(_song, lyrics).content,
+      'Same\nBlank\nDifferent');
+    expect(prepareLyricsFileExport(
+      _song, lyrics, includeDisplayedSubline: true,
+    ).content, 'Same\nBlank\nDifferent\nAutre\n');
   });
 
   test('rejects blank lines but keeps words-only lyric content', () async {
@@ -207,6 +255,11 @@ void main() {
     final file = prepareLyricsFileExport(_song, lyrics);
     expect(file.extension, 'elrc');
     expect(file.content,
+        '[00:01.05]<00:01.05>Hello <00:01.40>world\n');
+    final withTranslation = prepareLyricsFileExport(
+      _song, lyrics, includeDisplayedSubline: true,
+    );
+    expect(withTranslation.content,
         '[00:01.05]<00:01.05>Hello <00:01.40>world\nBonjour monde\n');
   });
 
