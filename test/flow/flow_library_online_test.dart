@@ -74,6 +74,38 @@ void main() {
     }
   });
 
+  test('online radio maintains three-artist spacing when alternatives exist', () {
+    final library = FlowLibrary(
+      songs: [
+        song('prior', artist: 'Artist A', title: 'Already playing'),
+      ],
+      favoriteIds: {'prior'},
+    );
+    final selection = library.eligibleOnline(
+      FlowData(session: FlowSession(trackIds: ['prior'])),
+      [
+        song('repeat-1', artist: 'Artist A', title: 'Another song'),
+        song('repeat-2', artist: 'Artist A', title: 'Third song'),
+        song('b', artist: 'Artist B', title: 'Other B'),
+        song('c', artist: 'Artist C', title: 'Other C'),
+        song('d', artist: 'Artist D', title: 'Other D'),
+      ],
+      limit: 4,
+    );
+    expect(selection.map((song) => song.artist).toList(), [
+      'Artist B', 'Artist C', 'Artist D', 'Artist A',
+    ]);
+    final onlyArtist = library.eligibleOnline(
+      FlowData(),
+      [
+        song('a1', artist: 'Same Artist', title: 'A'),
+        song('a2', artist: 'Same Artist', title: 'B'),
+      ],
+      limit: 2,
+    );
+    expect(onlyArtist.length, 2, reason: 'do not starve a single-artist provider');
+  });
+
   test('online filtering keeps unknown genre candidates and obeys caps', () {
     final library = FlowLibrary(songs: [], favoriteIds: {});
     final accepted = library.eligibleOnline(
