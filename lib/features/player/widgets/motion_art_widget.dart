@@ -146,9 +146,12 @@ class _MotionArtViewState extends State<MotionArtView>
   bool _routeIsCurrent = true;
   bool _tickerEnabled = true;
   bool _loading = false;
-  bool _suspendedForMemoryPressure = false;
-  Timer? _memoryRecoveryTimer;
+  // One cooldown for the whole app: newly created artwork views must not
+  // reopen a video decoder while Android is reporting memory pressure.
+  static final ValueNotifier<bool> _memoryPressurePause = ValueNotifier(false);
+  static Timer? _memoryRecoveryTimer;
   static const _memoryRecoveryDelay = Duration(minutes: 2);
+  bool get _suspendedForMemoryPressure => _memoryPressurePause.value;
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   bool get _canPlay =>
       widget.enabled &&
@@ -184,6 +187,7 @@ class _MotionArtViewState extends State<MotionArtView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _memoryPressurePause.addListener(_onMemoryPressureChanged);
     movingCoverRevision.addListener(_onRevisionChanged);
     SecureSpotifyTokenStore.sessionRevision.addListener(_onRevisionChanged);
     if (widget.enabled) {
@@ -246,17 +250,25 @@ class _MotionArtViewState extends State<MotionArtView>
 
   @override
   void didHaveMemoryPressure() {
-    // Android may warn of impending memory pressure before terminating the
-    // process. Muted motion-art decoding is optional; audio is not.
-    _suspendedForMemoryPressure = true;
+    // All mounted views receive this Android notification. Use a single
+    // process-wide cooldown so new views don't immediately reload decoders.
     _memoryRecoveryTimer?.cancel();
-    _teardown();
-    if (mounted) setState(() {});
+    _memoryPressurePause.value = true;
     _memoryRecoveryTimer = Timer(_memoryRecoveryDelay, () {
       _memoryRecoveryTimer = null;
-      _suspendedForMemoryPressure = false;
-      if (mounted) _beginLoad();
+      _memoryPressurePause.value = false;
     });
+  }
+
+  void _onMemoryPressureChanged() {
+    if (!mounted) return;
+    if (_suspendedForMemoryPressure) {
+      // Optional video decoding must release its buffers before music.
+      _teardown();
+    } else {
+      _beginLoad();
+    }
+    setState(() {});
   }
 
   void _syncPlayback() {
@@ -321,11 +333,11 @@ class _MotionArtViewState extends State<MotionArtView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _memoryPressurePause.removeListener(_onMemoryPressureChanged);
     movingCoverRevision.removeListener(_onRevisionChanged);
     SecureSpotifyTokenStore.sessionRevision.removeListener(_onRevisionChanged);
     AnimatedArtworkService.instance.revision.removeListener(_onRevisionChanged);
     _stopListeningToSuppression();
-    _memoryRecoveryTimer?.cancel();
     _teardown();
     super.dispose();
   }
