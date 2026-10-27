@@ -24,6 +24,24 @@ Song song(String id) => Song(
 class _Player extends PlayerNotifier {
   PlayerState? initial;
   final played = <String>[];
+  final upNextMoves = <(int, int)>[];
+  final manualMoves = <(int, int)>[];
+  @override
+  Future<void> moveUpNextItem(int from, int to) async {
+    upNextMoves.add((from, to));
+    final items = [...state.upNext];
+    items.insert(to, items.removeAt(from));
+    state = state.copyWith(upNext: items);
+  }
+
+  @override
+  Future<void> moveQueueItem(int from, int to) async {
+    manualMoves.add((from, to));
+    final items = [...state.queue];
+    items.insert(to, items.removeAt(from));
+    state = state.copyWith(queue: items);
+  }
+
   @override
   PlayerState build() =>
       initial ??
@@ -55,6 +73,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     bool manualOnly = false,
+    bool reorderDemo = false,
     bool autoplayOnly = false,
     bool discoveryPendingOnly = false,
     LokalThemeId theme = LokalThemeId.dark,
@@ -64,6 +83,13 @@ void main() {
     addTearDown(tester.view.reset);
     player = _Player();
     if (manualOnly) player.initial = PlayerState(queue: [song('Manual')]);
+    if (reorderDemo) {
+      player.initial = PlayerState(
+        currentSong: song('Now'),
+        upNext: [song('Next0'), song('Next1'), song('Next2')],
+        queue: [song('Manual0'), song('Manual1'), song('Manual2')],
+      );
+    }
     if (discoveryPendingOnly) {
       player.initial = PlayerState(
         currentSong: song('Now'),
@@ -227,6 +253,49 @@ void main() {
     expect(player.played, ['manual:0']);
     expect(opens, 1);
   });
+  testWidgets('popup queue grip drags Up Next down and Manual Queue up',
+      (tester) async {
+    await pump(tester, reorderDemo: true);
+
+    Future<void> drag(WidgetTester tester, Finder grip, Offset delta) async {
+      final handle = grip;
+      expect(handle, findsOneWidget);
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump(const Duration(milliseconds: 40));
+      await gesture.moveBy(delta);
+      await tester.pump(const Duration(milliseconds: 120));
+      await gesture.up();
+      await tester.pumpAndSettle();
+    }
+
+    await drag(tester, find.byKey(const ValueKey('upnext-drag-0')),
+        const Offset(0, 165));
+    expect(player.upNextMoves, isNotEmpty,
+        reason: 'Drag handle in the mini-player sheet must invoke the callback');
+    expect(player.upNextMoves.last.$1, 0);
+    expect(player.upNextMoves.last.$2, greaterThan(0));
+    expect(player.state.upNext.first.id, isNot('Next0'));
+
+    // Make sure the second list is independently reorderable, not just Up Next.
+    await drag(tester, find.byKey(const ValueKey('manual-queue-drag-1')),
+        const Offset(0, -90));
+    expect(player.manualMoves, isNotEmpty);
+    expect(player.manualMoves.last.$1, 1);
+    expect(player.manualMoves.last.$2, 0);
+    expect(player.state.queue.first.id, 'Manual1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sheet queue heading uses the same inset as upcoming tracks',
+      (tester) async {
+    await pump(tester, reorderDemo: true);
+    final titleX = tester.getTopLeft(find.text('QUEUE')).dx;
+    final upcomingX = tester.getTopLeft(find.text('Up Next')).dx;
+    expect(titleX, closeTo(upcomingX, 1),
+        reason: 'Popup Queue title was too far left of the content');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('sheet adopts the active light palette', (tester) async {
     await pump(tester, theme: LokalThemeId.light);
     final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
