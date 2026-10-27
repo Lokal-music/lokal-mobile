@@ -48,6 +48,44 @@ Song _track(String id) => Song(
 );
 
 void main() {
+  testWidgets('Home and Library use identical trailing header coordinates', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _app(
+        KonnektedHomeTopBar(
+          onSettings: () {},
+          onAppearance: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    final homeDiscord = tester.getRect(find.byTooltip('Discord'));
+    final homeSettings = tester.getRect(find.byTooltip('Settings'));
+
+    await tester.pumpWidget(
+      _app(KonnektedLibrary(onNavigate: (_) {})),
+    );
+    await tester.pump();
+    final libraryDiscord = tester.getRect(find.byTooltip('Discord'));
+    final librarySettings = tester.getRect(find.byTooltip('Settings'));
+    expect(libraryDiscord.center, homeDiscord.center);
+    expect(librarySettings.center, homeSettings.center);
+    expect(find.text('Library'), findsOneWidget);
+    final addButton = tester.getRect(
+      find.bySemanticsLabel('Add music, playlists and folders'),
+    );
+    final title = tester.getRect(find.text('Library'));
+    expect(title.left, greaterThanOrEqualTo(addButton.right));
+    expect((title.center.dy - addButton.center.dy).abs(), lessThan(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Home modes share the logo and header actions row', (
     tester,
   ) async {
