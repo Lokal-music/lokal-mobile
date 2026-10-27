@@ -290,6 +290,7 @@ class AndroidAudioEngine implements AudioEngine {
   Timer? _stemTimer;
   bool _stemHandoffStarted = false;
   bool _stemPausedByUser = false;
+  bool _stemOutgoingStopped = false;
   AutoMixStemClip? _activeStemClip;
   just_audio.AudioPlayer? _stemOutgoing;
   just_audio.AudioPlayer? _stemIncoming;
@@ -1321,6 +1322,7 @@ class AndroidAudioEngine implements AudioEngine {
       _stemPlayer = clipPlayer;
       _stemHandoffStarted = false;
       _stemPausedByUser = false;
+      _stemOutgoingStopped = false;
       _activeStemClip = clip;
       _stemOutgoing = outgoing;
       _stemIncoming = incoming;
@@ -1367,6 +1369,12 @@ class AndroidAudioEngine implements AudioEngine {
           ));
         }
         final initial = (position / 180).clamp(0.0, 1.0);
+        // Once the pre-rendered overlap owns the audio, retire the old
+        // decoder instead of needlessly decoding a silent song for 16s.
+        if (position >= 240 && !_stemOutgoingStopped) {
+          _stemOutgoingStopped = true;
+          unawaited(outgoing.stop().catchError((Object _) {}));
+        }
         if (!_stemHandoffStarted) {
           unawaited(outgoing.setVolume(userVolume * (1 - initial)));
           unawaited(clipPlayer.setVolume(userVolume * initial));
@@ -1433,6 +1441,7 @@ class AndroidAudioEngine implements AudioEngine {
     final hadHandoff = _stemHandoffStarted;
     _stemHandoffStarted = false;
     _stemPausedByUser = false;
+    _stemOutgoingStopped = false;
     try {
       if (!hadHandoff || !incoming.playing) {
         await incoming.seek(clip.resume);
@@ -1455,6 +1464,7 @@ class AndroidAudioEngine implements AudioEngine {
     _stemTimer = null;
     _stemHandoffStarted = false;
     _stemPausedByUser = false;
+    _stemOutgoingStopped = false;
     _activeStemClip = null;
     _stemOutgoing = null;
     _stemIncoming = null;
