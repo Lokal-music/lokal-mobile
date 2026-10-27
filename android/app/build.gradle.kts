@@ -287,6 +287,8 @@ dependencies {
     // Full-player native music videos: single Media3 clock for separate
     // video-only and audio-only legs, independent of the audio queue.
     implementation("androidx.media3:media3-exoplayer:1.8.0")
+    // SoundCloud native streaming can offer AAC through HLS when no progressive MP3 exists.
+    implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
     implementation("androidx.lifecycle:lifecycle-service:2.7.0")
     

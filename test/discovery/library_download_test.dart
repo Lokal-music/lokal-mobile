@@ -309,4 +309,33 @@ void main() {
       'Song.mp3',
     );
   });
+
+  test('a Monochrome FLAC download keeps catalogue title, artist, album and cover', () async {
+    final flac = File(p.join(root.path, 'cache', '155142501534011392.flac'));
+    await flac.writeAsBytes(List.filled(64, 7));
+    final song = Song(
+      id: 'discovery:mono',
+      title: 'Get Lucky',
+      artist: 'Daft Punk',
+      album: 'Random Access Memories',
+      duration: const Duration(seconds: 370),
+      fileType: 'FLAC',
+      filePath: flac.path,
+      sourceDisplayName: 'Monochrome',
+      isExternal: true,
+    );
+    final music = Directory(p.join(root.path, 'Library'))..createSync();
+    final saved = await downloader([
+      LibraryDownloadFolder(uri: 'test-library', name: 'Music', path: music.path),
+    ]).save(song, artwork: 'https://tracks.monochrome.st/cover.jpg');
+
+    expect(p.basename(saved.path), 'Daft Punk - Get Lucky.flac');
+    expect(upserts.single.title, 'Get Lucky');
+    expect(upserts.single.artist, 'Daft Punk');
+    expect(upserts.single.album, 'Random Access Memories');
+    expect(upserts.single.fileType, 'FLAC');
+    expect(upserts.single.hasLocalEdits, isFalse);
+    expect(tags, [saved.path], reason: 'FLAC tags must be written into the file');
+    expect(covers, ['https://tracks.monochrome.st/cover.jpg']);
+  });
 }

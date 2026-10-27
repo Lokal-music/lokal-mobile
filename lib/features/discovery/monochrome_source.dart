@@ -50,9 +50,15 @@ abstract final class MonochromeSource {
           entry['playable'] == false || !seen.add(id)) continue;
 
       final names = entry['artistNames'];
+      final credits = entry['artists'];
+      // Some catalogue responses provide artist objects rather than artistNames.
+      // Keep the display/embedded tag instead of falling back to "Unknown Artist".
       final artists = names is List
           ? names.whereType<String>().map((s) => s.trim()).where((s) => s.isNotEmpty).take(8).join(', ')
-          : '';
+          : credits is List
+              ? credits.whereType<Map>().map((a) => discoveryText(a['name']))
+                  .whereType<String>().take(8).join(', ')
+              : '';
       final rawDuration = entry['duration'];
       final seconds = rawDuration is num && rawDuration.isFinite
           ? (rawDuration > 1000 ? rawDuration / 1000 : rawDuration)
@@ -68,7 +74,7 @@ abstract final class MonochromeSource {
         id: id,
         title: title,
         artist: artists.isEmpty ? 'Artist not supplied' : artists,
-        album: discoveryText(entry['albumTitle'] ?? entry['releaseTitle']),
+        album: discoveryText(entry['albumTitle'] ?? entry['releaseTitle'] ?? entry['album']),
         duration: seconds == null ? null : discoveryDuration(seconds),
         source: DiscoverySource.monochrome,
         sourceName: 'Monochrome',

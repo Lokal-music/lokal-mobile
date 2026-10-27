@@ -1,4 +1,5 @@
 import 'lyric_motion_line.dart';
+import 'lyrics_subline_timing.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -23,6 +24,9 @@ class KaraokeLyricLine extends StatefulWidget {
   final Color sungColor;
   final Color unsungColor;
 
+  /// Optional translated or romanized text to animate to the source vocal.
+  final String? sublineText;
+
   /// Position source to sweep against. Defaults to the player's own position;
   /// carousel peek stages pass a static source so their sweep stays put.
   final ValueNotifier<Duration>? positionNotifier;
@@ -40,6 +44,7 @@ class KaraokeLyricLine extends StatefulWidget {
     required this.style,
     required this.sungColor,
     required this.unsungColor,
+    this.sublineText,
     this.positionNotifier,
     this.active = true,
   });
@@ -53,6 +58,7 @@ class _KaraokeLyricLineState extends State<KaraokeLyricLine>
   static const double _fillEpsilon = 0.0004;
 
   late List<LyricsWord> _segments;
+  late LyricsLine _displayLine;
   Duration _basePosition = Duration.zero;
   Duration _tickerElapsed = Duration.zero;
   Duration _baseTickerElapsed = Duration.zero;
@@ -88,7 +94,8 @@ class _KaraokeLyricLineState extends State<KaraokeLyricLine>
       _positionNotifier.addListener(_onPositionTick);
     }
     if (!identical(oldWidget.lyrics, widget.lyrics) ||
-        oldWidget.lineIndex != widget.lineIndex) {
+        oldWidget.lineIndex != widget.lineIndex ||
+        oldWidget.sublineText != widget.sublineText) {
       _resolveWords();
       _onPositionTick();
       return;
@@ -101,7 +108,16 @@ class _KaraokeLyricLineState extends State<KaraokeLyricLine>
   }
 
   void _resolveWords() {
-    _segments = widget.lyrics.lines[widget.lineIndex].words ?? const [];
+    // Project against resolved playback windows, not raw ELRC words whose
+    // end may equal their start until the next word/line is inspected.
+    // Leave the original vocal rendering path unchanged.
+    final sourceLine = widget.sublineText == null
+        ? widget.lyrics.lines[widget.lineIndex]
+        : widget.lyricsService.playbackLines(widget.lyrics)[widget.lineIndex];
+    _displayLine = widget.sublineText == null
+        ? sourceLine
+        : projectLyricsSubline(sourceLine, widget.sublineText!);
+    _segments = _displayLine.words ?? const [];
     _builtForLineIndex = widget.lineIndex;
     _builtForLyrics = widget.lyrics;
     _lastFills = const [];
@@ -202,14 +218,14 @@ class _KaraokeLyricLineState extends State<KaraokeLyricLine>
 
     if (_segments.isEmpty) {
       return Text(
-        widget.lyrics.lines[widget.lineIndex].text,
+        _displayLine.text,
         textAlign: widget.textAlign,
         style: widget.style,
       );
     }
 
     return LyricMotionLine(
-      line: widget.lyrics.lines[widget.lineIndex],
+      line: _displayLine,
       position: _predictedPosition(),
       style: widget.style,
       sung: widget.sungColor,
