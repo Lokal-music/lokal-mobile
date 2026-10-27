@@ -77,6 +77,14 @@ def main():
             if device['state'] != 'Booted':
                 subprocess.run(['xcrun', 'simctl', 'boot', udid], check=True,
                                stdout=log, stderr=subprocess.STDOUT, timeout=60)
+            # A device reported as Booted can still lack a usable display on a
+            # fresh hosted Mac. Start its GUI session before waiting for full
+            # SpringBoard readiness; bootstatus and the control app remain gates.
+            developer = os.environ.get('DEVELOPER_DIR') or command('xcode-select', '-p').strip()
+            simulator = Path(developer) / 'Applications/Simulator.app'
+            subprocess.run(['open', '-a', str(simulator), '--args',
+                            '-CurrentDeviceUDID', udid], check=True,
+                           stdout=log, stderr=subprocess.STDOUT, timeout=20)
             subprocess.run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], check=True,
                            stdout=log, stderr=subprocess.STDOUT, timeout=300)
     except (OSError, subprocess.SubprocessError) as error:
@@ -84,6 +92,9 @@ def main():
         for args, destination in [
             (['xcrun', 'simctl', 'list', 'devices', '--json'], 'devices-after.json'),
             (['xcrun', 'simctl', 'io', udid, 'screenshot', str(output / 'boot.png')], 'screenshot.log'),
+            (['xcrun', 'simctl', 'spawn', udid, 'log', 'show', '--last', '5m',
+              '--style', 'compact', '--predicate',
+              'process == "SpringBoard" OR process == "backboardd"'], 'system-display.log'),
         ]:
             try:
                 with (output / destination).open('w') as log:

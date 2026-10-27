@@ -293,3 +293,28 @@ A paused/cued iPhone video seek now cues the new position instead of issuing a
 seek that may start playback. Thirteen focused production-JavaScript/controller
 tests pass, including the unchanged Android autoplay policy. Source analysis of
 this continuation has no issues. Production observation remains deferred.
+
+
+### Build 38 and canonical queue/evidence correction — 27 October 2026
+
+[Build 38](https://github.com/lokal-music/lokal-mobile/actions/runs/40374844619),
+head `43f1352b71bb7a76f60f7010cc9015bcc2b79bf8`, compiles and packages the
+release and simulator apps, and reaches the new repeated-reset selection check
+on iOS 18.6. That check incorrectly expects the unrotated input playlist even
+though the existing wrap-around preference places the selected song first.
+The assertion now captures canonical IDs/order and selection index immediately
+after selection, then requires exact preservation after reset. It still checks
+both expected song IDs, selected index, paused state, zero position and explicit
+replay; it does not weaken queue retention into unordered equality.
+
+The driver also rejects the old camel-case backend screenshot name, preventing
+JSON evidence export on the failed test. Producers now use lowercase system /
+rust-dsp names. JSON evidence is written even if screenshot export fails, and
+the export failure still fails the driver. The old run is not a recovery pass.
+
+The isolated iOS 26 device reports Booted but times out waiting for SpringBoard;
+its screenshot is empty and no app runs. The next boot starts Simulator.app for
+the exact selected device before bootstatus, retaining the same boot/control/app
+gates. Display-service logs are preserved on failure. This is a host startup
+correction awaiting native validation, not a proven iOS 26 recovery fix.
+All sixteen dependency/simulator/control Python tests pass.

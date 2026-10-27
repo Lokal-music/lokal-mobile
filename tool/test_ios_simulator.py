@@ -47,6 +47,7 @@ class SimulatorCoordinatorTest(unittest.TestCase):
             'IOS_SIMULATOR_DEVICE_TYPE': DEVICE,
             'RUNNER_TEMP': directory,
             'GITHUB_ENV': str(Path(directory) / 'environment'),
+            'DEVELOPER_DIR': '/Xcode/Developer',
         }
 
     def test_uses_exact_os_and_isolated_device_instead_of_unrelated_booted_phone(self):
@@ -59,6 +60,10 @@ class SimulatorCoordinatorTest(unittest.TestCase):
                 'xcrun', 'simctl', 'create', 'Lokal iPhone iOS 18.6', DEVICE, RUNTIME,
             ))
             self.assertEqual(run.call_args.args[0], ['xcrun', 'simctl', 'bootstatus', 'owned-udid', '-b'])
+            calls = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(calls[-2], ['open', '-a',
+                '/Xcode/Developer/Applications/Simulator.app', '--args',
+                '-CurrentDeviceUDID', 'owned-udid'])
             selected = json.loads((Path(directory) / 'ios-simulator-boot-18.6/selected.json').read_text())
             self.assertEqual(selected['runtime'], RUNTIME)
             self.assertEqual(selected['device_type'], DEVICE)

@@ -579,3 +579,17 @@ notice beneath content. Host checks cover all eleven locales at 200% on a
 320px phone. The exact workflow contract selection passes 234 tests; native
 posted-reset and delayed-HTTP acceptance is added but pending. Production
 observation remains deferred; no physical reset or live-video pass is claimed.
+
+
+### New upstream review queue — 27 October 2026
+
+Four further merged PRs are confirmed, bringing the review scope to 44 merged
+mobile PRs after #172 through #225. The candidate still implements the earlier
+40 through #219; these four are reviewed for the next parity continuation.
+
+| PR | Relevant iPhone behavior | Adaptation / acceptance |
+| --- | --- | --- |
+| [221](https://github.com/lokal-music/lokal-mobile/pull/221) | Save displayed lyrics from full player, inline lyrics and Space; preserve LRC/ELRC/TTML or export plain UTF-8. | Use an acknowledged iOS Files export, retain timing and translations, silent cancellation, no mutation of selected source or original sidecars. |
+| [223](https://github.com/lokal-music/lokal-mobile/pull/223) | Native Monochrome FLAC discovery/playback/download source with bounded search and honest format labels. | Preserve source identity, opt-in source policy and iPhone progressive playback; actual stream format and hardware output remain measured separately. |
+| [224](https://github.com/lokal-music/lokal-mobile/pull/224) | Accept streaming-only HTTP add-ons when explicit downloading is prohibited. | Retain manifest validation and download prohibition; use the existing iPhone streaming route rather than staging a prohibited library copy. |
+| [225](https://github.com/lokal-music/lokal-mobile/pull/225) | Artist favorites filters/search, Spotify followed-artist import and remote-only rows. | Preserve legacy favorites, reuse secure configured credentials, additive read-only import with bounded pagination, no Spotify follows/unfollows or implicit login. |

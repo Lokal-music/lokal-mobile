@@ -67,7 +67,10 @@ Future<void> probeIosMediaReset(
   await tester.pump(const Duration(milliseconds: 750));
   expect(player.isPlayingNotifier.value, isFalse);
   expect(player.positionNotifier.value, pausedAt);
-  await binding.takeScreenshot('ios-reset-${engine.name}-paused');
+  final outputName = engine == AudioEngineType.iosSystem
+      ? 'system'
+      : 'rust-dsp';
+  await binding.takeScreenshot('ios-reset-$outputName-paused');
 
   // A second reset while paused must also stay paused. A seek retains intent
   // without constructing an output before the subsequent explicit Play.
@@ -112,6 +115,13 @@ Future<void> probeIosNewSelectionDuringReset(
     await tester.pump(const Duration(milliseconds: 250));
     expect(player.currentSongNotifier.value?.id, selected.id);
     expect(player.isPlayingNotifier.value, isFalse);
+    // Selection applies the user's existing wrap-around/shuffle policy before
+    // recovery finishes. A later reset must retain that canonical queue, not
+    // replace it with the caller's unrotated input list.
+    final selectedOrder = player.playlist.map((s) => s.id).toList();
+    final selectedIndex = player.currentIndex;
+    expect(selectedOrder.toSet(), {original.id, selected.id});
+    expect(selectedOrder[selectedIndex], selected.id);
     await binding.takeScreenshot('ios-reset-new-selection-recovering');
     await _ios.invokeMethod<void>('postMediaServicesResetForIntegrationTest');
     await tester.pump(const Duration(milliseconds: 250));
@@ -120,10 +130,8 @@ Future<void> probeIosNewSelectionDuringReset(
     acknowledged.complete();
     await _awaitPhase(tester, LocalAudioPhase.paused);
     expect(player.currentSongNotifier.value?.id, selected.id);
-    expect(player.playlist.map((s) => s.id).toList(), [
-      original.id,
-      selected.id,
-    ]);
+    expect(player.playlist.map((s) => s.id).toList(), selectedOrder);
+    expect(player.currentIndex, selectedIndex);
     expect(player.isPlayingNotifier.value, isFalse);
     expect(player.positionNotifier.value, Duration.zero);
     await player.resume();
@@ -181,8 +189,9 @@ Future<void> probeIosDelayedHttpReset(
           );
         }
         request.response.contentLength = end - start + 1;
-        if (request.method != 'HEAD')
+        if (request.method != 'HEAD') {
           request.response.add(bytes.sublist(start, end + 1));
+        }
       }
       await request.response.close();
     }();
