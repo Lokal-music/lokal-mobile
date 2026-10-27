@@ -1,0 +1,49 @@
+name: iPhone widget data contracts
+
+on:
+  pull_request:
+    paths:
+      - 'ios/Widgets/Contracts/**'
+      - 'ios/Widgets/Tests/**'
+      - 'lib/models/ios_widget_snapshot.dart'
+      - 'lib/services/ios_widget_snapshot_builder.dart'
+      - 'test/widgets/ios/**'
+      - 'test/services/android_widget_contract_test.dart'
+      - 'test/fixtures/ios_widget/**'
+      - '.github/workflows/ios-widget-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-widget-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - name: Check the Dart writer against the shared corpus
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub --fatal-infos lib/models/ios_widget_snapshot.dart lib/services/ios_widget_snapshot_builder.dart test/widgets/ios
+          flutter test --no-pub test/widgets/ios test/services/android_widget_contract_test.dart
+      - name: Compile and exercise the actual Foundation reader
+        run: |
+          xcodebuild -version
+          swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Tests/main.swift -o "$RUNNER_TEMP/lokal-widget-contracts"
+          "$RUNNER_TEMP/lokal-widget-contracts" test/fixtures/ios_widget/snapshot_contract.json
