@@ -97,7 +97,7 @@ class FlowLibrary {
         seenRecordings.add(radioRecordingKey(known.artist, known.title));
       }
     }
-    final result = <Song>[];
+    final candidates = <Song>[];
     for (final song in suggestions) {
       if (song.id.trim().isEmpty ||
           song.artist.trim().isEmpty ||
@@ -108,8 +108,28 @@ class FlowLibrary {
       }
       final identity = radioRecordingKey(song.artist, song.title);
       if (!seenRecordings.add(identity)) continue;
-      result.add(song);
-      if (result.length >= limit) break;
+      candidates.add(song);
+    }
+    // Keep the provider's order unless an alternate artist can avoid an
+    // immediate repeat. This is the same 3-track lookback used for local
+    // Flow recommendations; it carries across online queue refills.
+    final recent = <String>[
+      for (final id in data.session.trackIds.skip(
+        math.max(0, data.session.trackIds.length - 3),
+      ))
+        if (byId[id] case final song?) normalizeFlowText(song.artist),
+    ];
+    if (recent.length > 3) recent.removeRange(0, recent.length - 3);
+    final result = <Song>[];
+    while (candidates.isNotEmpty && result.length < limit) {
+      var index = candidates.indexWhere(
+        (song) => !recent.contains(normalizeFlowText(song.artist)),
+      );
+      if (index < 0) index = 0; // all remaining songs share recent artists
+      final selected = candidates.removeAt(index);
+      result.add(selected);
+      recent.add(normalizeFlowText(selected.artist));
+      if (recent.length > 3) recent.removeAt(0);
     }
     return List.unmodifiable(result);
   }
