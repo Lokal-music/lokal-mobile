@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'package:flick/core/theme/lokal_tokens.dart';
@@ -23,8 +21,7 @@ class _ArtworkRepairScreenState extends State<ArtworkRepairScreen> {
   @override
   void dispose() {
     _service.cancel();
-    // The in-flight future owns its client until its completion; closing a
-    // socket here is not required for cancelling the next album.
+    _service.dispose();
     super.dispose();
   }
 
