@@ -19,7 +19,7 @@ class _QueuePlayer extends PlayerNotifier {
   @override
   PlayerState build() => PlayerState(
     currentSong: _track('playing'),
-    upNext: [_track('a'), _track('b'), _track('c')],
+    upNext: [_track('a'), _track('b'), _track('c'), _track('d'), _track('e'), _track('f')],
     queue: [_track('d'), _track('e'), _track('f')],
   );
 
@@ -90,6 +90,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(find.text('Queue'), findsOneWidget);
+      expect(find.text('Track d'), findsOneWidget,
+          reason: 'Manual tracks are in the single real playback list');
       expect(find.text('Manual queue'), findsNothing,
           reason: 'Manual songs must not appear a second time below Up Next');
       expect(find.byType(SliverReorderableList), findsOneWidget);
