@@ -82,7 +82,7 @@ void main() {
     expect(find.text('4 songs'), findsNWidgets(3));
   });
 
-  testWidgets('Cover Flow shows Made for you; a tap plays with it queued', (
+  testWidgets('Cover Flow has no redundant heading; a tap plays with it queued', (
     tester,
   ) async {
     final recent = [_track('r1'), _track('r2'), _track('r3')];
@@ -116,7 +116,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('MADE FOR YOU'), findsOneWidget);
+    expect(find.text('MADE FOR YOU'), findsNothing);
     expect(find.text('RECENT'), findsNothing);
     expect(find.text('NEW'), findsNothing);
     expect(find.text('Track r1'), findsOneWidget);
@@ -180,11 +180,12 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Settings'));
       await tester.tap(find.bySemanticsLabel('Appearance'));
       expect(find.byTooltip('Settings'), findsOneWidget);
-      await tester.tap(find.bySemanticsLabel('Open Flow'));
+      // Flow is now a third Home mode, not a separate Cover Flow button.
+      expect(find.bySemanticsLabel('Flow'), findsOneWidget);
+      expect(find.bySemanticsLabel('Discovery'), findsOneWidget);
       expect(opened, [
         KonnektedDestination.settings,
         const KonnektedDestination.settingsAt(LokalSettingsGroup.themeAccent),
-        KonnektedDestination.flow,
       ]);
       await tester.scrollUntilVisible(find.text('Add your music'), 180);
       await tester.pumpAndSettle();
