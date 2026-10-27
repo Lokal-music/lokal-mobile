@@ -363,3 +363,9 @@ file protections. No guessed locking change, ignored ENOENT, weakened assertions
 or fixed-race claim accompanies this investigation. Swift execution and both SDK
 checks for the diagnostic source remain pending; widget runtime wiring remains
 blocked on resolving the failure.
+
+Native run 9 also fails storage, this time at the separate-process case; its
+child wrapper previously discarded the underlying error. Diagnostics now retain
+the child's error, exit status and termination reason, and identify the fixed or
+opaque owned filename for failed regular-file opens. No private source path or
+credential is logged. The investigation remains open.

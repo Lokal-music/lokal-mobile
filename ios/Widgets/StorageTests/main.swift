@@ -76,7 +76,7 @@ if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--publish",
     try store.publish(candidate(number))
     exit(0)
   } catch LokalWidgetStoreError.staleRevision { exit(3) }
-  catch { exit(1) }
+  catch { print("Widget store child failed: \(error)"); exit(1) }
 }
 
 do {
@@ -160,7 +160,7 @@ do {
       try child.run()
       return child
     }
-    for child in processes { child.waitUntilExit(); try require([0, 3].contains(child.terminationStatus), "Native child failed") }
+    for child in processes { child.waitUntilExit(); try require([0, 3].contains(child.terminationStatus), "Native child failed with status \(child.terminationStatus), reason \(child.terminationReason.rawValue)") }
     try require(try revision(LokalWidgetStore(container: root)) == 13, "Cross-process revision was overwritten")
   }
   try check("owned directory and metadata symlinks cannot escape the container") {
