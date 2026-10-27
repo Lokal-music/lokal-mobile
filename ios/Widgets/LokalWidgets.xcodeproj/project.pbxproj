@@ -1,0 +1,385 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+		1F7F84937E134EAAC45E165C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Contracts/LokalWidgetSnapshot.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		A7B9CEA0C8736AAC21E91A86 = {
+			isa = PBXBuildFile;
+			fileRef = 1F7F84937E134EAAC45E165C;
+		};
+		6DCB124390CFE33C647872CB = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Storage/LokalWidgetStore.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		5BE159A4F2A19F6F62B0CCF0 = {
+			isa = PBXBuildFile;
+			fileRef = 6DCB124390CFE33C647872CB;
+		};
+		4CC8F12BB6FD568C0E828CF6 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Presentation/LokalWidgetPresentation.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		23EA6434A3003A273EB77410 = {
+			isa = PBXBuildFile;
+			fileRef = 4CC8F12BB6FD568C0E828CF6;
+		};
+		CA1494937C670405E43A122B = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Presentation/LokalWidgetDisplayArtwork.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		C85CB34BF712FEFC66BCAB6E = {
+			isa = PBXBuildFile;
+			fileRef = CA1494937C670405E43A122B;
+		};
+		E6EBCFABA495B8FE1AF4D0B0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Presentation/LokalWidgetView.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		7B0CD115FA5C83FC5B6420C3 = {
+			isa = PBXBuildFile;
+			fileRef = E6EBCFABA495B8FE1AF4D0B0;
+		};
+		257E5711083DD688894E51F0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Timeline/LokalWidgetTimeline.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		3B4612C0161443741A8E4205 = {
+			isa = PBXBuildFile;
+			fileRef = 257E5711083DD688894E51F0;
+		};
+		E6FCA18C069BB2B809E6B1DA = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Extension/LokalWidgets.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		B67D6493E018A7A94381FC0D = {
+			isa = PBXBuildFile;
+			fileRef = E6FCA18C069BB2B809E6B1DA;
+		};
+		D6C568EC61F7BA1F0DA124D4 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = Extension/Info.plist;
+			sourceTree = SOURCE_ROOT;
+		};
+		2DB4D87E9CE0A361BF8107F0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = en;
+			path = Resources/en.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		53BE0A132ADD1B999A7BB28E = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = fr;
+			path = Resources/fr.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		32EB480D34E9C09CFC0BCBFD = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = de;
+			path = Resources/de.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		0E22E1C30D65FA24196E0FBF = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = es;
+			path = Resources/es.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		A31EE3A32C174A8B9BC6670A = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = it;
+			path = Resources/it.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		FEE5C22B25561EE035AC6A13 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = "pt-BR";
+			path = "Resources/pt-BR.lproj/Localizable.strings";
+			sourceTree = SOURCE_ROOT;
+		};
+		DD186B02582D4399C82B1B9A = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = nl;
+			path = Resources/nl.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		D1CDA70D635D9D05346FA890 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = pl;
+			path = Resources/pl.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		46985317F21F03BAFEDD7D7F = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = sv;
+			path = Resources/sv.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		901CD2D7D639DC98642C97D7 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = tr;
+			path = Resources/tr.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		5E30A9BCDB0714C3A58D178C = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = "zh-Hans";
+			path = "Resources/zh-Hans.lproj/Localizable.strings";
+			sourceTree = SOURCE_ROOT;
+		};
+		0472F93596097B45CF10155E = {
+			isa = PBXVariantGroup;
+			children = (
+				2DB4D87E9CE0A361BF8107F0,
+				53BE0A132ADD1B999A7BB28E,
+				32EB480D34E9C09CFC0BCBFD,
+				0E22E1C30D65FA24196E0FBF,
+				A31EE3A32C174A8B9BC6670A,
+				FEE5C22B25561EE035AC6A13,
+				DD186B02582D4399C82B1B9A,
+				D1CDA70D635D9D05346FA890,
+				46985317F21F03BAFEDD7D7F,
+				901CD2D7D639DC98642C97D7,
+				5E30A9BCDB0714C3A58D178C,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		E028D174BF40F6FC3439AF27 = {
+			isa = PBXBuildFile;
+			fileRef = 0472F93596097B45CF10155E;
+		};
+		FBC2DCC043D98AB22D5BE93C = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.app-extension";
+			includeInIndex = 0;
+			path = LokalWidgets.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		CE604D5B20B03B125BFEFCC1 = {
+			isa = PBXGroup;
+			children = (
+				FBC2DCC043D98AB22D5BE93C,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C438A11BC3F0E7C995F8815F = {
+			isa = PBXGroup;
+			children = (
+				1F7F84937E134EAAC45E165C,
+				6DCB124390CFE33C647872CB,
+				4CC8F12BB6FD568C0E828CF6,
+				CA1494937C670405E43A122B,
+				E6EBCFABA495B8FE1AF4D0B0,
+				257E5711083DD688894E51F0,
+				E6FCA18C069BB2B809E6B1DA,
+				D6C568EC61F7BA1F0DA124D4,
+				0472F93596097B45CF10155E,
+				CE604D5B20B03B125BFEFCC1,
+			);
+			sourceTree = "<group>";
+		};
+		DFA30C5AAA4850ABDCA0ECB6 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A7B9CEA0C8736AAC21E91A86,
+				5BE159A4F2A19F6F62B0CCF0,
+				23EA6434A3003A273EB77410,
+				C85CB34BF712FEFC66BCAB6E,
+				7B0CD115FA5C83FC5B6420C3,
+				3B4612C0161443741A8E4205,
+				B67D6493E018A7A94381FC0D,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A4CFB60FFD4323C52AC2E832 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E028D174BF40F6FC3439AF27,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		61315350AA117F21EAE556C2 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		78A0AA913EF291908098E93E = {
+			isa = XCBuildConfiguration;
+			name = Debug;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				SDKROOT = iphoneos;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SWIFT_VERSION = 6.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			};
+		};
+		D0778386515F15B33388E34C = {
+			isa = XCBuildConfiguration;
+			name = Debug;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.lokal.mobile.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+			};
+		};
+		7AA327DEFC51466C00F71E73 = {
+			isa = XCBuildConfiguration;
+			name = Release;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				SDKROOT = iphoneos;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SWIFT_VERSION = 6.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			};
+		};
+		5F86AFCC3A3AD77422E9C1AD = {
+			isa = XCBuildConfiguration;
+			name = Release;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.lokal.mobile.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+			};
+		};
+		6DF2E7E163EF0961B942AC3C = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				78A0AA913EF291908098E93E,
+				7AA327DEFC51466C00F71E73,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8278C2037D3298EB96887D22 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0778386515F15B33388E34C,
+				5F86AFCC3A3AD77422E9C1AD,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		740BC6BEDC2570EAE0FE217C = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8278C2037D3298EB96887D22;
+			buildPhases = (
+				DFA30C5AAA4850ABDCA0ECB6,
+				61315350AA117F21EAE556C2,
+				A4CFB60FFD4323C52AC2E832,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LokalWidgets;
+			productName = LokalWidgets;
+			productReference = FBC2DCC043D98AB22D5BE93C;
+			productType = "com.apple.product-type.app-extension";
+		};
+		ED0330015A9710DDA300224A = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+			};
+			buildConfigurationList = 6DF2E7E163EF0961B942AC3C;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				fr,
+				de,
+				es,
+				it,
+				"pt-BR",
+				nl,
+				pl,
+				sv,
+				tr,
+				"zh-Hans",
+			);
+			mainGroup = C438A11BC3F0E7C995F8815F;
+			productRefGroup = CE604D5B20B03B125BFEFCC1;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				740BC6BEDC2570EAE0FE217C,
+			);
+		};
+	};
+	rootObject = ED0330015A9710DDA300224A;
+}

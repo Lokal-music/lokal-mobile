@@ -464,3 +464,56 @@ widget tests and recovery probe reports no issues. Whole app/integration analysi
 has no errors. Actionlint and diff checks pass. Actual Swift execution/SDK parity
 for the new buffering field, live-runtime app acceptance and the observed build-56
 retirement timeout remain separate hosted gates.
+
+
+## Standalone read-only WidgetKit candidate
+
+`ios/Widgets/LokalWidgets.xcodeproj`, shared scheme `LokalWidgets`, builds an
+independent extension containing exactly Now Playing, Flow / Radio and Cover
+Flow, each supporting small/medium/large. It is deliberately not a dependency or
+embedded product of Runner. Neither product acquires an entitlement or an App
+Group identifier from this change. The extension's absent `LokalWidgetAppGroup`
+key produces an explicit unavailable display; it never substitutes an app-private
+container, creates a store, writes a snapshot, fetches art or starts playback.
+A future optional package must configure the same real group in both products
+and prove the signed Windows workflow before embedding the extension.
+
+The native view uses the captured accent, system contrast surfaces and Dynamic
+Type. `ViewThatFits` prioritizes track/open content at accessibility sizes;
+VoiceOver retains complete recording metadata. Static artwork and layouts add no
+animation. Cover Flow displays up to three actual recommendation records; missing
+recommendations and inactive Flow retain an honest open-app state. Current art
+can fall back to the explicitly retained owned last-good filename. Reads use the
+existing descriptor-relative store and an eight-MiB aggregate display budget.
+Before UIKit decodes an image, ImageIO rechecks complete single PNG/JPEG content,
+compressed size and the host's 600px per-axis downsample bound. Damaged/evicted art
+falls back independently from valid metadata. Labels have all 11 app languages;
+widget language follows the extension's iOS localization selection for now.
+The app's explicit language preference still needs a shared-language binding.
+
+All entry values crossing WidgetKit completion are typed `Sendable` values.
+Timeline planning creates at most four entries: now, a valid future source start,
+recording end and strict freshness expiry when relevant. Progress uses the system
+`ProgressView(timerInterval:)`; scaling both endpoints respects playback rate.
+Paused, buffering, completed, invalid-clock and stale samples do not animate.
+There is no wall-clock elapsed label that could misstate audio time at another
+rate. At freshness expiry a static stale entry requests a reread; that request is
+at most once per 15-minute source window while playing, and never a recurring
+extension timer. WidgetKit may defer requests according to its budget. The stale
+fallback remains necessary; a system schedule is not a promise of continuous
+rendering. Paused/empty/unavailable snapshots rely on subsequent committed host
+reloads rather than repeated polling.
+
+The entire widget opens `konnekted://widget`, using the installed app scheme.
+This is an open-app entry only: there is no unvalidated play/toggle/seek URL, no
+track ID in a deep link and no claim of background control. AppIntent/inbox
+commands and Flow/recommendation owner binding remain separate implementation
+gates. A read-only extension is not full widget feature parity.
+
+The focused workflow now compiles the presentation/timeline executable against
+the shared 48-case corpus and additional native clock/rate/state/image cases,
+and separately links the actual extension for device and simulator at iOS 16
+with Swift 6 strict concurrency and warnings-as-errors. Local project-reference,
+scheme, resource completeness, actionlint and diff checks pass. Hosted compilation,
+rendered family/large-text snapshots, actual WidgetKit scheduling, signed group
+access and installed-device behavior remain pending for this new source.
