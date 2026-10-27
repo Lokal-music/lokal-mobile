@@ -146,11 +146,15 @@ class _MotionArtViewState extends State<MotionArtView>
   bool _routeIsCurrent = true;
   bool _tickerEnabled = true;
   bool _loading = false;
+  bool _suspendedForMemoryPressure = false;
+  Timer? _memoryRecoveryTimer;
+  static const _memoryRecoveryDelay = Duration(minutes: 2);
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   bool get _canPlay =>
       widget.enabled &&
       widget.playbackActive &&
       !_suppressed &&
+      !_suspendedForMemoryPressure &&
       _routeIsCurrent &&
       _tickerEnabled &&
       _lifecycle == AppLifecycleState.resumed;
@@ -240,6 +244,21 @@ class _MotionArtViewState extends State<MotionArtView>
     _syncPlayback();
   }
 
+  @override
+  void didHaveMemoryPressure() {
+    // Android may warn of impending memory pressure before terminating the
+    // process. Muted motion-art decoding is optional; audio is not.
+    _suspendedForMemoryPressure = true;
+    _memoryRecoveryTimer?.cancel();
+    _teardown();
+    if (mounted) setState(() {});
+    _memoryRecoveryTimer = Timer(_memoryRecoveryDelay, () {
+      _memoryRecoveryTimer = null;
+      _suspendedForMemoryPressure = false;
+      if (mounted) _beginLoad();
+    });
+  }
+
   void _syncPlayback() {
     final controller = _controller;
     if (controller != null) {
@@ -306,6 +325,7 @@ class _MotionArtViewState extends State<MotionArtView>
     SecureSpotifyTokenStore.sessionRevision.removeListener(_onRevisionChanged);
     AnimatedArtworkService.instance.revision.removeListener(_onRevisionChanged);
     _stopListeningToSuppression();
+    _memoryRecoveryTimer?.cancel();
     _teardown();
     super.dispose();
   }
