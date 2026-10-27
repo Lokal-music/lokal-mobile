@@ -147,6 +147,16 @@ List<LokalSettingsSection> playbackSettings(
           enabled: !locked,
           onChanged: (value) => crossfade(enabled: value),
         ),
+        if (Platform.isAndroid)
+          LokalSettingRow.toggle(
+            label: lokalText('Prepared stem mixes (experimental)'),
+            description: lokalText(
+              'Play verified offline Demucs transition clips for matching local songs. No model runs during playback; unsupported tracks use normal crossfade.',
+            ),
+            value: !locked && prefs.automixStemClipsEnabled,
+            enabled: !locked && prefs.crossfadeEnabled,
+            onChanged: notifier.setAutomixStemClipsEnabled,
+          ),
         LokalSettingSlider(
           label: lokalText('Crossfade length'),
           description: lokalText('How long the two songs overlap.'),

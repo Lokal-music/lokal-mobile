@@ -4,7 +4,10 @@ import 'package:flick/services/ios_local_audio_players.dart';
 import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/morneye/morneye_live_playback.dart';
+import 'package:flick/features/konnekted/library/replayable_stream_songs.dart';
 import 'package:flick/services/online_radio_recommendations.dart';
+import 'package:flick/services/automix_analysis_cache.dart';
+import 'package:flick/services/automix_stem_clip.dart';
 
 import 'link/link_journal.dart';
 
@@ -497,8 +500,8 @@ List<Song> selectAutoplayRecommendations({
 
 class _IosPlaySelection {
   _IosPlaySelection(this.song, this.playlist, this.selection);
-  final Song song;
-  final List<Song>? playlist;
+  Song song;
+  List<Song>? playlist;
   final int selection;
   bool prepared = false;
 }
@@ -2649,6 +2652,9 @@ class PlayerService {
           curve: curve,
         );
       },
+      automixProfileLookup: AutoMixAnalysisCache.instance.read,
+      stemClipLookup: AutoMixStemClipCache.instance.read,
+      stemVolumeProvider: () => _currentVolume,
       onNextSong: _resolveAndroidCrossfadeNext,
       onTrackAdvanced: _onAndroidTrackAdvanced,
       onTrackError: _onAndroidTrackError,
@@ -5940,6 +5946,53 @@ class PlayerService {
       await IosLocalAudioRequests.wait(_externalPlaybackOwner.releaseCurrent());
     }
     if (intent != _pendingPlaybackGeneration) return;
+    // Qobuz/Morneye and HTTP add-on handles are ephemeral. The Likes-page
+    // conversion alone cannot protect an ordinary queue left open longer
+    // than the media registration lifetime. Re-arm stale queue entries
+    // before a local player builds any future audio sources.
+    final recovered = replayableStreamSelection(song, playlist ?? _playlist);
+    if (!identical(song, recovered.selected) && recovered.selected.isPending) {
+      AppLog.instance.add(
+        '[Playback] Refreshing expired online stream for ' + song.title,
+      );
+    }
+    song = recovered.selected;
+    if (playlist != null) {
+      playlist = recovered.queue;
+    }
+    if (playlist == null || selectionIntent?.prepared == true) {
+      // A selection presented during recovery already has its canonical queue
+      // (including shuffle and manually inserted entries). Repair descriptors
+      // in place instead of selecting again and shuffling it a second time.
+      final currentQueue = playlist == null
+          ? recovered.queue
+          : replayableStreamSelection(song, _playlist).queue;
+      var changed = false;
+      for (var i = 0; i < _playlist.length; i++) {
+        if (identical(_playlist[i], currentQueue[i])) continue;
+        _playlist[i] = currentQueue[i];
+        changed = true;
+      }
+      // Shuffle restoration must not resurrect expired handles or an older
+      // recording of the explicitly selected song, even if the visible queue
+      // already contains the current version. Preserve the original ordering.
+      final replacements = {for (final entry in currentQueue) entry.id: entry};
+      for (var i = 0; i < _originalPlaylist.length; i++) {
+        final original = _originalPlaylist[i];
+        final replacement = replacements[original.id];
+        if (replacement != null &&
+            (original.id == song.id || needsStreamReResolution(original))) {
+          _originalPlaylist[i] = replacement;
+        }
+      }
+      if (changed) _notifyUpNextChanged();
+    }
+    if (selectionIntent != null) {
+      selectionIntent.song = song;
+      selectionIntent.playlist = playlist == null
+          ? null
+          : List<Song>.unmodifiable(playlist!);
+    }
     if (!_castingService.isActive) {
       await IosLocalAudioRequests.wait(initAudio());
     }

@@ -113,6 +113,12 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
     await ref.read(appPreferencesServiceProvider).setCrossfadeEnabled(value);
   }
 
+  Future<void> setAutomixStemClipsEnabled(bool value) async {
+    if (state.automixStemClipsEnabled == value) return;
+    state = state.copyWith(automixStemClipsEnabled: value);
+    await ref.read(appPreferencesServiceProvider).setAutomixStemClipsEnabled(value);
+  }
+
   Future<void> setCrossfadeDurationSecs(double value) async {
     if (state.crossfadeDurationSecs == value) return;
     state = state.copyWith(crossfadeDurationSecs: value);

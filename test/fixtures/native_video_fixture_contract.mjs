@@ -2,6 +2,7 @@
 // decoding. The iPhone acceptance probe separately requires real WK frames.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {createContext, runInContext} from 'node:vm';
 
 const html = readFileSync(process.argv[2], 'utf8');
@@ -10,11 +11,13 @@ const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1
 assert.equal(scripts.length, 3, 'controlled API + unchanged production bridge + initializer');
 const events = [];
 const timers = new Set();
-let topMessage, childMessage, childContext, nextFrame;
+let topMessage, childMessage, childContext, nextFrame, mediaBlob;
 const handlers = new Map();
 let qualityTotal = 0, droppedTotal = 0;
 const media = {
   currentTime: 0, duration: 12, paused: true, ended: false, readyState: 4,
+  seeking: false, playbackRate: 1, currentSrc: 'blob:https://app.lokal.mobile/generated',
+  seekable: {length: 1, start: () => 0, end: () => 12}, buffered: {length: 0},
   plays: 0, pauses: 0,
   addEventListener(name, handler) { handlers.set(name, handler); },
   play() { this.plays++; this.paused = false; return Promise.resolve(); },
@@ -38,6 +41,9 @@ for (const script of scripts) runInContext(script, top);
 assert.ok(frame.srcdoc.endsWith('</script></body></html>'));
 const childScript = /<script>([\s\S]*?)<\/script>/.exec(frame.srcdoc)[1];
 childContext = createContext({
+  Blob, Uint8Array,
+  atob: value => Buffer.from(value, 'base64').toString('binary'),
+  URL: {createObjectURL(blob) { mediaBlob = blob; return media.currentSrc; }},
   document: {getElementById(id) { assert.equal(id, 'media'); return media; }},
   parent: Object.assign(parentSender, {postMessage(data) {
     topMessage({source: frame.contentWindow, data});
@@ -47,7 +53,14 @@ childContext = createContext({
 });
 childContext.window = childContext;
 runInContext(childScript, childContext);
+assert.equal(mediaBlob.type, 'video/mp4');
+assert.equal(createHash('sha256').update(Buffer.from(await mediaBlob.arrayBuffer())).digest('hex'),
+  '416a7558921761a26aca370a294be0080ae969afb3249acfef720b3d54b24f37',
+  'the seekable Blob must retain the exact generated H.264/AAC bytes');
+assert.equal(media.src, media.currentSrc, 'media loads the actual owned Blob resource');
 handlers.get('loadedmetadata')();
+assert.equal(JSON.stringify(top.__lokalNativeVideoSnapshot().seekable), '[[0,12]]',
+  'native seekable ranges are reported without invented media time');
 assert.equal(top.__lokalNativeVideoSnapshot().frames, 0, 'source-clock samples must never invent frames');
 handlers.get('timeupdate')();
 assert.equal(top.__lokalNativeVideoSnapshot().frames, 0, 'timeupdate is not frame delivery');
@@ -86,4 +99,4 @@ assert.equal(media.paused, true);
 assert.equal(top.lokalVideoCommand('release'), true);
 assert.equal(top.lokalVideoCommand('play'), false);
 assert.equal(timers.size, 0);
-console.log(JSON.stringify({checks: 20, scope: 'Actual fixture/production scripts with controlled DOM; no native decoding claim'}));
+console.log(JSON.stringify({checks: 24, scope: 'Actual fixture/production scripts with controlled DOM; no native decoding claim'}));

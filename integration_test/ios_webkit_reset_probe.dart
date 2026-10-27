@@ -179,6 +179,8 @@ Future<void> probeIosWebKitReset(
       (video.sourcePosition - pausedAt).abs(),
       lessThan(const Duration(milliseconds: 100)),
     );
+    binding.reportData!['media_reset_webkit_paused_native_sample'] =
+        Map<String, dynamic>.from(await nativeSnapshot());
     await binding.takeScreenshot('ios-webkit-reset-paused-space');
     await video.command('play');
     final replayProgress = await progress('explicit-replay');

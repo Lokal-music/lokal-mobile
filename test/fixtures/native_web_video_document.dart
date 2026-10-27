@@ -17,9 +17,12 @@ String nativeWebVideoFixtureDocument({
   final child =
       '''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>html,body{margin:0;background:#000;height:100%;overflow:hidden}video{width:100%;height:100%}</style>
-</head><body><video id="media" playsinline controls preload="auto"
-src="data:video/mp4;base64,$iosNativeVideoFixtureBase64"></video><script>
+</head><body><video id="media" playsinline controls preload="auto"></video><script>
 const media = document.getElementById('media');
+// Give WebKit a byte-backed seekable resource. The document owns this one Blob
+// until native view retirement; no network, provider URL or synthetic clock.
+const mediaBytes = Uint8Array.from(atob('$iosNativeVideoFixtureBase64'), function(c) { return c.charCodeAt(0); });
+media.src = URL.createObjectURL(new Blob([mediaBytes], {type: 'video/mp4'}));
 let presentedFrames = 0;
 let frameCallbacks = 0;
 let presentedMediaTime = 0;
@@ -32,6 +35,12 @@ function observeFrame(now, metadata) {
   media.requestVideoFrameCallback(observeFrame);
 }
 if (media.requestVideoFrameCallback) media.requestVideoFrameCallback(observeFrame);
+function ranges(value) {
+  const result = [];
+  for (let i = 0; i < Math.min(value.length, 4); i++)
+    result.push([value.start(i), value.end(i)]);
+  return result;
+}
 function report(kind) {
   const quality = media.getVideoPlaybackQuality ? media.getVideoPlaybackQuality() : null;
   const qualityFrames = quality && Number.isFinite(quality.totalVideoFrames) ? quality.totalVideoFrames : 0;
@@ -47,7 +56,11 @@ function report(kind) {
     presentedMediaTime: presentedMediaTime,
     frameCallbackSupported: callbackSupported,
     videoWidth: media.videoWidth, videoHeight: media.videoHeight,
-    readyState: media.readyState}, '*');
+    readyState: media.readyState,
+    seeking: media.seeking, paused: media.paused, ended: media.ended,
+    playbackRate: media.playbackRate,
+    seekable: ranges(media.seekable), buffered: ranges(media.buffered),
+    resourceKind: media.currentSrc.startsWith('blob:') ? 'blob' : 'other'}, '*');
 }
 media.addEventListener('loadedmetadata', function() { report('ready'); });
 for (const name of ['playing','pause','waiting','seeked','ended','timeupdate'])

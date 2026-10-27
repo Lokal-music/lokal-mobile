@@ -462,3 +462,49 @@ and saves counter support, each raw counter, dimensions, readiness and stage in
 the JSON report before a failure. Twenty controlled-DOM assertions execute the
 actual fixture and production scripts for each start mode; these are host
 contract evidence, not native decoding. Real WebKit acceptance is pending.
+
+
+### Build 45: presentation proven, restored HTML clock still fails
+
+[Build 45](https://github.com/lokal-music/lokal-mobile/actions/runs/40450555891),
+source `4112b76393541aec7373b9663d4e9069168a4a2d`, tree
+`e1494c0bb083c9687a7bb5d25dff6db735321a5b`, packages the unsigned app and passes
+ordinary app/codecs and system/Rust/session-observer/new-selection/HTTP/radio
+reset probes on **both iOS 18.6 and 26.0**. WebKit's actual presentation
+callbacks and advancing source clock satisfy the initial video gate. The
+explicit replay after reset fails the unchanged combined progress gate:
+
+| Runtime | Restored HTML `currentTime` | Actual callbacks | Last presented media time | Full native suite |
+| --- | --- | --- | --- | --- |
+| iOS 18.6 | 0.741 s, no advance | 118 | 11.9 s | Failed at replay |
+| iOS 26.0 | 0.515 s, no advance | 117 | 11.9 s | Failed at replay |
+
+The distinction is observed in the controlled local fixture. It does not prove
+a production YouTube replay defect or qualify the real provider. Both runtime
+archives are preserved and SHA-256 verified before extraction:
+
+- iOS 18.6 artifact `12712186320`: `80a63b81dc0d63b139f690cf4f6f554985918250319cac9c94b7501af8f9b5f0`.
+- iOS 26.0 artifact `12712054381`: `9db438e12dda5c7ace760bf395e520c956145dbf92fd23bc108368bd25bd2086`.
+
+The next experiment loads the **identical generated MP4 bytes** through an owned
+Blob resource instead of a data URL. This changes the fixture's WebKit resource
+loading/seek path; it does not replace `currentTime` with callback timestamps,
+interpolate a transport clock or change the production bridge. The document owns
+one bounded resource until its native view retires. New reports include actual
+seekable/buffered ranges, seeking/paused/ended state, rate and resource kind, plus
+the paused replacement's sample before explicit Play. The exact generated-byte
+hash and actual fixture/production scripts are checked in both start modes.
+Native success of this experiment remains **pending**.
+
+```mermaid
+flowchart LR
+  MP4[Unchanged generated H.264/AAC bytes] --> Blob[Document-owned Blob resource]
+  Blob --> Media[Actual WebKit media element and seek]
+  Media --> Clock[Raw currentTime]
+  Media --> Frames[Actual delivered frame callbacks]
+  Clock --> Bridge[Unchanged production bridge]
+  Clock --> Gate[Require source and bridge progress]
+  Bridge --> Gate
+  Frames --> Gate
+  Gate --> Evidence[Independent iOS 18.6 and 26 reports]
+```

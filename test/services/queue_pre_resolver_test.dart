@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flick/models/song.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
@@ -314,13 +315,21 @@ void main() {
     testResolver('a found song is swapped in place without a new lookup', (
       tester,
     ) async {
+      final directory = (await tester.runAsync(
+        () => Directory.systemTemp.createTemp('lokal-resolved-path-'),
+      ))!;
+      addTearDown(() => directory.delete(recursive: true));
+      final cached = File('${directory.path}/k1.m4a');
+      await tester.runAsync(() => cached.writeAsBytes([0]));
       host.playlist = [_owned('now'), pending('k1'), _owned('b')];
       resolver.schedule();
-      lookups.answer('k1');
+      lookups.answer('k1', _ready('k1').copyWith(filePath: cached.path));
       await tester.pump();
       expect(host.swaps.single.$1, 'pending:k1');
       expect(host.playlist.map((s) => s.id), ['now', 'discovery:k1', 'b']);
-      expect(resolver.resolvedPaths, {'/cache/k1.m4a'});
+      expect(resolver.resolvedPaths, {cached.path});
+      await tester.runAsync(cached.delete);
+      expect(resolver.resolvedPaths, isEmpty, reason: 'deleted cache files are not retained');
       expect(resolver.running, isEmpty);
     });
 

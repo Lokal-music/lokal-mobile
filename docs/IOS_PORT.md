@@ -1056,3 +1056,35 @@ keeps the requirement for newly delivered frames and records raw counter evidenc
 before failing. The complete native run is not accepted; physical daemon/device
 checks and production observation remain deferred. See [exact measured evidence
 and the revised frame gate](IOS_MEDIA_RESET_ARCHITECTURE.md).
+
+
+### Current continuation through #231
+
+The [post-172 review](IOS_POST172_REVIEW.md#parity-through-231--27-october-2026)
+now covers 47 merged product PRs. Flow queue continuity, stable explicit add-on
+selection, expired online queue recovery and bounded DNS resolution are carried
+forward while preserving iPhone playback retirement. Experimental offline model
+cuts and third-decoder stem mixing stay Android-only; ordinary iPhone crossfade
+remains available. See [AutoMix limits](AUTOMIX_ANALYSIS_CACHE.md).
+
+Widget metadata and atomic image/storage contracts now have a passing hosted
+Swift 6 run, including iOS 16 device/simulator SDK checks and nineteen actual
+filesystem/image/process cases. Host publication, native layouts and durable
+widget actions remain to be implemented and qualified.
+
+Build 45 packages the app and passes the system/Rust/session-observer/HTTP/radio
+reset probes on both iOS 18.6 and 26.0. Its actual WebKit presentation callbacks
+prove initial video frame delivery; the explicit replay stage fails because the
+HTML media source clock stays at its restored seek position while frames advance.
+Both full native suites remain failed. No release qualification or physical
+reset/device result is inferred from this partial evidence.
+
+The expanded host selection plus widget contracts passes 465 Flutter tests;
+whole app/integration analysis has no errors. Native acceptance of the new
+47-PR source remains pending.
+
+
+The next controlled WebKit experiment loads the same generated MP4 bytes as a
+Blob resource and records real seek/buffer state around replay. Both native
+source-clock and delivered-frame gates remain required; no passing native result
+is claimed before that workflow completes. See [reset evidence and experiment](IOS_MEDIA_RESET_ARCHITECTURE.md#build-45-presentation-proven-restored-html-clock-still-fails).

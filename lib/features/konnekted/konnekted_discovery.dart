@@ -1233,10 +1233,24 @@ Future<List<OnlineSource>> _playbackSources(
   bool forDownload = false,
   bool includeMorneye = true,
   String? selectedSourceId,
+  bool respectEnabledDiscoverySources = false,
 }) async {
   final registry = DiscoverySourceRegistry(web, settings);
   final youtube = YoutubeAudio(web);
+  // Automatic Discovery should not resurrect native sources behind the
+  // listener's back when their only enabled source is an HTTP add-on.
+  // Explicit online Search selections still have access to native sources.
+  final httpOnly = respectEnabledDiscoverySources &&
+      settings.activeAddons.isNotEmpty && !settings.youtubeEnabled;
+  final legacyLabels = <String, String>{};
+  for (final addon in registry.addons) {
+    if (registry.addons.where((other) =>
+        other.displayName == addon.displayName).length == 1) {
+      legacyLabels['w-${addon.displayName}'] = 'w-${addon.configId}';
+    }
+  }
   return PlaybackSourcePriority.order([
+    if (!httpOnly && (selectedSourceId == null || selectedSourceId == 'yt'))
     OnlineSource(
       id: 'yt',
       name: 'YouTube Music',
@@ -1246,7 +1260,9 @@ Future<List<OnlineSource>> _playbackSources(
       ],
       play: (found) => youtube.prepare(found, cache(), cancel: cancel),
     ),
-    if (await isMonochromeEnabled())
+    if (!httpOnly &&
+        (selectedSourceId == null || selectedSourceId == 'mono') &&
+        await isMonochromeEnabled())
       OnlineSource(
         id: 'mono',
         name: 'Monochrome',
@@ -1285,9 +1301,9 @@ Future<List<OnlineSource>> _playbackSources(
         },
       ),
     for (final addon in registry.addons)
-      if (selectedSourceId == null || selectedSourceId == 'w-${addon.displayName}')
+      if (selectedSourceId == null || selectedSourceId == 'w-${addon.configId}')
       OnlineSource(
-        id: 'w-${addon.displayName}',
+        id: 'w-${addon.configId}',
         name: addon.displayName,
         addon: true,
         results: (query) async => [
@@ -1321,7 +1337,7 @@ Future<List<OnlineSource>> _playbackSources(
       ...await _morneyeSources(morneye, cache, onStatus,
         cancel: cancel, forDownload: forDownload,
         selectedSourceId: selectedSourceId),
-  ], (source) => source.id);
+  ], (source) => source.id, aliases: legacyLabels);
 }
 
 /// The sources Search offers for songs you don't have. [onStatus] hears
@@ -1346,6 +1362,18 @@ Future<List<OnlineSource>> onlineSources(
     onStatus,
     morneye ?? MorneyeService.instance,
   );
+}
+
+/// Preserve source pinning when a legacy queued HTTP ID used a mutable name.
+String _canonicalOnlineSourceId(String sourceId, DiscoveryTrack track) {
+  if (!sourceId.startsWith('w-') ||
+      track.source != DiscoverySource.addon ||
+      track.addonId == null) {
+    return sourceId;
+  }
+  final stable = 'w-' + track.addonId!;
+  final legacy = track.sourceName == null ? null : 'w-' + track.sourceName!;
+  return sourceId == stable || sourceId == legacy ? stable : sourceId;
 }
 
 /// Gets [track], found earlier on the source [sourceId] (an [OnlineSource.id]),
@@ -1377,6 +1405,7 @@ Future<Song> playOnlineTrack(
   final transport = client ?? http.Client();
   try {
     final web = DiscoveryHttp(transport);
+    final canonicalId = _canonicalOnlineSourceId(sourceId, track);
     final sources = await _playbackSources(
       web,
       settings,
@@ -1385,12 +1414,11 @@ Future<Song> playOnlineTrack(
       morneye ?? MorneyeService.instance,
       cancel: cancel,
       forDownload: forDownload,
-      // HTTP and native YouTube playback must not wait for unrelated Morneye
-      // add-on initialization or verification before source resolution.
-      includeMorneye: sourceId.startsWith('a-'),
-      selectedSourceId: sourceId,
+      // HTTP playback never waits for unrelated Morneye initialization.
+      includeMorneye: canonicalId.startsWith('a-'),
+      selectedSourceId: canonicalId,
     );
-    final source = sources.where((s) => s.id == sourceId).firstOrNull;
+    final source = sources.where((s) => s.id == canonicalId).firstOrNull;
     if (source == null) {
       throw DiscoveryException(
         '${track.sourceName ?? 'That source'} isn’t available any more.',
@@ -1531,6 +1559,7 @@ Future<Song?> findDiscoverySong(
       onStatus,
       morneye ?? MorneyeService.instance,
       cancel: cancel,
+      respectEnabledDiscoverySources: true,
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();

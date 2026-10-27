@@ -141,7 +141,6 @@ class QueuePreResolver {
   /// Unlike staged songs, HTTP and live Morneye tracks have intentionally
   /// opaque in-memory handles. They are usable while their registered
   /// descriptors exist, even though File(handle).existsSync() is false.
-  @visibleForTesting
   static bool isPlayableResolvedSource(Song song) {
     if (song.sourcePackage == 'konnekted.progressive') {
       return DiscoveryProgressiveStreams.instance.contains(song.filePath);

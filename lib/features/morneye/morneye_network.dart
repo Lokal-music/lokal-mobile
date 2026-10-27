@@ -292,6 +292,7 @@ class MorneyeNetwork {
   final HttpClient _client;
   final MorneyeLookup _lookup;
   final String userAgent;
+
   /// Allows slow signed catalogue endpoints more time without slowing all add-ons.
   final Duration requestTimeout;
 
@@ -314,10 +315,14 @@ class MorneyeNetwork {
     caseSensitive: false,
   );
 
-  Future<void> _checkAddress(Uri url) async {
+  Future<void> _checkAddress(Uri url, Duration timeout) async {
     final host = url.host;
     final literal = InternetAddress.tryParse(host);
-    final addresses = literal != null ? [literal] : await _lookup(host);
+    // Unlike openUrl/request.close, DNS had no deadline: a stalled Qobuz
+    // hostname lookup could hold the foreground playback resolver forever.
+    final addresses = literal != null
+        ? [literal]
+        : await _lookup(host).timeout(timeout);
     final explicitLocal =
         permissions.network.contains(host) &&
         (host == 'localhost' ||
@@ -347,7 +352,7 @@ class MorneyeNetwork {
         if (!_dropped.hasMatch(entry.key)) entry.key: entry.value,
     };
     for (var hop = 0; hop <= 5; hop++) {
-      await _checkAddress(url);
+      await _checkAddress(url, deadline);
       final request = await _client.openUrl(method, url).timeout(deadline);
       request.followRedirects = false;
       final names = sent.keys.map((k) => k.toLowerCase()).toSet();
@@ -435,9 +440,7 @@ class MorneyeNetwork {
       headers: headers,
     );
     final bytes = BytesBuilder(copy: false);
-    await for (final chunk in response.body.timeout(
-      requestTimeout,
-    )) {
+    await for (final chunk in response.body.timeout(requestTimeout)) {
       bytes.add(chunk);
       if (bytes.length > 16 * 1024 * 1024) {
         await response.close();

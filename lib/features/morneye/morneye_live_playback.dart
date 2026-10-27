@@ -294,7 +294,17 @@ class MorneyeLiveRegistry {
     return handle;
   }
 
-  MorneyeLiveSession? resolve(String? handle) => _streams[handle]?.session;
+  MorneyeLiveSession? resolve(String? handle) {
+    if (handle == null) return null;
+    final entry = _streams[handle];
+    if (entry == null) return null;
+    if (DateTime.now().difference(entry.created) > _ttl ||
+        !entry.session.isPlayable) {
+      _streams.remove(handle);
+      return null;
+    }
+    return entry.session;
+  }
 
   void prune() {
     final now = DateTime.now();

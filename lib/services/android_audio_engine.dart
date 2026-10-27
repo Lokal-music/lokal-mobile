@@ -13,6 +13,8 @@ import 'package:flick/services/atmos_diagnostics.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
 import 'package:flick/services/ios_local_audio_players.dart';
 import 'package:flick/services/local_audio_lifecycle.dart';
+import 'package:flick/services/automix_analysis_cache.dart';
+import 'package:flick/services/automix_stem_clip.dart';
 
 /// A queue entry's identity includes the actual encoded media source. Two
 /// versions of the same catalogue song can share an ID but not a decoder or
@@ -45,6 +47,13 @@ typedef AndroidTrackIgnorePredicate = bool Function(Song track);
 typedef AndroidFastStartPredicate = bool Function();
 typedef AndroidCrossfadeConfigProvider = AndroidCrossfadeConfig Function();
 typedef AndroidNextSongProvider = Song? Function();
+typedef AndroidAutoMixProfileLookup = Future<AutoMixProfile?> Function(
+  Song song,
+);
+typedef AndroidStemClipLookup = Future<AutoMixStemClip?> Function(
+  Song outgoing,
+  Song incoming,
+);
 typedef AndroidTrackAdvancedCallback = void Function(Song track);
 typedef AndroidTrackErrorCallback = void Function(Song track);
 
@@ -107,6 +116,108 @@ bool shouldArmCrossfade({
   return remaining.inMilliseconds <= fadeMs;
 }
 
+/// Prepare the next decoder before the overlap begins. This gives remote
+/// add-ons time to resolve and buffer without advancing the outgoing song
+/// early. The actual handoff still waits for the fade window.
+@visibleForTesting
+bool shouldPrepareCrossfade({
+  required bool enabled,
+  required Duration duration,
+  required Duration position,
+  required double fadeSecs,
+  double preparationLeadSecs = 8,
+}) {
+  if (!enabled ||
+      !fadeSecs.isFinite ||
+      fadeSecs <= 0 ||
+      !preparationLeadSecs.isFinite)
+    return false;
+  final fadeMs = (fadeSecs * 1000).round();
+  if (duration.inMilliseconds <= fadeMs) return false;
+  final left = (duration - position).inMilliseconds;
+  return left > 0 &&
+      left <= fadeMs + (math.max(0.0, preparationLeadSecs) * 1000).round();
+}
+
+/// Only substantial terminal silence should shorten an AutoMix overlap.
+/// A mismatch with the decoder duration or a very long quiet outro returns
+/// the original duration rather than risking a premature skip.
+@visibleForTesting
+Duration automixEffectiveAudibleEnd(
+  Duration duration,
+  AutoMixProfile? profile,
+) {
+  if (profile == null || duration.inMilliseconds < 25000) return duration;
+  if ((duration.inMilliseconds / 1000 - profile.durationSeconds).abs() > 2) {
+    return duration;
+  }
+  final audible = Duration(
+    milliseconds: (profile.audibleEndSeconds * 1000).round(),
+  );
+  final silence = duration - audible;
+  return silence >= const Duration(seconds: 3) &&
+          silence <= const Duration(seconds: 15) &&
+          audible >= const Duration(seconds: 20)
+      ? audible
+      : duration;
+}
+
+/// The upstream model identifies the start of a 32-beat phrase. Native
+/// Android playback currently has no independent pitch-locked stem mixer,
+/// so a long overlap is safe only when the two beat rates already match
+/// closely. Otherwise retain the configured short crossfade.
+@visibleForTesting
+double? automixPhraseOverlapSeconds(AutoMixProfile? outgoing) {
+  final bpm = outgoing?.analyzedBpm;
+  if (bpm == null || !bpm.isFinite || bpm < 85 || bpm > 200) return null;
+  final seconds = 32 * 60 / bpm;
+  return seconds >= 9 && seconds <= 22 ? seconds : null;
+}
+
+@visibleForTesting
+bool automixNativePhraseCompatible(
+  AutoMixProfile? outgoing,
+  AutoMixProfile? incoming,
+) {
+  final first = outgoing?.analyzedBpm;
+  final second = incoming?.analyzedBpm;
+  return first != null &&
+      second != null &&
+      first.isFinite &&
+      second.isFinite &&
+      first > 0 &&
+      second > 0 &&
+      ((first / second) - 1).abs() <= 0.01;
+}
+
+@visibleForTesting
+Duration? automixModelEnd(
+  Duration decoderDuration,
+  AutoMixProfile? profile,
+  double fadeSecs,
+) {
+  if (profile == null ||
+      profile.modelExits.isEmpty ||
+      !fadeSecs.isFinite ||
+      fadeSecs <= 0)
+    return null;
+  final duration = decoderDuration.inMilliseconds / 1000;
+  if (duration < 30 || (duration - profile.durationSeconds).abs() > 2)
+    return null;
+  // A CUE-DETR overlap start is not proof of a vocal-free region. Limit
+  // early skips to the last 30 seconds unless a real stem mixer is present.
+  final candidates = profile.modelExits.where(
+    (time) =>
+        time.isFinite &&
+        time >= math.max(duration * 0.6, duration - 30) &&
+        time >= 20 &&
+        time + fadeSecs <= duration,
+  );
+  if (candidates.isEmpty) return null;
+  final start = candidates.reduce(math.max);
+  return Duration(milliseconds: ((start + fadeSecs) * 1000).round());
+}
+
 @visibleForTesting
 bool shouldUseFastStartCurrentTrackOnly({
   required bool allowFastStart,
@@ -150,6 +261,10 @@ class AndroidAudioEngine implements AudioEngine {
     required AndroidTrackIgnorePredicate shouldIgnoreTrack,
     required AndroidFastStartPredicate shouldFastStartCurrentTrackOnly,
     AndroidCrossfadeConfigProvider? crossfadeConfigProvider,
+    AndroidAutoMixProfileLookup? automixProfileLookup,
+    AndroidStemClipLookup? stemClipLookup,
+    double Function()? stemVolumeProvider,
+    Future<just_audio.AudioPlayer> Function()? stemPlayerProvider,
     AndroidNextSongProvider? onNextSong,
     AndroidTrackAdvancedCallback? onTrackAdvanced,
     AndroidTrackErrorCallback? onTrackError,
@@ -168,6 +283,14 @@ class AndroidAudioEngine implements AudioEngine {
        _shouldFastStartCurrentTrackOnly = shouldFastStartCurrentTrackOnly,
        _crossfadeConfigProvider =
            crossfadeConfigProvider ?? (() => AndroidCrossfadeConfig.disabled),
+       _automixProfileLookup = engineType == AudioEngineType.iosSystem
+           ? null
+           : automixProfileLookup,
+       _stemClipLookup = engineType == AudioEngineType.iosSystem
+           ? null
+           : stemClipLookup,
+       _stemVolumeProvider = stemVolumeProvider,
+       _stemPlayerProvider = stemPlayerProvider,
        _onNextSong = onNextSong,
        _onTrackAdvanced = onTrackAdvanced,
        _onTrackError = onTrackError,
@@ -188,6 +311,27 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidTrackIgnorePredicate _shouldIgnoreTrack;
   final AndroidFastStartPredicate _shouldFastStartCurrentTrackOnly;
   final AndroidCrossfadeConfigProvider _crossfadeConfigProvider;
+  final AndroidAutoMixProfileLookup? _automixProfileLookup;
+  final AndroidStemClipLookup? _stemClipLookup;
+  final double Function()? _stemVolumeProvider;
+  final Future<just_audio.AudioPlayer> Function()? _stemPlayerProvider;
+  Future<AutoMixStemClip?>? _stemCandidate;
+  String? _stemCandidateIdentity;
+  AutoMixStemClip? _stemReady;
+  just_audio.AudioPlayer? _stemPlayer;
+  Timer? _stemTimer;
+  bool _stemHandoffStarted = false;
+  bool _stemPausedByUser = false;
+  bool _stemOutgoingStopped = false;
+  int _stemLastPositionMs = 0;
+  DateTime? _stemLastProgressAt;
+  AutoMixStemClip? _activeStemClip;
+  just_audio.AudioPlayer? _stemOutgoing;
+  just_audio.AudioPlayer? _stemIncoming;
+  int _stemEpoch = 0;
+  Future<void>? _stemHandoffFuture;
+  AutoMixProfile? _currentAutoMixProfile;
+  int _autoMixProfileGeneration = 0;
   final AndroidNextSongProvider? _onNextSong;
   final AndroidTrackAdvancedCallback? _onTrackAdvanced;
   final AndroidTrackErrorCallback? _onTrackError;
@@ -362,6 +506,8 @@ class AndroidAudioEngine implements AudioEngine {
   just_audio.AudioPlayer? _secondary;
   Timer? _crossfadeTimer;
   bool _crossfadeArmed = false;
+  bool _crossfadeCommitted = false; // true only after the two players swap
+  int _crossfadeEpoch = 0; // invalidates late async decoder preparations
   double _rampUserVolume = 1.0;
   Duration _rampElapsed = Duration.zero;
   Duration _rampTotal = Duration.zero;
@@ -595,9 +741,11 @@ class AndroidAudioEngine implements AudioEngine {
     // If a crossfade swapped the primary with its secondary slot, the
     // PlayerService-owned instance can still live in _secondary. Clearing
     // only _player would alias the two slots on the next _ensurePlayer().
+    ++_crossfadeEpoch;
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
     final survivor = _secondary;
     _secondary = null;
     _player = null;
@@ -737,6 +885,21 @@ class AndroidAudioEngine implements AudioEngine {
       _sourceFailed = false;
     }
     _loadedTrack = track;
+    _currentAutoMixProfile = null;
+    final profileRequest = ++_autoMixProfileGeneration;
+    final lookup = _automixProfileLookup;
+    if (lookup != null && !track.atmosEncoded) {
+      unawaited(
+        lookup(track)
+            .then((profile) {
+              if (profileRequest == _autoMixProfileGeneration &&
+                  identical(_loadedTrack, track)) {
+                _currentAutoMixProfile = profile;
+              }
+            })
+            .catchError((Object _) {}),
+      );
+    }
     _lastAtmosPlaybackState = null;
     if (track.atmosEncoded) {
       AtmosDiagnostics.record('native_load_start', {
@@ -854,6 +1017,38 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> play() => _run(() async {
+    final stem = _stemPlayer;
+    if (stem != null) {
+      _stemPausedByUser = false;
+      _stemLastProgressAt = DateTime.now();
+      if (stem.processingState == just_audio.ProcessingState.completed &&
+          _activeStemClip != null &&
+          _stemOutgoing != null &&
+          _stemIncoming != null) {
+        await _finishStemClip(
+          _stemEpoch,
+          _activeStemClip!,
+          _stemOutgoing!,
+          _stemIncoming!,
+          stem,
+        );
+        return;
+      }
+      unawaited(stem.play().catchError((Object _) {}));
+      if (_stemHandoffStarted && _player != null) {
+        final pending = _stemHandoffFuture;
+        if (pending != null) {
+          try {
+            await pending.timeout(const Duration(milliseconds: 300));
+          } catch (_) {}
+        }
+        unawaited(_player!.play().catchError((Object _) {}));
+      }
+      if (_secondary != null && _secondary!.volume > 0) {
+        unawaited(_secondary!.play().catchError((Object _) {}));
+      }
+      return;
+    }
     if (_sourceFailed && _loadedTrack != null) {
       await _wait(load(_loadedTrack!));
     }
@@ -873,8 +1068,9 @@ class AndroidAudioEngine implements AudioEngine {
       debugPrintStack(stackTrace: stackTrace);
       rethrow;
     }
-    // Resume a crossfade ramp that was frozen by pause().
-    if (_crossfadeArmed) {
+    // Only a committed ramp needs both decoders resumed. While merely
+    // preloading, the original player owns playback and remains solo.
+    if (_crossfadeCommitted) {
       final outgoing = _secondary;
       if (outgoing != null) {
         try {
@@ -891,10 +1087,24 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> pause() => _run(() async {
+    final stem = _stemPlayer;
+    if (stem != null) {
+      _stemPausedByUser = true;
+      try {
+        await stem.pause();
+      } catch (_) {}
+      try {
+        await _player?.pause();
+      } catch (_) {}
+      try {
+        await _secondary?.pause();
+      } catch (_) {}
+      return;
+    }
     final player = await _wait(_ensurePlayer());
     await _wait(player.pause());
-    if (_crossfadeArmed) {
-      // Freeze the ramp where it is; play() resumes from [_rampElapsed].
+    if (_crossfadeCommitted) {
+      // Freeze only a live ramp, never a still-buffering incoming decoder.
       _crossfadeTimer?.cancel();
       _crossfadeTimer = null;
       final outgoing = _secondary;
@@ -946,53 +1156,359 @@ class AndroidAudioEngine implements AudioEngine {
   @override
   void updateTrack(Song track) {}
 
+  /// Use cached waveform analysis only to omit a substantial trailing
+  /// digital silence. Never trim ambiguous short fades or sources whose
+  /// measured duration disagrees with the active decoder.
+  Duration _audibleTransitionEnd(Duration? decoderDuration) =>
+      automixEffectiveAudibleEnd(
+        decoderDuration ?? _loadedTrack?.duration ?? Duration.zero,
+        _currentAutoMixProfile,
+      );
+
+  // Begin fingerprint checks up to 60s ahead; SHA over large FLAC files
+  // stays off the UI isolate. Only one candidate is outstanding per source
+  // pair. Unknown/remote/unprepared pairs never hold normal playback.
+  void _prewarmStemCandidate(just_audio.AudioPlayer player, Duration pos) {
+    final lookup = _stemClipLookup;
+    final outgoing = _loadedTrack;
+    final next = _onNextSong?.call();
+    if (lookup == null ||
+        outgoing == null ||
+        next == null ||
+        outgoing.atmosEncoded ||
+        next.atmosEncoded ||
+        (player.duration ?? outgoing.duration) - pos >
+            const Duration(seconds: 60))
+      return;
+    final id =
+        '${androidAudioSourceIdentity(outgoing)}->${androidAudioSourceIdentity(next)}';
+    if (id == _stemCandidateIdentity) return;
+    _stemCandidateIdentity = id;
+    _stemReady = null;
+    final task = lookup(
+      outgoing,
+      next,
+    ).then<AutoMixStemClip?>((clip) => clip).catchError((Object _) => null);
+    _stemCandidate = task;
+    unawaited(
+      task.then((clip) {
+        if (_stemCandidateIdentity == id) _stemReady = clip;
+      }),
+    );
+  }
+
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
     if (_retired) return;
     if (_crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
     final cfg = _crossfadeConfigProvider();
+    if (cfg.enabled) _prewarmStemCandidate(player, pos);
     final duration = player.duration;
-    if (!shouldArmCrossfade(
+    final audibleDuration = _audibleTransitionEnd(duration);
+    final phraseSecs = automixPhraseOverlapSeconds(_currentAutoMixProfile);
+    // A verified offline render has its own exact outgoing and incoming
+    // timeline. It can run even when separate model sidecars were not copied.
+    final prepared = _stemReady;
+    final modelEnd = prepared != null
+        ? prepared.start + prepared.length
+        : automixModelEnd(
+            duration ?? Duration.zero,
+            _currentAutoMixProfile,
+            phraseSecs ?? cfg.durationSecs,
+          );
+    // If the model cue passed during a seek or late analysis, revert to
+    // the ordinary end-of-track transition instead of disabling AutoMix.
+    final usableModelEnd = modelEnd != null && modelEnd > pos ? modelEnd : null;
+    final targetEnd = usableModelEnd ?? audibleDuration;
+    if (!shouldPrepareCrossfade(
       enabled: cfg.enabled,
-      duration: duration ?? Duration.zero,
+      duration: targetEnd,
       position: pos,
-      fadeSecs: cfg.durationSecs,
+      fadeSecs: prepared != null
+          ? prepared.durationSeconds
+          : usableModelEnd != null && phraseSecs != null
+          ? phraseSecs
+          : cfg.durationSecs,
     )) {
       return;
     }
-    _armCrossfade(cfg, (cfg.durationSecs * 1000).round());
+    _armCrossfade(
+      cfg,
+      (cfg.durationSecs * 1000).round(),
+      audibleDuration,
+      usableModelEnd,
+      phraseSecs,
+    );
   }
 
-  void _armCrossfade(AndroidCrossfadeConfig cfg, int fadeMs) {
-    // Set synchronously so the next position tick can't re-enter.
+  void _armCrossfade(
+    AndroidCrossfadeConfig cfg,
+    int fadeMs,
+    Duration normalMixEnd,
+    Duration? modelMixEnd,
+    double? phraseSecs,
+  ) {
+    // The preparation phase is independent of the fade itself: streams may
+    // require several seconds to buffer. Skips/stops/route changes invalidate
+    // this attempt and cannot start an obsolete successor after an await.
     _crossfadeArmed = true;
+    _crossfadeCommitted = false;
+    final epoch = ++_crossfadeEpoch;
+    final outgoing = _player;
+    final outgoingTrack = _loadedTrack;
+    final next = _onNextSong?.call();
+    if (outgoing == null ||
+        outgoingTrack == null ||
+        next == null ||
+        next.atmosEncoded ||
+        next.id == outgoingTrack.id) {
+      _crossfadeArmed = false;
+      return;
+    }
+    final nextIdentity = androidAudioSourceIdentity(next);
+    bool valid() {
+      final candidate = _onNextSong?.call();
+      return !_retired &&
+          _crossfadeArmed &&
+          epoch == _crossfadeEpoch &&
+          _crossfadeConfigProvider().enabled &&
+          identical(_player, outgoing) &&
+          identical(_loadedTrack, outgoingTrack) &&
+          candidate != null &&
+          androidAudioSourceIdentity(candidate) == nextIdentity;
+    }
+
+    // A queue edit can invalidate the candidate without calling load/stop.
+    // In that case no new epoch is created, so release our own armed state.
+    void releaseIfOwned() {
+      if (epoch == _crossfadeEpoch) _crossfadeArmed = false;
+    }
+
     unawaited(() async {
-      final outgoing = _player;
-      if (outgoing == null) {
-        _crossfadeArmed = false;
-        return;
-      }
-      final next = _onNextSong?.call();
-      if (next == null || next.atmosEncoded || next.id == _loadedTrack?.id) {
-        // Nothing to crossfade into (end of list / loop-one): let the track
-        // end naturally so onTrackEnded handles it.
-        _crossfadeArmed = false;
-        return;
-      }
       try {
         final incoming = await _wait(_ensureSecondary());
+        if (!valid()) {
+          releaseIfOwned();
+          return;
+        }
+        // A cached local profile can trim verified leading silence. Provider
+        // streams and unavailable analyses keep their natural start.
+        AutoMixProfile? upcomingProfile;
+        if (_automixProfileLookup case final fetch?) {
+          try {
+            upcomingProfile = await fetch(next)
+                .then<AutoMixProfile?>((profile) => profile)
+                .timeout(
+                  const Duration(milliseconds: 400),
+                  onTimeout: () => null,
+                );
+          } catch (_) {}
+        }
+        if (!valid()) {
+          releaseIfOwned();
+          return;
+        }
+        final modelEntry = upcomingProfile?.modelEntrances
+            .where(
+              (t) =>
+                  t.isFinite &&
+                  t >= 0 &&
+                  t <= 45 &&
+                  t <= upcomingProfile!.durationSeconds - 20,
+            )
+            .firstOrNull;
+        final hasPairedCues = modelMixEnd != null && modelEntry != null;
+        // The longer 32-beat window is not safe without pitch-preserving
+        // tempo correction; only accept essentially matched rates.
+        final phraseCompatible =
+            phraseSecs != null &&
+            automixNativePhraseCompatible(
+              _currentAutoMixProfile,
+              upcomingProfile,
+            );
+        final modelPair =
+            hasPairedCues && (phraseSecs == null || phraseCompatible);
+        AutoMixStemClip? preparedStem;
+        final lookup = _stemClipLookup;
+        if (lookup != null && (outgoing.speed - 1).abs() < .001) {
+          final id =
+              '${androidAudioSourceIdentity(outgoingTrack)}->${nextIdentity}';
+          try {
+            final pending = _stemCandidateIdentity == id
+                ? _stemCandidate
+                : lookup(outgoingTrack, next);
+            preparedStem = await pending
+                ?.then<AutoMixStemClip?>((clip) => clip)
+                .timeout(
+                  const Duration(milliseconds: 450),
+                  onTimeout: () => null,
+                );
+            if (!valid()) {
+              releaseIfOwned();
+              return;
+            }
+            if (preparedStem != null &&
+                hasPairedCues &&
+                !AutoMixStemClip.suitableForCues(
+                  preparedStem,
+                  outgoingStart:
+                      _currentAutoMixProfile?.modelExits.isNotEmpty == true
+                      ? _currentAutoMixProfile!.modelExits.last
+                      : null,
+                  incomingStart: modelEntry,
+                )) {
+              preparedStem = null;
+            }
+          } catch (error) {
+            preparedStem = null;
+          }
+        }
+        final fallbackOverlapMs = modelPair && phraseCompatible
+            ? (phraseSecs * 1000).round()
+            : fadeMs;
+        final fallbackMixEnd = modelPair ? modelMixEnd : normalMixEnd;
+        var overlapMs =
+            preparedStem?.length.inMilliseconds ?? fallbackOverlapMs;
+        var mixEnd = preparedStem == null
+            ? fallbackMixEnd
+            : preparedStem.start + preparedStem.length;
         final source = await _wait(_sourceBuilder(next));
-        _rampUserVolume = outgoing.volume <= 0 ? 1.0 : outgoing.volume;
+        if (!valid()) {
+          releaseIfOwned();
+          return;
+        }
+        // A muted track must stay muted through the preparation and ramp.
+        _rampUserVolume = outgoing.volume;
         await _wait(
           incoming
               .setAudioSource(source, preload: true)
               .timeout(const Duration(seconds: 30)),
         );
-        await _wait(
-          incoming.seek(Duration.zero).timeout(const Duration(seconds: 15)),
-        );
+        if (!valid()) {
+          releaseIfOwned();
+          return;
+        }
+        final entrance = modelPair
+            ? modelEntry
+            : (upcomingProfile?.leadInSeconds ?? 0);
+        final entry =
+            (modelEntry != null || (entrance >= 0.4 && entrance <= 3)) &&
+                (upcomingProfile?.durationSeconds ?? 0) >= 20
+            ? Duration(milliseconds: (entrance * 1000).round())
+            : Duration.zero;
+        await _wait(incoming.seek(entry).timeout(const Duration(seconds: 15)));
+        if (!valid()) {
+          releaseIfOwned();
+          return;
+        }
         await _wait(incoming.setVolume(0));
         await _wait(incoming.setSpeed(outgoing.speed));
         await _wait(incoming.setLoopMode(just_audio.LoopMode.off));
+        if (!valid()) {
+          releaseIfOwned();
+          return;
+        }
+        // Decoder preparation must happen *before* the cue, not at its
+        // musical start. Otherwise a cold Media3 decoder misses the precise
+        // overlap even with a cached WAV. The last 8 seconds are reserved
+        // for starting the already-prepared third player.
+        just_audio.AudioPlayer? preparedStemPlayer;
+        if (preparedStem != null) {
+          try {
+            preparedStemPlayer = _stemPlayerProvider != null
+                ? await _stemPlayerProvider()
+                : just_audio.AudioPlayer(useProxyForRequestHeaders: false);
+            await preparedStemPlayer.setVolume(0);
+            await preparedStemPlayer.setLoopMode(just_audio.LoopMode.off);
+            await preparedStemPlayer
+                .setAudioSource(
+                  just_audio.AudioSource.uri(Uri.file(preparedStem.path)),
+                  preload: true,
+                )
+                .timeout(const Duration(seconds: 8));
+            if (!valid()) {
+              await preparedStemPlayer.dispose();
+              releaseIfOwned();
+              return;
+            }
+          } catch (error) {
+            devLog('[automix] third decoder unavailable: $error');
+            try {
+              await preparedStemPlayer?.dispose();
+            } catch (_) {}
+            preparedStemPlayer = null;
+            preparedStem = null;
+            overlapMs = fallbackOverlapMs;
+            mixEnd = fallbackMixEnd;
+          }
+        }
+
+        // Do not advance the queue while the next song is only buffered.
+        // Poll the media position rather than wall time so pause/buffering
+        // cannot cause a premature transition. The guard also covers manual
+        // queue edits that do not trigger a player.load().
+        while (valid()) {
+          final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
+          if (outgoing.processingState ==
+              just_audio.ProcessingState.completed) {
+            if (preparedStemPlayer != null) {
+              unawaited(preparedStemPlayer.dispose().catchError((Object _) {}));
+            }
+            _crossfadeArmed = false; // normal end-of-track takes over
+            return;
+          }
+          // A slow add-on may become ready after the *analysed* audible end
+          // while the media element is still playing its silent tail. Start
+          // immediately in that case, but never start while paused.
+          if (outgoing.playing && remainingMs <= overlapMs) break;
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+        }
+        if (!valid()) {
+          if (preparedStemPlayer != null) {
+            unawaited(preparedStemPlayer.dispose().catchError((Object _) {}));
+          }
+          releaseIfOwned();
+          return;
+        }
+        // Volume may change while the incoming decoder is buffering.
+        _rampUserVolume = outgoing.volume;
+
+        final physicalRemainingMs =
+            ((outgoing.duration ?? outgoingTrack.duration) - outgoing.position)
+                .inMilliseconds;
+        if (physicalRemainingMs <= 0) {
+          _crossfadeArmed = false;
+          return;
+        }
+        final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
+        // When the cached audible endpoint has already passed, use the
+        // physically available silence rather than abandon the transition.
+        // Never schedule a ramp past the actual decoder's end.
+        final activeFadeMs = math.min(
+          overlapMs,
+          remainingMs > 0
+              ? math.min(remainingMs, physicalRemainingMs)
+              : physicalRemainingMs,
+        );
+        if (preparedStem != null &&
+            preparedStemPlayer != null &&
+            (outgoing.position - preparedStem.start).inMilliseconds.abs() <=
+                650 &&
+            await _commitStemClip(
+              clip: preparedStem,
+              preparedPlayer: preparedStemPlayer,
+              outgoing: outgoing,
+              incoming: incoming,
+              next: next,
+              nextProfile: upcomingProfile,
+              valid: valid,
+              epoch: epoch,
+            )) {
+          return;
+        }
+        if (preparedStemPlayer != null &&
+            !identical(_stemPlayer, preparedStemPlayer)) {
+          unawaited(preparedStemPlayer.dispose().catchError((Object _) {}));
+        }
         unawaited(
           incoming.play().catchError((Object error, StackTrace stackTrace) {
             devLog('[crossfade] incoming play() failed: $error');
@@ -1000,18 +1516,19 @@ class AndroidAudioEngine implements AudioEngine {
           }),
         );
         _loadedTrack = next;
+        // Advance profile ownership together with the two playback decoders.
+        ++_autoMixProfileGeneration;
+        _currentAutoMixProfile = upcomingProfile;
         _loadedSingleTrackOnly = true;
         _playlistSignature = const <String>[];
-        _rampTotal = Duration(milliseconds: fadeMs);
+        _rampTotal = Duration(milliseconds: activeFadeMs);
         _rampElapsed = Duration.zero;
         _rampCurve = cfg.curve;
-        // Swap roles: incoming becomes the active player, outgoing becomes the
-        // idle slot and is faded out by the ramp.
+        // Ping-pong decoders only when the incoming audio is committed.
         _player = incoming;
         _secondary = outgoing;
+        _crossfadeCommitted = true;
         _startRampTimer(outgoing, incoming);
-        // The emitted state drives PlayerService's track-change bookkeeping
-        // (index sync, notification, replay tracking, position save).
         _emit(
           _state.copyWith(
             currentTrack: next,
@@ -1020,14 +1537,14 @@ class AndroidAudioEngine implements AudioEngine {
             duration: incoming.duration ?? next.duration,
           ),
         );
-        // Queue-entry consumption + priority anchor are not covered by the
-        // playback-state subscription, so the service does them here.
         _onTrackAdvanced?.call(next);
       } catch (error, stackTrace) {
         if (IosLocalAudioRequests.isRetired(error)) return;
-        devLog('[crossfade] arm failed: $error');
+        if (epoch != _crossfadeEpoch) return;
+        devLog('[crossfade] preparation failed: $error');
         debugPrintStack(stackTrace: stackTrace);
         _crossfadeArmed = false;
+        _crossfadeCommitted = false;
         final active = _player;
         if (active != null) {
           try {
@@ -1036,6 +1553,261 @@ class AndroidAudioEngine implements AudioEngine {
         }
       }
     }());
+  }
+
+  /// Third decoder is only for a verified, offline-rendered Demucs window.
+  /// It is never used for network sources, bit-perfect routes or Atmos.
+  Future<bool> _commitStemClip({
+    required AutoMixStemClip clip,
+    required just_audio.AudioPlayer preparedPlayer,
+    required just_audio.AudioPlayer outgoing,
+    required just_audio.AudioPlayer incoming,
+    required Song next,
+    required AutoMixProfile? nextProfile,
+    required bool Function() valid,
+    required int epoch,
+  }) async {
+    just_audio.AudioPlayer? mixed = preparedPlayer;
+    try {
+      // Already source-decoded ahead of the model cue.
+      if (mixed.processingState == just_audio.ProcessingState.idle) {
+        await mixed.dispose();
+        return false;
+      }
+      final lateMs = (outgoing.position - clip.start).inMilliseconds;
+      if (!valid() || !outgoing.playing || lateMs.abs() > 650) {
+        await mixed.dispose();
+        return false;
+      }
+      if (lateMs > 0) await mixed.seek(Duration(milliseconds: lateMs));
+      if (!valid() || !outgoing.playing) {
+        await mixed.dispose();
+        return false;
+      }
+      // Capture a non-null decoder for periodic callbacks after this async
+      // setup; the mutable nullable handle is used only for failure cleanup.
+      final just_audio.AudioPlayer clipPlayer = mixed;
+      _stemPlayer = clipPlayer;
+      _stemHandoffStarted = false;
+      _stemPausedByUser = false;
+      _stemOutgoingStopped = false;
+      _stemLastPositionMs = 0;
+      _stemLastProgressAt = DateTime.now();
+      _activeStemClip = clip;
+      _stemOutgoing = outgoing;
+      _stemIncoming = incoming;
+      _stemEpoch = epoch;
+      _stemHandoffFuture = null;
+      _rampUserVolume = outgoing.volume;
+      // just_audio.play returns only when playback completes: never await.
+      unawaited(
+        clipPlayer.play().catchError((Object error) {
+          devLog('[automix] stem render failed: $error');
+          if (!_stemPausedByUser) {
+            unawaited(
+              _finishStemClip(epoch, clip, outgoing, incoming, clipPlayer),
+            );
+          }
+        }),
+      );
+      _loadedTrack = next;
+      ++_autoMixProfileGeneration;
+      _currentAutoMixProfile = nextProfile;
+      _loadedSingleTrackOnly = true;
+      _playlistSignature = const <String>[];
+      _player = incoming;
+      _secondary = outgoing;
+      _crossfadeCommitted = true;
+      _emit(
+        _state.copyWith(
+          currentTrack: next,
+          position: Duration(milliseconds: (clip.inStart * 1000).round()),
+          bufferedPosition: Duration.zero,
+          duration: incoming.duration ?? next.duration,
+        ),
+      );
+      try {
+        _onTrackAdvanced?.call(next);
+      } catch (error) {
+        devLog('[automix] queue sync: $error');
+      }
+      _stemTimer?.cancel();
+      _stemTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+        if (epoch != _crossfadeEpoch || !identical(_stemPlayer, clipPlayer))
+          return;
+        if (!clipPlayer.playing) {
+          // A prepared decoder can fail silently before entering the ready
+          // state. Never keep Flow blocked indefinitely on a missing play.
+          if (!_stemPausedByUser &&
+              _stemLastProgressAt != null &&
+              DateTime.now().difference(_stemLastProgressAt!) >
+                  const Duration(seconds: 6)) {
+            unawaited(
+              _finishStemClip(epoch, clip, outgoing, incoming, clipPlayer),
+            );
+            return;
+          }
+          if (!_stemPausedByUser &&
+              clipPlayer.processingState ==
+                  just_audio.ProcessingState.completed) {
+            unawaited(
+              _finishStemClip(epoch, clip, outgoing, incoming, clipPlayer),
+            );
+          }
+          return;
+        }
+        final position = clipPlayer.position.inMilliseconds;
+        if (position > _stemLastPositionMs + 10) {
+          _stemLastPositionMs = position;
+          _stemLastProgressAt = DateTime.now();
+        } else if (!_stemPausedByUser &&
+            _stemLastProgressAt != null &&
+            DateTime.now().difference(_stemLastProgressAt!) >
+                const Duration(seconds: 10)) {
+          unawaited(
+            _finishStemClip(epoch, clip, outgoing, incoming, clipPlayer),
+          );
+          return;
+        }
+        final total = clip.length.inMilliseconds;
+        final userVolume = _stemVolumeProvider?.call() ?? _rampUserVolume;
+        if (!_stemHandoffStarted) {
+          _emit(
+            _state.copyWith(
+              position: Duration(
+                milliseconds: (clip.inStart * 1000).round() + position,
+              ),
+            ),
+          );
+        }
+        final initial = (position / 180).clamp(0.0, 1.0);
+        // Once the pre-rendered overlap owns the audio, retire the old
+        // decoder instead of needlessly decoding a silent song for 16s.
+        if (position >= 240 && !_stemOutgoingStopped) {
+          _stemOutgoingStopped = true;
+          unawaited(outgoing.stop().catchError((Object _) {}));
+        }
+        if (!_stemHandoffStarted) {
+          unawaited(outgoing.setVolume(userVolume * (1 - initial)));
+          unawaited(clipPlayer.setVolume(userVolume * initial));
+          if (total - position <= 900) {
+            _stemHandoffStarted = true;
+            final remaining = math.max(0, total - position);
+            final resume = clip.resume - Duration(milliseconds: remaining);
+            final pendingHandoff = () async {
+              try {
+                await incoming.seek(resume);
+                if (epoch != _crossfadeEpoch ||
+                    _stemPausedByUser ||
+                    !identical(_stemPlayer, clipPlayer))
+                  return;
+                await incoming.setVolume(0);
+                unawaited(incoming.play());
+              } catch (_) {}
+            }();
+            _stemHandoffFuture = pendingHandoff;
+            unawaited(pendingHandoff);
+          }
+        } else {
+          final p = ((position - (total - 900)) / 900).clamp(0.0, 1.0);
+          unawaited(clipPlayer.setVolume(userVolume * (1 - p)));
+          unawaited(incoming.setVolume(userVolume * p));
+        }
+        if (position >= total - 20 ||
+            clipPlayer.processingState ==
+                just_audio.ProcessingState.completed) {
+          unawaited(
+            _finishStemClip(epoch, clip, outgoing, incoming, clipPlayer),
+          );
+        }
+      });
+      return true;
+    } catch (error) {
+      devLog('[automix] prepared stem unavailable: $error');
+      if (identical(_stemPlayer, mixed)) _stemPlayer = null;
+      try {
+        await mixed.dispose();
+      } catch (_) {}
+      return false;
+    }
+  }
+
+  Future<void> _finishStemClip(
+    int epoch,
+    AutoMixStemClip clip,
+    just_audio.AudioPlayer outgoing,
+    just_audio.AudioPlayer incoming,
+    just_audio.AudioPlayer mixed,
+  ) async {
+    if (epoch != _crossfadeEpoch ||
+        !identical(_stemPlayer, mixed) ||
+        _stemPausedByUser)
+      return;
+    _stemTimer?.cancel();
+    _stemTimer = null;
+    _stemPlayer = null;
+    _activeStemClip = null;
+    _stemOutgoing = null;
+    _stemIncoming = null;
+    final pendingHandoff = _stemHandoffFuture;
+    _stemHandoffFuture = null;
+    if (pendingHandoff != null) {
+      try {
+        await pendingHandoff.timeout(const Duration(milliseconds: 300));
+      } catch (_) {}
+    }
+    if (epoch != _crossfadeEpoch) {
+      try {
+        await mixed.dispose();
+      } catch (_) {}
+      return;
+    }
+    final hadHandoff = _stemHandoffStarted;
+    _stemHandoffStarted = false;
+    _stemPausedByUser = false;
+    _stemOutgoingStopped = false;
+    _stemLastProgressAt = null;
+    try {
+      if (!hadHandoff || !incoming.playing) {
+        await incoming.seek(clip.resume);
+        if (epoch == _crossfadeEpoch) unawaited(incoming.play());
+      }
+      if (epoch == _crossfadeEpoch) {
+        await incoming.setVolume(
+          _stemVolumeProvider?.call() ?? _rampUserVolume,
+        );
+      }
+    } catch (_) {}
+    try {
+      await mixed.stop();
+    } catch (_) {}
+    try {
+      await mixed.dispose();
+    } catch (_) {}
+    if (epoch != _crossfadeEpoch) return;
+    try {
+      await outgoing.stop().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    _crossfadeCommitted = false;
+    _crossfadeArmed = false;
+  }
+
+  void _disposeStemPlayer() {
+    _stemTimer?.cancel();
+    _stemTimer = null;
+    _stemHandoffStarted = false;
+    _stemPausedByUser = false;
+    _stemOutgoingStopped = false;
+    _stemLastProgressAt = null;
+    _activeStemClip = null;
+    _stemOutgoing = null;
+    _stemIncoming = null;
+    _stemHandoffFuture = null;
+    final mixed = _stemPlayer;
+    _stemPlayer = null;
+    if (mixed != null) {
+      unawaited(mixed.dispose().catchError((Object _) {}));
+    }
   }
 
   void _startRampTimer(
@@ -1072,13 +1844,17 @@ class AndroidAudioEngine implements AudioEngine {
       await _wait(outgoing.setVolume(_rampUserVolume));
     } catch (_) {}
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
   }
 
   Future<void> _cancelCrossfade() async {
+    ++_crossfadeEpoch;
+    _disposeStemPlayer();
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     final wasArmed = _crossfadeArmed;
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
     final secondary = _secondary;
     if (secondary != null) {
       try {
@@ -1108,6 +1884,8 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   Future<void> _disposeRetired() async {
+    ++_crossfadeEpoch;
+    _disposeStemPlayer();
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
@@ -1141,9 +1919,12 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   Future<void> _dispose() async {
+    ++_crossfadeEpoch;
+    _disposeStemPlayer();
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _crossfadeArmed = false;
+    _crossfadeCommitted = false;
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
