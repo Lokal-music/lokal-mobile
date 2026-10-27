@@ -110,7 +110,6 @@ void main() {
               played = song;
               queue = shelf;
             },
-            onOpenFlow: () {},
           ),
         ),
       ),
