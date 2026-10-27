@@ -70,6 +70,7 @@ Widget _app({
   int? streak,
   List<MilestoneRecord> milestones = const [],
   bool persistentDock = false,
+  double textScale = 1,
   VoidCallback? onDockTap,
 }) => ProviderScope(
   overrides: [
@@ -81,9 +82,10 @@ Widget _app({
   child: MaterialApp(
     theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
     home: MediaQuery(
-      data: const MediaQueryData(
-        size: Size(390, 2400),
-        padding: EdgeInsets.only(top: 24, bottom: 24),
+      data: MediaQueryData(
+        size: const Size(390, 2400),
+        padding: const EdgeInsets.only(top: 24, bottom: 24),
+        textScaler: TextScaler.linear(textScale),
         disableAnimations: true,
       ),
       child: Scaffold(
@@ -157,6 +159,41 @@ void main() {
     expect(discord.right + 10, closeTo(settings.left, .1));
     expect(settings.right, closeTo(390 - 16, .1));
     expect((avatar.center.dy - settings.center.dy).abs(), lessThan(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('2x text scales profile name without clipping or moving actions', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    _tall(tester);
+    const longName = 'Long accessibility profile name that needs scrolling';
+    await tester.pumpWidget(
+      _app(
+        onNavigate: (_) {},
+        accounts: const YouAccounts(lastFm: longName),
+        textScale: 2,
+      ),
+    );
+    await tester.pump();
+
+    final name = tester.getRect(find.byType(OverflowMarqueeTitle));
+    final row = tester.getRect(
+      find.ancestor(
+        of: find.byType(OverflowMarqueeTitle),
+        matching: find.byType(Row),
+      ).first,
+    );
+    final discord = tester.getRect(find.byTooltip('Discord'));
+    final settings = tester.getRect(find.byTooltip('Settings'));
+
+    expect(row.height, greaterThan(44));
+    expect(name.height, greaterThan(44));
+    expect(name.top, greaterThanOrEqualTo(row.top));
+    expect(name.bottom, lessThanOrEqualTo(row.bottom));
+    expect(discord.center.dy, closeTo(settings.center.dy, .1));
+    expect(discord.center.dy, closeTo(row.center.dy, .1));
+    expect(settings.right, closeTo(390 - 16, .1));
     expect(tester.takeException(), isNull);
   });
 
