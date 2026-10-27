@@ -169,3 +169,80 @@ and applies it to the held owned-file descriptor. No private keybag constant is
 guessed. Probe failure stays explicit and is retried on a later publication;
 simulator code does not claim device protection. The corrected device/simulator SDK checks and all nineteen storage cases
 pass in the hosted run above. Physical file-protection behavior remains pending.
+
+
+## Host publication policy candidate
+
+`Publication/LokalWidgetPublisher.swift` adds the synchronous native publication
+policy, intended for a host-owned utility queue. It does not construct an audio
+engine, resolve an implicit App Group, fetch artwork, reload timelines or attach
+the Flutter host yet. The bridge must first confirm the installed shared-container
+capability; base-app playback remains independent of that capability.
+
+The input is the bounded canonical metadata document plus image bytes keyed by
+its opaque current/recommendation aliases. At most thirteen images and 12 MiB
+in aggregate are accepted before image decoding. Unknown aliases and stale
+revisions fail explicitly. Snapshot normalization removes unrelated input fields;
+prepared artwork is content-addressed and deduplicated before committing.
+
+The returned acknowledgement contains the actual committed revision, owned
+filenames by alias, last-good background artwork and a degraded-artwork flag.
+An invalid image preserves a verified same-track cover when available. Artwork
+from a different track may remain the separate last-good background; it is never
+silently attached as the new track's cover. If the owned cache is full, retry
+with verified existing covers and no new images so title/pause/seek metadata can
+still advance. Other storage errors and stale writes never become success.
+Read the actual stored revision on startup; do not assume a restarted process
+can overwrite the previous writer with revision one.
+
+```mermaid
+sequenceDiagram
+  participant D as Future Flutter coordinator
+  participant H as Native publication policy / utility queue
+  participant I as Bounded ImageIO preparation
+  participant S as Atomic shared store
+  D->>H: Canonical metadata + bounded image bytes by opaque alias
+  H->>S: Read actual previous revision and verified artwork
+  H->>H: Reject stale/unreferenced/oversized input
+  H->>I: Prepare complete owned PNGs
+  I-->>H: Hash-named images or explicit image failure
+  H->>S: Commit metadata and referenced assets
+  alt Cache quota reached
+    H->>S: Commit metadata with verified old assets only
+  end
+  S-->>H: Actual committed revision
+  H-->>D: Revision + owned artwork names + degraded-art flag
+  Note over D: Only acknowledge the matching latest request
+```
+
+Fourteen new native cases exercise actual storage/images, restarted revision
+reads, duplicate covers, invalid images, distinct-track fallback, stale writers,
+unreferenced images, aggregate quotas, bad schema/documents, allowlist privacy,
+full-cache metadata fallback and concurrent publication. The hosted workflow
+compiles the same policy with Swift 6 warnings-as-errors and both iOS 16 SDK
+targets before running those cases. Swift is unavailable locally: **execution
+and SDK acceptance of this new policy are pending**. The preceding reader/store
+passes remain scoped to their original source; no app bridge, WidgetKit layout,
+App Group provisioning, timeline or physical-device acceptance is inferred.
+
+
+### Held-reader inode replacement correction
+
+The first publication workflow passes the unchanged 64 Flutter contracts, all
+45 Swift reader cases, and both actual iOS 16 SDK checks **including the new
+publisher**. Its storage concurrency case then fails; publication execution is
+skipped in that run. The reader previously required `st_nlink == 1` after
+`openat`. A writer can legitimately replace that exact pathname between open
+and fstat, reducing the held old descriptor's link count to zero even though
+its complete immutable bytes remain readable.
+
+Bounded reads now accept a regular held descriptor with zero or one link.
+`O_NOFOLLOW`, nonregular/FIFO rejection, hard-link rejection (`> 1`), and strict
+single-link writer/cleanup descriptors remain. A deterministic new storage case
+performs an actual independent-store commit immediately after the reader's open
+and before its fstat: the held read must return complete revision one, and the
+next read complete revision two. The test hook is absent by default. Native
+storage now has twenty cases and logs the actual concurrency errors if any
+recur. The publication suite runs independently after prior failures while the
+workflow retains every failing gate. Acceptance of this correction remains
+pending until its hosted SDK and actual execution checks pass.

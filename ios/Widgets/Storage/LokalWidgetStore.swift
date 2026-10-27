@@ -54,8 +54,10 @@ final class LokalWidgetStore: @unchecked Sendable {
   #endif
   private let directory: Int32
   private let mutex = NSLock()
+  private let afterReadOpenForTesting: (@Sendable (String) -> Void)?
 
-  init(container: URL, createIfMissing: Bool = false) throws {
+  init(container: URL, createIfMissing: Bool = false,
+       afterReadOpenForTesting: (@Sendable (String) -> Void)? = nil) throws {
     guard container.isFileURL else { throw LokalWidgetStoreError.unavailable }
     let base = Darwin.open(container.standardizedFileURL.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard base >= 0 else { throw LokalWidgetStoreError.posix(errno) }
@@ -66,6 +68,7 @@ final class LokalWidgetStore: @unchecked Sendable {
     let owned = openat(base, Self.directoryName, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard owned >= 0 else { throw LokalWidgetStoreError.posix(errno) }
     directory = owned
+    self.afterReadOpenForTesting = afterReadOpenForTesting
   }
 
   deinit { Darwin.close(directory) }
@@ -212,11 +215,13 @@ final class LokalWidgetStore: @unchecked Sendable {
     return data
   }
 
-  private func openRegular(_ name: String, flags: Int32) throws -> Int32 {
+  private func openRegular(_ name: String, flags: Int32, allowUnlinkedRead: Bool = false) throws -> Int32 {
     let fd = openat(directory, name, flags | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
     guard fd >= 0 else { throw LokalWidgetStoreError.posix(errno) }
+    if allowUnlinkedRead { afterReadOpenForTesting?(name) }
     var info = stat()
-    guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), info.st_nlink == 1 else {
+    guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+          info.st_nlink == 1 || (allowUnlinkedRead && info.st_nlink == 0) else {
       Darwin.close(fd)
       throw LokalWidgetStoreError.unsafeFile
     }
@@ -225,7 +230,11 @@ final class LokalWidgetStore: @unchecked Sendable {
 
   private func readBounded(_ name: String, limit: Int) throws -> Data? {
     let fd: Int32
-    do { fd = try openRegular(name, flags: O_RDONLY) }
+    // An atomic rename can unlink the old regular file immediately after
+    // openat. Its held read descriptor still owns the complete old bytes.
+    // Accept zero links only for this bounded read; hard links (>1), writers,
+    // cleanup paths and all nonregular/symlink targets remain rejected.
+    do { fd = try openRegular(name, flags: O_RDONLY, allowUnlinkedRead: true) }
     catch LokalWidgetStoreError.posix(ENOENT) { return nil }
     defer { Darwin.close(fd) }
     var info = stat()
