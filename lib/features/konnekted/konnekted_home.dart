@@ -258,32 +258,7 @@ class KonnektedHomeTopBar extends StatelessWidget {
                   child: const LokalLogo(size: 32),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: LokalGlass.capsule(
-                      thickness: LokalGlassThickness.thin,
-                      shadow: false,
-                      padding: const EdgeInsets.all(3),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (final tab in KonnektedHomeTab.values)
-                            _ShelfChip(
-                              label: lokalText(tab.label),
-                              selected: tab == selectedTab,
-                              onTap: () => onTabChanged?.call(tab),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
+              const Spacer(),
               const LokalDiscordButton(),
               const SizedBox(width: 10),
               Tooltip(
@@ -301,6 +276,31 @@ class KonnektedHomeTopBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          // Keep the Home mode switch in the header, but give it its own
+          // horizontal space instead of shrinking tap targets beside actions.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: LokalGlass.capsule(
+                thickness: LokalGlassThickness.thin,
+                shadow: false,
+                padding: const EdgeInsets.all(3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final tab in KonnektedHomeTab.values)
+                      _ShelfChip(
+                        label: lokalText(tab.label),
+                        selected: tab == selectedTab,
+                        onTap: () => onTabChanged?.call(tab),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           // Desktop's greeting: a salutation, then a line from your listening.
           Semantics(
             header: true,
@@ -406,12 +406,15 @@ class _ShelfChip extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 44, minWidth: 56),
+          alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: selected
