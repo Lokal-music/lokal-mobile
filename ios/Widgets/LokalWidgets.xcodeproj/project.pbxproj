@@ -191,6 +191,7 @@
 			isa = PBXGroup;
 			children = (
 				FBC2DCC043D98AB22D5BE93C,
+				6D559C6A629102D4DF97D4D1,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -207,6 +208,7 @@
 				E6FCA18C069BB2B809E6B1DA,
 				D6C568EC61F7BA1F0DA124D4,
 				0472F93596097B45CF10155E,
+				01B5FBA80FF16A62C1AB3EC0,
 				CE604D5B20B03B125BFEFCC1,
 			);
 			sourceTree = "<group>";
@@ -349,6 +351,135 @@
 			productReference = FBC2DCC043D98AB22D5BE93C;
 			productType = "com.apple.product-type.app-extension";
 		};
+		01B5FBA80FF16A62C1AB3EC0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = RenderHarness/LokalWidgetPreview.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		6D559C6A629102D4DF97D4D1 = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = LokalWidgetPreview.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		677B138BABF817CDC6E9B84C = {
+			isa = PBXBuildFile;
+			fileRef = 1F7F84937E134EAAC45E165C;
+		};
+		A914CD686F05002F4128E674 = {
+			isa = PBXBuildFile;
+			fileRef = 4CC8F12BB6FD568C0E828CF6;
+		};
+		784544F23C9581E39CA28458 = {
+			isa = PBXBuildFile;
+			fileRef = E6EBCFABA495B8FE1AF4D0B0;
+		};
+		A0FF9775FE22D0EF4B4467AA = {
+			isa = PBXBuildFile;
+			fileRef = 01B5FBA80FF16A62C1AB3EC0;
+		};
+		EDF002B3E7E54A26A96F5C39 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				677B138BABF817CDC6E9B84C,
+				A914CD686F05002F4128E674,
+				784544F23C9581E39CA28458,
+				A0FF9775FE22D0EF4B4467AA,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DDD9AB0B221D8941531C3587 = {
+			isa = PBXBuildFile;
+			fileRef = 0472F93596097B45CF10155E;
+		};
+		828405B1D542D4B2BC092D87 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDD9AB0B221D8941531C3587,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		99872C2A887B09C2622589A5 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		43F5CCC91096AE636C47418A = {
+			isa = XCBuildConfiguration;
+			name = Debug;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = app.lokal.widgetPreview;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				MARKETING_VERSION = 1.0.0;
+				CURRENT_PROJECT_VERSION = 1;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				TARGETED_DEVICE_FAMILY = 1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SKIP_INSTALL = YES;
+			};
+		};
+		49ABEF20B0BE6E2EC6ACD0CA = {
+			isa = XCBuildConfiguration;
+			name = Release;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = app.lokal.widgetPreview;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				MARKETING_VERSION = 1.0.0;
+				CURRENT_PROJECT_VERSION = 1;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				TARGETED_DEVICE_FAMILY = 1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SKIP_INSTALL = YES;
+			};
+		};
+		EA1397A21FB18AFF3160937E = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				43F5CCC91096AE636C47418A,
+				49ABEF20B0BE6E2EC6ACD0CA,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4F65776B1EA7533BFE49C144 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EA1397A21FB18AFF3160937E;
+			buildPhases = (
+				EDF002B3E7E54A26A96F5C39,
+				99872C2A887B09C2622589A5,
+				828405B1D542D4B2BC092D87,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LokalWidgetPreview;
+			productName = LokalWidgetPreview;
+			productReference = 6D559C6A629102D4DF97D4D1;
+			productType = "com.apple.product-type.application";
+		};
 		ED0330015A9710DDA300224A = {
 			isa = PBXProject;
 			attributes = {
@@ -378,6 +509,7 @@
 			projectRoot = "";
 			targets = (
 				740BC6BEDC2570EAE0FE217C,
+				4F65776B1EA7533BFE49C144,
 			);
 		};
 	};

@@ -1250,3 +1250,10 @@ the engineering IPA and enables no entitlement. The new focused workflow must
 link it on both actual iOS 16 SDK targets; rendering, App Group provisioning,
 validated commands and signed Windows installation remain separate gates.
 See the [candidate boundaries](IOS_WIDGETKIT.md#standalone-read-only-widgetkit-candidate).
+
+
+Widget run 16 accepts the first standalone source's native presentation tests
+and actual iOS 16 device/simulator extension linkage. The continuation adds a
+simulator-only native render app and a 441-image language/family/accessibility
+matrix. Rendering, installed WidgetKit behavior and physical signing remain
+separate from the accepted linker/test result.

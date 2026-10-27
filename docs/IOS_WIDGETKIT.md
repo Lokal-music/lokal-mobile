@@ -1,6 +1,6 @@
 # iPhone widgets: shared data and implementation gates
 
-Status: native publication/bridge and first-create correction accepted; live sampler candidate, 27 October 2026 (Europe/Paris).
+Status: native publication/sampler contracts and standalone extension linkage accepted; rendering candidate, 27 October 2026 (Europe/Paris).
 The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
 [shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):
 45 shared cases plus native numeric/clock guards and 64 Dart contracts. The [storage run](https://github.com/lokal-music/lokal-mobile/actions/runs/40450346881)
@@ -14,8 +14,8 @@ and Flutter coordinator. The later run-14 correction passes 23 storage cases,
 cases plus both real bridge SDK checks. The [live-sampler contract run 15](https://github.com/lokal-music/lokal-mobile/actions/runs/40510204249)
 passes 48 reader cases, the same 23 store cases and both stress controls, 14
 publisher cases, 109 Flutter contracts and both real Flutter bridge SDK checks.
-**Full runtime sampling acceptance remains pending; no WidgetKit target, widget
-entitlement or iPhone widget UI is enabled.**
+**Full runtime sampling acceptance remains pending. The standalone WidgetKit
+candidate is not embedded or provisioned in the main IPA.**
 
 The product remains exactly three configurations—Now Playing, Flow / Radio and
 Cover Flow—with responsive small/medium/large families. Artwork, Dynamic Type,
@@ -517,3 +517,33 @@ with Swift 6 strict concurrency and warnings-as-errors. Local project-reference,
 scheme, resource completeness, actionlint and diff checks pass. Hosted compilation,
 rendered family/large-text snapshots, actual WidgetKit scheduling, signed group
 access and installed-device behavior remain pending for this new source.
+
+
+### Native linkage accepted; render harness continuation
+
+[Focused run 16](https://github.com/lokal-music/lokal-mobile/actions/runs/40516346438)
+accepts the first standalone source, tree `0eef6ff8246789cc3585e7e2b7ffd4bc5e81a906`,
+at PR head `a28426426ea3d2a1402bb992ef72abe19145f74b`: 18 additional native
+presentation/timeline/image cases plus the shared corpus pass, and the actual
+extension links for both iOS 16 device and simulator targets. Reader, real store
+with both 50×24-worker controls and publisher contracts also pass. The Flutter
+metadata/bridge job is tracked separately until it completes.
+
+The next continuation adds the independent `LokalWidgetPreview` app target and
+`tool/ios_widget_render.py`. It builds and launches a real native SwiftUI app,
+then renders the exact shared layout and surface at explicit family bounds.
+The harness supplies normal-app margins; it does not pretend to install a widget
+on SpringBoard or exercise WidgetKit container/background scheduling. Runner and
+the extension have no dependency on this simulator-only app.
+
+The requested matrix is **441 PNGs**: all three configurations/families, all 11
+locales, normal/accessibility-5 text, light/dark appearance, plus English paused,
+buffering, stale, empty and unavailable cases. Each locale launches a fresh
+process with its actual preferred bundle language and asserts that selection.
+Images and per-case JSON are exported from the owned app container; CI verifies
+case completeness and exact PNG pixel bounds. Captures remain available for
+visual inspection, rather than calling a linker pass a rendering pass. The
+smallest accessibility fallback keeps one visual title line and Open Lokal,
+while its combined VoiceOver label retains the complete recording metadata.
+No animation frames or automatic Home Screen placement are inferred from static
+rendered PNGs. This rendering continuation still needs its own hosted pass.

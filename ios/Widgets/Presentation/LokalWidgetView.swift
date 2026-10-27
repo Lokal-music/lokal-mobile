@@ -4,7 +4,7 @@ import UIKit
 
 /// Native shared palette: system surfaces/contrast and the captured app accent.
 /// Accent is decorative; readable labels always use system primary/secondary.
-private struct LokalWidgetTheme {
+struct LokalWidgetTheme {
   let accent: Color
   let surface = Color(uiColor: .secondarySystemBackground)
 
@@ -45,6 +45,14 @@ struct LokalWidgetView: View {
   }
 
   var body: some View {
+    layout
+      .widgetURL(URL(string: "konnekted://widget"))
+      .modifier(LokalWidgetBackground(accent: theme.accent, surface: theme.surface))
+  }
+
+  /// Shared native layout also rendered by the isolated simulator harness.
+  /// The harness supplies app-host margins; WidgetKit owns extension margins.
+  var layout: some View {
     ViewThatFits(in: .vertical) {
       content(compact: false).fixedSize(horizontal: false, vertical: true)
       content(compact: true).fixedSize(horizontal: false, vertical: true)
@@ -52,16 +60,14 @@ struct LokalWidgetView: View {
       // VoiceOver metadata while prioritizing the recording and open action.
       VStack(alignment: .leading, spacing: 6) {
         Text(hasContent ? (primary.map { title($0) } ?? "") : lokalWidgetText("Your music, one tap away"))
-          .font(.headline).lineLimit(2)
-        Text(lokalWidgetText("Open Lokal")).font(.caption)
+          .font(.headline).lineLimit(1)
+        Text(lokalWidgetText("Open Lokal")).font(.caption).lineLimit(1)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     .tint(theme.accent)
-    .widgetURL(URL(string: "konnekted://widget"))
     .accessibilityElement(children: .combine)
     .accessibilityLabel(Text(accessibilitySummary))
-    .modifier(LokalWidgetBackground(accent: theme.accent, surface: theme.surface))
   }
 
   @ViewBuilder private func content(compact: Bool) -> some View {
@@ -153,11 +159,19 @@ struct LokalWidgetView: View {
   }
 }
 
+struct LokalWidgetSurface: View {
+  let accent: Color
+  let surface: Color
+  var body: some View {
+    LinearGradient(colors: [surface, accent.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
+  }
+}
+
 private struct LokalWidgetBackground: ViewModifier {
   let accent: Color
   let surface: Color
   private var background: some View {
-    LinearGradient(colors: [surface, accent.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    LokalWidgetSurface(accent: accent, surface: surface)
   }
   @ViewBuilder func body(content: Content) -> some View {
     if #available(iOS 17.0, *) {
