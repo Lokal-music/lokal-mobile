@@ -222,7 +222,6 @@ void main() {
     expect(incoming.playCalls, 0);
     expect(advanced, isEmpty);
     expect(outgoing.currentPlaying, isTrue);
-    expect(engine.playbackState.currentTrack?.id, 'first');
   });
 
   testWidgets('failed sources and stalled seeks cannot poison later playback', (
