@@ -45,6 +45,15 @@ class SongRepository {
     return songs;
   }
 
+  /// Read current metadata before a maintenance operation changes a recording.
+  Future<Song?> getSongById(String id) async {
+    final key = int.tryParse(id);
+    if (key == null) return null;
+    final entity = await _isar.songEntitys.get(key);
+    if (entity == null || entity.filePath.startsWith('ghost://')) return null;
+    return _entityToSong(entity);
+  }
+
   /// Get songs by folder URI.
   Future<List<Song>> getSongsByFolder(String folderUri) async {
     final entities = await _isar.songEntitys

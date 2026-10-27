@@ -1,10 +1,17 @@
 # iPhone review of mobile PRs after #172
 
-Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-The parity continuation carries **53 reviewed merged PRs through #239**, including
-merged source `4e9a627d91c7b9485d62588c6ed3e6842cb80a7b`. Build 34 passes both complete
-iOS 18.6/26.0 native suites through #217. Later reset and lyrics changes require
-their own fresh native acceptance and do not borrow build-34 qualification.
+Current review: **72 merged product PRs after #172 through #272**. The newest
+continuation includes artwork quality/repair, Unicode local-lyrics search,
+background motion-art release and Desktop Copy favorite identity. Reviewed
+Android USB changes remain excluded. Each source checkpoint requires its own
+acceptance; review/inclusion does not qualify a physical iPhone release.
+
+Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196. Earlier
+checkpoints carried 53 reviewed PRs through #239, including merged source
+`4e9a627d91c7b9485d62588c6ed3e6842cb80a7b`. Build 34 passes both native suites
+through #217; preserved build 53 passes both through #246. Independently verified
+build 67 now passes both complete native suites through #261. Later source
+requires its own native acceptance.
 The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
 (merge `b26d8b9e08a8acc4d60b8aa2e2b7e3c4b521fdb1`). All 20 PRs below are
 included by ancestry, including stacked #180/#181; none is copied as a divergent
@@ -820,3 +827,48 @@ integration analysis has no errors (621 warning/information items); actionlint
 and diff checks pass. Native, live-provider, installed-widget and physical-device
 acceptance remain separate gates for this source. Native audio interfaces,
 dependency locks and Android CI state are unchanged.
+
+
+### Reviewed through #272 — 27 October 2026
+
+Five newly merged product PRs bring the reviewed total to **72**. PR #263 was
+open at the previous checkpoint and is included now; #269 is still open and is
+not counted. The shared logging portion of #257 is implemented separately in
+the inherited continuation, with paused-position/Rust cadence work still pending.
+
+| PR / exact merged source | iPhone behavior and adaptation |
+| --- | --- |
+| [263](https://github.com/lokal-music/lokal-mobile/pull/263) / `71d959d7555f4966ef013fff9a4a1696b8b0e849` | Select downloaded covers by decoded dimensions, preserve valid lower-resolution fallback, reject incomplete/oversized image data and normalize non-JPEG bytes when saving JPEG artwork. Carry opt-in exact-album cover repair, with all eleven UI languages, usable large text, explicit stop/error feedback and cancellation on leaving/backgrounding. Reload current metadata before replacement so an edit made during the lookup is preserved. Reuse bounded/cancellable transport and graceful HTTP ownership. |
+| [266](https://github.com/lokal-music/lokal-mobile/pull/266) / `5c291da1de836cdcb70d09f7bbf1d0b62f87cca9` | Preserve native scripts and Indic combining marks in local Library lyrics search, with full-width and punctuation folding. Keep the existing local-only incremental scan; no remote lyrics search or index migration is introduced. |
+| [267](https://github.com/lokal-music/lokal-mobile/pull/267) / `8c4a897c95107c9630cfb2174b0d83fa11363932` | Carry NFC normalization, emoji bases and CJK separator handling without joining Latin/Indic words or matching variation selectors alone. Add locked `unorm_dart` 0.3.2 and retain its MIT license through Flutter's license registry. |
+| [268](https://github.com/lokal-music/lokal-mobile/pull/268) / `4ffea34f7d40dfe816105ed6285db27cdf83fdf4` | Release muted artwork decoders and pending loads when hidden/paused/detached, preserve transient inactive state and recreate visuals on resume. Pause the last shared view during the brief decoder handoff. Correct an upstream acknowledgement race: `release()` awaits that queued Pause while a new view can retain/reuse the decoder. Audio playback ownership remains separate. |
+| [272](https://github.com/lokal-music/lokal-mobile/pull/272) / `3f56f19d0e03795a616be8a07f9e27eb7886c0fa` | Reuse the existing Desktop Copy row by server/original-track identity; repair legacy duplicate hearts to one canonical local favorite, preserving the earliest like rank and Link snapshot without deleting library/playlist/history rows. Both rows address the same heart. Exclude Android USB route, transport-failure and volume-handling changes. |
+
+The only Dart dependency changes are `image` 4.10.2 (the decoder correction
+required by #263) and `unorm_dart` 0.3.2. `flutter pub get --enforce-lockfile`
+accepts their exact upstream archive digests; native Rust/bridge/CocoaPods locks
+are unchanged. Image decoding remains off the UI isolate, with 5 MiB input and
+16-megapixel bounds. Artwork redirects are opt-in to the existing transport:
+same-host HTTPS or Cover Art Archive's Internet Archive storage, at most three
+hops, with credential headers stripped across origins. Existing audio/source
+redirect rejection remains the default.
+
+Integration tests cover actual exported image dimensions/content, manual-edit
+preservation, blocked-request cancellation, late cancellation after a consumed
+response, native-script/emoji negatives, duplicate-heart repair and acknowledged
+motion handoff. The new repair screen passes real-font layout/action checks in
+all eleven locales at 200% on a 320-point screen. Expanded host and latest-source
+native acceptance are recorded separately; no physical-phone battery, provider
+catalogue or metadata-writing qualification is inferred from these host cases.
+
+
+Validation of the through-#272 continuation: **803 Flutter tests pass** across
+the expanded iPhone selection plus all iOS/Android-widget contracts. This
+includes native-script matching, real image validation, cover repair orchestration/
+network cancellation, all-locale large-text controls, Link/copy/heart behavior,
+acknowledged motion handoff, logging, sharing and the inherited audio retirement
+regressions. Whole app/integration analysis has no errors (620 existing warning/
+information items). Eight new artwork/search/execution-test files pass analysis
+with fatal infos. Enforced lockfile resolution, readiness inventory, actionlint
+and diff checks pass. Native latest-source and physical-device gates remain
+separate. Native Rust, bridge/CocoaPods locks and Android CI state are unchanged.

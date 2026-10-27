@@ -5,21 +5,22 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **67 reviewed merged
-mobile PRs after #172 through #261**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **72 reviewed merged
+mobile PRs after #172 through #272**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
 and platform adaptations.
 
-**This source is not a finalized release.** Build 53 is the new complete pass
-of both native suites on iOS 18.6 and 26.0, through #246. Its generated WebKit
-fixture passes settled-seek, native-clock and newly delivered frame gates on
-explicit replay. Actual queue reorder and unconfigured widget-channel checks
-also pass. The inspected unsigned IPA, source, notices and matching symbols are
-preserved together. Later source still requires its own full acceptance; build
-56 exposes a different iOS 18.6 retirement/replacement timeout, with iOS 26 passing.
-The new probe retains phase/view/timing/native-document diagnostics for this gate.
+**This source is not a finalized release.** Build 67 is the current independently
+verified engineering package, passing both complete native suites on iOS 18.6
+and 26.0 through #261. Its generated WebKit fixture passes settled-seek,
+native-clock and newly delivered frame gates on explicit replay, with repeated
+playing/paused resets. Actual queue reorder and unconfigured widget-channel
+checks also pass. The inspected unsigned IPA, source, notices and matching
+symbols are preserved together; build 53 remains an older retained checkpoint.
+The later logger/sharing/through-#272 source requires its own full native
+acceptance. The expanded latest-source host selection passes 803 cases.
 
 | Checkpoint | Accepted scope and limit |
 | --- | --- |
@@ -34,6 +35,7 @@ The new probe retains phase/view/timing/native-document diagnostics for this gat
 | [Build 59](https://github.com/lokal-music/lokal-mobile/actions/runs/40510204116) / PR #259 | Complete iOS 18.6 pass for the live-sampler source; iOS 26 explicit replay reaches source end but presents only two new frames after its settled baseline, failing the unchanged three-frame gate. This is not a complete dual-runtime acceptance. |
 | [Widget run 21](https://github.com/lokal-music/lokal-mobile/actions/runs/40553935455) / PR #271 | All four focused native jobs pass: device/simulator extension linkage, contracts and 450 actual images in eleven locales, including nine independent OCR checks of visible recording/artist/recommendation text. Static layout evidence does not qualify live timer drawing, installed Home Screen behavior or signed shared access. |
 | [Build 66](https://github.com/lokal-music/lokal-mobile/actions/runs/40524454354) / PR #265 | iOS 18.6 reaches an initial native view but no local decoder/JavaScript readiness; release cleanup also times out. iOS 26 fails its control/recovery boot before app acceptance. This source has no complete dual-runtime acceptance. |
+| [Build 67](https://github.com/lokal-music/lokal-mobile/actions/runs/40551780392) / PR #270 | Complete iOS 18.6 and 26 acceptance through #261. Both settled replays advance bridge/native clocks and five new frames, with repeated playing/paused resets. IPA/source/notices/34 binaries/26 native symbol bundles are independently reverified. Tree `054b7aa18dbbbae333802eeea73a9e225cb42735`. This does not qualify later logger, sharing or through-#272 changes. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
@@ -1407,3 +1409,97 @@ destination is the shared file. Error-toast teardown is explicit in the test;
 native sheet failures remain visible in the product. Add this suite and its path
 trigger to the iPhone workflow. These host checks do not qualify the physical
 iPhone share sheet or photo-library permission flow.
+
+
+### Parity continuation through #272
+
+The current review covers 72 merged product PRs after #172. Carry the newly
+merged #263, #266, #267, #268 and relevant Desktop Copy/favorite changes from
+#272; the separate open #269 is outside this checkpoint. Android USB transport,
+route/volume handling and Priority Anchor behavior remain unchanged.
+
+Cover downloads compare actual decoded resolution and preserve valid fallback
+bytes. The new Library → Covers maintenance screen starts only on explicit tap,
+shows localized progress/stop/retry states, and remains usable in eleven
+languages at 200% text on a 320-point screen. Leaving/backgrounding cancels the
+operation; transient inactive system UI does not. A reload of the current song
+row protects manual edits or changed metadata made during the lookup. Unknown,
+ambiguous and manually selected cover identities are skipped.
+
+```mermaid
+flowchart LR
+  Tap[User starts cover refresh] --> Match[Exact album and album artist]
+  Match --> Fetch[Bounded cancellable artwork transfer]
+  Fetch --> Decode[Validate pixels off the UI isolate]
+  Decode --> Reload[Reload current metadata and skip edits]
+  Reload --> Apply[Apply verified larger artwork]
+  Stop[Stop / leave / background] --> Cancel[Cancel request and prevent the next file update]
+  Cancel -.-> Fetch
+  Cancel -.-> Apply
+```
+
+The transfer has one 12-second deadline and a 5 MiB cap, retaining the existing
+successful-response/late-cancellation connection behavior. Optional artwork
+redirects allow same-host HTTPS or Cover Art Archive to Internet Archive storage
+with bounded hops and no cross-origin credential forwarding. Ordinary source
+redirect policy is preserved. Image decoding has a 16-megapixel bound and uses
+the locked `image` 4.10.2 decoder correction; NFC lyrics matching adds locked
+`unorm_dart` 0.3.2 with its upstream MIT notice retained. No native Rust/bridge or
+CocoaPods dependency changes are made.
+
+Local lyrics search now handles NFC equivalents, full-width text, native Indic
+marks and optional CJK separators without joining Latin/Indic words or matching
+unrelated emoji via variation selectors. Desktop Copy reuses confirmed original
+identity and repairs duplicate favorites while keeping both library rows and
+their playlist/history references. Hidden artwork controllers are released;
+the last shared view waits for Pause acknowledgement while a quick new view
+can reuse that decoder. Existing foreground audio continues independently.
+
+The inherited logger/sharing/diagnostic source at tree
+`cc069f1528b6701023c50966a6a02fe082def0c4` passes 676 combined Flutter cases.
+The expanded through-#272 selection passes **803 Flutter tests**. Whole app and integration analysis has no errors (620 existing warning/information items); the eight new artwork/search/execution-test files also pass analysis with fatal infos. Readiness inventory, enforced dependency resolution, actionlint and diff checks pass. Native
+acceptance of this source, live catalogue behavior, installed widgets and
+physical iPhone metadata/share/install behavior remain separate release gates.
+
+
+Build 67's complete iOS 18.6 native job succeeds for the earlier through-#261
+tree `054b7aa18dbbbae333802eeea73a9e225cb42735`. Its runtime report is preserved
+from artifact `12761670035`, independently verified archive SHA-256
+`e3caec92acef4e9c6142eb3fa271f12ad8874cfbbcca47ee75cdae5052082bf6`.
+CI merge `4ecf94aabfa4f6d7c7224bdfa68bb8c364e7a4ed` compares with zero file
+changes against published head `ff236a5d0f2234d44be59685159e2e2d019b50b5`.
+Real WebKit explicit replay advances the bridge by 406 ms, native time from
+0.931 to 1.433 seconds, and newly presented frames from four to nine; document
+visibility is visible and both playing/paused resets complete. iOS 26 remains
+a separate pending job. This is a complete single-runtime result, not a later
+source or complete dual-runtime acceptance.
+
+
+### Build 67 package and both native runtimes accepted
+
+Both jobs of [run 40551780392](https://github.com/lokal-music/lokal-mobile/actions/runs/40551780392)
+succeed for through-#261 source at tree
+`054b7aa18dbbbae333802eeea73a9e225cb42735` (CI merge
+`4ecf94aabfa4f6d7c7224bdfa68bb8c364e7a4ed`). The iOS 26 report verifies five
+new explicit-replay frames, 403 ms of bridge progress and 497 ms of actual source
+progress, plus repeated playing/paused resets and acknowledged native cleanup.
+The iOS 18.6 report independently verifies five frames, 406 ms bridge progress
+and 502 ms native progress. Runtime artifacts `12761670035` and `12760863731`
+verify archive SHA-256 `e3caec92acef4e9c6142eb3fa271f12ad8874cfbbcca47ee75cdae5052082bf6`
+and `32acf5fd5ecbc159c79ab8ad120356f1c1cce9484ad1aefb81a73969f96fc4fb`.
+
+The preserved engineering package is
+`/workspace/artifacts/ios-engineering-67/ipa/Lokal-unsigned.ipa`, SHA-256
+`bf8b3cf557b433a7eed74610a2865dd68997dffbec9a44ebb69974fdd9b2ba10`.
+Its enclosing artifact `12756642665` independently verifies SHA-256
+`92be77b3d1cdd6f1f97e02c2d0ccb7555e4176f84d19c0c023d77eca373347b4`.
+Reinspection confirms the bundle/build/iOS 16 floor, all 34 arm64 iOS Mach-O
+binaries and UUIDs, 26 matching native symbol bundles, retained Dart AOT symbols,
+Cast/privacy/native/Flutter notices and the complete 2,239-file source export
+against the equivalent committed tree. Only the four pre-existing declared
+Opus export-ignore entries are absent. The source, notices and symbols remain
+beside the IPA, with a machine-readable/checksum checkpoint record; the temporary
+download ZIP is removed after verification. Earlier complete packages remain
+preserved. Installation needs local signing; physical Windows/iPhone installation,
+actual iOS 16 runtime, live provider/receiver, signed widgets and newer source
+acceptance remain separate unfinished gates.

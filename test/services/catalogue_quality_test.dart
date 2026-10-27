@@ -191,7 +191,7 @@ void main() {
       codec: details.codec,
       bitDepth: details.bitDepth,
       sampleRate: details.sampleRate,
-    ), 'FLAC · 24-bit / 96 kHz');
+    ), 'FLAC · 24-bit · 96 kHz');
 
     final advertised = morneyeSearchAudioDetails(
       codec: 'AAC', bitDepth: null, sampleRate: 48000,
@@ -229,7 +229,7 @@ void main() {
     ), '24-bit / 96 kHz');
     expect(catalogueAudioDetails(quality: 'LOSSLESS'), 'Lossless');
     expect(catalogueAudioDetails(codec: 'FLAC', bitDepth: 24,
-      sampleRate: 192000), 'FLAC · 24-bit / 192 kHz');
+      sampleRate: 192000), 'FLAC · 24-bit · 192 kHz');
     expect(catalogueAudioDetails(), isEmpty);
   });
 
@@ -374,7 +374,7 @@ void main() {
       catalogueSampleRate: tidal.sampleRate,
       requestedQuality: 'HiRes FLAC (requested)',
     );
-    expect(firstSearch.label, 'FLAC · 24-bit / 44.1 kHz');
+    expect(firstSearch.label, 'FLAC · 24-bit · 44.1 kHz');
     expect(firstSearch.tooltip, contains('catalogue'));
     expect(firstSearch.label, isNot(contains('catalogue')));
     expect(firstSearch.label, isNot(contains('requested')));
@@ -386,7 +386,7 @@ void main() {
       catalogueSampleRate: tidal.sampleRate,
       requestedQuality: 'Low (requested)',
     );
-    expect(low.label, 'FLAC · 24-bit / 44.1 kHz',
+    expect(low.label, 'FLAC · 24-bit · 44.1 kHz',
         reason: 'Show only available per-track metadata; a different requested '
             'tier must not introduce a second chip or be mistaken for playback');
     expect(low.tooltip, contains('catalogue'));
