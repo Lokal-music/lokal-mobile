@@ -123,7 +123,7 @@ class _KonnektedDiscoveryViewState
                     'Customize {arg0}',
                     args: {
                       'arg0': switch (source) {
-                        KonnektedDiscoverySource.youtube => 'YouTube Music',
+                        KonnektedDiscoverySource.youtube => 'YouTube',
                         KonnektedDiscoverySource.lastfm => 'Last.fm',
                         KonnektedDiscoverySource.spotify => 'Spotify',
                       },
@@ -967,7 +967,7 @@ class _Header extends StatelessWidget {
                       _ProviderChip(
                         label: lokalText(switch (provider) {
                           KonnektedDiscoverySource.lastfm => 'Last.fm',
-                          KonnektedDiscoverySource.youtube => 'YouTube Music',
+                          KonnektedDiscoverySource.youtube => 'YouTube',
                           KonnektedDiscoverySource.spotify => 'Spotify',
                         }),
                         selected: source == provider,
