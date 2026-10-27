@@ -20,6 +20,7 @@ import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
 import 'package:flick/widgets/lokal/lokal_swipe_to_queue.dart';
+import 'package:flick/features/folders/widgets/folder_artwork_mosaic.dart';
 
 /// Groups songs by immediate subfolder relative to [prefix] within [folderUri].
 ({List<FolderGroup> subfolders, List<Song> songs}) groupByImmediateFolder({
@@ -540,7 +541,6 @@ class _RootFolderCardState extends State<_RootFolderCard>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _tiltAnimation;
-  List<_ArtEntry> _cachedArtworks = const [];
 
   @override
   void initState() {
@@ -557,15 +557,6 @@ class _RootFolderCardState extends State<_RootFolderCard>
       begin: 0.0,
       end: 0.02,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _cachedArtworks = _computeArtworks(widget.entry.songs);
-  }
-
-  @override
-  void didUpdateWidget(covariant _RootFolderCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.entry.songs, widget.entry.songs)) {
-      _cachedArtworks = _computeArtworks(widget.entry.songs);
-    }
   }
 
   @override
@@ -574,27 +565,8 @@ class _RootFolderCardState extends State<_RootFolderCard>
     super.dispose();
   }
 
-  static List<_ArtEntry> _computeArtworks(List<Song> songs) {
-    final seen = <String>{};
-    final result = <_ArtEntry>[];
-    for (final song in songs) {
-      final art = song.albumArt;
-      if (art != null && art.isNotEmpty && seen.add(art)) {
-        result.add(_ArtEntry(art, song.filePath));
-      }
-      if (result.length >= 4) break;
-    }
-    return result;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final artworks = _cachedArtworks;
-    final padded = List<_ArtEntry>.from(artworks);
-    while (padded.length < 4) {
-      padded.add(const _ArtEntry(null, null));
-    }
-
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -646,7 +618,7 @@ class _RootFolderCardState extends State<_RootFolderCard>
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            _buildArtGrid(context, padded),
+                            FolderArtworkMosaic(songs: widget.entry.songs),
                             Positioned.fill(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
@@ -735,50 +707,6 @@ class _RootFolderCardState extends State<_RootFolderCard>
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildArtGrid(BuildContext context, List<_ArtEntry> artworks) {
-    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final cardWidth = context.scaleSize(AppConstants.cardWidthMd);
-    final targetWidth = (cardWidth * devicePixelRatio).round();
-    final cellSize = targetWidth ~/ 2;
-
-    return GridView.count(
-      crossAxisCount: 2,
-      physics: const NeverScrollableScrollPhysics(),
-      children: artworks.map((entry) {
-        if (entry.art != null && entry.art!.isNotEmpty) {
-          return ClipRRect(
-            borderRadius: BorderRadius.all(
-              Radius.circular(AppConstants.radiusSm),
-            ),
-            child: CachedImageWidget(
-              imagePath: entry.art,
-              audioSourcePath: entry.source,
-              fit: BoxFit.cover,
-              useThumbnail: true,
-              thumbnailWidth: cellSize,
-              thumbnailHeight: cellSize,
-              placeholder: _buildGridPlaceholder(context),
-              errorWidget: _buildGridPlaceholder(context),
-            ),
-          );
-        }
-        return _buildGridPlaceholder(context);
-      }).toList(),
-    );
-  }
-
-  Widget _buildGridPlaceholder(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.all(Radius.circular(AppConstants.radiusSm)),
-      child: Container(
-        color: context.lokal.surface2,
-        child: const Center(
-          child: FlickArtworkPlaceholder(size: 22, opacity: 0.9),
         ),
       ),
     );
@@ -1306,7 +1234,6 @@ class _SubfolderCardState extends State<_SubfolderCard>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _tiltAnimation;
-  List<_ArtEntry> _cachedArtworks = const [];
 
   @override
   void initState() {
@@ -1323,19 +1250,6 @@ class _SubfolderCardState extends State<_SubfolderCard>
       begin: 0.0,
       end: 0.02,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _cachedArtworks = _RootFolderCardState._computeArtworks(
-      widget.folder.songs,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _SubfolderCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.folder.songs, widget.folder.songs)) {
-      _cachedArtworks = _RootFolderCardState._computeArtworks(
-        widget.folder.songs,
-      );
-    }
   }
 
   @override
@@ -1346,12 +1260,6 @@ class _SubfolderCardState extends State<_SubfolderCard>
 
   @override
   Widget build(BuildContext context) {
-    final artworks = _cachedArtworks;
-    final padded = List<_ArtEntry>.from(artworks);
-    while (padded.length < 4) {
-      padded.add(const _ArtEntry(null, null));
-    }
-
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -1403,7 +1311,7 @@ class _SubfolderCardState extends State<_SubfolderCard>
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            _buildArtGrid(context, padded),
+                            FolderArtworkMosaic(songs: widget.folder.songs),
                             Positioned.fill(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
@@ -1484,50 +1392,6 @@ class _SubfolderCardState extends State<_SubfolderCard>
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildArtGrid(BuildContext context, List<_ArtEntry> artworks) {
-    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final cardWidth = context.scaleSize(AppConstants.cardWidthMd);
-    final targetWidth = (cardWidth * devicePixelRatio).round();
-    final cellSize = targetWidth ~/ 2;
-
-    return GridView.count(
-      crossAxisCount: 2,
-      physics: const NeverScrollableScrollPhysics(),
-      children: artworks.map((entry) {
-        if (entry.art != null && entry.art!.isNotEmpty) {
-          return ClipRRect(
-            borderRadius: BorderRadius.all(
-              Radius.circular(AppConstants.radiusSm),
-            ),
-            child: CachedImageWidget(
-              imagePath: entry.art,
-              audioSourcePath: entry.source,
-              fit: BoxFit.cover,
-              useThumbnail: true,
-              thumbnailWidth: cellSize,
-              thumbnailHeight: cellSize,
-              placeholder: _buildGridPlaceholder(context),
-              errorWidget: _buildGridPlaceholder(context),
-            ),
-          );
-        }
-        return _buildGridPlaceholder(context);
-      }).toList(),
-    );
-  }
-
-  Widget _buildGridPlaceholder(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.all(Radius.circular(AppConstants.radiusSm)),
-      child: Container(
-        color: context.lokal.surface2,
-        child: const Center(
-          child: FlickArtworkPlaceholder(size: 22, opacity: 0.9),
         ),
       ),
     );
@@ -1631,12 +1495,6 @@ class _SongTile extends StatelessWidget {
   }
 }
 
-class _ArtEntry {
-  final String? art;
-  final String? source;
-
-  const _ArtEntry(this.art, this.source);
-}
 
 /// Expandable tree view of folder hierarchies with their songs.
 class _FolderTreeView extends StatefulWidget {
