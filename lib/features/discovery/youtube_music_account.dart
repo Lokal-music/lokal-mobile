@@ -746,9 +746,16 @@ List<LokalDiscoveryAlbum> parseYoutubeMusicAlbums(Object? root) {
         ? _text(row['title'])
         : titleRuns.map(_text).join();
     if (id.isEmpty || title.isEmpty) return;
+    final byline = _bylineRuns(row['subtitle'] ?? row['shortBylineText']);
+    // YouTube Music prefixes some release cards with "Single", "Album"
+    // or "EP"; that release type is not the recording artist.
+    final isReleaseType = const {'single', 'album', 'ep'}.contains(
+      _text(byline.firstOrNull).trim().toLowerCase(),
+    );
+    final artist = _metadata(isReleaseType ? byline.skip(1) : byline).artist;
     albums.putIfAbsent(id, () => LokalDiscoveryAlbum(
       title: title,
-      artist: _text(row['subtitle'] ?? row['shortBylineText']),
+      artist: artist,
       artworkUrl: _thumbnail(row['thumbnailRenderer'] ?? row['thumbnail']),
       url: 'https://music.youtube.com/browse/$id',
     ));
