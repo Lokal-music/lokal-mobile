@@ -730,6 +730,84 @@ List<({String browseId, String? params})> _mixShelfBrowseEndpoints(
   return endpoints.values.toList();
 }
 
+/// Parse YouTube Music album cards without treating arbitrary tracks as albums.
+List<LokalDiscoveryAlbum> parseYoutubeMusicAlbums(Object? root) {
+  final albums = <String, LokalDiscoveryAlbum>{};
+  _walk(root, (node) {
+    final row = node['musicTwoRowItemRenderer'] ??
+        node['musicResponsiveListItemRenderer'];
+    if (row is! Map) return;
+    final titleRuns = _columnRuns(row, 0);
+    final browse = _at(row, ['navigationEndpoint', 'browseEndpoint']) ??
+        _at(titleRuns.firstOrNull, ['navigationEndpoint', 'browseEndpoint']);
+    final id = (_at(browse, ['browseId']) ?? '').toString();
+    if (!id.startsWith('MPRE') && !_pageType(browse).endsWith('_ALBUM')) return;
+    final title = _text(row['title']).isNotEmpty
+        ? _text(row['title'])
+        : titleRuns.map(_text).join();
+    if (id.isEmpty || title.isEmpty) return;
+    albums.putIfAbsent(id, () => LokalDiscoveryAlbum(
+      title: title,
+      artist: _text(row['subtitle'] ?? row['shortBylineText']),
+      artworkUrl: _thumbnail(row['thumbnailRenderer'] ?? row['thumbnail']),
+      url: 'https://music.youtube.com/browse/$id',
+    ));
+  });
+  return albums.values.toList();
+}
+
+/// Match real, named provider shelves, not fabricated search recommendations.
+String? youtubeMusicHomeCategory(String title) {
+  final value = title.toLowerCase().trim();
+  if (value.contains('community')) return 'community';
+  if (value.contains('new release') ||
+      value.contains('new album') ||
+      value.contains('recently released')) return 'newReleases';
+  if (value.contains('trending')) return 'trending';
+  if (value.contains('featured playlist')) return 'featuredPlaylists';
+  if (value.contains('daily discover') ||
+      value.contains('discover mix')) return 'dailyDiscover';
+  return null;
+}
+
+List<LokalDiscoveryCategory> parseYoutubeMusicHomeCategories(Object? root) {
+  final groups = <String, List<LokalDiscoveryCategory>>{};
+  _walk(root, (node) {
+    final shelf = node['musicCarouselShelfRenderer'] ??
+        node['musicShelfRenderer'];
+    if (shelf is! Map) return;
+    final id = youtubeMusicHomeCategory(_shelfTitle(shelf));
+    if (id == null) return;
+    final contents = shelf['contents'];
+    final category = LokalDiscoveryCategory(
+      id: id,
+      tracks: parseYoutubeMusicTracks(contents),
+      mixes: parseYoutubeMusicPlaylists(contents),
+      albums: parseYoutubeMusicAlbums(contents),
+    );
+    if (!category.isEmpty) groups.putIfAbsent(id, () => []).add(category);
+  });
+  return [
+    for (final entry in groups.entries)
+      LokalDiscoveryCategory(
+        id: entry.key,
+        tracks: <String, LokalDiscoveryTrack>{
+          for (final group in entry.value)
+            for (final track in group.tracks)
+              track.videoId ?? track.key: track,
+        }.values.toList(),
+        mixes: <String, LokalDiscoveryMix>{
+          for (final group in entry.value)
+            for (final mix in group.mixes) mix.id: mix,
+        }.values.toList(),
+        albums: <String, LokalDiscoveryAlbum>{
+          for (final group in entry.value)
+            for (final album in group.albums) album.url: album,
+        }.values.toList(),
+      ),
+  ];
+}
+
 List<LokalDiscoveryArtist> parseYoutubeMusicArtists(Object? root) {
   final artists = <String, LokalDiscoveryArtist>{};
   _walk(root, (node) {
@@ -812,6 +890,7 @@ class YoutubeMusicAccountData {
     required this.mixes,
     required this.history,
     required this.artists,
+    this.categories = const [],
     this.homeError,
     this.mixError,
   });
@@ -822,6 +901,7 @@ class YoutubeMusicAccountData {
   final List<LokalDiscoveryMix> mixes;
   final List<LokalDiscoveryTrack>? history;
   final List<LokalDiscoveryArtist> artists;
+  final List<LokalDiscoveryCategory> categories;
   final String? homeError;
   final String? mixError;
 }
@@ -1274,6 +1354,7 @@ class YoutubeMusicAccount {
       mixes: mixes.values.toList(),
       history: historyTracks,
       artists: parseYoutubeMusicArtists(homePages),
+      categories: parseYoutubeMusicHomeCategories(homePages),
       homeError: home == null && errors.isNotEmpty
           ? _message(errors.first)
           : null,
@@ -1398,6 +1479,7 @@ Future<LokalDiscovery> loadYoutubeMusicDiscovery(
     warnings: warnings,
     mixes: data.mixes,
     mixError: data.mixError,
+    categories: data.categories,
     liked: data.liked?.take(30).toList(),
     history: data.history,
     artists: artists.values.take(30).toList(),
