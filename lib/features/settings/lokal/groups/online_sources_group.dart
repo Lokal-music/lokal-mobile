@@ -10,6 +10,7 @@ import 'package:flick/features/internet_radio/radio_providers.dart';
 import 'package:flick/features/settings/screens/network_sources_screen.dart';
 import 'package:flick/features/settings/widgets/http_addons_settings_panel.dart';
 import 'package:flick/features/settings/widgets/playback_source_priority_panel.dart';
+import 'package:flick/features/settings/widgets/eco_data_mode_toggle.dart';
 import 'package:flick/features/settings/widgets/global_catalogue_selector.dart';
 import 'package:flick/features/morneye/morneye_addons_screen.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
@@ -40,6 +41,13 @@ List<LokalSettingsSection> onlineSourcesSettings(
           'Try sources from top to bottom when finding a song to play. Installed add-ons appear here too.',
         ),
         child: const PlaybackSourcePriorityPanel(),
+      ),
+      LokalSettingCustom(
+        label: lokalText('Eco Data Mode'),
+        description: lokalText(
+          'On mobile data, prefer compressed native sources (YouTube Music, SoundCloud) before lossless providers. Uses your normal source order on Wi-Fi. Does not change explicit source selections.',
+        ),
+        child: const EcoDataModeToggle(),
       ),
       LokalSettingLink(
         label: lokalText('Network servers'),
