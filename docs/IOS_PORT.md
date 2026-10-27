@@ -1032,3 +1032,15 @@ warnings or errors; the Swift 6 macOS contract workflow still requires its first
 execution. This work does not enable an extension, an App Group, widget controls
 or any additional online request. See [wire rules, architecture and remaining
 rendering/provisioning gates](IOS_WIDGETKIT.md).
+
+
+### Widget storage and artwork continuation
+
+The first [hosted widget contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390)
+passes the actual Swift 6 reader against all 45 shared cases, native numeric/clock
+checks and the 64 Dart contracts. The next isolated continuation implements
+bounded ImageIO preparation, descriptor-relative atomic storage, revision/process
+locking and current/previous cover retention. Its nineteen real filesystem/image/
+process cases and iOS 16 SDK checks are prepared but require hosted execution.
+App Group publishing, extension UI, commands and Windows signing remain disabled
+or pending; see [storage architecture and limits](IOS_WIDGETKIT.md).

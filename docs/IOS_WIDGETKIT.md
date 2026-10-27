@@ -1,10 +1,12 @@
 # iPhone widgets: shared data and implementation gates
 
-Status: metadata contract implementation, 27 October 2026 (Europe/Paris).
-The Dart canonical-state builder and tolerant Swift/Foundation reader are
-implemented. The shared synthetic corpus covers both readers; native execution
-of the new Swift workflow is pending. **No WidgetKit target, App Group publisher,
-widget entitlement or iPhone widget UI is enabled by this change.**
+Status: atomic storage candidate, 27 October 2026 (Europe/Paris).
+The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
+[shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):
+45 shared cases plus native numeric/clock guards and 64 Dart contracts. The new
+storage/image candidate and its filesystem/process suite require their first passing
+hosted execution. **No WidgetKit target, host publisher, widget entitlement or
+iPhone widget UI is enabled by this change.**
 
 The product remains exactly three configurations—Now Playing, Flow / Radio and
 Cover Flow—with responsive small/medium/large families. Artwork, Dynamic Type,
@@ -20,7 +22,8 @@ flowchart LR
   Builder --> Contract[Version 1 bounded JSON]
   Corpus[Shared malformed / legacy / progress corpus] --> Contract
   Contract --> Reader[Swift Foundation tolerant reader]
-  Reader --> Future[Next: atomic App Group store + WidgetKit timelines]
+  Reader --> Store[Descriptor-relative atomic snapshot / owned artwork store]
+  Store --> Future[Next: provisioned host publisher + WidgetKit timelines]
   Future --> Action[Next: validated app-owned command inbox]
   Action --> Coordinator[Existing app playback coordinator]
 ```
@@ -95,3 +98,72 @@ aliases, bounded recommendations and absence of source URLs/private paths.
 The Foundation executable additionally checks extreme native clock/numeric
 values. Actual WidgetKit rendering, background controls and signed installation
 remain open until those later gates pass.
+
+
+## Atomic store and artwork candidate
+
+`LokalWidgetStore` accepts an explicitly supplied container; its optional iOS
+factory resolves the actual provisioned App Group or throws unavailable. A
+read-only instance cannot create a missing store. The host publisher is not
+wired, so this introduces no entitlement dependency into base-app startup.
+
+The store opens its owned directory without following a terminal symlink and
+retains that descriptor. All subsequent I/O uses fixed/validated flat names and
+`openat` / `renameat` / `unlinkat`. Regular-file and single-link checks reject
+FIFOs, directories and hard links; nonblocking opens prevent a planted FIFO from
+hanging the widget. Moving/replacing the original container path cannot redirect
+a held descriptor to another directory. Instance locking and a regular-file
+`flock` serialize separate threads, instances and processes.
+
+```mermaid
+sequenceDiagram
+  participant P as Future host publisher
+  participant I as ImageIO preparation
+  participant S as Owned store + process lock
+  participant R as Widget reader
+  P->>I: Bounded PNG/JPEG bytes, off the main queue
+  I-->>P: Downsampled metadata-free PNG + content hash
+  P->>S: Candidate revision + referenced prepared images
+  S->>S: Reject stale revision; validate cache and asset set
+  S->>S: Write and fsync owned temporary images; rename
+  S->>S: Verify every referenced image hash
+  S->>S: Preserve previous snapshot; atomically rename new snapshot
+  S-->>P: Acknowledge the committed revision
+  R->>S: Bounded regular-file snapshot / image reads
+  S-->>R: Complete old or new document, verified image bytes
+```
+
+| Boundary | Candidate behavior |
+| --- | --- |
+| Artwork input | PNG/JPEG only, complete single image, at most 12 MiB, each dimension at most 12,000 and at most 40 million pixels before decoding. |
+| Artwork output | ImageIO applies orientation and downsamples to a maximum 600px edge; new PNG encoding removes original metadata. At most 2 MiB per owned image; filename is SHA-256 of the encoded bytes. |
+| Cache | At most 32 artwork files / 16 MiB. Preserve current/previous references and ten minutes of reader grace. Remove only expired unreferenced owned artwork. Reclaim a dead writer's temporaries while holding the exclusive writer lock. |
+| Publication | Positive revision greater than the committed revision; all referenced images must exist and verify before acknowledgement. No unreferenced or duplicate prepared image batch. |
+| Write failure | Complete current snapshot remains available. Partial asset staging is reusable verified cache, never a claimed new snapshot. |
+| Cache full | Return an explicit error. A metadata-only update retaining an existing verified cover remains possible; the future publisher must use that fallback rather than freeze title/state. |
+| Bad stored snapshot | Reject oversized/malformed/future-schema data explicitly; do not silently overwrite it. An explicit owned-cache repair action belongs in host integration. |
+| File protection | Device temporaries require protection class C (after first unlock). Simulator skips this kernel policy; signed-device/lock-screen verification remains open. |
+
+The new macOS executable exercises nineteen actual filesystem/image/process
+cases, including independent native child processes, descriptor/path replacement,
+symlinks, hard links, FIFOs, real permission denial, image decoding/metadata
+removal, incomplete assets, cache quotas and reference/grace retention. The
+workflow also type-checks the source with the actual iOS 16 device and simulator
+SDK targets. Until that run passes, this section describes the candidate and its
+acceptance design rather than a reported native storage pass.
+
+Atomic rename establishes reader visibility and failure behavior; physical
+power-loss durability, actual App Group sandbox access, protected-device reads,
+background execution and WidgetKit timelines still require their own acceptance.
+The existing Android publisher and playback/transport code are unchanged.
+
+
+The first storage workflow passes the unchanged 45-case Swift reader and Dart
+checks, then stops at the iOS device SDK check: the SDK does not expose the
+`PROTECTION_CLASS_C` alias. The correction uses Foundation's public
+`completeFileProtectionUntilFirstUserAuthentication` policy on a private probe,
+verifies the reported Foundation attribute, reads that descriptor's actual class
+and applies it to the held owned-file descriptor. No private keybag constant is
+guessed. Probe failure stays explicit and is retried on a later publication;
+simulator code does not claim device protection. SDK and storage execution of
+this correction remain pending.

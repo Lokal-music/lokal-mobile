@@ -5,6 +5,8 @@ on:
     paths:
       - 'ios/Widgets/Contracts/**'
       - 'ios/Widgets/Tests/**'
+      - 'ios/Widgets/Storage/**'
+      - 'ios/Widgets/StorageTests/**'
       - 'lib/models/ios_widget_snapshot.dart'
       - 'lib/services/ios_widget_snapshot_builder.dart'
       - 'test/widgets/ios/**'
@@ -47,3 +49,11 @@ jobs:
           xcodebuild -version
           swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Tests/main.swift -o "$RUNNER_TEMP/lokal-widget-contracts"
           "$RUNNER_TEMP/lokal-widget-contracts" test/fixtures/ios_widget/snapshot_contract.json
+      - name: Check iOS 16 device and simulator storage APIs
+        run: |
+          swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift
+          swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift
+      - name: Exercise actual atomic storage, images and concurrent processes
+        run: |
+          swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/StorageTests/main.swift -o "$RUNNER_TEMP/lokal-widget-store-contracts"
+          "$RUNNER_TEMP/lokal-widget-store-contracts"
