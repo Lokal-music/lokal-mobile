@@ -106,7 +106,7 @@ class KonnektedLibrary extends ConsumerWidget {
             child: Padding(
               padding: konnektedTopBarPadding,
               child: SizedBox(
-                height: 44,
+                height: konnektedHeaderHeight(context),
                 child: Row(
                   children: [
                     LokalRoundAction(
