@@ -4,6 +4,8 @@ import 'package:flick/features/queue/screens/queue_screen.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/player_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flick/core/utils/app_haptics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -48,7 +50,8 @@ Future<void> _drag(WidgetTester tester, String key, double dy) async {
   await tester.ensureVisible(grip);
   await tester.pump();
   final gesture = await tester.startGesture(tester.getCenter(grip));
-  await tester.pump(const Duration(milliseconds: 40));
+  // Reordering requires a hold, so normal scroll/tap gestures still work.
+  await tester.pump(const Duration(milliseconds: 600));
   await gesture.moveBy(Offset(0, dy));
   await tester.pump(const Duration(milliseconds: 250));
   await gesture.up();
@@ -56,6 +59,83 @@ Future<void> _drag(WidgetTester tester, String key, double dy) async {
 }
 
 void main() {
+  testWidgets('full row long press starts queue reordering, not a tap',
+      (tester) async {
+    tester.view.physicalSize = const Size(440, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final player = _QueuePlayer();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [playerProvider.overrideWith(() => player)],
+      child: MaterialApp(
+        theme: LokalTheme.build(LokalTokens.themes[LokalThemeId.dark]!),
+        home: const Scaffold(body: QueueList()),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final row = find.byKey(const ValueKey('next:a:0'));
+    final child = find.descendant(of: row, matching: find.text('Track a'));
+    expect(find.byType(ReorderableDelayedDragStartListener), findsNWidgets(6));
+    expect(child, findsOneWidget);
+
+    // The title, not the old narrow grip, owns the reorder gesture.
+    final gesture = await tester.startGesture(tester.getCenter(child));
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveBy(const Offset(0, 180));
+    await tester.pump(const Duration(milliseconds: 240));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(player.upcomingMoves, hasLength(1));
+    expect(player.upcomingMoves.single.$1, 0);
+    expect(player.upcomingMoves.single.$2, greaterThan(0));
+  });
+
+  testWidgets('the drag-start haptic fires once, never on release',
+      (tester) async {
+    AppHaptics.setEnabled(true);
+    addTearDown(() => AppHaptics.setEnabled(true));
+    final feedback = <MethodCall>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'HapticFeedback.vibrate') feedback.add(call);
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    tester.view.physicalSize = const Size(440, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final player = _QueuePlayer();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [playerProvider.overrideWith(() => player)],
+      child: MaterialApp(
+        theme: LokalTheme.build(LokalTokens.themes[LokalThemeId.dark]!),
+        home: const Scaffold(body: QueueList(embedded: true)),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final start = find.text('Track a');
+    final gesture = await tester.startGesture(tester.getCenter(start));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(feedback, isEmpty,
+        reason: 'A normal touch must not vibrate before drag mode starts');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(feedback, hasLength(1));
+    expect(feedback.single.method, 'HapticFeedback.vibrate');
+    expect(feedback.single.arguments, 'HapticFeedbackType.selectionClick');
+
+    await gesture.moveBy(const Offset(0, 170));
+    await tester.pump(const Duration(milliseconds: 240));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(feedback, hasLength(1),
+        reason: 'No duplicate vibration or release/drop feedback');
+    expect(player.upcomingMoves, hasLength(1));
+  });
+
   test('queue drop positions use one pre-removal normalization', () {
     expect(queueDropIndex(0, 2, 3), 1);
     expect(queueDropIndex(0, 3, 3), 2);
