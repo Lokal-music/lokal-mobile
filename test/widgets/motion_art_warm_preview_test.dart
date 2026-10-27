@@ -3,6 +3,7 @@ import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/services/motion_art/animated_artwork_service.dart';
 import 'package:flick/services/motion_art/moving_cover_settings.dart';
 import 'package:flick/services/motion_art/shared_motion_playback.dart';
+import 'package:flick/services/motion_art/motion_art_memory_pressure.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:video_player/video_player.dart';
@@ -27,6 +28,7 @@ class _WarmController extends VideoPlayerController {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  tearDown(MotionArtMemoryPressure.instance.resetForTesting);
   testWidgets('ticker-disabled pull preview shows the warm Canvas immediately', (
     tester,
   ) async {
@@ -41,13 +43,18 @@ void main() {
       position: Duration(seconds: 3),
     );
     var created = 0;
+    var disposed = 0;
+    final activations = <bool>[];
     final pool = SharedMotionPlayback<VideoPlayerController>(
       create: (_) async {
         created++;
         return controller;
       },
-      activate: (_, active) async {},
-      dispose: (resource) async => resource.dispose(),
+      activate: (_, active) async => activations.add(active),
+      dispose: (resource) async {
+        disposed++;
+        await resource.dispose();
+      },
     );
     final key =
         'player:42|${movingCoverRevision.value}|${SecureSpotifyTokenStore.sessionRevision.value}|${AnimatedArtworkService.instance.revision.value}';
@@ -95,6 +102,10 @@ void main() {
     await tester.pump();
     expect(find.byType(VideoPlayer), findsNothing);
     expect(find.text('static cover'), findsOneWidget);
+    // The mini-player no longer requests playback. Recovery must reactivate
+    // the view's existing warm resource rather than start another decoder.
+    await mini.setActive(false);
+    expect(activations.last, isFalse);
     suppression.value = true;
     await tester.pump();
     expect(find.byType(VideoPlayer), findsNothing);
@@ -121,11 +132,23 @@ void main() {
     );
     expect(find.byType(VideoPlayer), findsNothing);
     expect(find.text('static cover'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-    // Flush the process-wide cooldown timer to avoid leaking fake timers
-    // between test cases.
-    await tester.pump(const Duration(minutes: 2, seconds: 1));
+    // Keep the fresh view mounted with its ticker active throughout cooldown.
+    // A retained mini-player lease may supply the already decoded resource.
+    await tester.pump(const Duration(minutes: 2));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('decoded-frame')), findsOneWidget);
+    expect(created, 1);
+    expect(activations.last, isTrue);
+
+    // With the only other lease gone, memory pressure must dispose the
+    // final decoder immediately rather than wait for a 500 ms handoff.
     await mini.release(immediate: true);
+    tester.binding.handleMemoryPressure();
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(VideoPlayer), findsNothing);
+    expect(disposed, 1);
+    await tester.pumpWidget(const SizedBox());
     suppression.dispose();
   });
 }
