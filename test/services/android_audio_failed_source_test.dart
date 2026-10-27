@@ -397,9 +397,9 @@ void main() {
     await engine.load(songs.first);
     await engine.play();
     await tester.pump(); // publish outgoing cached cue profile
-    outgoing.positions.add(const Duration(seconds: 150));
+    outgoing.positions.add(const Duration(seconds: 149));
     await tester.pump();
-    expect(incoming.loads, 0, reason: 'preparation starts at cue minus 8s, not earlier');
+    expect(incoming.loads, 0, reason: 'preparation starts at cue minus 8s (150s), not earlier');
     outgoing.positions.add(const Duration(seconds: 151));
     for (var i = 0; i < 4; i++) await tester.pump();
     expect(incoming.loads, 1);
