@@ -1,4 +1,3 @@
-import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/l10n/l10n.dart';
 
 import '../link/lokal_devices_card.dart';
@@ -12,6 +11,7 @@ import 'package:flick/services/you_profile_service.dart';
 
 import 'package:flick/providers/lokal_remote_provider.dart';
 
+import 'package:flick/widgets/common/overflow_marquee_title.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/data/repositories/recently_played_repository.dart';
@@ -404,104 +404,86 @@ class _YouHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Spacer(),
-              const LokalDiscordButton(),
-              const SizedBox(width: 10),
-              Tooltip(
-                message: lokalText('Settings'),
-                excludeFromSemantics: true,
-                child: LokalGlassButton(
-                  semanticLabel: lokalText('Settings'),
-                  onPressed: onSettings,
-                  child: Icon(Icons.settings_rounded, color: t.text),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Semantics(
-                label: 'Edit profile photo',
-                button: true,
-                child: InkWell(
-                  onTap: onEdit,
-                  customBorder: const CircleBorder(),
-                  child: Container(
-                  width: 64,
-                  height: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [t.accent, t.accentDim],
-                    ),
-                  ),
-                  child: avatarPath != null
-                      ? ClipOval(
-                          child: Image.file(
-                            File(avatarPath!),
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Text(
-                              initial,
-                              style: TextStyle(color: t.bg, fontSize: 28),
-                            ),
-                          ),
-                        )
-                      : Text(
-                          initial,
-                          style: TextStyle(
-                            fontFamily: LokalTheme.sans,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: t.bg,
+          SizedBox(
+            height: 44,
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 44,
+                  child: Semantics(
+                    label: 'Edit profile photo',
+                    button: true,
+                    onTap: onEdit,
+                    excludeSemantics: true,
+                    child: InkWell(
+                      onTap: onEdit,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [t.accent, t.accentDim],
                           ),
                         ),
+                        child: avatarPath != null
+                            ? ClipOval(
+                                child: Image.file(
+                                  File(avatarPath!),
+                                  width: 44,
+                                  height: 44,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Text(
+                                    initial,
+                                    style: TextStyle(color: t.bg, fontSize: 20),
+                                  ),
+                                ),
+                              )
+                            : Text(
+                                initial,
+                                style: TextStyle(
+                                  fontFamily: LokalTheme.sans,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: t.bg,
+                                ),
+                              ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Semantics(
-                  header: true,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    label: name,
+                    child: ExcludeSemantics(
+                      child: OverflowMarqueeTitle(
+                        key: ValueKey('you-header-name:$name'),
+                        title: name,
                         style: TextStyle(
                           fontFamily: LokalTheme.sans,
-                          fontSize: 34,
+                          fontSize: 22,
                           height: 1.1,
-                          letterSpacing: -1.2,
+                          letterSpacing: -.7,
                           fontWeight: FontWeight.w800,
                           color: t.text,
                         ),
                       ),
-                      if (username?.trim().isNotEmpty == true &&
-                          username != name)
-                        Text(
-                          '@$username',
-                          style: TextStyle(color: t.muted, fontSize: 14),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Edit profile',
-                onPressed: onEdit,
-                icon: Icon(Icons.edit_rounded, color: t.muted),
-              ),
-            ],
+                const SizedBox(width: 8),
+                KonnektedHeaderActions(
+                  onEditProfile: onEdit,
+                  onSettings: onSettings,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           Row(
