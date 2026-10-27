@@ -11,6 +11,7 @@ import 'package:flick/services/audio_engine.dart';
 import 'package:flick/core/utils/dev_log.dart';
 import 'package:flick/services/atmos_diagnostics.dart';
 import 'package:flick/services/automix_analysis_cache.dart';
+import 'package:flick/services/automix_stem_clip.dart';
 
 /// A queue entry's identity includes the actual encoded media source. Two
 /// versions of the same catalogue song can share an ID but not a decoder or
@@ -45,6 +46,7 @@ typedef AndroidFastStartPredicate = bool Function();
 typedef AndroidCrossfadeConfigProvider = AndroidCrossfadeConfig Function();
 typedef AndroidNextSongProvider = Song? Function();
 typedef AndroidAutoMixProfileLookup = Future<AutoMixProfile?> Function(Song song);
+typedef AndroidStemClipLookup = Future<AutoMixStemClip?> Function(Song outgoing, Song incoming);
 typedef AndroidTrackAdvancedCallback = void Function(Song track);
 typedef AndroidTrackErrorCallback = void Function(Song track);
 
@@ -236,6 +238,8 @@ class AndroidAudioEngine implements AudioEngine {
     required AndroidFastStartPredicate shouldFastStartCurrentTrackOnly,
     AndroidCrossfadeConfigProvider? crossfadeConfigProvider,
     AndroidAutoMixProfileLookup? automixProfileLookup,
+    AndroidStemClipLookup? stemClipLookup,
+    Future<just_audio.AudioPlayer> Function()? stemPlayerProvider,
     AndroidNextSongProvider? onNextSong,
     AndroidTrackAdvancedCallback? onTrackAdvanced,
     AndroidTrackErrorCallback? onTrackError,
@@ -254,6 +258,8 @@ class AndroidAudioEngine implements AudioEngine {
        _crossfadeConfigProvider =
            crossfadeConfigProvider ?? (() => AndroidCrossfadeConfig.disabled),
        _automixProfileLookup = automixProfileLookup,
+       _stemClipLookup = stemClipLookup,
+       _stemPlayerProvider = stemPlayerProvider,
        _onNextSong = onNextSong,
        _onTrackAdvanced = onTrackAdvanced,
        _onTrackError = onTrackError;
@@ -272,6 +278,13 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidFastStartPredicate _shouldFastStartCurrentTrackOnly;
   final AndroidCrossfadeConfigProvider _crossfadeConfigProvider;
   final AndroidAutoMixProfileLookup? _automixProfileLookup;
+  final AndroidStemClipLookup? _stemClipLookup;
+  final Future<just_audio.AudioPlayer> Function()? _stemPlayerProvider;
+  Future<AutoMixStemClip?>? _stemCandidate;
+  String? _stemCandidateIdentity;
+  just_audio.AudioPlayer? _stemPlayer;
+  Timer? _stemTimer;
+  bool _stemHandoffStarted = false;
   AutoMixProfile? _currentAutoMixProfile;
   int _autoMixProfileGeneration = 0;
   final AndroidNextSongProvider? _onNextSong;
@@ -976,9 +989,27 @@ class AndroidAudioEngine implements AudioEngine {
         _currentAutoMixProfile,
       );
 
+  // Begin fingerprint checks up to 60s ahead; SHA over large FLAC files
+  // stays off the UI isolate. Only one candidate is outstanding per source
+  // pair. Unknown/remote/unprepared pairs never hold normal playback.
+  void _prewarmStemCandidate(just_audio.AudioPlayer player, Duration pos) {
+    final lookup = _stemClipLookup;
+    final outgoing = _loadedTrack;
+    final next = _onNextSong?.call();
+    if (lookup == null || outgoing == null || next == null ||
+        outgoing.atmosEncoded || next.atmosEncoded ||
+        (player.duration ?? outgoing.duration) - pos >
+            const Duration(seconds: 60)) return;
+    final id = '${androidAudioSourceIdentity(outgoing)}->${androidAudioSourceIdentity(next)}';
+    if (id == _stemCandidateIdentity) return;
+    _stemCandidateIdentity = id;
+    _stemCandidate = lookup(outgoing, next).catchError((Object _) => null);
+  }
+
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
     if (_crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
     final cfg = _crossfadeConfigProvider();
+    if (cfg.enabled) _prewarmStemCandidate(player, pos);
     final duration = player.duration;
     final audibleDuration = _audibleTransitionEnd(duration);
     final phraseSecs = automixPhraseOverlapSeconds(_currentAutoMixProfile);
@@ -1063,6 +1094,27 @@ class AndroidAudioEngine implements AudioEngine {
             );
         final modelPair = hasPairedCues &&
             (phraseSecs == null || phraseCompatible);
+        AutoMixStemClip? preparedStem;
+        final lookup = _stemClipLookup;
+        if (lookup != null && modelPair) {
+          final id = '${androidAudioSourceIdentity(outgoingTrack)}->${nextIdentity}';
+          try {
+            final pending = _stemCandidateIdentity == id
+                ? _stemCandidate
+                : lookup(outgoingTrack, next);
+            preparedStem = await pending?.timeout(
+              const Duration(milliseconds: 450), onTimeout: () => null,
+            );
+            if (!valid()) { releaseIfOwned(); return; }
+            if (preparedStem != null &&
+                !AutoMixStemClip.suitableForCues(preparedStem,
+                  outgoingStart: _currentAutoMixProfile?.modelExits.isNotEmpty == true
+                      ? _currentAutoMixProfile!.modelExits.last : null,
+                  incomingStart: modelEntry)) {
+              preparedStem = null;
+            }
+          } catch (_) { preparedStem = null; }
+        }
         final overlapMs = modelPair && phraseCompatible
             ? (phraseSecs! * 1000).round() : fadeMs;
         final mixEnd = modelPair ? modelMixEnd! : normalMixEnd;
@@ -1123,6 +1175,15 @@ class AndroidAudioEngine implements AudioEngine {
               ? math.min(remainingMs, physicalRemainingMs)
               : physicalRemainingMs,
         );
+        if (preparedStem != null &&
+            (outgoing.position - preparedStem.start).inMilliseconds.abs() <= 650 &&
+            await _commitStemClip(
+              clip: preparedStem, outgoing: outgoing, incoming: incoming,
+              next: next, nextProfile: upcomingProfile,
+              valid: valid, epoch: epoch,
+            )) {
+          return;
+        }
         unawaited(
           incoming.play().catchError((Object error, StackTrace stackTrace) {
             devLog('[crossfade] incoming play() failed: $error');
