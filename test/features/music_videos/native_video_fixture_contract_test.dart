@@ -36,7 +36,7 @@ void main() {
             0,
             reason: '${result.stdout}\n${result.stderr}',
           );
-          expect((jsonDecode(result.stdout as String) as Map)['checks'], 20);
+          expect((jsonDecode(result.stdout as String) as Map)['checks'], 24);
         }
       } finally {
         await directory.delete(recursive: true);
@@ -64,7 +64,8 @@ void main() {
       );
       expect(fixture, contains(bridge));
       expect(fixture, isNot(contains('https://www.youtube.com')));
-      expect(fixture, contains('data:video/mp4;base64,'));
+      expect(fixture, contains('URL.createObjectURL(new Blob([mediaBytes]'));
+      expect(fixture, isNot(contains('data:video/mp4;base64,')));
       expect(fixture, contains('getVideoPlaybackQuality'));
       expect(fixture, contains('media.currentTime'));
       expect(fixture, contains('const lokalInitialSeconds = 2.345;'));

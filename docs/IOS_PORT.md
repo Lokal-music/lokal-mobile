@@ -1082,3 +1082,9 @@ reset/device result is inferred from this partial evidence.
 The expanded host selection plus widget contracts passes 465 Flutter tests;
 whole app/integration analysis has no errors. Native acceptance of the new
 47-PR source remains pending.
+
+
+The next controlled WebKit experiment loads the same generated MP4 bytes as a
+Blob resource and records real seek/buffer state around replay. Both native
+source-clock and delivered-frame gates remain required; no passing native result
+is claimed before that workflow completes. See [reset evidence and experiment](IOS_MEDIA_RESET_ARCHITECTURE.md#build-45-presentation-proven-restored-html-clock-still-fails).
