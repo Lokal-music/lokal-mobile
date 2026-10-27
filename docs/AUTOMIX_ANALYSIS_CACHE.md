@@ -26,14 +26,13 @@ as proven phrase or vocal boundaries.
   trailing silence** and seek over up to three seconds of digital lead-in.
   Missing or uncertain profiles preserve existing transitions.
 - Identity is SHA-256 of the analyzer schema version, local path, file length,
-  modification timestamp and track duration. Replacing a track invalidates
+  modification timestamp, track duration, and optional sidecar size and timestamp. Adding or replacing a sidecar creates a new cache identity. Replacing a track invalidates
   its derived profile, even if its library ID is unchanged.
 - The JSON records live under application support
   `automix_profiles/`, written with a flushed temporary file and atomic
   rename. The directory is capped at 512 profiles, pruned every 32 inserts.
   The existing Isar waveform cache remains the authoritative source.
-- Remote/signed URLs, unknown IDs, CUE slices, inaccessible files and tracks
-  without a fresh Isar waveform are skipped. Bit-perfect/native Atmos
+- Remote/signed URLs, CUE slices and inaccessible files are skipped. A missing or unknown local song ID only skips Isar waveform lookup; a separately validated CUE-DETR sidecar remains usable even without a fresh waveform. Bit-perfect/native Atmos
   sources keep the current non-mixing output path.
 - A corrupt JSON entry is discarded and regenerated from Isar; it never causes
   playback failure. Cache exhaustion and storage errors fall back to ordinary
