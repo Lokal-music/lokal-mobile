@@ -20,12 +20,34 @@ String nativeWebVideoFixtureDocument({
 </head><body><video id="media" playsinline controls preload="auto"
 src="data:video/mp4;base64,$iosNativeVideoFixtureBase64"></video><script>
 const media = document.getElementById('media');
+let presentedFrames = 0;
+let frameCallbacks = 0;
+let presentedMediaTime = 0;
+function observeFrame(now, metadata) {
+  frameCallbacks++;
+  if (Number.isFinite(metadata.presentedFrames))
+    presentedFrames = Math.max(presentedFrames, metadata.presentedFrames);
+  if (Number.isFinite(metadata.mediaTime)) presentedMediaTime = metadata.mediaTime;
+  report('frame');
+  media.requestVideoFrameCallback(observeFrame);
+}
+if (media.requestVideoFrameCallback) media.requestVideoFrameCallback(observeFrame);
 function report(kind) {
   const quality = media.getVideoPlaybackQuality ? media.getVideoPlaybackQuality() : null;
+  const qualityFrames = quality && Number.isFinite(quality.totalVideoFrames) ? quality.totalVideoFrames : 0;
+  const droppedFrames = quality && Number.isFinite(quality.droppedVideoFrames) ? quality.droppedVideoFrames : 0;
+  const decodedFrames = Number.isFinite(media.webkitDecodedFrameCount) ? media.webkitDecodedFrameCount : 0;
+  const callbackSupported = typeof media.requestVideoFrameCallback === 'function';
   parent.postMessage({fixture: 'lokal-native-video', kind: kind,
     position: media.currentTime, duration: Number.isFinite(media.duration) ? media.duration : 0,
     state: media.ended ? 0 : media.paused ? 2 : media.readyState < 3 ? 3 : 1,
-    frames: quality ? quality.totalVideoFrames : (media.webkitDecodedFrameCount || 0)}, '*');
+    frames: callbackSupported ? frameCallbacks : Math.max(0, qualityFrames - droppedFrames, decodedFrames),
+    qualityFrames: qualityFrames, droppedFrames: droppedFrames, decodedFrames: decodedFrames,
+    presentedFrames: presentedFrames, frameCallbacks: frameCallbacks,
+    presentedMediaTime: presentedMediaTime,
+    frameCallbackSupported: callbackSupported,
+    videoWidth: media.videoWidth, videoHeight: media.videoHeight,
+    readyState: media.readyState}, '*');
 }
 media.addEventListener('loadedmetadata', function() { report('ready'); });
 for (const name of ['playing','pause','waiting','seeked','ended','timeupdate'])

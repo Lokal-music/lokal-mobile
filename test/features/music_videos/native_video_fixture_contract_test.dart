@@ -36,7 +36,7 @@ void main() {
             0,
             reason: '${result.stdout}\n${result.stderr}',
           );
-          expect((jsonDecode(result.stdout as String) as Map)['checks'], 8);
+          expect((jsonDecode(result.stdout as String) as Map)['checks'], 20);
         }
       } finally {
         await directory.delete(recursive: true);

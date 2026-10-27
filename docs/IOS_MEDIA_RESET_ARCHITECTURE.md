@@ -4,8 +4,7 @@ Status: hosted iOS 18.6 reset-path validation and continued acceptance,
 27 October 2026 (Europe/Paris). **Production observation remains deferred.**
 Build 39 passes the complete iOS 18.6 suite, including actual posted reset,
 late-native-HTTP and radio checks. Build 40 passes the complete iOS 26 suite on the parity source through #225,
-but exposes a background gain retirement race on iOS 18.6. The corrected WebKit
-and retained-session-observer continuation passes host tests and requires native execution.
+but exposes a background gain retirement race on iOS 18.6. Build 41 confirms the retained-session observer and all ordinary audio/reset/HTTP/radio checks on iOS 18.6, but its new WebKit frame assertion fails. The next test continuation observes actual presentation callbacks and retains the frame-delivery requirement; its native result is pending.
 Physical daemon/background/accessory acceptance remains open.
 
 Apple's [media-services reset contract](https://developer.apple.com/documentation/avfaudio/avaudiosession/mediaserviceswereresetnotification)
@@ -427,3 +426,39 @@ holds a native gain acknowledgement across reset, observes prompt background
 cancellation and a later native error, forbids stale publication, and verifies
 that an unrelated current gain failure still propagates. No global error-handler
 filter, refreshed request ticket, weakened assertion or automatic retry is used.
+
+
+## Build 41: audio/session pass, WebKit frame measurement still open
+
+[Build 41](https://github.com/lokal-music/lokal-mobile/actions/runs/40445664407)
+compiles/packages source `37d59f33ce89a5a57f95cbb3af4e7795b3008551`, tree
+`90c719c8b0f5552e063a006273dc4f45d8ec0dab`; the runtime report identifies PR
+merge `1d279f87ac5663cd37ea133353fd4818fef6daa1`. Its iOS 18.6 run passes
+all ordinary app/codec checks and posted AVPlayer/Rust reset, newer selection,
+late-native-HTTP and radio cases. Retained session observers now pass actual
+Lost/Reset/interruption plugin checks: an old interruption-end stays paused,
+a fresh interruption still pauses/resumes, and replay advances 528 ms. Rust
+reset replay advances 352 ms, stale HTTP replacement 555 ms, and radio opens
+four actual loopback requests. No uncaught background gain retirement recurs.
+
+The new offline WebKit test reaches source-clock advancement, then fails its
+quality-frame assertion with `totalVideoFrames = 0`. That does not establish
+whether the decoder failed or that specific counter is unavailable/delayed.
+The full run fails; no WebKit reset or complete native-suite pass is claimed.
+Diagnostics artifact `12710330509` SHA-256:
+`c5fb8b718199606d7604859bf78aa049118f833253b33fa87e9db5a8d648f123`.
+Runtime artifact `12710315603` SHA-256:
+`d1b4c7b4ebbebd48e6ac519cd182584d66de0b4ac2472e95be65ef0825823057`.
+Diagnostics, JSON and screenshots are preserved locally with the archive hash
+verified before extraction.
+
+The next fixture observes `requestVideoFrameCallback` when supported, counting
+only delivered callbacks and reporting actual presented media time. Otherwise it
+uses the decoder counter or quality frames after subtracting dropped frames.
+A clock/timeupdate sample never becomes a frame. The gate requires more than
+two **new** delivered frames plus native and bridge clock progress; presentation
+time must also advance when callbacks are supported. It waits for both signals
+and saves counter support, each raw counter, dimensions, readiness and stage in
+the JSON report before a failure. Twenty controlled-DOM assertions execute the
+actual fixture and production scripts for each start mode; these are host
+contract evidence, not native decoding. Real WebKit acceptance is pending.

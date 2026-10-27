@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flick/core/theme/app_theme.dart';
 import 'package:flick/features/music_videos/music_video_controller.dart';
 import 'package:flick/features/music_videos/music_video_surface.dart';
@@ -32,7 +34,7 @@ Future<void> probeIosWebKitReset(
     onMediaReset: video.retireForMediaReset,
   );
 
-  Future<void> until(bool Function() ready, String reason) async {
+  Future<void> until(FutureOr<bool> Function() ready, String reason) async {
     for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 250));
       expect(
@@ -45,7 +47,7 @@ Future<void> probeIosWebKitReset(
         isNull,
         reason: '$reason: generated local media did not become playable',
       );
-      if (ready()) return;
+      if (await ready()) return;
     }
     fail(reason);
   }
@@ -58,20 +60,38 @@ Future<void> probeIosWebKitReset(
     return value as Map;
   }
 
-  Future<int> progress() async {
+  Future<int> progress(String stage) async {
     final before = video.sourcePosition;
-    await until(
-      () =>
-          video.playingNotifier.value &&
-          video.sourcePosition - before > const Duration(milliseconds: 350),
-      'Real WebKit source time did not advance',
-    );
-    final snapshot = await nativeSnapshot();
+    final initialFrame = await nativeSnapshot();
+    final beforeFrames = (initialFrame['frames'] as num?) ?? 0;
+    final beforeMediaTime = (initialFrame['position'] as num?) ?? 0;
+    final beforePresentedTime =
+        (initialFrame['presentedMediaTime'] as num?) ?? 0;
+    Map snapshot = initialFrame;
+    await until(() async {
+      snapshot = await nativeSnapshot();
+      binding.reportData!['media_reset_webkit_last_frame_observation'] = {
+        'stage': stage,
+        'before_frames': beforeFrames,
+        'before_media_time': beforeMediaTime,
+        'bridge_progress_ms': (video.sourcePosition - before).inMilliseconds,
+        'native_sample': Map<String, dynamic>.from(snapshot),
+      };
+      return video.playingNotifier.value &&
+          snapshot['state'] == 1 &&
+          video.sourcePosition - before > const Duration(milliseconds: 350) &&
+          ((snapshot['position'] as num?) ?? 0) - beforeMediaTime > .350 &&
+          ((snapshot['frames'] as num?) ?? 0) - beforeFrames > 2 &&
+          (snapshot['frameCallbackSupported'] != true ||
+              ((snapshot['presentedMediaTime'] as num?) ?? 0) -
+                      beforePresentedTime >
+                  .250);
+    }, 'Real WebKit must advance both source time and newly delivered frames');
     expect(snapshot['state'], 1);
     expect(
-      snapshot['frames'],
+      (snapshot['frames'] as num) - beforeFrames,
       greaterThan(2),
-      reason: 'The real WebKit video decoder must deliver frames',
+      reason: 'The real WebKit video decoder must deliver new frames',
     );
     return (video.sourcePosition - before).inMilliseconds;
   }
@@ -115,7 +135,7 @@ Future<void> probeIosWebKitReset(
       () => video.timingAvailableNotifier.value && views.length == 1,
       'Production video bridge did not observe the local decoder',
     );
-    final initialProgress = await progress();
+    final initialProgress = await progress('initial');
     final presentation = key.currentState;
     space.value = true;
     await tester.pump();
@@ -161,7 +181,7 @@ Future<void> probeIosWebKitReset(
     );
     await binding.takeScreenshot('ios-webkit-reset-paused-space');
     await video.command('play');
-    final replayProgress = await progress();
+    final replayProgress = await progress('explicit-replay');
     expect(lifecycle.phase.value, LocalAudioPhase.ready);
 
     await video.command('pause');
