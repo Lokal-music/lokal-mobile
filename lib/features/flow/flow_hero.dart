@@ -61,17 +61,18 @@ class FlowHero extends StatelessWidget {
                             .copyWith(letterSpacing: 2.5),
                       ),
                     ),
-                    IconButton(
+                    OutlinedButton.icon(
                       key: const Key('flow-tune-button'),
-                      tooltip: 'Tune Flow',
                       onPressed: onTune,
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(44, 44),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         foregroundColor: t.text,
                         backgroundColor: t.surface3,
                         side: BorderSide(color: t.border2),
                       ),
-                      icon: const Icon(Icons.tune_rounded, size: 20),
+                      icon: const Icon(Icons.tune_rounded, size: 18),
+                      label: const Text('Tune'),
                     ),
                   ],
                 ),
