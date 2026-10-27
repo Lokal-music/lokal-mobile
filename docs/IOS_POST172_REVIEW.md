@@ -719,3 +719,35 @@ The new source and controls additionally pass actual enable/disable, preview,
 AAC-HLS selection and all-locale/large-text cases. Native acceptance of this
 53-PR source, live providers, actual cellular routing and physical listening
 are still pending.
+
+
+### Parity through #246 — 27 October 2026
+
+Four further merged product PRs bring the audit to **57**. PR #247 is open at
+this checkpoint and is not counted as a merged change. Native acceptance does
+not transfer between source revisions.
+
+| PR / exact merged source | iPhone behavior and adaptation |
+| --- | --- |
+| [243](https://github.com/lokal-music/lokal-mobile/pull/243) / `3ea3ba76678b37f323f14fb16f62ee6662ff730b` | Explicit footer Search taps focus or reopen the keyboard without resetting the query; ordinary Search respects its auto-focus preference. Both queue views retain per-section recording occurrence keys. Manual queue changes notify immediately and Up Next reordering updates the manual backing order. Flutter's normalized `onReorderItem` target is applied exactly once. Both grips have a fully hit-testable 44×48 area; merely enlarging a transparent, non-hit-testable child left only the icon draggable. |
+| [244](https://github.com/lokal-music/lokal-mobile/pull/244) / `9e9d0943184d1ac3b214ae8364f8ca01cd434faa` | Home includes Local / Discovery / Flow under its shared header; embedded Flow can scroll that header away at large text sizes. Discovery source controls sit below the greeting. Only actual provider Home song/playlist/album categories render; unknown/absent shelves are omitted. Long-press a source to reorder/hide its shelves using stable, per-provider IDs. Save order and visibility as one acknowledged record, migrate the older two-key shape, restore cached preferences on rejection, and keep the sheet open with localized feedback on failure. The sheet reserves bounded space with a scrolling flexible list at large text sizes. |
+| [245](https://github.com/lokal-music/lokal-mobile/pull/245) / `15de4347f05012fa3afec64df43e2898905f1840` | Cover Flow's full-width stage uses the active theme background. Live changes across all ten theme IDs preserve the mounted cover flow, its perspective and gestures. |
+| [246](https://github.com/lokal-music/lokal-mobile/pull/246) / `663c4d593db0f5cdd6a6704f2596ba5089818668` | Carry the direct `ValueListenable` import required for Search compilation; add the same missing import in the upstream regression test. Update new semantics checks to the SDK's `getSemanticsData()` API and dispose test handles before invariant checking. |
+
+New shelf instructions, category names, customization titles and save-failure
+feedback have all ten non-English translations. The Home/Discovery regression
+selection checks actual bundled-font layouts at 320px with 200% text. The native
+widget bridge checkpoint passes its real Flutter framework checks independently;
+no runtime sampler, WidgetKit UI, entitlement or physical iPhone result is
+inferred from that pass. Android CI stays manually disabled; native audio/Rust
+and dependency locks are unchanged.
+
+
+Validation of the through-#246 continuation: the exact expanded iPhone workflow
+selection plus 85 widget/Android-widget contracts passes **583 Flutter tests**.
+The 68 focused parity cases pass, as do five Flow screen cases including actual
+Home mode entry and large-text header scrolling. Focused new model/probe tests
+have no analysis issues; whole app/integration analysis has no errors (618
+warning/information items remain). Actionlint and diff checks pass. Latest-source
+native queue/video/channel acceptance and physical/device/provider qualification
+remain pending.

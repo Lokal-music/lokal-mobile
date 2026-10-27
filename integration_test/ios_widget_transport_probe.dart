@@ -40,11 +40,23 @@ Future<void> probeIosWidgetTransport(
       ),
     ),
   );
+  await expectLater(
+    const MethodChannel('lokal/widgets')
+        .invokeMethod<void>('unsupported-operation'),
+    throwsA(
+      isA<PlatformException>().having(
+        (error) => error.code,
+        'code',
+        'UNSUPPORTED_WIDGET_METHOD',
+      ),
+    ),
+  );
   binding.reportData!['widget_unconfigured_installation'] = {
     'scope':
         'Actual native bridge in standalone unprovisioned simulator bundle',
     'capability': 'notConfigured',
     'publication_rejected_explicitly': true,
+    'unsupported_operation_rejected_explicitly': true,
     'signed_group_or_extension_acceptance': false,
   };
 }

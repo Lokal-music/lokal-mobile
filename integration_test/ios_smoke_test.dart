@@ -50,6 +50,7 @@ import 'ios_radio_reset_probe.dart';
 import 'ios_webkit_reset_probe.dart';
 import 'ios_session_reset_probe.dart';
 import 'ios_widget_transport_probe.dart';
+import 'ios_queue_reorder_probe.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -367,6 +368,8 @@ void main() {
     await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
+
+    await probeIosQueueReorder(tester, binding, player, song);
 
     // Controlled external-owner acknowledgements exercise the actual player
     // queue and AVPlayer. This is ownership coverage, not YouTube acceptance.

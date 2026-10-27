@@ -4,21 +4,34 @@ Status: implementation and hosted native validation, 27 October 2026 (Europe/Par
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
-Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
-**Build 34 passes both complete native suites on iOS 18.6 and 26.0**, using
-a fresh Mac for iOS 26. It is the current complete checkpoint through #217.
-Build 39 passes the complete iOS 18.6 suite through #219, including posted-reset/HTTP/radio acceptance. Build 40 passes that complete suite on iOS 26 with the 44-PR parity source through #225; its iOS 18.6 run exposes an uncaught background gain-update retirement, now corrected in the next candidate. The WebKit/session continuation still requires native acceptance. The iOS 16+
-unsigned engineering IPA passes inspection of 34 device binaries, Cast resources,
-privacy metadata, source/notices and matching symbols. See the exact source,
-checksum and native evidence in the build-34 checkpoint below. Installation still
-requires local signing; physical-device and Windows install/update acceptance
-remain open.
+Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
+app for the iOS 16+ port. The current parity source includes **57 reviewed merged
+mobile PRs after #172 through #246**. Search keyboard behavior, queue reordering,
+configurable Discovery shelves and theme-aware Cover Flow are included in the
+latest continuation. [The source audit](IOS_POST172_REVIEW.md) records the exact
+merged commits and platform adaptations.
 
-The stacked parity continuation carries **44 reviewed merged mobile PRs after #172 through #225**, including
-Likes stream revalidation, retained-artwork Space, separate video timing, search,
-profile, notification artwork, playlists and locale updates. See
-[the PR-by-PR UI/behavior review and revised WidgetKit design](IOS_POST172_REVIEW.md)
-and [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md).
+**This source is not a finalized release.** Build 34 remains the last complete
+pass of both native suites on iOS 18.6 and 26.0, at the older through-#217 source.
+Later runs build inspected unsigned engineering IPAs and pass ordinary playback,
+but expose recovery acceptance failures or simulator-host failures. The next
+candidate retains the native playback clock/frame gates while correcting a
+metadata-only seek in the controlled video fixture.
+
+| Checkpoint | Accepted scope and limit |
+| --- | --- |
+| Build 34 | Complete dual-runtime baseline through #217; preserved IPA/source/symbols. Does not qualify later changes. |
+| Build 40 | Complete iOS 26 suite through #225; iOS 18.6 exposed a retired background-gain update, corrected in the continuation. |
+| Builds 45–46 | Actual initial WebKit frame callbacks and clock progress pass; explicit replay fails. Blob transport alone did not resolve the stuck seek. |
+| Builds 47/49 | Engineering package builds; iOS 18.6 replay still fails and iOS 26 host boot times out before app acceptance. |
+| [Widget native run 7](https://github.com/lokal-music/lokal-mobile/actions/runs/40481024530) / PR #248 | Real Flutter bridge checks pass for iOS 16 arm64 device/simulator with Swift 6 warnings-as-errors, plus 85 Flutter, 45 reader, 20 store and 14 publisher cases. App Group provisioning, runtime sampling and WidgetKit UI are separate gates. |
+| Build 51 / PR #248 | Full app/channel and data-ready video recovery acceptance pending. The through-#246 continuation additionally introduces a real-service queue reorder probe. |
+
+Unsigned engineering packages pass binary/resource/privacy/source/notices and
+matching-symbol inspection. Installation still requires local signing. See
+[Windows installation and acceptance](IOS_SIDELOADING.md), the
+[widget implementation gates](IOS_WIDGETKIT.md), and
+[current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md).
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
@@ -33,9 +46,9 @@ The IPA is an engineering build, not a qualified release. See
 flowchart LR
   Source["Flutter + Rust source"] --> Mac["Hosted Xcode 26.0.1"]
   Mac --> Device["arm64 release/AOT · build passes"]
-  Mac --> Sim["iOS 26 + 18.6 · full app shell renders"]
+  Mac --> Sim["iOS 26 + 18.6 · baseline shell renders"]
   Device --> IPA["Unsigned engineering IPA · inspection passes"]
-  Sim --> Smoke["Scanner / QuickJS / audio · simulator passes"]
+  Sim --> Smoke["Latest playback / recovery acceptance · pending"]
   IPA --> Windows["Windows re-sign/install · untested"]
   Windows --> Phone["Physical iPhone acceptance · pending"]
 ```
@@ -68,8 +81,9 @@ native channel adapter, confirmed commands and a guarded local/remote handoff.
 Its standalone native device/simulator linkage and integrated application tests
 pass; actual receiver acceptance remains pending. WidgetKit extension delivery, Discord feasibility and resumable
 background transfers remain open work. The [widget metadata foundation](IOS_WIDGETKIT.md)
-now defines the canonical-state writer, bounded shared JSON and tolerant Swift
-reader; App Group persistence, actual widget UI and signing remain pending. Native desktop Bonjour discovery
+now implements the canonical-state writer, bounded JSON, tolerant native reader,
+atomic store, artwork publication and actual Flutter channel. Runtime sampling,
+provisioned App Group publication, widget UI/actions and Windows signing remain pending. Native desktop Bonjour discovery
 passes its controlled service/HTTP checks on build 18 / iOS 18.6. Live add-on stream handles currently
 retain the system streaming adapter and explicitly report Rust DSP bypass;
 DSP support for those sources remains open rather than attempting to open an
@@ -1125,3 +1139,40 @@ show the restored seek beginning at metadata-only readiness and staying pending
 while frames decode. The updated fixture defers cue until data is ready; the
 probe requires actual seek completion before measuring progress. This is a
 pending native experiment, with the existing progress/frame gates retained.
+
+
+### Through-#246 parity continuation
+
+The new Home modes share the greeting and retain a scrolling header for embedded
+Flow so large text cannot reserve the entire screen. Discovery section visibility
+and order commit as one acknowledged, normalized preference record; rejected
+writes restore the attempted cache and leave the editor available for retry.
+The sheet uses a bounded flexible list rather than a fixed-height list competing
+with expanded localized headings. All new messages have ten non-English
+translations. Actual bundled-font tests exercise all eleven locales at 320px
+with 200% text, queue tests use real drag gestures, and theme tests preserve the
+mounted Cover Flow across all ten themes.
+
+The new native queue probe exercises the actual PlayerService and native player:
+a normalized adjacent downward move, immediate manual notifier updates, matching
+Up Next/manual order, and preservation of the paused current recording and
+playhead. Its first hosted execution is pending. No mock notifier pass is used
+as evidence of native queue acceptance. The native widget probe also checks the
+explicit unsupported-operation reply introduced by the Swift 6 bridge correction.
+
+Remaining implementation: canonical widget runtime sampling/owned artwork,
+read-only WidgetKit layouts and owned app commands, suspension-safe transfers,
+and the feasible Discord surface. Remaining qualification: complete latest-source
+native acceptance, live provider/Cast behavior, physical playback/background/
+interruption/routes, and Windows re-sign/install/update/refresh with the actual
+profile. These are release gates, not time estimates.
+
+
+Validation of the through-#246 continuation: the exact expanded iPhone workflow
+selection plus 85 widget/Android-widget contracts passes **583 Flutter tests**.
+The 68 focused parity cases pass, as do five Flow screen cases including actual
+Home mode entry and large-text header scrolling. Focused new model/probe tests
+have no analysis issues; whole app/integration analysis has no errors (618
+warning/information items remain). Actionlint and diff checks pass. Latest-source
+native queue/video/channel acceptance and physical/device/provider qualification
+remain pending.

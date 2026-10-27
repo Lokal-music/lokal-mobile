@@ -11,7 +11,10 @@ import 'package:flick/features/konnekted/konnekted_discovery_view.dart';
 import 'package:flick/features/konnekted/konnekted_home.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
 import 'package:flick/models/song.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,7 +109,7 @@ Future<Map<String, dynamic>> _lastfm(
   };
 }
 
-Widget _app(Widget child, {String? account = 'me'}) => ProviderScope(
+Widget _app(Widget child, {String? account = 'me', double scale = 1}) => ProviderScope(
   overrides: [
     konnektedLibraryProvider.overrideWithValue(AsyncData(_library)),
     konnektedFavoritesProvider.overrideWithValue(const AsyncData([])),
@@ -119,6 +122,10 @@ Widget _app(Widget child, {String? account = 'me'}) => ProviderScope(
   ],
   child: MaterialApp(
     theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+      child: child!,
+    ),
     home: Scaffold(body: child),
   ),
 );
@@ -164,6 +171,14 @@ class _ReadySpotify extends KonnektedDiscoveryNotifier {
 }
 
 void main() {
+  setUpAll(() async {
+    for (final (family, asset) in [
+      (LokalTheme.sans, 'assets/fonts/DMSans-Regular.ttf'),
+      ('NotoSansSC', 'assets/fonts/NotoSansSC-Regular.ttf'),
+    ]) {
+      await (FontLoader(family)..addFont(rootBundle.load(asset))).load();
+    }
+  });
   test('Morneye playback cache key isolates addon version, settings, tier and song', () {
     String key({
       String addon = 'qobuz', String digest = 'v1',
@@ -547,4 +562,74 @@ void main() {
     expect(find.text('Fresh Finds'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('long-press provider opens persisted shelf customization', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(412, 915)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(SingleChildScrollView(
+        child: KonnektedDiscoveryView(
+          onNavigate: (_) {},
+          onPlay: (_, _) {},
+        ),
+      )),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Albums For You'), findsOneWidget);
+    final semantics = tester.ensureSemantics();
+    final provider = tester.getSemantics(find.bySemanticsLabel('Last.fm'));
+    expect(provider.getSemanticsData().hasAction(SemanticsAction.longPress), isTrue);
+    tester.binding.pipelineOwner.semanticsOwner!.performAction(
+      provider.id, SemanticsAction.longPress,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose sections to show and drag to reorder.'),
+        findsOneWidget);
+    expect(find.byType(ReorderableListView), findsOneWidget);
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Albums For You'), findsNothing);
+    semantics.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
+
+  testWidgets('Discovery customization fits every locale at 200% on 320px', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final previous = l10n;
+    addTearDown(() => LocaleController.instance.bind(previous));
+    for (final locale in kSupportedLocales) {
+      LocaleController.instance.bindLocale(locale);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(_app(
+        SingleChildScrollView(child: KonnektedDiscoveryView(
+          onNavigate: (_) {}, onPlay: (_, _) {},
+        )), scale: 2,
+      ));
+      await tester.pumpAndSettle();
+      final provider = find.bySemanticsLabel('Last.fm');
+      await tester.ensureVisible(provider);
+      await tester.pumpAndSettle();
+      await tester.longPress(provider);
+      await tester.pumpAndSettle();
+      final instructions = lokalText('Choose sections to show and drag to reorder.');
+      expect(find.text(instructions), findsOneWidget);
+      if (locale.languageCode != 'en') expect(instructions, isNot('Choose sections to show and drag to reorder.'));
+      final done = find.text(lokalText('Done'));
+      expect(done, findsOneWidget);
+      expect(tester.takeException(), isNull, reason: '$locale sheet');
+      await tester.tap(done);
+      await tester.pumpAndSettle();
+      expect(find.byType(ReorderableListView), findsNothing);
+      expect(tester.takeException(), isNull, reason: '$locale save');
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
 }

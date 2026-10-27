@@ -11,6 +11,8 @@ import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/player_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,6 +49,49 @@ Song _track(String id) => Song(
 );
 
 void main() {
+  setUpAll(() async {
+    for (final (family, asset) in [
+      (LokalTheme.sans, 'assets/fonts/DMSans-Regular.ttf'),
+      ('NotoSansSC', 'assets/fonts/NotoSansSC-Regular.ttf'),
+    ]) {
+      await (FontLoader(family)..addFont(rootBundle.load(asset))).load();
+    }
+  });
+  testWidgets('Home header tabs remain readable and screen-reader actionable', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(320, 568)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final selected = <KonnektedHomeTab>[];
+    await tester.pumpWidget(
+      _app(
+        KonnektedHomeTopBar(
+          onSettings: () {},
+          onAppearance: () {},
+          selectedTab: KonnektedHomeTab.local,
+          onTabChanged: selected.add,
+        ),
+        scale: 2,
+      ),
+    );
+    final semantics = tester.ensureSemantics();
+    final discovery = find.bySemanticsLabel('Discovery');
+    expect(discovery, findsOneWidget);
+    // Never shrink the mode controls with FittedBox on a narrow device.
+    expect(tester.getSize(discovery).height, greaterThanOrEqualTo(44));
+    final node = tester.getSemantics(discovery);
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    tester.binding.pipelineOwner.semanticsOwner!.performAction(
+      node.id, SemanticsAction.tap,
+    );
+    await tester.pump();
+    expect(selected, [KonnektedHomeTab.discovery]);
+    semantics.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Your Mixes play with their own queues', (tester) async {
     final mixes = [
       for (final name in ['Daily Mix', 'New Arrivals', 'Most Played'])
@@ -82,7 +127,7 @@ void main() {
     expect(find.text('4 songs'), findsNWidgets(3));
   });
 
-  testWidgets('Cover Flow shows Made for you; a tap plays with it queued', (
+  testWidgets('Cover Flow has no redundant heading; a tap plays with it queued', (
     tester,
   ) async {
     final recent = [_track('r1'), _track('r2'), _track('r3')];
@@ -110,13 +155,12 @@ void main() {
               played = song;
               queue = shelf;
             },
-            onOpenFlow: () {},
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('MADE FOR YOU'), findsOneWidget);
+    expect(find.text('MADE FOR YOU'), findsNothing);
     expect(find.text('RECENT'), findsNothing);
     expect(find.text('NEW'), findsNothing);
     expect(find.text('Track r2'), findsOneWidget); // The shelf starts in the middle.
@@ -180,13 +224,15 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Settings'));
       await tester.tap(find.bySemanticsLabel('Appearance'));
       expect(find.byTooltip('Settings'), findsOneWidget);
-      await tester.tap(find.bySemanticsLabel('Open Flow'));
+      // Flow is now a third Home mode, not a separate Cover Flow button.
+      expect(find.bySemanticsLabel('Flow'), findsOneWidget);
+      expect(find.bySemanticsLabel('Discovery'), findsOneWidget);
       expect(opened, [
         KonnektedDestination.settings,
         const KonnektedDestination.settingsAt(LokalSettingsGroup.themeAccent),
-        KonnektedDestination.flow,
       ]);
-      await tester.scrollUntilVisible(find.text('Add your music'), 180);
+      await tester.scrollUntilVisible(find.text('Add your music'), 180,
+        scrollable: find.descendant(of: find.byType(CustomScrollView).first, matching: find.byType(Scrollable)).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add your music'));
       expect(

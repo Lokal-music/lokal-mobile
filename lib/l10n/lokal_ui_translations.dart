@@ -1,5 +1,13 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Choose sections to show and drag to reorder.": "Choisissez les sections à afficher et faites-les glisser pour les réorganiser.",
+  "From the community": "De la communauté",
+  "New releases": "Nouveautés",
+  "Trending songs for you": "Titres tendance pour vous",
+  "Featured playlists for you": "Playlists sélectionnées pour vous",
+  "Your daily discover": "Votre découverte du jour",
+  "Could not save Discovery layout. Try again.": "Impossible d’enregistrer la disposition de Découverte. Réessayez.",
+  "Customize {arg0}": "Personnaliser {arg0}",
   "SoundCloud (preview)": "SoundCloud (extrait)",
   "Eco Data Mode": "Mode économie de données",
   "Mobile data": "Données mobiles",
@@ -586,6 +594,14 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Choose sections to show and drag to reorder.": "Wähle sichtbare Bereiche und ziehe sie zum Sortieren.",
+  "From the community": "Aus der Community",
+  "New releases": "Neuerscheinungen",
+  "Trending songs for you": "Angesagte Songs für dich",
+  "Featured playlists for you": "Ausgewählte Playlists für dich",
+  "Your daily discover": "Deine tägliche Entdeckung",
+  "Could not save Discovery layout. Try again.": "Discovery-Layout konnte nicht gespeichert werden. Versuche es erneut.",
+  "Customize {arg0}": "{arg0} anpassen",
   "SoundCloud (preview)": "SoundCloud (Hörprobe)",
   "Eco Data Mode": "Datensparmodus",
   "Mobile data": "Mobile Daten",
@@ -1165,6 +1181,14 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Choose sections to show and drag to reorder.": "Elige las secciones que se mostrarán y arrástralas para ordenarlas.",
+  "From the community": "De la comunidad",
+  "New releases": "Novedades",
+  "Trending songs for you": "Canciones en tendencia para ti",
+  "Featured playlists for you": "Playlists destacadas para ti",
+  "Your daily discover": "Tu descubrimiento diario",
+  "Could not save Discovery layout. Try again.": "No se pudo guardar el diseño de Descubrimiento. Inténtalo de nuevo.",
+  "Customize {arg0}": "Personalizar {arg0}",
   "SoundCloud (preview)": "SoundCloud (vista previa)",
   "Eco Data Mode": "Modo de ahorro de datos",
   "Mobile data": "Datos móviles",
@@ -1752,6 +1776,14 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Choose sections to show and drag to reorder.": "Scegli le sezioni da mostrare e trascinale per riordinarle.",
+  "From the community": "Dalla community",
+  "New releases": "Nuove uscite",
+  "Trending songs for you": "Brani di tendenza per te",
+  "Featured playlists for you": "Playlist selezionate per te",
+  "Your daily discover": "La tua scoperta quotidiana",
+  "Could not save Discovery layout. Try again.": "Impossibile salvare la disposizione di Scopri. Riprova.",
+  "Customize {arg0}": "Personalizza {arg0}",
   "SoundCloud (preview)": "SoundCloud (anteprima)",
   "Eco Data Mode": "Modalità risparmio dati",
   "Mobile data": "Dati mobili",
@@ -2341,6 +2373,14 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Choose sections to show and drag to reorder.": "Escolha as seções e arraste para reordenar.",
+  "From the community": "Da comunidade",
+  "New releases": "Lançamentos",
+  "Trending songs for you": "Músicas em alta para você",
+  "Featured playlists for you": "Playlists em destaque para você",
+  "Your daily discover": "Sua descoberta diária",
+  "Could not save Discovery layout. Try again.": "Não foi possível salvar o layout de Descobrir. Tente novamente.",
+  "Customize {arg0}": "Personalizar {arg0}",
   "SoundCloud (preview)": "SoundCloud (prévia)",
   "Eco Data Mode": "Modo de economia de dados",
   "Mobile data": "Dados móveis",
@@ -2925,6 +2965,14 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Choose sections to show and drag to reorder.": "Kies welke secties je wilt zien en sleep ze om te sorteren.",
+  "From the community": "Uit de community",
+  "New releases": "Nieuwe releases",
+  "Trending songs for you": "Populaire nummers voor jou",
+  "Featured playlists for you": "Uitgelichte afspeellijsten voor jou",
+  "Your daily discover": "Je dagelijkse ontdekking",
+  "Could not save Discovery layout. Try again.": "De Ontdekken-indeling kon niet worden opgeslagen. Probeer opnieuw.",
+  "Customize {arg0}": "{arg0} aanpassen",
   "SoundCloud (preview)": "SoundCloud (fragment)",
   "Eco Data Mode": "Databesparingsmodus",
   "Mobile data": "Mobiele data",
@@ -3521,6 +3569,14 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Choose sections to show and drag to reorder.": "Wybierz widoczne sekcje i przeciągnij, aby zmienić kolejność.",
+  "From the community": "Od społeczności",
+  "New releases": "Nowości",
+  "Trending songs for you": "Popularne utwory dla Ciebie",
+  "Featured playlists for you": "Polecane playlisty dla Ciebie",
+  "Your daily discover": "Twoje codzienne odkrycie",
+  "Could not save Discovery layout. Try again.": "Nie udało się zapisać układu Odkrywaj. Spróbuj ponownie.",
+  "Customize {arg0}": "Dostosuj {arg0}",
   "SoundCloud (preview)": "SoundCloud (fragment)",
   "Eco Data Mode": "Tryb oszczędzania danych",
   "Mobile data": "Dane komórkowe",
@@ -4107,6 +4163,14 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Choose sections to show and drag to reorder.": "Välj vilka avsnitt som visas och dra för att ändra ordning.",
+  "From the community": "Från gemenskapen",
+  "New releases": "Nya släpp",
+  "Trending songs for you": "Populära låtar för dig",
+  "Featured playlists for you": "Utvalda spellistor för dig",
+  "Your daily discover": "Din dagliga upptäckt",
+  "Could not save Discovery layout. Try again.": "Kunde inte spara layouten för Upptäck. Försök igen.",
+  "Customize {arg0}": "Anpassa {arg0}",
   "SoundCloud (preview)": "SoundCloud (förhandslyssning)",
   "Eco Data Mode": "Datasparläge",
   "Mobile data": "Mobildata",
@@ -4699,6 +4763,14 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Choose sections to show and drag to reorder.": "选择要显示的栏目，拖动可调整顺序。",
+  "From the community": "来自社区",
+  "New releases": "新发行",
+  "Trending songs for you": "为你推荐的热门歌曲",
+  "Featured playlists for you": "为你精选的歌单",
+  "Your daily discover": "每日发现",
+  "Could not save Discovery layout. Try again.": "无法保存发现页布局，请重试。",
+  "Customize {arg0}": "自定义{arg0}",
   "SoundCloud (preview)": "SoundCloud（试听片段）",
   "Eco Data Mode": "省流量模式",
   "Mobile data": "移动数据",
@@ -5290,6 +5362,14 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Choose sections to show and drag to reorder.": "Gösterilecek bölümleri seçin ve sıralamak için sürükleyin.",
+  "From the community": "Topluluktan",
+  "New releases": "Yeni çıkanlar",
+  "Trending songs for you": "Senin için popüler şarkılar",
+  "Featured playlists for you": "Senin için öne çıkan çalma listeleri",
+  "Your daily discover": "Günlük keşfin",
+  "Could not save Discovery layout. Try again.": "Keşfet düzeni kaydedilemedi. Tekrar deneyin.",
+  "Customize {arg0}": "{arg0} özelleştir",
   "SoundCloud (preview)": "SoundCloud (önizleme)",
   "Eco Data Mode": "Veri tasarrufu modu",
   "Mobile data": "Mobil veri",
