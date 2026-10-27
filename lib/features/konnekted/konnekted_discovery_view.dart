@@ -26,6 +26,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'discovery_shelf_layout.dart';
 import 'konnekted_data.dart';
 import 'konnekted_destination.dart';
 import 'konnekted_discovery.dart';
@@ -72,13 +73,156 @@ class _KonnektedDiscoveryViewState
     extends ConsumerState<KonnektedDiscoveryView> {
   _Shelf? _open;
   String? _busy;
+  String? _expandedCategory;
+  final _shelfStore = const DiscoveryShelfLayoutStore();
+  final _shelfLayouts = <String, DiscoveryShelfLayout>{};
 
   @override
   void initState() {
     super.initState();
+    unawaited(_restoreShelfLayouts());
     Future.microtask(() {
       if (mounted) ref.read(konnektedDiscoveryProvider.notifier).load();
     });
+  }
+
+  Future<void> _restoreShelfLayouts() async {
+    for (final provider in discoveryShelfDefaults.keys) {
+      final layout = await _shelfStore.read(provider);
+      if (!mounted) return;
+      setState(() => _shelfLayouts.putIfAbsent(provider, () => layout));
+    }
+  }
+
+  DiscoveryShelfLayout _layout(KonnektedDiscoverySource source) =>
+      _shelfLayouts[source.name] ?? DiscoveryShelfLayout.defaults(source.name);
+
+  List<Widget> _arranged(
+    KonnektedDiscoverySource source, Map<String, List<Widget>> shelves,
+  ) => [
+    for (final id in _layout(source).visible) ...?shelves[id],
+  ];
+
+  Future<void> _customize(KonnektedDiscoverySource source) async {
+    final provider = source.name;
+    var layout = _layout(source);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, update) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  lokalText('Customize ${source.name == 'youtube' ? 'YouTube Music' : source.name == 'lastfm' ? 'Last.fm' : 'Spotify'}'),
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  lokalText('Choose sections to show and drag to reorder.'),
+                  style: TextStyle(color: sheetContext.lokal.muted),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: MediaQuery.sizeOf(sheetContext).height * .56,
+                  child: ReorderableListView(
+                    buildDefaultDragHandles: true,
+                    onReorder: (from, to) => update(
+                      () => layout = layout.moved(from, to),
+                    ),
+                    children: [
+                      for (final id in layout.order)
+                        SwitchListTile(
+                          key: ValueKey(id),
+                          title: Text(lokalText(discoveryShelfTitles[id] ?? id)),
+                          secondary: const Icon(Icons.drag_handle_rounded),
+                          value: !layout.hidden.contains(id),
+                          onChanged: (show) => update(
+                            () => layout = layout.showing(id, show),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      setState(() => _shelfLayouts[provider] = layout);
+                      unawaited(_shelfStore.write(provider, layout));
+                      Navigator.of(sheetContext).pop();
+                    },
+                    child: Text(lokalText('Done')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _youtubeCategory(
+    LokalDiscoveryCategory category, KonnektedLibraryIndex library,
+  ) {
+    final entries = category.tracks;
+    final expanded = _expandedCategory == category.id;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        KonnektedSectionHeading(
+          title: lokalText(discoveryShelfTitles[category.id] ?? category.id),
+          onSeeAll: entries.length > 6
+              ? () => setState(
+                    () => _expandedCategory = expanded ? null : category.id,
+                  )
+              : null,
+          seeAllLabel: expanded ? 'Show less' : 'See all',
+        ),
+        for (final track in expanded ? entries : entries.take(6))
+          KonnektedDiscoveryRow(
+            track: track,
+            inLibrary: library.match(track) != null,
+            busy: _busy == track.key,
+            onTap: () => _play(track, entries),
+            onMore: () => unawaited(_actions(track, entries)),
+            onQueue: () => _enqueue(track),
+          ),
+        if (category.mixes.isNotEmpty)
+          _MixShelf(
+            storageKey: 'youtube-${category.id}',
+            mixes: category.mixes,
+            busyId: _busy?.startsWith('mix:') == true
+                ? _busy!.substring(4) : null,
+            onTap: _playMix,
+          ),
+        if (category.albums.isNotEmpty)
+          _AlbumShelf(
+            albums: category.albums,
+            onTap: (album) => pushLokal(
+              context,
+              LokalMusicDetailPage.album(
+                title: album.title,
+                artist: album.artist,
+                localSongs: _library().album(album.title, album.artist),
+                initialOnline: true,
+                release: LokalCatalogueAlbum(
+                  title: album.title,
+                  artist: album.artist,
+                  artwork: album.artworkUrl,
+                  url: album.url,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   void _toggle(_Shelf shelf) =>
@@ -401,6 +545,7 @@ class _KonnektedDiscoveryViewState
           onSourceChanged: (next) {
             unawaited(_selectDiscoverySource(next));
           },
+          onCustomize: (provider) => unawaited(_customize(provider)),
           onRefresh: () {
             HapticFeedback.selectionClick();
             ref.read(konnektedDiscoveryProvider.notifier).load(refresh: true);
@@ -642,6 +787,7 @@ class _KonnektedDiscoveryViewState
           onSourceChanged: (next) {
             unawaited(_selectDiscoverySource(next));
           },
+          onCustomize: (provider) => unawaited(_customize(provider)),
           onRefresh: () {
             HapticFeedback.selectionClick();
             ref.invalidate(konnektedSpotifyDiscoveryProvider);
@@ -815,153 +961,70 @@ class _KonnektedDiscoveryViewState
   }
 }
 
-/// Discovery's title row and provider switch.
+/// Compact provider selection, placed immediately under the Home greeting.
 class _Header extends StatelessWidget {
   const _Header({
     required this.loading,
     required this.source,
     required this.onSourceChanged,
     required this.onRefresh,
+    required this.onCustomize,
   });
 
   final bool loading;
   final KonnektedDiscoverySource source;
   final ValueChanged<KonnektedDiscoverySource> onSourceChanged;
+  final ValueChanged<KonnektedDiscoverySource> onCustomize;
   final VoidCallback onRefresh;
 
   @override
-  Widget build(BuildContext context) {
-    final t = context.lokal;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: t.accent.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 17,
-                  color: t.accent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 10, 12, 0),
+    child: Row(
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: LokalGlass.capsule(
+                thickness: LokalGlassThickness.thin,
+                shadow: false,
+                padding: const EdgeInsets.all(3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            lokalText('Discovery'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: t.text,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          switch (source) {
-                            KonnektedDiscoverySource.lastfm => lokalText(
-                              'LAST.FM',
-                            ),
-                            KonnektedDiscoverySource.youtube => lokalText(
-                              'YOUTUBE MUSIC',
-                            ),
-                            KonnektedDiscoverySource.spotify => lokalText(
-                              'SPOTIFY',
-                            ),
-                          },
-                          style: LokalTheme.label(t, size: 10, color: t.muted),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      lokalText(
-                        'Personalized recommendations from your selected provider.',
+                    for (final provider in KonnektedDiscoverySource.values)
+                      _ProviderChip(
+                        label: lokalText(switch (provider) {
+                          KonnektedDiscoverySource.lastfm => 'Last.fm',
+                          KonnektedDiscoverySource.youtube => 'YouTube Music',
+                          KonnektedDiscoverySource.spotify => 'Spotify',
+                        }),
+                        selected: source == provider,
+                        onTap: () => onSourceChanged(provider),
+                        onLongPress: () => onCustomize(provider),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: t.muted),
-                    ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 12),
-          // Wraps on narrow screens and large text instead of overflowing.
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              // Shrinks rather than overflowing with very large text.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: LokalGlass.capsule(
-                  thickness: LokalGlassThickness.thin,
-                  shadow: false,
-                  padding: const EdgeInsets.all(3),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _ProviderChip(
-                        label: lokalText('Last.fm'),
-                        selected: source == KonnektedDiscoverySource.lastfm,
-                        onTap: () =>
-                            onSourceChanged(KonnektedDiscoverySource.lastfm),
-                      ),
-                      _ProviderChip(
-                        label: lokalText('YouTube Music'),
-                        selected: source == KonnektedDiscoverySource.youtube,
-                        onTap: () =>
-                            onSourceChanged(KonnektedDiscoverySource.youtube),
-                      ),
-                      _ProviderChip(
-                        label: lokalText('Spotify'),
-                        selected: source == KonnektedDiscoverySource.spotify,
-                        onTap: () =>
-                            onSourceChanged(KonnektedDiscoverySource.spotify),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: loading ? null : onRefresh,
-                icon: loading
-                    ? SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: t.accent,
-                        ),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 16),
-                label: Text(lokalText('Refresh')),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        IconButton(
+          tooltip: lokalText('Refresh'),
+          onPressed: loading ? null : onRefresh,
+          icon: loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh_rounded),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ProviderChip extends StatelessWidget {
@@ -969,12 +1032,14 @@ class _ProviderChip extends StatelessWidget {
     required this.label,
     this.selected = false,
     this.onTap,
+    this.onLongPress,
     this.comingSoon = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final bool comingSoon;
 
   @override
@@ -996,6 +1061,7 @@ class _ProviderChip extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
+            onLongPress: onLongPress,
             borderRadius: BorderRadius.circular(999),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
