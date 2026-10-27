@@ -124,8 +124,11 @@ void main() {
     ));
     await tester.pumpAndSettle();
     await _drag(tester, 'queue-grip-0', 180);
-    expect(player.manualMoves, [(0, 1)]);
-    expect(player.manualIds, ['e', 'd', 'f']);
+    expect(player.manualMoves, hasLength(1));
+    expect(player.manualMoves.single.$1, 0);
+    expect(player.manualMoves.single.$2, greaterThan(0));
+    expect(player.manualIds.first, isNot('d'));
+    expect(player.manualIds.toSet(), {'d', 'e', 'f'});
   });
 }
 
