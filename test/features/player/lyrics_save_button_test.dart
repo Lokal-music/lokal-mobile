@@ -20,7 +20,12 @@ void main() {
     );
 
     // The button's tooltip must not install its own long-press recognizer.
-    final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+    final tooltip = tester.widget<Tooltip>(
+      find.descendant(
+        of: find.byType(LyricsSaveButton),
+        matching: find.byType(Tooltip),
+      ),
+    );
     expect(tooltip.triggerMode, TooltipTriggerMode.manual);
     expect(tester.widget<IconButton>(find.byType(IconButton)).tooltip, isNull);
 
