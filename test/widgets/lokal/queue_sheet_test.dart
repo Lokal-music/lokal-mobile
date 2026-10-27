@@ -78,7 +78,11 @@ void main() {
     bool discoveryPendingOnly = false,
     LokalThemeId theme = LokalThemeId.dark,
   }) async {
-    tester.view.physicalSize = const Size(400, 800);
+    // Give the sheet enough height for both sliver sections to be mounted.
+    // Existing sheet sizing tests keep their regular phone dimensions.
+    tester.view.physicalSize = reorderDemo
+        ? const Size(400, 1300)
+        : const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     player = _Player();
