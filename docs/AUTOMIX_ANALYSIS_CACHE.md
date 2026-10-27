@@ -65,10 +65,29 @@ remains. This still uses the existing two-decoder crossfader; it is **not
 stem mixing**. Files with missing or invalid cues use the previous crossfade
 behavior.
 
-The optional upstream Demucs `--prepare-only` step can cache stem windows
-outside the app. Those windows cannot be rendered by the current Android or
-desktop player yet and must not be represented as active stem-based AutoMix.
-See the desktop guide `docs/AUTOMIX_MODEL_PREPARATION.md`.
+## Prepared stem clips on Android (opt-in)
+
+After preparing a pair on desktop, use the desktop exporter with
+`--clip-output auto` to produce an offline Demucs transition WAV and its
+adjacent `.json` manifest. Copy the **two original local audio files**, the
+mixed WAV and its manifest to the phone, keeping the generated WAV beside
+its outgoing source recording. The mobile reader matches and SHA-validates
+both original files and the clip even when Android paths differ from desktop.
+The separate `.lokal-automix.json` model cue sidecars are optional: a
+validated stem clip includes the authoritative transition timeline itself.
+
+Enable **Playback → Song transitions → Prepared stem mixes (experimental)**
+with crossfade on. Android prepares the incoming song and a third Media3
+player in the background, plays the mixed clip starting at the manifest's
+outgoing timestamp, retires the now-silent outgoing decoder and resumes the
+incoming song at the exact source timestamp. Pause, seek and stop invalidate
+or suspend the handoff; clip failure preserves normal crossfade. This is
+**playback of externally rendered Demucs audio**, not on-device separation.
+No large model or PyTorch runtime is bundled. The option is off by default;
+CPU, device compatibility and physical listening validation remain required.
+
+See the desktop guide `docs/AUTOMIX_MODEL_PREPARATION.md` for offline
+preparation and export commands.
 
 ## Future high-quality pipeline
 
