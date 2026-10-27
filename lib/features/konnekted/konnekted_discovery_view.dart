@@ -832,111 +832,92 @@ class _KonnektedDiscoveryViewState
             ),
             icon: Icons.auto_awesome_rounded,
           ),
-        if (data != null && data.mixes.isNotEmpty) ...[
-          KonnektedSectionHeading(
-            title: lokalText('Mixed for you'),
-            icon: Icons.queue_music_rounded,
-            subtitle: lokalText('Your Spotify mixes and playlists.'),
-          ),
-          _MixShelf(
-            storageKey: 'spotify-mixes',
-            mixes: data.mixes,
-            busyId: _busy?.startsWith('mix:') == true
-                ? _busy!.substring(4)
-                : null,
-            onTap: (mix) => unawaited(_playMix(mix, spotify: true)),
-          ),
-        ],
-        if (fresh.isNotEmpty) ...[
-          heading(
-            _Shelf.fresh,
-            'Fresh Finds',
-            Icons.music_note_rounded,
-            fresh.length,
-            subtitle: lokalText('New tracks around your Spotify taste.'),
-          ),
-          tracks(_Shelf.fresh, fresh),
-        ],
-        if (quick.isNotEmpty) ...[
-          heading(
-            _Shelf.quick,
-            'Quick Picks',
-            Icons.auto_awesome_rounded,
-            quick.length,
-            subtitle: lokalText('Your short-term top tracks.'),
-          ),
-          tracks(_Shelf.quick, quick),
-        ],
-        if (history.isNotEmpty) ...[
-          heading(
-            _Shelf.history,
-            'Recently Played',
-            Icons.history_rounded,
-            history.length,
-            subtitle: lokalText('Your latest Spotify listening.'),
-          ),
-          _History(
-            entries: _open == _Shelf.history
-                ? history
-                : history.take(6).toList(),
-            row: (track) => KonnektedDiscoveryRow(
-              track: track,
-              inLibrary: library.match(track) != null,
-              busy: _busy == track.key,
-              trailing: track.scrobbledAt == null
-                  ? null
-                  : DateFormat.Hm().format(
+        ..._arranged(KonnektedDiscoverySource.spotify,
+            <String, List<Widget>>{
+          if (data != null && data.mixes.isNotEmpty)
+            'mixes': [
+              KonnektedSectionHeading(
+                title: lokalText('Mixed for you'),
+                icon: Icons.queue_music_rounded,
+              ),
+              _MixShelf(
+                storageKey: 'spotify-mixes',
+                mixes: data.mixes,
+                busyId: _busy?.startsWith('mix:') == true
+                    ? _busy!.substring(4) : null,
+                onTap: (mix) => unawaited(_playMix(mix, spotify: true)),
+              ),
+            ],
+          if (fresh.isNotEmpty)
+            'fresh': [
+              heading(_Shelf.fresh, 'Fresh Finds',
+                  Icons.music_note_rounded, fresh.length),
+              tracks(_Shelf.fresh, fresh),
+            ],
+          if (quick.isNotEmpty)
+            'quick': [
+              heading(_Shelf.quick, 'Quick Picks',
+                  Icons.auto_awesome_rounded, quick.length),
+              tracks(_Shelf.quick, quick),
+            ],
+          if (history.isNotEmpty)
+            'history': [
+              heading(_Shelf.history, 'Recently Played',
+                  Icons.history_rounded, history.length),
+              _History(
+                entries: _open == _Shelf.history
+                    ? history : history.take(6).toList(),
+                row: (track) => KonnektedDiscoveryRow(
+                  track: track,
+                  inLibrary: library.match(track) != null,
+                  busy: _busy == track.key,
+                  trailing: track.scrobbledAt == null ? null :
+                    DateFormat.Hm().format(
                       DateTime.fromMillisecondsSinceEpoch(
-                        track.scrobbledAt! * 1000,
-                      ),
-                    ),
-              onTap: () => _play(track, history),
-              onMore: () => unawaited(_actions(track, history)),
-              onQueue: () => _enqueue(track),
-            ),
-          ),
-        ],
-        if (data?.albums case final albums? when albums.isNotEmpty) ...[
-          KonnektedSectionHeading(
-            title: lokalText('Albums For You'),
-            icon: Icons.album_rounded,
-          ),
-          _AlbumShelf(
-            albums: albums,
-            onTap: (album) => pushLokal(
-              context,
-              LokalMusicDetailPage.album(
-                title: album.title,
-                artist: album.artist,
-                localSongs: library.album(album.title, album.artist),
-                initialOnline: true,
-                release: LokalCatalogueAlbum(
-                  title: album.title,
-                  artist: album.artist,
-                  artwork: album.artworkUrl,
-                  url: album.url,
+                        track.scrobbledAt! * 1000)),
+                  onTap: () => _play(track, history),
+                  onMore: () => unawaited(_actions(track, history)),
+                  onQueue: () => _enqueue(track),
                 ),
               ),
-            ),
-          ),
-        ],
-        if (data?.artists case final artists? when artists.isNotEmpty) ...[
-          KonnektedSectionHeading(
-            title: lokalText('Artists For You'),
-            icon: Icons.person_rounded,
-          ),
-          _ArtistShelf(
-            artists: artists,
-            onTap: (artist) => pushLokal(
-              context,
-              LokalMusicDetailPage.artist(
-                name: artist.name,
-                localSongs: library.artist(artist.name),
-                initialOnline: true,
+            ],
+          if (data?.albums case final albums? when albums.isNotEmpty)
+            'albums': [
+              KonnektedSectionHeading(title: lokalText('Albums For You'),
+                  icon: Icons.album_rounded),
+              _AlbumShelf(
+                albums: albums,
+                onTap: (album) => pushLokal(
+                  context,
+                  LokalMusicDetailPage.album(
+                    title: album.title, artist: album.artist,
+                    localSongs: library.album(album.title, album.artist),
+                    initialOnline: true,
+                    release: LokalCatalogueAlbum(
+                      title: album.title, artist: album.artist,
+                      artwork: album.artworkUrl, url: album.url,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          if (data?.artists case final artists? when artists.isNotEmpty)
+            'artists': [
+              KonnektedSectionHeading(title: lokalText('Artists For You'),
+                  icon: Icons.person_rounded),
+              _ArtistShelf(
+                artists: artists,
+                onTap: (artist) => pushLokal(
+                  context,
+                  LokalMusicDetailPage.artist(
+                    name: artist.name,
+                    localSongs: library.artist(artist.name),
+                    initialOnline: true,
+                  ),
+                ),
+              ),
+            ],
+        }),
       ],
     );
   }
