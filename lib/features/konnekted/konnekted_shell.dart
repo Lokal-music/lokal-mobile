@@ -309,6 +309,7 @@ class _KonnektedShellState extends ConsumerState<KonnektedShell>
     _pull?.cancel();
     disposeArtworkGate();
     _tab.dispose();
+    _searchFocusRequests.dispose();
     _dockCollapsed.dispose();
     super.dispose();
   }
