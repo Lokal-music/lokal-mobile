@@ -42,5 +42,8 @@ jobs:
           test/flow
           test/services/automix_analysis_cache_test.dart
           test/services/automix_advanced_report_test.dart
+          test/services/automix_stem_clip_test.dart
           test/services/android_audio_engine_crossfade_test.dart
           test/services/android_audio_failed_source_test.dart
+      - name: Compile Flutter Android APK
+        run: flutter build apk --debug --no-pub
