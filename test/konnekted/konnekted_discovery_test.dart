@@ -304,6 +304,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Supermix'), findsOneWidget);
+      expect(find.bySemanticsLabel('YouTube'), findsOneWidget);
+      expect(find.bySemanticsLabel('YouTube Music'), findsNothing);
       expect(find.text('Mixed for you'), findsOneWidget);
       expect(find.text('Quick Picks'), findsOneWidget);
       expect(find.text('Your Likes'), findsNothing);
