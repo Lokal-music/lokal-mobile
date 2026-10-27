@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart' as ja;
 import 'package:flick/models/song.dart';
 import 'package:flick/services/android_audio_engine.dart';
 import 'package:flick/services/automix_analysis_cache.dart';
+import 'package:flick/services/automix_stem_clip.dart';
 
 class _Player implements ja.AudioPlayer {
   _Player() {
@@ -93,6 +94,8 @@ class _Player implements ja.AudioPlayer {
   Future<void> play() async { currentPlaying = true; playCalls++; }
   @override
   Future<void> pause() async { currentPlaying = false; }
+  @override
+  Future<void> dispose() async { currentPlaying = false; }
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -408,6 +411,72 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(incoming.playCalls, 1);
     expect(incoming.currentPosition, const Duration(seconds: 6));
+  });
+
+  testWidgets('verified offline stem uses third decoder then resumes next track', (tester) async {
+    final outgoing = _Player();
+    final incoming = _Player();
+    final stem = _Player();
+    final songs = [
+      const Song(id: 'out', title: 'Outgoing', artist: 'A',
+          duration: Duration(minutes: 3), filePath: '/out.flac', fileType: 'FLAC'),
+      const Song(id: 'in', title: 'Incoming', artist: 'B',
+          duration: Duration(minutes: 3), filePath: '/in.flac', fileType: 'FLAC'),
+    ];
+    Song? next = songs.last;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => outgoing,
+      secondaryPlayerProvider: () async => incoming,
+      stemPlayerProvider: () async => stem,
+      sourcesBuilder: () async => ja.AudioSource.uri(Uri.file('/out.flac')),
+      sourceBuilder: (_) async => ja.AudioSource.uri(Uri.file('/in.flac')),
+      playlistProvider: () => songs,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+      crossfadeConfigProvider: () => const AndroidCrossfadeConfig(
+        enabled: true, durationSecs: 3, curve: AndroidCrossfadeCurve.equalPower,
+      ),
+      stemClipLookup: (_, _) async => const AutoMixStemClip(
+        path: '/out.flac.lokal-stem-to-ffffffffffffffffffffffff.wav',
+        outStart: 158, inStart: 6, resumeIn: 22,
+        durationSeconds: 16,
+      ),
+      onNextSong: () => next,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      for (final player in [outgoing, incoming, stem]) {
+        await player.positions.close();
+        await player.errors.close();
+      }
+    });
+    await engine.load(songs.first);
+    await engine.play();
+    outgoing.positions.add(const Duration(seconds: 120));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    // Clip report is available before the source window starts.
+    outgoing.positions.add(const Duration(seconds: 150));
+    for (var i = 0; i < 5; i++) await tester.pump();
+    outgoing.positions.add(const Duration(seconds: 158));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(stem.playCalls, 1, reason: 'only the mixed third decoder plays first');
+    expect(incoming.playCalls, 0, reason: 'real incoming song stays muted until clip end');
+    await engine.pause();
+    expect(stem.playing, isFalse);
+    await engine.play();
+    expect(stem.playing, isTrue);
+    stem.positions.add(const Duration(seconds: 15, milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(incoming.seeks, greaterThan(1)); // preload entry + exact resume seek
+    expect(incoming.playCalls, greaterThan(0));
+    stem.positions.add(const Duration(seconds: 16));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(stem.playing, isFalse);
+    expect(incoming.currentVolume, closeTo(1, .001));
   });
 
   testWidgets('a stalled source is discarded and the next tap uses a fresh player', (
