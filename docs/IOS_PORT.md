@@ -1,6 +1,6 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-Status: implementation and hosted native validation, 26 October 2026 (Europe/Paris).
+Status: implementation and hosted native validation, 27 October 2026 (Europe/Paris).
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
@@ -14,7 +14,7 @@ checksum and native evidence in the build-34 checkpoint below. Installation stil
 requires local signing; physical-device and Windows install/update acceptance
 remain open.
 
-The candidate carries **40 reviewed merged mobile PRs after #172 through #219**, including
+The stacked parity continuation carries **44 reviewed merged mobile PRs after #172 through #225**, including
 Likes stream revalidation, retained-artwork Space, separate video timing, search,
 profile, notification artwork, playlists and locale updates. See
 [the PR-by-PR UI/behavior review and revised WidgetKit design](IOS_POST172_REVIEW.md)
@@ -949,3 +949,34 @@ radio reset/reopen coverage using a loopback station, and paused iPhone video
 seek preservation. Sixteen Python dependency/simulator/control tests, actionlint
 and thirteen focused video contract tests pass; the new native app gates remain
 pending. The current complete dual-runtime checkpoint remains Build 34.
+
+
+### Parity through #225 — 27 October 2026
+
+The new continuation carries lyrics-to-file export, native opt-in Monochrome
+FLAC, streaming-only HTTP add-on installation and Spotify artist-favorite
+import/filters. It is stacked on the reset candidate, with independent Mac
+validation. The exact expanded contract selection passes 295 Flutter tests;
+new artist controls fit all eleven locales at 200% on a 320px screen. Native
+Rust/bindings/dependency locks are unchanged. Live provider/account playback and
+native Files picker completion/cancellation still require acceptance.
+
+```mermaid
+flowchart LR
+  Choice[Explicit source choice] --> Preference[Persisted Monochrome opt-in]
+  Preference --> Search[Bounded native search]
+  Search --> Resolve[Stable source and track identity]
+  Resolve --> Play[iPhone progressive playback]
+  Resolve --> Download[Explicit verified library download]
+  Addon[Streaming-only add-on] --> Play
+  Addon --> Guard[Library download prohibited]
+  Lyrics[Displayed lyrics snapshot] --> Picker[iOS Files export]
+  Picker --> Ack[Save acknowledged or silent cancellation]
+  Spotify[Configured Spotify session] --> Pages[Complete bounded artist pages]
+  Pages --> Favorites[Serialized additive local favorites]
+```
+
+Build 39 covers the reset queue/evidence correction through the earlier 40 PRs,
+not these later feature changes. Build 38 reaches native reset selection checks
+but fails on an incorrect unrotated-queue test expectation; it is not a recovery
+pass. Build 34 remains the latest complete dual-runtime checkpoint.

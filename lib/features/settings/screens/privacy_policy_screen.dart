@@ -19,8 +19,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
     ),
     (
       'Online services are opt-in',
-      'YouTube Music, Spotify, Last.fm, ListenBrainz, network servers and '
-          'add-ons are all off until you sign in, connect or install them in '
+      'YouTube Music, Spotify, Last.fm, ListenBrainz, Monochrome, network servers and '
+          'add-ons are contacted when you choose to use or configure them in '
           'Settings › Online sources. Once you do, Lokal talks to that '
           'service on your behalf: for example to load your mixes, import '
           'playlists or scrobble what you play. Each service handles that '

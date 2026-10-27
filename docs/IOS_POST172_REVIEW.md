@@ -1,8 +1,8 @@
 # iPhone review of mobile PRs after #172
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-The candidate carries **40 reviewed merged PRs through #219**, including merged
-source `c8f8f574fdd2812a5a0e7398c47fac17cb6731ed`. Build 34 passes both complete
+The parity continuation carries **44 reviewed merged PRs through #225**, including
+merged source `56bb6629a55f79b56af556da94d4e6ed8d83ec30`. Build 34 passes both complete
 iOS 18.6/26.0 native suites through #217. Later reset and lyrics changes require
 their own fresh native acceptance and do not borrow build-34 qualification.
 The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
@@ -584,8 +584,8 @@ observation remains deferred; no physical reset or live-video pass is claimed.
 ### New upstream review queue — 27 October 2026
 
 Four further merged PRs are confirmed, bringing the review scope to 44 merged
-mobile PRs after #172 through #225. The candidate still implements the earlier
-40 through #219; these four are reviewed for the next parity continuation.
+mobile PRs after #172 through #225. The recovery checkpoint implements the earlier 40 through #219. The stacked
+parity continuation now carries these four, with the adaptations below.
 
 | PR | Relevant iPhone behavior | Adaptation / acceptance |
 | --- | --- | --- |
@@ -593,3 +593,37 @@ mobile PRs after #172 through #225. The candidate still implements the earlier
 | [223](https://github.com/lokal-music/lokal-mobile/pull/223) | Native Monochrome FLAC discovery/playback/download source with bounded search and honest format labels. | Preserve source identity, opt-in source policy and iPhone progressive playback; actual stream format and hardware output remain measured separately. |
 | [224](https://github.com/lokal-music/lokal-mobile/pull/224) | Accept streaming-only HTTP add-ons when explicit downloading is prohibited. | Retain manifest validation and download prohibition; use the existing iPhone streaming route rather than staging a prohibited library copy. |
 | [225](https://github.com/lokal-music/lokal-mobile/pull/225) | Artist favorites filters/search, Spotify followed-artist import and remote-only rows. | Preserve legacy favorites, reuse secure configured credentials, additive read-only import with bounded pagination, no Spotify follows/unfollows or implicit login. |
+
+
+### Parity continuation through #225
+
+The four patches are ported onto `feat/ios-parity-through225`, stacked on the
+reset candidate so its ongoing native run can finish independently.
+
+- Lyrics export uses the pinned cross-platform byte-based Files picker API and
+  acknowledges Save/cancellation. It preserves original timed formats and plain
+  bytes; rendered desktop timing retains millisecond offsets. UTF-8 filenames
+  fit a 255-byte iPhone file component without splitting surrogate pairs. The
+  full-player/Space guard uses the actually displayed song after video yields.
+- Monochrome is a native source with stable `mono` identity, disabled until
+  explicitly enabled in Online sources. Source priority reloads after that
+  persisted choice. Playback uses the existing iPhone progressive route;
+  explicit downloads retain verification. No measured sample rate, bit depth,
+  bit-perfect status or live-service success is invented.
+- Streaming-only add-ons install while explicit library download remains
+  prohibited by the resolver. Manifest/settings tests wait for actual completed
+  persistence while driving both widget and HTTP-stream queues.
+- Artist favorites preserve legacy flags, known remote-only names and local
+  rows. Concurrent writes are serialized (the added race test fails before the
+  fix). Spotify import uses the existing secure session and read-only v1 GET
+  `libraryV3` transport; short/inconsistent/malformed pages and GraphQL partial
+  errors fail before import. Existing v2 transport stays intact.
+- New labels, status text and save feedback are localized in all ten non-English
+  phrase maps. Artist filters/import controls fit all eleven locales at 200%
+  on 320px using bundled fonts; source IDs and artist metadata remain unchanged.
+
+The exact expanded iPhone workflow selection passes **295 Flutter tests**.
+Whole lib/integration analysis has no errors (571 warnings/information).
+Native code, API 141 bindings and dependency locks are unchanged from the
+315-Rust-test checkpoint. Native/source-account/Files acceptance for this
+continuation is pending; the new provider is not contacted by default.

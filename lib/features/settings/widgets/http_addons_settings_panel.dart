@@ -107,11 +107,8 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
         DiscoveryHttp(_client),
         endpoint: endpoint,
       ).health();
-      if (!health.cacheAllowed) {
-        throw const DiscoveryException(
-          'This source disallows downloads required for playback.',
-        );
-      }
+      // Streaming-only addons (allowDownloads: 0) are valid sources.
+      // Explicit saves remain blocked by DiscoveryAddon.resolve(forDownload: true).
 
       final host = Uri.parse(endpoint).host.toLowerCase().replaceFirst(
         RegExp(r'^www\\.'),

@@ -1,6 +1,6 @@
 /// Discovery metadata is not a playable Song. In particular, a catalog URL is
 /// never passed to the engine as a local file, and provider quality is not fact.
-enum DiscoverySource { youtubeMusic, addon, morneye }
+enum DiscoverySource { youtubeMusic, monochrome, addon, morneye }
 
 class DiscoveryTrack {
   const DiscoveryTrack({

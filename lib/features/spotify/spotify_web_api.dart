@@ -30,12 +30,15 @@ class SpotifyWebApi implements SpotifyLibraryApi {
   final DateTime? likesSince;
   void close() => _http.client.close();
   static const hashes = {
-    'searchTracks': 'bc1ca2fcd0ba1013a0fc88e6cc4f190af501851e3dafd3e1ef85840297694428',
+    'searchTracks':
+        'bc1ca2fcd0ba1013a0fc88e6cc4f190af501851e3dafd3e1ef85840297694428',
     'home': '5fb7da7a03ee2776c0670856609cb85a189a3cecc36cc160b91cde79063b9cf1',
     'fetchPlaylist':
         '21ea11a6ac75a5f3e01fd365d29c18e0a4a8b7dc09f89bbb5d73910190c6acaf',
     'fetchLibraryTracks':
         '087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240',
+    'libraryV3':
+        '390c78e5b951029bad359785e69b07b536a509c581cbcd0aded5e5067f187455',
   };
   Future<Map<String, dynamic>> query(
     String operation,
@@ -54,18 +57,30 @@ class SpotifyWebApi implements SpotifyLibraryApi {
         throw const SpotifyApiException(
           'Your Spotify session expired. Update its cookie in Data → Accounts.',
         );
+      final extensions = {
+        'persistedQuery': {
+          'version': 1,
+          'sha256Hash': tokens.queryHashes[operation] ?? hashes[operation],
+        },
+      };
+      // The desktop-proven libraryV3 operation is served on Pathfinder v1
+      // as a GET. Other existing Spotify operations retain their v2 POST.
+      final artistsLibrary = operation == 'libraryV3';
       final response = await _http.send(
-        Uri.https('api-partner.spotify.com', '/pathfinder/v2/query'),
-        jsonBody: jsonEncode({
-          'operationName': operation,
-          'variables': variables,
-          'extensions': {
-            'persistedQuery': {
-              'version': 1,
-              'sha256Hash': tokens.queryHashes[operation] ?? hashes[operation],
-            },
-          },
-        }),
+        artistsLibrary
+            ? Uri.https('api-partner.spotify.com', '/pathfinder/v1/query', {
+                'operationName': operation,
+                'variables': jsonEncode(variables),
+                'extensions': jsonEncode(extensions),
+              })
+            : Uri.https('api-partner.spotify.com', '/pathfinder/v2/query'),
+        jsonBody: artistsLibrary
+            ? null
+            : jsonEncode({
+                'operationName': operation,
+                'variables': variables,
+                'extensions': extensions,
+              }),
         headers: {
           'Authorization': 'Bearer ${tokens.accessToken}',
           'Accept': 'application/json',
@@ -104,6 +119,13 @@ class SpotifyWebApi implements SpotifyLibraryApi {
         await oauth.refresh();
         continue;
       }
+      if (artistsLibrary &&
+          body['errors'] is List &&
+          (body['errors'] as List).isNotEmpty) {
+        throw const SpotifyApiException(
+          'Spotify could not read the complete artist library. Retry later.',
+        );
+      }
       if (body['data'] is Map<String, dynamic>)
         return body['data'] as Map<String, dynamic>;
       throw const SpotifyApiException(
@@ -111,6 +133,88 @@ class SpotifyWebApi implements SpotifyLibraryApi {
       );
     }
     throw const SpotifyApiException('Spotify could not refresh your session.');
+  }
+
+  /// Spotify web-player Artists library, matching desktop's libraryV3 API.
+  /// Read only: Spotify's official /me/following endpoint often rejects the
+  /// cookie-backed WebPlayer session. A partial response never gets imported.
+  Future<List<String>> getFollowedArtists({
+    void Function(int loaded)? onProgress,
+    SpotifyCancellation? cancellation,
+    int pageSize = 50,
+    int maxArtists = 2000,
+  }) async {
+    final limit = maxArtists.clamp(1, 2000).toInt();
+    final size = pageSize.clamp(1, limit < 50 ? limit : 50).toInt();
+    final names = <String, String>{};
+    int? expectedTotal;
+    for (var offset = 0; offset < limit; offset += size) {
+      cancellation?.check();
+      final data = await query('libraryV3', {
+        'filters': ['Artists'],
+        'order': null,
+        'textFilter': null,
+        'features': [
+          'LIKED_SONGS',
+          'YOUR_EPISODES_V2',
+          'PRERELEASES',
+          'EVENTS',
+        ],
+        'limit': size,
+        'offset': offset,
+        'flatten': false,
+        'folderUri': null,
+        'includeFoldersWhenFlattening': true,
+      }, cancellation: cancellation);
+      final me = data['me'];
+      final library = me is Map ? me['libraryV3'] : null;
+      if (library is! Map || library['items'] is! List) {
+        throw const SpotifyApiException(
+          'Spotify could not read followed artists. Reconnect and retry.',
+        );
+      }
+      final items = library['items'] as List;
+      final total = library['totalCount'];
+      if (total is! int ||
+          total < 0 ||
+          items.length > size ||
+          (expectedTotal != null && total != expectedTotal)) {
+        throw const SpotifyApiException(
+          'Spotify returned an incomplete artist list. Retry later.',
+        );
+      }
+      expectedTotal = total;
+      if (total > limit) {
+        throw const SpotifyApiException(
+          'Spotify artist list exceeds the 2000-artist import limit.',
+        );
+      }
+      final received = offset + items.length;
+      if (received > total || (received < total && items.length < size)) {
+        throw const SpotifyApiException(
+          'Spotify artist list was incomplete. Retry later.',
+        );
+      }
+      for (final row in items.whereType<Map>()) {
+        final wrapper = row['item'];
+        final artist = wrapper is Map ? wrapper['data'] : null;
+        if (artist is! Map || artist['__typename'] != 'Artist') continue;
+        final profile = artist['profile'];
+        final rawName = profile is Map ? profile['name'] : null;
+        final name = rawName is String ? rawName.trim() : '';
+        if (name.isNotEmpty && name.length <= 200) {
+          names.putIfAbsent(name.toLowerCase(), () => name);
+        }
+      }
+      onProgress?.call(names.length);
+      if (received == total) break;
+      if (offset + size >= limit) {
+        throw const SpotifyApiException(
+          'Spotify artist list was incomplete. Retry later.',
+        );
+      }
+    }
+    return names.values.toList(growable: false);
   }
 
   @override
