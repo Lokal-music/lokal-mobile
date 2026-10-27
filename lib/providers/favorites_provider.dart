@@ -16,12 +16,14 @@ class FavoritesState {
   final List<Song> favoriteSongs;
   /// ID -> timestamp/rank when the heart was added, not file import time.
   final Map<String, int> likedRanks;
+  final Map<String, String> desktopCopyRedirects;
   final bool isLoading;
 
   const FavoritesState({
     this.favoriteIds = const {},
     this.favoriteSongs = const [],
     this.likedRanks = const {},
+    this.desktopCopyRedirects = const {},
     this.isLoading = true,
   });
 
@@ -29,18 +31,21 @@ class FavoritesState {
     Set<String>? favoriteIds,
     List<Song>? favoriteSongs,
     Map<String, int>? likedRanks,
+    Map<String, String>? desktopCopyRedirects,
     bool? isLoading,
   }) {
     return FavoritesState(
       favoriteIds: favoriteIds ?? this.favoriteIds,
       favoriteSongs: favoriteSongs ?? this.favoriteSongs,
       likedRanks: likedRanks ?? this.likedRanks,
+      desktopCopyRedirects: desktopCopyRedirects ?? this.desktopCopyRedirects,
       isLoading: isLoading ?? this.isLoading,
     );
   }
 
   /// Check if a song is a favorite.
-  bool isFavorite(String songId) => favoriteIds.contains(songId);
+  bool isFavorite(String songId) =>
+      favoriteIds.contains(desktopCopyRedirects[songId] ?? songId);
 
   /// Number of favorites.
   int get count => favoriteIds.length;
@@ -59,6 +64,7 @@ class FavoritesNotifier extends AsyncNotifier<FavoritesState> {
       favoriteIds: ids,
       favoriteSongs: songs,
       likedRanks: likedRanks,
+      desktopCopyRedirects: service.desktopCopyRedirects,
       isLoading: false,
     );
   }
