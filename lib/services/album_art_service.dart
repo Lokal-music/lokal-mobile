@@ -331,6 +331,7 @@ class AlbumArtService {
 
   /// Bounded memory cache for per-folder cover bytes.
   static const int _folderCoverCacheMaxEntries = 64;
+  final Map<String, Future<String?>> _explicitFolderCoverResolutions = {};
 
   Future<Uint8List?> _loadFolderCoverBytes(String audioSourcePath) async {
     if (audioSourcePath.startsWith('content://')) {
@@ -363,12 +364,101 @@ class AlbumArtService {
     return bytes;
   }
 
+  Future<String?> resolveExplicitFolderCoverPath({
+    required String audioSourcePath,
+    int parentLevels = 0,
+  }) {
+    if (audioSourcePath.isEmpty) return Future.value(null);
+    if (parentLevels < 0) {
+      throw ArgumentError.value(parentLevels, 'parentLevels');
+    }
+    final key = _folderCoverCacheKey(audioSourcePath, parentLevels);
+    final cached = _explicitFolderCoverResolutions[key];
+    if (cached != null) return cached;
+    if (_explicitFolderCoverResolutions.length >= _folderCoverCacheMaxEntries) {
+      _explicitFolderCoverResolutions.remove(
+        _explicitFolderCoverResolutions.keys.first,
+      );
+    }
+    final resolution = _resolveExplicitFolderCoverPath(
+      audioSourcePath,
+      parentLevels,
+    );
+    _explicitFolderCoverResolutions[key] = resolution;
+    return resolution;
+  }
+
+  Future<String?> _resolveExplicitFolderCoverPath(
+    String audioSourcePath,
+    int parentLevels,
+  ) async {
+    Uint8List? bytes;
+    if (audioSourcePath.startsWith('content://')) {
+      if (!Platform.isAndroid) return null;
+      bytes = await _musicFolderService.fetchExplicitFolderArtwork(
+        audioSourcePath,
+        parentLevels: parentLevels,
+      );
+    } else {
+      var parent = File(_plainPathOf(audioSourcePath)).parent;
+      for (var level = 0; level < parentLevels; level++) {
+        parent = parent.parent;
+      }
+      if (!await parent.exists()) return null;
+      final matches = <File>[];
+      await for (final entity in parent.list(followLinks: false)) {
+        if (entity is File &&
+            isExplicitFolderCoverImageName(entity.uri.pathSegments.last)) {
+          matches.add(entity);
+        }
+      }
+      matches.sort(
+        (a, b) =>
+            _explicitFolderCoverPriority(a.path) -
+                _explicitFolderCoverPriority(b.path) ||
+            a.path.toLowerCase().compareTo(b.path.toLowerCase()),
+      );
+      if (matches.isNotEmpty) {
+        bytes = await matches.first.readAsBytes();
+      }
+    }
+    if (bytes == null || bytes.isEmpty) return null;
+
+    final dir = await _ensureArtworkDir();
+    final cachedFile = File('${dir.path}/${_cacheKey(bytes)}');
+    if (!await _isUsableImagePath(cachedFile.path)) {
+      await cachedFile.writeAsBytes(
+        await _normalizeArtworkBytes(bytes),
+        flush: true,
+      );
+    }
+    unawaited(_pruneIfNeeded(dir));
+    return cachedFile.path;
+  }
+
+  String _folderCoverCacheKey(String audioSourcePath, int parentLevels) {
+    if (audioSourcePath.startsWith('content://')) {
+      return '$audioSourcePath:$parentLevels';
+    }
+    var parent = File(_plainPathOf(audioSourcePath)).parent;
+    for (var level = 0; level < parentLevels; level++) {
+      parent = parent.parent;
+    }
+    return parent.path;
+  }
+
+  int _explicitFolderCoverPriority(String path) {
+    final name = path.split(Platform.pathSeparator).last.toLowerCase();
+    return name.startsWith('cover.') ? 0 : 1;
+  }
+
   /// Drops cached sibling-cover bytes for [audioSourcePath]'s folder so a
   /// reset re-reads a replaced `cover.jpg`. SAF rows are not cached here, so
   /// this only matters for filesystem paths.
   void evictFolderCoverCache(String audioSourcePath) {
+    _explicitFolderCoverResolutions.clear();
     if (audioSourcePath.startsWith('content://')) return;
-    _folderCoverCache.remove(File(_plainPathOf(audioSourcePath)).parent.path);
+    _folderCoverCache.remove(_folderCoverCacheKey(audioSourcePath, 0));
   }
 
   void _rememberFolderCover(String dir, Uint8List? bytes) {
@@ -493,6 +583,17 @@ bool isFolderCoverImageName(String name) {
     return false;
   }
   return _folderCoverStems.any((c) => stem == c || stem.startsWith('$c.'));
+}
+
+/// Whether [name] is an explicit folder-card cover image.
+bool isExplicitFolderCoverImageName(String name) {
+  final lower = name.toLowerCase();
+  final dot = lower.lastIndexOf('.');
+  if (dot <= 0) return false;
+  final stem = lower.substring(0, dot);
+  final extension = lower.substring(dot + 1);
+  return (stem == 'cover' || stem == 'folder') &&
+      const {'jpg', 'jpeg', 'png'}.contains(extension);
 }
 
 Uint8List _normalizeArtworkIsolate(Uint8List raw) {

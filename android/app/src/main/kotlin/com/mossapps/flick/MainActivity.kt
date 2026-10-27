@@ -488,11 +488,18 @@ class MainActivity: FlutterActivity() {
                 }
                 "readSiblingArtwork" -> {
                     val uri = call.argument<String>("uri")
+                    val explicitOnly = call.argument<Boolean>("explicitOnly") == true
+                    val parentLevels =
+                        call.argument<Int>("parentLevels")?.coerceAtLeast(0) ?: 0
                     if (uri != null) {
                         mainScope.launch {
                             try {
                                 val artwork = withContext(Dispatchers.IO) {
-                                    readSiblingArtwork(uri)
+                                    readSiblingArtwork(
+                                        uri,
+                                        explicitOnly,
+                                        parentLevels,
+                                    )
                                 }
                                 result.success(artwork)
                             } catch (e: Exception) {
@@ -3045,14 +3052,31 @@ class MainActivity: FlutterActivity() {
 
     private val siblingArtworkStems = listOf("cover", "folder", "album", "albumart", "front")
     private val siblingArtworkExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")
+    private val explicitFolderArtworkExtensions = setOf("jpg", "jpeg", "png")
 
-    private fun readSiblingArtwork(sourceUriString: String): ByteArray? {
+    private fun readSiblingArtwork(
+        sourceUriString: String,
+        explicitOnly: Boolean = false,
+        parentLevels: Int = 0,
+    ): ByteArray? {
         return try {
             val sourceUri = Uri.parse(sourceUriString)
             when (sourceUri.scheme) {
-                "content" -> readSiblingArtworkFromContentUri(sourceUri)
-                "file" -> readSiblingArtworkFromFilePath(sourceUri.path)
-                null, "" -> readSiblingArtworkFromFilePath(sourceUriString)
+                "content" -> readSiblingArtworkFromContentUri(
+                    sourceUri,
+                    explicitOnly,
+                    parentLevels,
+                )
+                "file" -> readSiblingArtworkFromFilePath(
+                    sourceUri.path,
+                    explicitOnly,
+                    parentLevels,
+                )
+                null, "" -> readSiblingArtworkFromFilePath(
+                    sourceUriString,
+                    explicitOnly,
+                    parentLevels,
+                )
                 else -> null
             }
         } catch (e: Exception) {
@@ -3061,7 +3085,11 @@ class MainActivity: FlutterActivity() {
         }
     }
 
-    private fun readSiblingArtworkFromContentUri(audioUri: Uri): ByteArray? {
+    private fun readSiblingArtworkFromContentUri(
+        audioUri: Uri,
+        explicitOnly: Boolean,
+        parentLevels: Int,
+    ): ByteArray? {
         val authority = audioUri.authority ?: return null
         val documentId = try {
             DocumentsContract.getDocumentId(audioUri)
@@ -3070,7 +3098,12 @@ class MainActivity: FlutterActivity() {
         }
         val slashIndex = documentId.lastIndexOf('/')
         if (slashIndex <= 0) return null
-        val parentDocumentId = documentId.substring(0, slashIndex)
+        var parentDocumentId = documentId.substring(0, slashIndex)
+        repeat(parentLevels) {
+            val parentSlashIndex = parentDocumentId.lastIndexOf('/')
+            if (parentSlashIndex <= 0) return null
+            parentDocumentId = parentDocumentId.substring(0, parentSlashIndex)
+        }
 
         val childrenUri = try {
             DocumentsContract.buildChildDocumentsUri(authority, parentDocumentId)
@@ -3095,11 +3128,24 @@ class MainActivity: FlutterActivity() {
             val matches = mutableListOf<Pair<String, String>>()
             while (cursor.moveToNext()) {
                 val displayName = cursor.getString(nameIndex) ?: continue
-                if (!isSiblingArtworkName(displayName)) continue
+                val isMatch = if (explicitOnly) {
+                    isExplicitFolderArtworkName(displayName)
+                } else {
+                    isSiblingArtworkName(displayName)
+                }
+                if (!isMatch) continue
                 val childDocumentId = cursor.getString(idIndex) ?: continue
                 matches.add(displayName to childDocumentId)
             }
-            matches.sortBy { it.first.lowercase() }
+            if (explicitOnly) {
+                matches.sortWith(
+                    compareBy<Pair<String, String>> {
+                        explicitFolderArtworkPriority(it.first)
+                    }.thenBy { it.first.lowercase() },
+                )
+            } else {
+                matches.sortBy { it.first.lowercase() }
+            }
 
             for ((_, childDocumentId) in matches) {
                 val childUri = DocumentsContract.buildDocumentUri(authority, childDocumentId)
@@ -3111,12 +3157,36 @@ class MainActivity: FlutterActivity() {
         return null
     }
 
-    private fun readSiblingArtworkFromFilePath(audioPath: String?): ByteArray? {
+    private fun readSiblingArtworkFromFilePath(
+        audioPath: String?,
+        explicitOnly: Boolean,
+        parentLevels: Int,
+    ): ByteArray? {
         if (audioPath.isNullOrBlank()) return null
-        val parent = java.io.File(audioPath).parentFile ?: return null
+        var parent = java.io.File(audioPath).parentFile ?: return null
+        repeat(parentLevels) {
+            parent = parent.parentFile ?: return null
+        }
         val covers = parent.listFiles()
-            ?.filter { it.isFile && isSiblingArtworkName(it.name) }
-            ?.sortedBy { it.name.lowercase() }
+            ?.filter {
+                val isMatch = if (explicitOnly) {
+                    isExplicitFolderArtworkName(it.name)
+                } else {
+                    isSiblingArtworkName(it.name)
+                }
+                it.isFile && isMatch
+            }
+            ?.let { files ->
+                if (explicitOnly) {
+                    files.sortedWith(
+                        compareBy<java.io.File> {
+                            explicitFolderArtworkPriority(it.name)
+                        }.thenBy { it.name.lowercase() },
+                    )
+                } else {
+                    files.sortedBy { it.name.lowercase() }
+                }
+            }
             ?: return null
 
         for (cover in covers) {
@@ -3138,6 +3208,18 @@ class MainActivity: FlutterActivity() {
         }
         return siblingArtworkStems.any { stem == it || stem.startsWith("$it.") }
     }
+
+    private fun isExplicitFolderArtworkName(name: String): Boolean {
+        val dot = name.lastIndexOf('.')
+        if (dot <= 0) return false
+        val stem = name.substring(0, dot).lowercase()
+        val extension = name.substring(dot + 1).lowercase()
+        return (stem == "cover" || stem == "folder") &&
+            extension in explicitFolderArtworkExtensions
+    }
+
+    private fun explicitFolderArtworkPriority(name: String): Int =
+        if (name.substringBeforeLast('.', "").equals("cover", ignoreCase = true)) 0 else 1
 
     private fun readBytesFromUri(uri: Uri): ByteArray? {
         return try {

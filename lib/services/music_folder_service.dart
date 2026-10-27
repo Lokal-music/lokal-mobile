@@ -490,6 +490,23 @@ class MusicFolderService {
     }
   }
 
+  Future<Uint8List?> fetchExplicitFolderArtwork(
+    String uri, {
+    int parentLevels = 0,
+  }) async {
+    try {
+      return await _channel.invokeMethod<Uint8List>('readSiblingArtwork', {
+        'uri': uri,
+        'explicitOnly': true,
+        'parentLevels': parentLevels,
+      });
+    } on PlatformException catch (e) {
+      throw StorageException(
+        'Failed to fetch explicit folder artwork: ${e.message}',
+      );
+    }
+  }
+
   /// Stages a content URI into the shared playback cache and returns the
   /// absolute staged path. [maxSizeBytes] optionally refuses to copy
   /// oversized sources (returns null) — used by metadata enrichment, not

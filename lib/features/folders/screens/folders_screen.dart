@@ -11,6 +11,7 @@ import 'package:flick/core/utils/string_sort_utils.dart';
 import 'package:flick/core/utils/uri_display_utils.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
+import 'package:flick/services/album_art_service.dart';
 import 'package:flick/services/music_folder_service.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
@@ -524,6 +525,32 @@ class _RootFolderEntry {
   const _RootFolderEntry({required this.folder, required this.songs});
 }
 
+Future<String?> _resolveExplicitFolderCoverPath(
+  List<Song> songs, {
+  required String folderRelativePath,
+}) {
+  for (final song in songs) {
+    final source = song.filePath;
+    if (source == null || source.isEmpty) continue;
+    final relativePath =
+        song.relativeFolderPath ??
+        SongsState.extractRelativeSubfolder(song.folderUri, source);
+    final sourceDepth = relativePath
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .length;
+    final folderDepth = folderRelativePath
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .length;
+    return AlbumArtService.instance.resolveExplicitFolderCoverPath(
+      audioSourcePath: source,
+      parentLevels: max(0, sourceDepth - folderDepth),
+    );
+  }
+  return Future.value(null);
+}
+
 /// Interactive folder card for root music folders.
 class _RootFolderCard extends StatefulWidget {
   final _RootFolderEntry entry;
@@ -540,6 +567,7 @@ class _RootFolderCardState extends State<_RootFolderCard>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _tiltAnimation;
+  late Future<String?> _explicitCoverPath;
   List<_ArtEntry> _cachedArtworks = const [];
 
   @override
@@ -557,6 +585,10 @@ class _RootFolderCardState extends State<_RootFolderCard>
       begin: 0.0,
       end: 0.02,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _explicitCoverPath = _resolveExplicitFolderCoverPath(
+      widget.entry.songs,
+      folderRelativePath: '',
+    );
     _cachedArtworks = _computeArtworks(widget.entry.songs);
   }
 
@@ -564,6 +596,10 @@ class _RootFolderCardState extends State<_RootFolderCard>
   void didUpdateWidget(covariant _RootFolderCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.entry.songs, widget.entry.songs)) {
+      _explicitCoverPath = _resolveExplicitFolderCoverPath(
+        widget.entry.songs,
+        folderRelativePath: '',
+      );
       _cachedArtworks = _computeArtworks(widget.entry.songs);
     }
   }
@@ -646,7 +682,20 @@ class _RootFolderCardState extends State<_RootFolderCard>
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            _buildArtGrid(context, padded),
+                            FutureBuilder<String?>(
+                              future: _explicitCoverPath,
+                              builder: (context, snapshot) {
+                                final coverPath = snapshot.data;
+                                if (coverPath == null) {
+                                  return _buildArtGrid(context, padded);
+                                }
+                                return CachedImageWidget(
+                                  imagePath: coverPath,
+                                  fit: BoxFit.cover,
+                                  useThumbnail: true,
+                                );
+                              },
+                            ),
                             Positioned.fill(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
@@ -1306,6 +1355,7 @@ class _SubfolderCardState extends State<_SubfolderCard>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _tiltAnimation;
+  late Future<String?> _explicitCoverPath;
   List<_ArtEntry> _cachedArtworks = const [];
 
   @override
@@ -1323,6 +1373,10 @@ class _SubfolderCardState extends State<_SubfolderCard>
       begin: 0.0,
       end: 0.02,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _explicitCoverPath = _resolveExplicitFolderCoverPath(
+      widget.folder.songs,
+      folderRelativePath: widget.folder.key,
+    );
     _cachedArtworks = _RootFolderCardState._computeArtworks(
       widget.folder.songs,
     );
@@ -1332,6 +1386,10 @@ class _SubfolderCardState extends State<_SubfolderCard>
   void didUpdateWidget(covariant _SubfolderCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.folder.songs, widget.folder.songs)) {
+      _explicitCoverPath = _resolveExplicitFolderCoverPath(
+        widget.folder.songs,
+        folderRelativePath: widget.folder.key,
+      );
       _cachedArtworks = _RootFolderCardState._computeArtworks(
         widget.folder.songs,
       );
@@ -1403,7 +1461,20 @@ class _SubfolderCardState extends State<_SubfolderCard>
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            _buildArtGrid(context, padded),
+                            FutureBuilder<String?>(
+                              future: _explicitCoverPath,
+                              builder: (context, snapshot) {
+                                final coverPath = snapshot.data;
+                                if (coverPath == null) {
+                                  return _buildArtGrid(context, padded);
+                                }
+                                return CachedImageWidget(
+                                  imagePath: coverPath,
+                                  fit: BoxFit.cover,
+                                  useThumbnail: true,
+                                );
+                              },
+                            ),
                             Positioned.fill(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(

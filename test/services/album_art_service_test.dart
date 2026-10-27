@@ -9,6 +9,20 @@ SongEntity _song(String path) =>
       ..artist = 'Artist';
 
 void main() {
+  group('isExplicitFolderCoverImageName', () {
+    test('accepts cover and folder JPG/PNG names', () {
+      expect(isExplicitFolderCoverImageName('cover.jpg'), isTrue);
+      expect(isExplicitFolderCoverImageName('folder.jpeg'), isTrue);
+      expect(isExplicitFolderCoverImageName('Cover.PNG'), isTrue);
+    });
+
+    test('rejects other stems and extensions', () {
+      expect(isExplicitFolderCoverImageName('front.jpg'), isFalse);
+      expect(isExplicitFolderCoverImageName('cover.webp'), isFalse);
+      expect(isExplicitFolderCoverImageName('folder.1.png'), isFalse);
+    });
+  });
+
   group('isFolderCoverImageName', () {
     test('accepts the classic cover/folder names', () {
       expect(isFolderCoverImageName('cover.jpg'), isTrue);
