@@ -94,13 +94,15 @@ enum VolumeTier { hardware, software, system, unavailable }
 VolumeTier determineVolumeTier({
   required bool isBitPerfectVolumePath,
   required Uac2VolumeMode? volumeMode,
+  bool volumeControlWritable = true,
   required bool hwVolumeFailed,
   required bool isDoP,
   required bool autoSwitchDsdForVolume,
   required bool isPassthrough,
   required bool usingRustBackend,
 }) {
-  final hwTrusted = volumeMode == Uac2VolumeMode.hardware && !hwVolumeFailed;
+  final hwTrusted = volumeMode == Uac2VolumeMode.hardware &&
+      volumeControlWritable && !hwVolumeFailed;
   // Wire DSD is protected even when the user's PCM bit-perfect toggle is off.
   // `isDoP` also covers USB native DSD: neither may enter the gain path.
   if (isDoP) {
@@ -2694,7 +2696,6 @@ class PlayerService {
   /// Bit-perfect volume path: direct USB DAC or DAP internal hi-res engine.
   bool get _isBitPerfectVolumePath =>
       isBitPerfectModeEnabled &&
-      !(_isDirectUsbPath && _currentUsbDsdMode == 'pcm') &&
       (currentEngineType == AudioEngineType.usbDacExperimental ||
           currentEngineType == AudioEngineType.dapInternalHighRes);
 
@@ -2780,10 +2781,15 @@ class PlayerService {
   VolumeTier _determineCurrentTier() => determineVolumeTier(
     isBitPerfectVolumePath: _isBitPerfectVolumePath,
     volumeMode: _uac2Service.currentDeviceStatus?.volumeMode,
+    volumeControlWritable:
+        _uac2Service.currentDeviceStatus?.volumeControlWritable ?? false,
     hwVolumeFailed: _hwVolumeFailed,
     isDoP: _usbDsdWireActive,
     autoSwitchDsdForVolume: Uac2PreferencesService.autoSwitchDsdForVolumeSync,
-    isPassthrough: _isPassthroughActive,
+    // Direct PCM still bypasses the mixer in bit-perfect mode: a stale
+    // diagnostics snapshot must never allow ineffective software gain.
+    isPassthrough: _isPassthroughActive ||
+        (_isDirectUsbPath && isBitPerfectModeEnabled),
     usingRustBackend: _usingRustBackend,
   );
 
@@ -6010,7 +6016,10 @@ class PlayerService {
         normalized.contains('resource busy') ||
         normalized.contains('access denied') ||
         normalized.contains('permission denied') ||
-        normalized.contains('usb session already active');
+        normalized.contains('usb session already active') ||
+        normalized.contains('libusb_no_device') ||
+        normalized.contains('usb direct host handle lost') ||
+        normalized.contains('no such device');
   }
 
   /// USB access denied needs a user permission grant, not a session
