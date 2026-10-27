@@ -73,6 +73,10 @@ void main() {
   testWidgets('Tune is at the top-right, not in the playback button row', (
     tester,
   ) async {
+    tester.view
+      ..physicalSize = const Size(320, 650)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     var tuneCalls = 0;
     var playCalls = 0;
     var saveCalls = 0;
@@ -110,6 +114,10 @@ void main() {
   testWidgets('reduced motion leaves the small infinity orb static', (
     tester,
   ) async {
+    tester.view
+      ..physicalSize = const Size(320, 650)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       heroApp(
         tokens: LokalTokens.resolve(LokalThemeId.light),
