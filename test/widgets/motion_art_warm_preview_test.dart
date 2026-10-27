@@ -100,6 +100,31 @@ void main() {
     expect(find.byType(VideoPlayer), findsNothing);
     expect(find.text('static cover'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
+
+    // The pressure guard belongs to the process, not only the original
+    // widget: navigating back to a fresh player must not decode video early.
+    suppression.value = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox.square(
+          dimension: 200,
+          child: MotionArtView(
+            title: 'Song',
+            artist: 'Artist',
+            sharedPlaybackKey: 'player:42',
+            sharedPlaybackOverride: pool,
+            suppressionOverride: suppression,
+            fallback: const Text('static cover'),
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(VideoPlayer), findsNothing);
+    expect(find.text('static cover'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    // Flush the process-wide cooldown timer to avoid leaking fake timers
+    // between test cases.
+    await tester.pump(const Duration(minutes: 2, seconds: 1));
     await mini.release(immediate: true);
     suppression.dispose();
   });
