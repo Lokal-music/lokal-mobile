@@ -119,7 +119,6 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
               SliverToBoxAdapter(
                 child: KonnektedCoverFlowSection(
                   onPlay: onPlay,
-                  onOpenFlow: () => onNavigate(KonnektedDestination.flow),
                 ),
               ),
               SliverToBoxAdapter(
@@ -339,11 +338,9 @@ class KonnektedCoverFlowSection extends ConsumerStatefulWidget {
   const KonnektedCoverFlowSection({
     super.key,
     required this.onPlay,
-    required this.onOpenFlow,
   });
 
   final void Function(Song song, List<Song> shelf) onPlay;
-  final VoidCallback onOpenFlow;
 
   @override
   ConsumerState<KonnektedCoverFlowSection> createState() =>
