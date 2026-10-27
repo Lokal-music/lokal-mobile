@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'discovery_http.dart';
 import 'discovery_models.dart';
+import 'discovery_sources.dart' show ResolvedDiscoveryAudio;
 
 class SoundCloudSource {
   SoundCloudSource(this.http, {this.clientId});
