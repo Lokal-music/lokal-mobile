@@ -50,41 +50,40 @@ class _Uac2VolumeControlState extends ConsumerState<Uac2VolumeControl> {
   /// to the DAC Feature Unit (hardware), the engine (software/DSP) or drops
   /// the write when volume is unavailable (bit-perfect passthrough).
   Future<void> _onSliderChangeEnd(double volume) async {
-    setState(() => _draggingVolume = null);
-
-    final playerService = ref.read(playerServiceProvider);
-    final wasMuted = ref.read(uac2DeviceStatusProvider)?.muted ?? false;
-
-    if (wasMuted && volume > 0.0) {
+    final player = ref.read(playerServiceProvider);
+    final hardware = player.isHardwareVolumeAuthority;
+    final device = ref.read(uac2DeviceStatusProvider);
+    if (mounted) setState(() => _draggingVolume = null);
+    if (hardware && device?.muted == true && volume > 0.0) {
       await ref.read(uac2DeviceStatusProvider.notifier).setMute(false);
-    }
-    if (!wasMuted && volume == 0.0) {
-      _preMuteVolume = playerService.currentVolume > 0.0
-          ? playerService.currentVolume
-          : 1.0;
+    } else if (hardware && device?.muted != true && volume == 0.0) {
+      _preMuteVolume = player.currentVolume > 0 ? player.currentVolume : 1.0;
       await ref.read(uac2DeviceStatusProvider.notifier).setMute(true);
     }
-    await playerService.setVolume(volume);
+    await player.setVolume(volume);
+    if (mounted) setState(() {});
   }
 
   Future<void> _toggleMute() async {
+    final player = ref.read(playerServiceProvider);
+    final hardware = player.isHardwareVolumeAuthority;
     final notifier = ref.read(uac2DeviceStatusProvider.notifier);
-    final playerService = ref.read(playerServiceProvider);
-    final currentMuted = ref.read(uac2DeviceStatusProvider)?.muted ?? false;
-    final newMuted = !currentMuted;
-
-    setState(() => _muteUpdateInFlight = true);
-
-    if (newMuted) {
-      _preMuteVolume = playerService.currentVolume.clamp(0.01, 1.0);
-      await notifier.setMute(true);
-      await playerService.setVolume(0.0);
-    } else {
-      await playerService.setVolume(_preMuteVolume);
-      await notifier.setMute(false);
+    final muted = hardware
+        ? (ref.read(uac2DeviceStatusProvider)?.muted ?? false)
+        : player.currentVolume == 0.0;
+    if (mounted) setState(() => _muteUpdateInFlight = true);
+    try {
+      if (!muted) {
+        _preMuteVolume = player.currentVolume.clamp(0.01, 1.0);
+        if (hardware) await notifier.setMute(true);
+        await player.setVolume(0.0);
+      } else {
+        await player.setVolume(_preMuteVolume);
+        if (hardware) await notifier.setMute(false);
+      }
+    } finally {
+      if (mounted) setState(() => _muteUpdateInFlight = false);
     }
-
-    if (mounted) setState(() => _muteUpdateInFlight = false);
   }
 
   @override
@@ -93,7 +92,8 @@ class _Uac2VolumeControlState extends ConsumerState<Uac2VolumeControl> {
 
     if (deviceStatus == null ||
         deviceStatus.state == Uac2State.idle ||
-        !deviceStatus.hasVolumeControl) {
+        (!deviceStatus.hasVolumeControl &&
+            !ref.read(playerServiceProvider).isVolumeAvailable)) {
       return const SizedBox.shrink();
     }
 
@@ -107,10 +107,12 @@ class _Uac2VolumeControlState extends ConsumerState<Uac2VolumeControl> {
         (hardwareAuthority
             ? (deviceStatus.volume ?? playerVolume)
             : playerVolume);
-    final effectiveMuted = deviceStatus.muted ?? false;
+    final effectiveMuted = hardwareAuthority
+        ? (deviceStatus.muted ?? false)
+        : playerVolume == 0.0;
     final volumeControlWritable =
-        deviceStatus.volumeControlWritable &&
         isAvailable &&
+        (!hardwareAuthority || deviceStatus.volumeControlWritable) &&
         !_muteUpdateInFlight;
     final showDb =
         isSoftwareVolume || deviceStatus.volumeMode == Uac2VolumeMode.hardware;
