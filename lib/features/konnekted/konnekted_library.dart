@@ -109,13 +109,6 @@ class KonnektedLibrary extends ConsumerWidget {
                 height: konnektedHeaderHeight(context),
                 child: Row(
                   children: [
-                    LokalRoundAction(
-                      icon: Icons.add_rounded,
-                      iconSize: 24,
-                      label: lokalText('Add music, playlists and folders'),
-                      onPressed: () => _showAdd(context, ref),
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
                       child: Semantics(
                         header: true,
@@ -142,6 +135,13 @@ class KonnektedLibrary extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    LokalRoundAction(
+                      icon: Icons.add_rounded,
+                      iconSize: 24,
+                      label: lokalText('Add music, playlists and folders'),
+                      onPressed: () => _showAdd(context, ref),
+                    ),
+                    const SizedBox(width: 10),
                     KonnektedHeaderActions(
                       onSettings: () => onNavigate(
                         KonnektedDestination.settings,

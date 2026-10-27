@@ -89,8 +89,19 @@ void main() {
       find.bySemanticsLabel('Add music, playlists and folders'),
     );
     final title = tester.getRect(find.text('Library'));
-    expect(title.left, greaterThanOrEqualTo(addButton.right));
+    // The title starts at the page margin: no empty 44dp action slot.
+    expect(title.left, closeTo(20, .1));
+    expect(title.right, lessThanOrEqualTo(addButton.left));
+    // Add joins the trailing action group; Discord and Settings stay fixed.
+    expect(addButton.right + 10, closeTo(libraryDiscord.left, .1));
     expect((title.center.dy - addButton.center.dy).abs(), lessThan(2));
+    await tester.tap(find.bySemanticsLabel('Add music, playlists and folders'));
+    await tester.pumpAndSettle();
+    expect(find.text('New playlist'), findsOneWidget);
+    expect(find.text('Import a playlist link'), findsOneWidget);
+    expect(find.text('Import M3U'), findsOneWidget);
+    // Also present in the empty-library action behind the add sheet.
+    expect(find.text('Add a music folder'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -138,6 +149,13 @@ void main() {
     expect(title.height, greaterThan(44));
     expect(title.top, greaterThanOrEqualTo(row.top));
     expect(title.bottom, lessThanOrEqualTo(row.bottom));
+    expect(title.left, closeTo(20, .1));
+    final add = tester.getRect(
+      find.bySemanticsLabel('Add music, playlists and folders'),
+    );
+    final discord = tester.getRect(find.byTooltip('Discord'));
+    expect(add.right + 10, closeTo(discord.left, .1));
+    expect(title.right, lessThanOrEqualTo(add.left));
     expect(tester.getRect(find.byTooltip('Discord')).center, homeDiscord.center);
     expect(tester.getRect(find.byTooltip('Settings')).center, homeSettings.center);
     expect(tester.takeException(), isNull);
