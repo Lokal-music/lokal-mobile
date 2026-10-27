@@ -27,6 +27,8 @@ import '../widgets/player_transport_controls.dart';
 import '../widgets/artwork_gradient_backdrop.dart';
 import '../widgets/artwork_mesh_blur_backdrop.dart';
 import '../widgets/lyric_motion_line.dart';
+import '../widgets/lyrics_subline_timing.dart';
+import '../widgets/flowing_lyric_subline.dart';
 import '../widgets/immersive_lyrics_stage.dart';
 import '../widgets/material_player_thumb.dart';
 
@@ -2361,7 +2363,22 @@ class _FlowingLyricsState extends State<_FlowingLyrics>
   // The parser keeps start-only enhanced-LRC words for lossless editing.
   // Resolve their end windows once for painting; never do it on each tick.
   late List<LyricsLine> _playbackLines;
+  // Project translations/romaji exactly once per source change, never during
+  // the frame-driven scroll/reveal loop. Null means line-only or plain lyrics.
+  List<LyricsLine?> _timedSublines = const [];
   List<LyricsLine> get _lines => _playbackLines;
+
+  void _prepareLyrics() {
+    _playbackLines = LyricsService().playbackLines(widget.lyrics);
+    _timedSublines = [
+      for (final line in _playbackLines)
+        if (line.words?.isNotEmpty == true &&
+            line.translation?.trim().isNotEmpty == true)
+          projectLyricsSubline(line, line.translation!.trim())
+        else
+          null,
+    ];
+  }
   late List<int> _ts = [
     for (final l in widget.lyrics.lines) l.timestamp.inMilliseconds,
   ];
@@ -2389,7 +2406,7 @@ class _FlowingLyricsState extends State<_FlowingLyrics>
   @override
   void initState() {
     super.initState();
-    _playbackLines = LyricsService().playbackLines(widget.lyrics);
+    _prepareLyrics();
     _anchorPos = widget.player.positionNotifier.value;
     _clockPlaying = widget.player.isPlayingNotifier.value;
     _clockSpeed = widget.player.playbackSpeedNotifier.value;
@@ -2407,7 +2424,7 @@ class _FlowingLyricsState extends State<_FlowingLyrics>
         if (line.translation?.isNotEmpty == true)
           _subText[line.timestamp.inMilliseconds] = line.translation!;
       }
-      _playbackLines = LyricsService().playbackLines(widget.lyrics);
+      _prepareLyrics();
       _ts = [for (final line in _lines) line.timestamp.inMilliseconds];
       _layoutLyrics = null;
     }
@@ -2638,11 +2655,22 @@ class _FlowingLyricsState extends State<_FlowingLyrics>
                         padding: const EdgeInsets.only(top: _subGap),
                         child: Transform.translate(
                           offset: Offset(0, (1 - _sublineReveal) * 6),
-                          child: Text(
-                            sub,
+                          child: FlowingLyricSubline(
+                            text: sub,
+                            // Source translation is available only after
+                            // Translate/Romanize; old memorized sublines must
+                            // not inherit the next source's timings.
+                            timedLine: widget.showTranslation &&
+                                    i < _timedSublines.length &&
+                                    _timedSublines[i]?.text == sub
+                                ? _timedSublines[i]
+                                : null,
+                            position: Duration(milliseconds: _posMs),
+                            singing: singing,
+                            lightweight: _ultra,
                             style: _sub.copyWith(
                               color: Colors.white.withValues(
-                                alpha: i == _active ? .72 : op * .8,
+                                alpha: i == _active ? .82 : op * .8,
                               ),
                             ),
                           ),
