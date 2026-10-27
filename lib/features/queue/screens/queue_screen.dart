@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flick/core/theme/adaptive_color_provider.dart';
+import 'package:flick/core/utils/app_haptics.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/l10n/l10n.dart';
@@ -239,7 +240,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                             style: TextStyle(fontSize: 12, color: mutedColor)),
                         const Spacer(),
                         if (!_selectionMode)
-                          Text(lokalText('Drag to reorder'),
+                          Text(lokalText('Hold to reorder'),
                               style: TextStyle(fontSize: 11, color: mutedColor)),
                       ],
                     ),
@@ -265,8 +266,13 @@ class _QueueListState extends ConsumerState<QueueList> {
                         )
                       : SliverReorderableList(
                           itemCount: songs.length,
-                          // The platform and sheet scroll gestures no longer
-                          // compete with nested Dismissible/second reorder lists.
+                          // A single selection pulse exactly when Flutter
+                          // recognizes the row's long press, not on release,
+                          // hover or on every animation frame. AppHaptics also
+                          // respects the user's haptic preference.
+                          onReorderStart: (_) => AppHaptics.selection(),
+                          // Keep scrolling as the default gesture; holding
+                          // anywhere on a song row arms the reorder instead.
                           onReorder: (from, destination) {
                             final to = queueDropIndex(from, destination, songs.length);
                             unawaited(_move(from, to, songs, manualOnly));
@@ -277,29 +283,33 @@ class _QueueListState extends ConsumerState<QueueList> {
                             borderRadius: BorderRadius.circular(14),
                             child: child,
                           ),
-                          itemBuilder: (context, i) => _QueueRow(
-                            key: ValueKey(ids[i]),
-                            song: songs[i],
-                            index: i,
-                            darkBackdrop: widget.embedded,
-                            onTap: () async {
-                              final player = ref.read(playerProvider.notifier);
-                              if (manualOnly) {
-                                await player.playFromQueueIndex(i);
-                              } else {
-                                await player.playFromUpNextIndex(i);
-                              }
-                              _openPlayer();
-                            },
-                            onRemove: () async {
-                              final player = ref.read(playerProvider.notifier);
-                              if (manualOnly) {
-                                await player.removeFromQueue(i);
-                              } else {
-                                await player.removeFromUpNext(i);
-                              }
-                            },
-                          ),
+                          itemBuilder: (context, i) =>
+                              ReorderableDelayedDragStartListener(
+                                key: ValueKey(ids[i]),
+                                index: i,
+                                child: _QueueRow(
+                                  song: songs[i],
+                                  index: i,
+                                  darkBackdrop: widget.embedded,
+                                  onTap: () async {
+                                    final player = ref.read(playerProvider.notifier);
+                                    if (manualOnly) {
+                                      await player.playFromQueueIndex(i);
+                                    } else {
+                                      await player.playFromUpNextIndex(i);
+                                    }
+                                    _openPlayer();
+                                  },
+                                  onRemove: () async {
+                                    final player = ref.read(playerProvider.notifier);
+                                    if (manualOnly) {
+                                      await player.removeFromQueue(i);
+                                    } else {
+                                      await player.removeFromUpNext(i);
+                                    }
+                                  },
+                                ),
+                              ),
                         ),
                 ),
               ] else
@@ -357,8 +367,9 @@ class _QueueListState extends ConsumerState<QueueList> {
 }
 
 /// A minimal queue row: artwork, title, secondary artist, duration, actions,
-/// and a dedicated immediate drag handle. No nested Dismissible/GestureDetector
-/// competes for the vertical drag arena.
+/// and a visual grip hint. The whole row is wrapped in a delayed drag
+/// recognizer, so a long press works on artwork, title, duration and actions.
+/// Ordinary taps and vertical scrolling remain unchanged.
 class _QueueRow extends StatelessWidget {
   const _QueueRow({
     super.key,
@@ -454,17 +465,19 @@ class _QueueRow extends StatelessWidget {
                   ],
                 ),
               ),
-              ReorderableDragStartListener(
-                index: index,
-                child: Semantics(
-                  button: true,
-                  label: 'Reorder ${song.title}',
-                  child: SizedBox(
-                    key: ValueKey('queue-grip-$index'),
-                    width: 44,
-                    height: 62,
-                    child: Icon(LucideIcons.gripVertical, color: mutedColor,
-                        size: 22),
+              // A visual affordance only. The parent delayed-drag
+              // recognizer accepts a long press on the ENTIRE song row.
+              ExcludeSemantics(
+                child: SizedBox(
+                  key: ValueKey('queue-grip-$index'),
+                  width: 44,
+                  height: 62,
+                  child: Center(
+                    child: Icon(
+                      LucideIcons.gripVertical,
+                      color: mutedColor,
+                      size: 22,
+                    ),
                   ),
                 ),
               ),
