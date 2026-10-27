@@ -89,7 +89,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     player = _Player();
-    if (manualOnly) player.initial = PlayerState(queue: [song('Manual')]);
+    if (manualOnly) player.initial = PlayerState(queue: [song('Manual'), song('Manual1'), song('Manual2')]);
     if (reorderDemo) {
       player.initial = PlayerState(
         currentSong: song('Now'),
@@ -260,43 +260,49 @@ void main() {
     expect(player.played, ['manual:0']);
     expect(opens, 1);
   });
-  testWidgets('popup queue grip drags Up Next down and Manual Queue up',
+  testWidgets('popup queue reorders playback Up Next by its grip',
       (tester) async {
     await pump(tester, reorderDemo: true);
-
-    Future<void> drag(WidgetTester tester, Finder grip, Offset delta) async {
-      final handle = grip;
-      expect(handle, findsOneWidget);
-      final gesture = await tester.startGesture(tester.getCenter(handle));
-      await tester.pump(const Duration(milliseconds: 40));
-      await gesture.moveBy(delta);
-      await tester.pump(const Duration(milliseconds: 120));
-      await gesture.up();
-      await tester.pumpAndSettle();
-    }
-
-    await drag(tester, find.byKey(const ValueKey('upnext-drag-0')),
-        const Offset(0, 165));
+    expect(find.text('Track Manual0'), findsNothing,
+        reason: 'Manual entries are already included in the actual Up Next list');
+    final handle = find.byKey(const ValueKey('queue-grip-0'));
+    await tester.ensureVisible(handle);
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump(const Duration(milliseconds: 60));
+    await gesture.moveBy(const Offset(0, 180));
+    await tester.pump(const Duration(milliseconds: 220));
+    await gesture.up();
+    await tester.pumpAndSettle();
     expect(player.upNextMoves, isNotEmpty,
-        reason: 'Drag handle in the mini-player sheet must invoke the callback');
+        reason: 'Dragging the grip must commit a real playback-order move');
     expect(player.upNextMoves.last.$1, 0);
     expect(player.upNextMoves.last.$2, greaterThan(0));
     expect(player.upNextIds.first, isNot('Next0'));
+    expect(tester.takeException(), isNull);
+  });
 
-    // Make sure the second list is independently reorderable, not just Up Next.
-    await drag(tester, find.byKey(const ValueKey('manual-queue-drag-1')),
-        const Offset(0, -90));
+  testWidgets('popup queue without a playback context still reorders manual entries',
+      (tester) async {
+    await pump(tester, manualOnly: true);
+    final handle = find.byKey(const ValueKey('queue-grip-0'));
+    await tester.ensureVisible(handle);
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump(const Duration(milliseconds: 60));
+    await gesture.moveBy(const Offset(0, 180));
+    await tester.pump(const Duration(milliseconds: 220));
+    await gesture.up();
+    await tester.pumpAndSettle();
     expect(player.manualMoves, isNotEmpty);
-    expect(player.manualMoves.last.$1, 1);
-    expect(player.manualMoves.last.$2, 0);
-    expect(player.manualIds.first, 'Manual1');
+    expect(player.manualMoves.last.$1, 0);
+    expect(player.manualMoves.last.$2, greaterThan(0));
+    expect(player.manualIds.first, isNot('Manual'));
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('sheet queue heading uses the same inset as upcoming tracks',
       (tester) async {
     await pump(tester, reorderDemo: true);
-    final titleX = tester.getTopLeft(find.text('QUEUE')).dx;
+    final titleX = tester.getTopLeft(find.text('Queue')).dx;
     final upcomingX = tester.getTopLeft(find.text('Up next')).dx;
     expect(titleX, closeTo(upcomingX, 1),
         reason: 'Popup Queue title was too far left of the content');
