@@ -29,6 +29,20 @@ class AppLog extends ChangeNotifier {
   final List<String> _pendingLines = [];
   File? _logFile;
   bool _persistenceInitialized = false;
+  Timer? _flushTimer;
+  Future<bool>? _flushInProgress;
+
+  // Idle applications should not wake the Dart isolate to inspect an empty
+  // log queue. A timer exists only while there are unsaved entries.
+  void _scheduleFlush() {
+    if (_logFile == null || _pendingLines.isEmpty || _flushTimer != null) {
+      return;
+    }
+    _flushTimer = Timer(_flushInterval, () {
+      _flushTimer = null;
+      unawaited(flushToDisk());
+    });
+  }
 
   List<LogEntry> get entries => _entries;
 
@@ -44,6 +58,7 @@ class AppLog extends ChangeNotifier {
         's': source.name,
         'm': message,
       }));
+      _scheduleFlush();
     }
     notifyListeners();
   }
@@ -59,10 +74,7 @@ class AppLog extends ChangeNotifier {
       }
       _logFile = File(p.join(directory.path, 'flick_log.jsonl'));
       await _replayPersisted();
-      Timer.periodic(
-        _flushInterval,
-        (_) => unawaited(flushToDisk()),
-      );
+      _scheduleFlush();
     } catch (error) {
       debugPrint('AppLog persistence unavailable: $error');
     }
@@ -90,23 +102,56 @@ class AppLog extends ChangeNotifier {
   }
 
   Future<void> flushToDisk() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+
+    // A lifecycle flush must wait for an in-flight disk write. The writer
+    // drains entries arriving during the write before it completes.
+    final active = _flushInProgress;
+    if (active != null) {
+      final succeeded = await active;
+      // The writer normally drains additions itself, but a log can arrive
+      // just as it finishes. Honor this explicit flush request too.
+      if (succeeded && _pendingLines.isNotEmpty) {
+        await flushToDisk();
+      }
+      return;
+    }
+
     final file = _logFile;
     if (file == null || _pendingLines.isEmpty) return;
-    final lines = List<String>.of(_pendingLines);
-    _pendingLines.clear();
+    final flush = _drainPendingLines(file);
+    _flushInProgress = flush;
     try {
-      await file.writeAsString(
-        '${lines.join('\n')}\n',
-        mode: FileMode.append,
-        flush: true,
-      );
-      if (await file.length() > _maxFileBytes) {
-        await _trimFile(file);
-      }
-    } catch (error) {
-      _pendingLines.insertAll(0, lines);
-      debugPrint('AppLog flush failed: $error');
+      await flush;
+    } finally {
+      _flushInProgress = null;
+      _scheduleFlush();
     }
+  }
+
+  Future<bool> _drainPendingLines(File file) async {
+    while (_pendingLines.isNotEmpty) {
+      final lines = List<String>.of(_pendingLines);
+      _pendingLines.clear();
+      try {
+        await file.writeAsString(
+          '${lines.join('\n')}\n',
+          mode: FileMode.append,
+          flush: true,
+        );
+        if (await file.length() > _maxFileBytes) {
+          await _trimFile(file);
+        }
+      } catch (error) {
+        _pendingLines.insertAll(0, lines);
+        debugPrint('AppLog flush failed: $error');
+        // Avoid an immediate retry loop on a failing disk; _scheduleFlush
+        // retains the existing delayed retry behavior.
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _trimFile(File file) async {
@@ -141,6 +186,8 @@ class AppLog extends ChangeNotifier {
   void clear() {
     _entries.clear();
     _pendingLines.clear();
+    _flushTimer?.cancel();
+    _flushTimer = null;
     final file = _logFile;
     if (file != null) {
       unawaited(_deleteFile(file));

@@ -544,7 +544,8 @@ class PlayerService {
   final AlbumColorModePreferenceService _albumColorModePreferenceService =
       AlbumColorModePreferenceService();
   bool _priorityAnchorActive = false;
-  bool _priorityAnchorEnabled = true;
+  // Opt-in: an additional silent Android AudioTrack can increase battery use.
+  bool _priorityAnchorEnabled = false;
   bool _motionArtDuringBitPerfect = false;
   bool _midStreamUsbFallbackActive = false;
   bool _deadRustEngineRecoveryActive = false;
@@ -1036,6 +1037,10 @@ class PlayerService {
     bitPerfectProcessingLockedNotifier.addListener(_bitPerfectLockedListener!);
     _updateBitPerfectProcessingLocked();
     _uac2Service.addStatusListener(_mirrorUsbVolumeFromUac2Status);
+    // Some playback completion/failure paths change this notifier without
+    // explicitly calling _updatePriorityAnchor. Always release the extra
+    // AudioTrack when the transport is no longer playing.
+    isPlayingNotifier.addListener(_updatePriorityAnchor);
     _notifyQueueChanged();
     // Keep the preview in sync with user settings and source transitions.
     currentSongNotifier.addListener(_scheduleAutoplayPreview);
@@ -1462,6 +1467,8 @@ class PlayerService {
   Future<void> onAppPaused() async {
     if (!Platform.isAndroid) return;
     _appInForeground = false;
+    // Background music continues; only hidden UI/FFI refreshes slow down.
+    _rustAudioService.setAppForeground(false);
     final enabled = await _appPreferencesService.getFloatingPlayerEnabled();
     if (!enabled) return;
     await _activateFloatingPlayer();
@@ -1469,6 +1476,7 @@ class PlayerService {
 
   Future<void> onAppResumed() async {
     _appInForeground = true;
+    _rustAudioService.setAppForeground(true);
     if (_floatingPlayerActive) {
       await _deactivateFloatingPlayer();
     }
@@ -2619,22 +2627,38 @@ class PlayerService {
         _priorityAnchorEnabled &&
         isPlayingNotifier.value;
     if (shouldAnchor && !_priorityAnchorActive) {
-      _uac2Service.startPriorityAnchor();
       _priorityAnchorActive = true;
+      AppLog.instance.add(
+        '[PriorityAnchor] start requested; enabled=true '
+        'engine=${currentEngineType.name}',
+      );
+      unawaited(_uac2Service.startPriorityAnchor());
     } else if (!shouldAnchor && _priorityAnchorActive) {
-      _uac2Service.stopPriorityAnchor();
       _priorityAnchorActive = false;
+      AppLog.instance.add(
+        '[PriorityAnchor] stop requested; enabled=$_priorityAnchorEnabled '
+        'playing=${isPlayingNotifier.value} engine=${currentEngineType.name}',
+      );
+      unawaited(_uac2Service.stopPriorityAnchor());
     }
   }
 
   Future<void> _loadPriorityAnchorPreference() async {
     _priorityAnchorEnabled = await _appPreferencesService
         .getPriorityAnchorEnabled();
+    AppLog.instance.add(
+      '[PriorityAnchor] preference loaded; enabled=$_priorityAnchorEnabled '
+      'engine=${currentEngineType.name}',
+    );
     _updatePriorityAnchor();
   }
 
   Future<void> setPriorityAnchorEnabled(bool value) async {
+    if (_priorityAnchorEnabled == value) return;
     _priorityAnchorEnabled = value;
+    AppLog.instance.add(
+      '[PriorityAnchor] user setting changed; enabled=$value',
+    );
     _updatePriorityAnchor();
   }
 
@@ -3611,6 +3635,9 @@ class PlayerService {
       if (_usingRustBackend != shouldUseRust) {
         _usingRustBackend = shouldUseRust;
       }
+      if (previous?.engine != state.engine) {
+        _updatePriorityAnchor();
+      }
       final shouldTrackReplayFromState = shouldTrackReplayFromPlaybackState(
         usingRustBackend: shouldUseRust,
         previousPosition: previous?.position,
@@ -4016,7 +4043,12 @@ class PlayerService {
     await _savePosition();
     _positionSaveTimer?.cancel();
     _clearReplayTracking();
-    _updatePriorityAnchor();
+    // Release even if the engine fails to publish its final stopped state.
+    if (_priorityAnchorActive) {
+      _priorityAnchorActive = false;
+      AppLog.instance.add('[PriorityAnchor] stop requested; playback stopped');
+      unawaited(_uac2Service.stopPriorityAnchor());
+    }
     try {
       await _playbackManager.stop();
     } catch (e) {
@@ -5834,6 +5866,10 @@ class PlayerService {
   }
 
   Future<void> _pauseInternal() async {
+    // Keep the most recent position once at pause instead of rewriting the
+    // unchanged resume position to storage every five seconds indefinitely.
+    _positionSaveTimer?.cancel();
+    _positionSaveTimer = null;
     if (_castingService.isActive) {
       await _castingService.delegatePause();
       return;
@@ -5857,7 +5893,12 @@ class PlayerService {
       await _playbackManager.pause();
     } catch (e) {
       _debugLog('Pause failed: $e');
+      // The engine may still be playing after a rejected pause. Keep
+      // position persistence and network prefetch alive until the next
+      // successful transport transition.
+      _ensurePositionSaveTimer();
     }
+    await _savePosition();
     await _refreshAudioOutputDiagnostics(
       reason: 'playback paused',
       activeSong: currentSongNotifier.value,
@@ -7405,6 +7446,11 @@ class PlayerService {
   }
 
   void dispose() {
+    isPlayingNotifier.removeListener(_updatePriorityAnchor);
+    if (_priorityAnchorActive) {
+      _priorityAnchorActive = false;
+      unawaited(_uac2Service.stopPriorityAnchor());
+    }
     _playbackDiagnosticsDebounceTimer?.cancel();
     _playbackDiagnosticsDebounceTimer = null;
     _queueDebounceTimer?.cancel();

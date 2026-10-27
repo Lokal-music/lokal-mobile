@@ -6,13 +6,16 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 
 class PriorityAnchorService(private val context: Context) {
 
     private var anchorTrack: AudioTrack? = null
     private var anchorThread: Thread? = null
-    private var running = false
+    @Volatile private var running = false
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
         private const val TAG = "PriorityAnchor"
@@ -97,16 +100,32 @@ class PriorityAnchorService(private val context: Context) {
         val silence = ByteArray(bufferSize)
 
         anchorThread = Thread({
-            while (running) {
-                val written = track.write(silence, 0, silence.size)
-                if (written < 0) {
-                    Log.e(TAG, "Anchor write failed: $written")
-                    break
+            try {
+                while (running) {
+                    val written = try {
+                        track.write(silence, 0, silence.size)
+                    } catch (e: Exception) {
+                        if (running) Log.e(TAG, "Anchor write exception: ${e.message}")
+                        break
+                    }
+                    if (written <= 0) {
+                        if (running) Log.e(TAG, "Anchor write failed: $written")
+                        break
+                    }
+                    try {
+                        Thread.sleep((bufferDurationMs - 5).coerceAtLeast(1L))
+                    } catch (_: InterruptedException) {
+                        break
+                    }
                 }
-                try {
-                    Thread.sleep(bufferDurationMs - 5)
-                } catch (_: InterruptedException) {
-                    break
+            } finally {
+                // A failed worker must never leave an orphaned AudioTrack
+                // holding the Android audio route until process death.
+                mainHandler.post {
+                    if (anchorTrack === track && running) {
+                        Log.w(TAG, "Anchor worker exited unexpectedly; releasing track")
+                        stop()
+                    }
                 }
             }
         }, "PriorityAnchor").apply {
@@ -131,18 +150,22 @@ class PriorityAnchorService(private val context: Context) {
     }
 
     fun stop() {
-        if (anchorTrack == null) {
-            return
-        }
         running = false
         anchorThread?.interrupt()
         anchorThread = null
-        try {
-            anchorTrack?.stop()
-            anchorTrack?.release()
-        } catch (_: Exception) {
-        }
+        val track = anchorTrack ?: return
         anchorTrack = null
+        try {
+            track.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Anchor stop failed: ${e.message}")
+        }
+        // Release independently even if stop failed (e.g. route already gone).
+        try {
+            track.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Anchor release failed: ${e.message}")
+        }
         Log.d(TAG, "Priority anchor stopped")
     }
 

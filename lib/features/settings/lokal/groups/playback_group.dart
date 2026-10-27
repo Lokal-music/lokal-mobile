@@ -351,7 +351,7 @@ List<LokalSettingsSection> outputSettings(BuildContext context, WidgetRef ref) {
         LokalSettingRow.toggle(
           label: lokalText('Background playback anchor'),
           description: lokalText(
-            'Help keep bit-perfect audio alive in the background. Some phones and routes may still stop it.',
+            'Optional compatibility mode for background bit-perfect audio. Keeps an extra silent audio stream running and may increase battery use.',
           ),
           value: prefs.priorityAnchorEnabled,
           onChanged: (value) {

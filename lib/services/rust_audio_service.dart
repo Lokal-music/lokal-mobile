@@ -58,6 +58,42 @@ class RustAudioService {
   Timer? _progressTimer;
   Timer? _eventPollTimer;
   bool _initialized = false;
+  bool _appInForeground = true;
+  bool _progressFast = true;
+
+  /// Keep foreground scrub/lyrics updates responsive without waking the Dart
+  /// isolate at display refresh rates while the screen is off.
+  void setAppForeground(bool foreground) {
+    if (_appInForeground == foreground) return;
+    _appInForeground = foreground;
+    if (_progressTimer != null) _startProgressUpdates(fast: _progressFast);
+    if (_eventPollTimer != null) _startEventPolling();
+  }
+
+  /// Event handoff stays responsive during playback; idle and paused engines
+  /// do not need twenty native FFI polls per second.
+  static Duration eventPollIntervalFor({
+    required RustPlaybackState state,
+    required bool foreground,
+  }) {
+    switch (state) {
+      case RustPlaybackState.playing:
+      case RustPlaybackState.buffering:
+      case RustPlaybackState.crossfading:
+        return foreground
+            ? const Duration(milliseconds: 50)
+            : const Duration(milliseconds: 250);
+      case RustPlaybackState.paused:
+        return foreground
+            ? const Duration(milliseconds: 500)
+            : const Duration(seconds: 1);
+      case RustPlaybackState.stopped:
+      case RustPlaybackState.idle:
+        return foreground
+            ? const Duration(seconds: 1)
+            : const Duration(seconds: 2);
+    }
+  }
   bool _highResModeEnabled = false;
   String? _currentPath;
   String? _nextPath;
@@ -284,6 +320,8 @@ class RustAudioService {
     // Also sync from Rust engine to ensure accuracy
     _currentPath = rust_audio.audioGetCurrentPath() ?? path;
     _startProgressUpdates(fast: true);
+    _updateState();
+    _startEventPolling();
   }
 
   /// Play a remote audio stream directly over HTTP (range-based, no cache
@@ -303,6 +341,8 @@ class RustAudioService {
     );
     _currentPath = rust_audio.audioGetCurrentPath() ?? url;
     _startProgressUpdates(fast: true);
+    _updateState();
+    _startEventPolling();
   }
 
   /// Queue the next track for gapless playback.
@@ -385,10 +425,11 @@ class RustAudioService {
   Future<void> pause() async {
     if (!_initialized) return;
     await rust_audio.audioPause();
-    // Switch to slower updates when paused to reduce CPU usage while keeping UI synced
-    _startProgressUpdates(fast: false);
-    // Force immediate state update for responsive UI
-    _updateState();
+    // A paused transport has a stationary position; update it once instead
+    // of repeatedly crossing FFI while the listener is not advancing.
+    _stopProgressUpdates();
+    _updateProgress();
+    _startEventPolling();
   }
 
   /// Resume playback.
@@ -397,8 +438,8 @@ class RustAudioService {
     await rust_audio.audioResume();
     // Resume fast updates for smooth progress bar
     _startProgressUpdates(fast: true);
-    // Force immediate state update
     _updateState();
+    _startEventPolling();
   }
 
   /// Stop playback completely.
@@ -408,12 +449,16 @@ class RustAudioService {
     _stopProgressUpdates();
     _currentPath = null;
     _nextPath = null;
+    _updateState();
+    _startEventPolling();
   }
 
   /// Seek to a position in seconds.
   Future<void> seek(Duration position) async {
     if (!_initialized) return;
     await rust_audio.audioSeek(positionSecs: position.inMilliseconds / 1000.0);
+    // Seek can happen while paused, when the progress timer is intentionally off.
+    _updateProgress();
   }
 
   /// Set the volume (0.0 to 2.0; values >1.0 apply extended gain).
@@ -545,13 +590,16 @@ class RustAudioService {
   /// If progress updates ever cause frame drops, the Rust side should batch
   /// state into a single struct to reduce FFI call overhead.
   void _startProgressUpdates({bool fast = true}) {
+    _progressFast = fast;
     _stopProgressUpdates();
 
-    // Update progress every 50ms for smooth UI updates when playing
-    // Update slower (250ms) when paused to keep UI in sync without waste
+    // The background media session remains active, but a hidden progress bar
+    // does not need a 50ms refresh cadence.
     final interval = fast
-        ? const Duration(milliseconds: 50)
-        : const Duration(milliseconds: 250);
+        ? (_appInForeground
+            ? const Duration(milliseconds: 50)
+            : const Duration(milliseconds: 250))
+        : const Duration(seconds: 1);
     _progressTimer = Timer.periodic(interval, (_) {
       _updateProgress();
     });
@@ -632,13 +680,34 @@ class RustAudioService {
     }
   }
 
-  /// Start polling for events from the Rust engine.
+  /// Poll promptly on a transport change, then adapt to playback state.
+  /// A one-shot timer lets a track-ended event immediately change the cadence.
   void _startEventPolling() {
     _stopEventPolling();
-
-    // Poll for events every 50ms
-    _eventPollTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+    if (!_initialized) return;
+    try {
       _pollEvents();
+    } finally {
+      // A throwing user callback must not disable native event delivery.
+      if (_eventPollTimer == null) _scheduleEventPoll();
+    }
+  }
+
+  void _scheduleEventPoll() {
+    if (!_initialized) return;
+    final interval = eventPollIntervalFor(
+      state: stateNotifier.value,
+      foreground: _appInForeground,
+    );
+    _eventPollTimer = Timer(interval, () {
+      _eventPollTimer = null;
+      try {
+        _pollEvents();
+      } finally {
+        // Keep polling even when an event callback throws. Do not overwrite
+        // a timer installed by a synchronous transport transition.
+        if (_eventPollTimer == null) _scheduleEventPoll();
+      }
     });
   }
 
