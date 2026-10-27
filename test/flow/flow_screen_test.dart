@@ -56,7 +56,16 @@ void main() {
           playerProvider.overrideWith(_ScreenPlayer.new),
           flowPlaybackProvider.overrideWithValue(_InactivePlayback()),
         ],
-        child: const MaterialApp(home: FlowScreen()),
+        // The desktop-style infinity orb animates indefinitely in production.
+        // Disable motion here so pumpAndSettle can exercise loading states.
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: const FlowScreen(),
+            ),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
