@@ -1295,12 +1295,15 @@ class AndroidAudioEngine implements AudioEngine {
         await mixed.dispose();
         return false;
       }
-      _stemPlayer = mixed;
+      // Capture a non-null decoder for periodic callbacks after this async
+      // setup; the mutable nullable handle is used only for failure cleanup.
+      final clipPlayer = mixed;
+      _stemPlayer = clipPlayer;
       _stemHandoffStarted = false;
       _stemPausedByUser = false;
       _rampUserVolume = outgoing.volume;
       // just_audio.play returns only when playback completes: never await.
-      unawaited(mixed.play().catchError((Object error) {
+      unawaited(clipPlayer.play().catchError((Object error) {
         devLog('[automix] stem render failed: $error');
       }));
       _loadedTrack = next;
@@ -1320,15 +1323,15 @@ class AndroidAudioEngine implements AudioEngine {
       _onTrackAdvanced?.call(next);
       _stemTimer?.cancel();
       _stemTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
-        if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed)) return;
-        if (!mixed!.playing) {
+        if (epoch != _crossfadeEpoch || !identical(_stemPlayer, clipPlayer)) return;
+        if (!clipPlayer.playing) {
           if (!_stemPausedByUser &&
-              mixed.processingState == just_audio.ProcessingState.completed) {
-            unawaited(_finishStemClip(epoch, clip, outgoing, incoming, mixed));
+              clipPlayer.processingState == just_audio.ProcessingState.completed) {
+            unawaited(_finishStemClip(epoch, clip, outgoing, incoming, clipPlayer));
           }
           return;
         }
-        final position = mixed.position.inMilliseconds;
+        final position = clipPlayer.position.inMilliseconds;
         final total = clip.length.inMilliseconds;
         if (!_stemHandoffStarted) {
           _emit(_state.copyWith(
@@ -1339,7 +1342,7 @@ class AndroidAudioEngine implements AudioEngine {
         final initial = (position / 180).clamp(0.0, 1.0);
         if (!_stemHandoffStarted) {
           unawaited(outgoing.setVolume(_rampUserVolume * (1 - initial)));
-          unawaited(mixed.setVolume(_rampUserVolume * initial));
+          unawaited(clipPlayer.setVolume(_rampUserVolume * initial));
           if (total - position <= 900) {
             _stemHandoffStarted = true;
             final remaining = math.max(0, total - position);
@@ -1347,7 +1350,7 @@ class AndroidAudioEngine implements AudioEngine {
             unawaited(() async {
               try {
                 await incoming.seek(resume);
-                if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed)) return;
+                if (epoch != _crossfadeEpoch || !identical(_stemPlayer, clipPlayer)) return;
                 await incoming.setVolume(0);
                 unawaited(incoming.play());
               } catch (_) {}
@@ -1355,12 +1358,12 @@ class AndroidAudioEngine implements AudioEngine {
           }
         } else {
           final p = ((position - (total - 900)) / 900).clamp(0.0, 1.0);
-          unawaited(mixed.setVolume(_rampUserVolume * (1 - p)));
+          unawaited(clipPlayer.setVolume(_rampUserVolume * (1 - p)));
           unawaited(incoming.setVolume(_rampUserVolume * p));
         }
         if (position >= total - 20 ||
-            mixed.processingState == just_audio.ProcessingState.completed) {
-          unawaited(_finishStemClip(epoch, clip, outgoing, incoming, mixed));
+            clipPlayer.processingState == just_audio.ProcessingState.completed) {
+          unawaited(_finishStemClip(epoch, clip, outgoing, incoming, clipPlayer));
         }
       });
       return true;
