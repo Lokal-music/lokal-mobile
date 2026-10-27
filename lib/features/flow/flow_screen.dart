@@ -12,6 +12,7 @@ import 'flow_controller.dart';
 import 'flow_library.dart';
 import 'flow_playback.dart';
 import 'flow_tuner_sheet.dart';
+import 'flow_hero.dart';
 
 /// Drop-in shell entry point. Requires the app's existing ProviderScope.
 class FlowScreen extends ConsumerStatefulWidget {
@@ -141,7 +142,7 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: _FlowHero(
+            child: FlowHero(
               mood: data.config.mood,
               count: songs.length,
               playing: playing,
@@ -381,112 +382,6 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
       ),
     );
   }
-}
-
-class _FlowHero extends StatelessWidget {
-  const _FlowHero({
-    required this.mood,
-    required this.count,
-    required this.playing,
-    required this.busy,
-    required this.enabled,
-    required this.onPlay,
-    required this.onShuffle,
-    required this.onSave,
-    this.onTune,
-  });
-  final FlowMood mood;
-  final int count;
-  final bool playing;
-  final bool busy;
-  final bool enabled;
-  final VoidCallback onPlay;
-  final VoidCallback onShuffle;
-  final VoidCallback onSave;
-  final VoidCallback? onTune;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(28),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xff532394), Color(0xff9c3565), Color(0xff16325b)],
-      ),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'MADE FROM YOUR MUSIC',
-          style: TextStyle(color: Colors.white70, letterSpacing: 2),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Flow ∞',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 44,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        Text(
-          mood == FlowMood.flow
-              ? 'Your personal soundtrack'
-              : '${mood.label} · Your personal soundtrack',
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '$count tracks · Local library',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        const SizedBox(height: 22),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xff532394),
-                disabledForegroundColor: Colors.white54,
-                disabledBackgroundColor: Colors.white12,
-              ),
-              onPressed: enabled ? onPlay : null,
-              icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-              label: Text(playing ? 'Pause' : 'Play'),
-            ),
-            _button('Shuffle', Icons.shuffle, enabled ? onShuffle : null),
-            _button('Save', Icons.playlist_add, enabled ? onSave : null),
-            _button('Tune', Icons.tune, onTune),
-          ],
-        ),
-        if (busy)
-          const Padding(
-            padding: EdgeInsets.only(top: 12),
-            child: LinearProgressIndicator(
-              color: Colors.white,
-              backgroundColor: Colors.white24,
-            ),
-          ),
-      ],
-    ),
-  );
-
-  Widget _button(String label, IconData icon, VoidCallback? callback) =>
-      OutlinedButton.icon(
-        onPressed: callback,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          disabledForegroundColor: Colors.white38,
-          side: const BorderSide(color: Colors.white54),
-        ),
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-      );
 }
 
 class _StateCard extends StatelessWidget {

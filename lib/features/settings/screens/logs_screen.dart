@@ -240,29 +240,24 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
       bytes: bytes,
     );
     if (savedUri == null || !mounted) return;
-    final localPath = savedUri.scheme == 'file' || savedUri.scheme.isEmpty
-        ? savedUri.toFilePath()
-        : null;
-
     final share = await showLokalConfirmSheet(
       context: context,
       title: l10n.saved,
-      message: l10n.savedToNNNshareIt(localPath ?? savedUri.toString()),
+      message: l10n.savedToNNNshareIt(savedUri.toString()),
       confirmLabel: l10n.share,
       cancelLabel: l10n.no,
     );
     if (share && mounted) {
+      // Android's SAF save picker may return "/document/primary:Music/..."
+      // with NO URI scheme. That is a document identifier, not a readable
+      // filesystem path. Re-share the exported bytes in every case instead
+      // of guessing whether XFile can access the returned path.
       await SharePlus.instance.share(
         ShareParams(
           files: [
-            // Android's save picker can return a content URI, which XFile
-            // cannot read as a disk path. Share the bytes we just exported.
-            if (localPath != null)
-              XFile(localPath)
-            else
-              XFile.fromData(bytes, mimeType: 'text/plain', name: fileName),
+            XFile.fromData(bytes, mimeType: 'text/plain'),
           ],
-          fileNameOverrides: localPath == null ? [fileName] : null,
+          fileNameOverrides: [fileName],
           subject: _subject,
         ),
       );

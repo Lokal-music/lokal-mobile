@@ -782,3 +782,41 @@ actual source/account labels and unpainted Cover Flow behavior also pass.
 Whole app/integration analysis has no errors (620 warning/information items).
 Actionlint and diff checks pass. Hosted native acceptance of this new source
 remains pending; no physical installation or live-provider result is inferred.
+
+
+### Reviewed through #261 — 27 October 2026
+
+Seven further merged product PRs bring the reviewed total to **67**. The
+continuation carries the relevant queue/header/Flow/network changes below.
+Platform-only USB/anchor work is explicitly excluded; shared power optimization
+is retained as planned follow-up rather than claimed implemented. PR #263 is
+open at this checkpoint and is not counted or assumed present.
+
+| PR / exact merged source | iPhone behavior and adaptation |
+| --- | --- |
+| [254](https://github.com/lokal-music/lokal-mobile/pull/254) / `731d3640b2f44b3989f9be7a4734c387a7a72231` | Hold anywhere on a queue row to reorder; ordinary scrolling/taps remain available. Exactly one preference-aware selection haptic starts a drag. The More tooltip uses manual triggering so its own long-press recognizer cannot steal the row gesture. Use the current SDK's already-normalized `onReorderItem` once, with no second subtraction; preserve failure rollback and disable a second drag while a drop is pending. |
+| [255](https://github.com/lokal-music/lokal-mobile/pull/255) / `8f35891b91c8df07fb59efaa60a8b2ba73821c1d` | Home, Library and You share header height and trailing Discord/Settings coordinates. Keep 44-point appearance/avatar/edit actions, the full profile name in semantics and the existing reduced-motion-aware overflow title. Large-text recap rails grow; period controls and account chips wrap/scroll instead of overflowing after the shorter header exposes them. |
+| [256](https://github.com/lokal-music/lokal-mobile/pull/256) / `c7831b2768b88cd634b2d56f3ef4275528e398e6` | Android direct-USB audit, route-refresh ownership and UAC2 settings lifetime fixes have no iPhone USB counterpart. Do not import native USB/bit-perfect features or modify that transport in this port. |
+| [257](https://github.com/lokal-music/lokal-mobile/pull/257) / `f940a4f3889da285e8f8757d9043c1fce3b1366e` | Android Priority Anchor/default/service changes remain Android-only; iPhone does not acquire a silent anchor stream. Shared demand-driven log flushing, paused-position persistence and foreground/background Rust event/progress cadence are relevant power follow-ups. Integrate them with the iOS retirement/request fences and native pause/seek/reset probes before calling them accepted; this UI/network continuation does not claim those shared changes. |
+| [258](https://github.com/lokal-music/lokal-mobile/pull/258) / `dee5fb2dfcf6abbf08a31d756dbd50bd0bca17de` | Library title starts at the page margin; Add moves beside Discord without moving the shared trailing actions. Preserve its real music-folder/playlist import menu and Classipod title long-press. |
+| [260](https://github.com/lokal-music/lokal-mobile/pull/260) / `2d4edcc135d00ee2d8ab38cb0adcb66ffad07668` | Do not complete an abort trigger after consuming a successful Discovery/Spotify response, including a later cancellation signal; failed/blocked requests still abort. Use the existing graceful client in discovery artwork, source preparation/search and both Spotify transports. Preserve previously loaded search sources on refresh failure and explain a rejected refreshed Spotify session. Diagnostics classify errors without response bodies/stream URLs; additionally hash custom source IDs so credentials or control characters cannot enter log labels. Re-share exported log bytes with an explicit filename rather than guessing path semantics. Live-provider/iOS network qualification remains separate. |
+| [261](https://github.com/lokal-music/lokal-mobile/pull/261) / `c25d19979f30672afbd2feaa07245f61588fade7` | Carry the desktop-style themed Flow card/infinity orb while retaining the existing Flow controller/play/save/tune actions. Use shared `onAccent` contrast, localized controls/moods/status, reduced-motion and offstage ticker handling. Label the real local/online mixture as Your mix instead of implying every recommendation is a local file. |
+
+The focused integration pass checks all 11 locales at 200% text with actual
+bundled fonts for both the profile and Flow card. Existing queue failure recovery,
+whole-row long presses and one-start-haptic checks pass. Full combined/native
+validation of this continuation is still recorded separately after it runs.
+
+
+Validation of the through-#261 continuation: the expanded iPhone workflow
+selection plus all widget/Android-widget contracts passes **654 Flutter tests**.
+The 76 focused integration cases pass, including actual-font all-locale 200%
+profile/Flow layouts, whole-row drag/haptic behavior, shared header coordinates,
+reorder rollback/retry and HTTP success/cancellation. Source-label cases confirm
+custom URLs/credentials/control characters never enter diagnostic labels. The
+complete selection additionally executes 50 actual Node assertions in each
+ready/paused fixture mode for the inherited WebKit diagnostics. Whole app and
+integration analysis has no errors (621 warning/information items); actionlint
+and diff checks pass. Native, live-provider, installed-widget and physical-device
+acceptance remain separate gates for this source. Native audio interfaces,
+dependency locks and Android CI state are unchanged.

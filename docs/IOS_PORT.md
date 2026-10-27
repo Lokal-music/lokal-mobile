@@ -5,8 +5,8 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **60 reviewed merged
-mobile PRs after #172 through #250**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **67 reviewed merged
+mobile PRs after #172 through #261**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
@@ -1281,3 +1281,38 @@ fixture tests pass; Node executes 50 actual assertions in each ready/paused mode
 including forwarding the added DOM observations. Hosted replay acceptance of
 this diagnostic source remains pending. The build-53 dual-runtime IPA remains
 the preserved complete checkpoint.
+
+
+### Parity checkpoint through #261 and power follow-up
+
+The current reviewed checkpoint is pinned at merged #261 (67 product PRs after
+#172); open #263 is outside it. Carry whole-row long-press queue reordering,
+shared Home/Library/You header geometry, the repositioned Library Add action,
+the themed/localized Flow hero and shared HTTP-success/cancellation lifecycle
+corrections. Preserve authoritative queue order and acknowledged rollback.
+Large-text profile recap/period/account controls adapt without shrinking actions.
+Custom source IDs are hashed in diagnostic labels; new network logging does not
+export signed URLs, account settings or response bodies. No new online service
+is enabled. Android USB/anchor code, native Rust audio interfaces and dependency
+locks remain unchanged.
+
+PR #257's shared Dart power work remains in the release plan: demand-driven log
+persistence, one paused-position save and foreground/background Rust polling.
+Adapt it to the existing iOS request/retirement fences, then test rejected pause,
+paused seek, lifecycle/reset ownership, background delivery and idle wakeups.
+Android's silent Priority Anchor is not part of the iPhone design. This
+follow-up is not counted as an implemented iPhone battery result.
+
+
+Validation of the through-#261 continuation: the expanded iPhone workflow
+selection plus all widget/Android-widget contracts passes **654 Flutter tests**.
+The 76 focused integration cases pass, including actual-font all-locale 200%
+profile/Flow layouts, whole-row drag/haptic behavior, shared header coordinates,
+reorder rollback/retry and HTTP success/cancellation. Source-label cases confirm
+custom URLs/credentials/control characters never enter diagnostic labels. The
+complete selection additionally executes 50 actual Node assertions in each
+ready/paused fixture mode for the inherited WebKit diagnostics. Whole app and
+integration analysis has no errors (621 warning/information items); actionlint
+and diff checks pass. Native, live-provider, installed-widget and physical-device
+acceptance remain separate gates for this source. Native audio interfaces,
+dependency locks and Android CI state are unchanged.

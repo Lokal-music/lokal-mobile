@@ -292,8 +292,9 @@ void main() {
         ProviderScope(
           overrides: [
             currentSongProvider.overrideWithValue(song('now')),
-            upNextProvider.overrideWithValue([song('a'), song('b')]),
+            upNextProvider.overrideWithValue([song('a'), song('b'), song('q')]),
             queueProvider.overrideWithValue([song('q')]),
+            autoplayUpNextProvider.overrideWithValue(const []),
           ],
           child: const MaterialApp(
             home: Scaffold(body: QueueList(embedded: true)),
@@ -305,7 +306,10 @@ void main() {
       expect(find.text('Song b'), findsOneWidget);
       expect(find.text('Song q'), findsOneWidget);
       expect(find.text('Song now'), findsNothing);
-      expect(find.byType(ReorderableDragStartListener), findsNWidgets(3));
+      expect(
+        find.byType(ReorderableDelayedDragStartListener),
+        findsNWidgets(3),
+      );
     },
   );
 }

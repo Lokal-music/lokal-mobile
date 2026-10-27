@@ -67,7 +67,16 @@ void main() {
           playerProvider.overrideWith(_ScreenPlayer.new),
           flowPlaybackProvider.overrideWithValue(_InactivePlayback()),
         ],
-        child: const MaterialApp(home: FlowScreen()),
+        // The desktop-style infinity orb animates indefinitely in production.
+        // Disable motion here so pumpAndSettle can exercise loading states.
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: const FlowScreen(),
+            ),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -166,8 +175,10 @@ void main() {
           child: MaterialApp(
             theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.light)),
             builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: const TextScaler.linear(2)),
+              data: MediaQuery.of(context).copyWith(
+                textScaler: const TextScaler.linear(2),
+                disableAnimations: true,
+              ),
               child: child!,
             ),
             home: Scaffold(

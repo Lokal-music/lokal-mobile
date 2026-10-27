@@ -1,9 +1,9 @@
-import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/l10n/l10n.dart';
 
 import '../link/lokal_devices_card.dart';
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,6 +12,7 @@ import 'package:flick/services/you_profile_service.dart';
 
 import 'package:flick/providers/lokal_remote_provider.dart';
 
+import 'package:flick/widgets/common/overflow_marquee_title.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/data/repositories/recently_played_repository.dart';
@@ -184,8 +185,8 @@ class _KonnektedYouState extends ConsumerState<KonnektedYou> {
       final defaultName = profile?.displayName.trim().isNotEmpty == true
           ? profile!.displayName
           : profile?.username.trim().isNotEmpty == true
-              ? profile!.username
-              : ref.read(youAccountsProvider).name;
+          ? profile!.username
+          : ref.read(youAccountsProvider).name;
       final service = ref.read(youProfileServiceProvider);
       final saved = await showModalBottomSheet<bool>(
         context: context,
@@ -219,8 +220,8 @@ class _KonnektedYouState extends ConsumerState<KonnektedYou> {
     final defaultName = profile?.displayName.trim().isNotEmpty == true
         ? profile!.displayName
         : profile?.username.trim().isNotEmpty == true
-            ? profile!.username
-            : accounts.name;
+        ? profile!.username
+        : accounts.name;
     final name = local?.username ?? defaultName;
     final streak = ref.watch(youStreakProvider).value;
     final milestones =
@@ -257,7 +258,13 @@ class _KonnektedYouState extends ConsumerState<KonnektedYou> {
             ),
           ),
           SizedBox(
-            height: 136,
+            height: math.max(
+              136,
+              40 +
+                  MediaQuery.textScalerOf(context).scale(11) * 2 * 1.4 +
+                  MediaQuery.textScalerOf(context).scale(20) * 1.4 +
+                  MediaQuery.textScalerOf(context).scale(12) * 1.4,
+            ),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -359,20 +366,41 @@ class _Label extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(24, 22, 16, 10),
-    child: Row(
-      children: [
-        Expanded(
-          child: Semantics(
-            header: true,
-            child: Text(
-              text.toUpperCase(),
-              style: LokalTheme.label(context.lokal),
-            ),
+    child: MediaQuery.textScalerOf(context).scale(14) > 20
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  text.toUpperCase(),
+                  style: LokalTheme.label(context.lokal),
+                ),
+              ),
+              if (trailing != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: trailing,
+                  ),
+                ),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    text.toUpperCase(),
+                    style: LokalTheme.label(context.lokal),
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
           ),
-        ),
-        ?trailing,
-      ],
-    ),
   );
 }
 
@@ -404,104 +432,86 @@ class _YouHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Spacer(),
-              const LokalDiscordButton(),
-              const SizedBox(width: 10),
-              Tooltip(
-                message: lokalText('Settings'),
-                excludeFromSemantics: true,
-                child: LokalGlassButton(
-                  semanticLabel: lokalText('Settings'),
-                  onPressed: onSettings,
-                  child: Icon(Icons.settings_rounded, color: t.text),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Semantics(
-                label: 'Edit profile photo',
-                button: true,
-                child: InkWell(
-                  onTap: onEdit,
-                  customBorder: const CircleBorder(),
-                  child: Container(
-                  width: 64,
-                  height: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [t.accent, t.accentDim],
-                    ),
-                  ),
-                  child: avatarPath != null
-                      ? ClipOval(
-                          child: Image.file(
-                            File(avatarPath!),
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Text(
-                              initial,
-                              style: TextStyle(color: t.bg, fontSize: 28),
-                            ),
-                          ),
-                        )
-                      : Text(
-                          initial,
-                          style: TextStyle(
-                            fontFamily: LokalTheme.sans,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: t.bg,
+          SizedBox(
+            height: konnektedHeaderHeight(context),
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 44,
+                  child: Semantics(
+                    label: 'Edit profile photo',
+                    button: true,
+                    onTap: onEdit,
+                    excludeSemantics: true,
+                    child: InkWell(
+                      onTap: onEdit,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [t.accent, t.accentDim],
                           ),
                         ),
+                        child: avatarPath != null
+                            ? ClipOval(
+                                child: Image.file(
+                                  File(avatarPath!),
+                                  width: 44,
+                                  height: 44,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Text(
+                                    initial,
+                                    style: TextStyle(color: t.bg, fontSize: 20),
+                                  ),
+                                ),
+                              )
+                            : Text(
+                                initial,
+                                style: TextStyle(
+                                  fontFamily: LokalTheme.sans,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: t.bg,
+                                ),
+                              ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Semantics(
-                  header: true,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    label: name,
+                    child: ExcludeSemantics(
+                      child: OverflowMarqueeTitle(
+                        key: ValueKey('you-header-name:$name'),
+                        title: name,
                         style: TextStyle(
                           fontFamily: LokalTheme.sans,
-                          fontSize: 34,
+                          fontSize: 22,
                           height: 1.1,
-                          letterSpacing: -1.2,
+                          letterSpacing: -.7,
                           fontWeight: FontWeight.w800,
                           color: t.text,
                         ),
                       ),
-                      if (username?.trim().isNotEmpty == true &&
-                          username != name)
-                        Text(
-                          '@$username',
-                          style: TextStyle(color: t.muted, fontSize: 14),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Edit profile',
-                onPressed: onEdit,
-                icon: Icon(Icons.edit_rounded, color: t.muted),
-              ),
-            ],
+                const SizedBox(width: 8),
+                KonnektedHeaderActions(
+                  onEditProfile: onEdit,
+                  onSettings: onSettings,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           Row(
@@ -528,7 +538,6 @@ class _YouHeader extends StatelessWidget {
     );
   }
 }
-
 
 /// A small on-device editor. Photos are copied out of the gallery picker
 /// cache by YouProfileService; leaving the username empty restores the linked
@@ -634,16 +643,25 @@ class _YouProfileEditorState extends State<_YouProfileEditor> {
         ? widget.defaultName
         : _username.text.trim();
     final initial = initialName.isNotEmpty
-        ? initialName.characters.first.toUpperCase() : 'Y';
+        ? initialName.characters.first.toUpperCase()
+        : 'Y';
     final path = _removePhoto
         ? widget.linkedAvatarPath
         : widget.profile.avatarPath ?? widget.linkedAvatarPath;
     Widget photo;
     if (_pickedPhoto != null) {
-      photo = Image.memory(_pickedPhoto!, width: 86, height: 86, fit: BoxFit.cover);
+      photo = Image.memory(
+        _pickedPhoto!,
+        width: 86,
+        height: 86,
+        fit: BoxFit.cover,
+      );
     } else if (path != null) {
       photo = Image.file(
-        File(path), width: 86, height: 86, fit: BoxFit.cover,
+        File(path),
+        width: 86,
+        height: 86,
+        fit: BoxFit.cover,
         errorBuilder: (_, _, _) => Center(
           child: Text(initial, style: TextStyle(fontSize: 34, color: t.bg)),
         ),
@@ -663,17 +681,27 @@ class _YouProfileEditorState extends State<_YouProfileEditor> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Edit profile', style: TextStyle(
-                fontSize: 23, fontWeight: FontWeight.w700, color: t.text,
-              )),
+              Text(
+                'Edit profile',
+                style: TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w700,
+                  color: t.text,
+                ),
+              ),
               const SizedBox(height: 6),
-              Text('This profile belongs to your phone. Linked accounts are not renamed.',
-                style: TextStyle(color: t.muted, fontSize: 13)),
+              Text(
+                'This profile belongs to your phone. Linked accounts are not renamed.',
+                style: TextStyle(color: t.muted, fontSize: 13),
+              ),
               const SizedBox(height: 18),
               Center(
                 child: ClipOval(
                   child: Container(
-                    color: t.accent, width: 86, height: 86, child: photo,
+                    color: t.accent,
+                    width: 86,
+                    height: 86,
+                    child: photo,
                   ),
                 ),
               ),
@@ -719,7 +747,9 @@ class _YouProfileEditorState extends State<_YouProfileEditor> {
                 runSpacing: 8,
                 children: [
                   TextButton(
-                    onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.of(context).pop(false),
                     child: const Text('Cancel'),
                   ),
                   FilledButton(
@@ -821,6 +851,8 @@ class _RecapCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             _periodLabel(period).toUpperCase(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: LokalTheme.label(t, color: t.accent),
                           ),
                         ),
@@ -1203,14 +1235,15 @@ class _AccountChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.lokal;
-    final state = connected ? 'Connected' : 'Connect';
+    final state = lokalText(connected ? 'Connected' : 'Connect');
     return Semantics(
       button: true,
       label: lokalText(
         "{arg0}, {arg1}",
         args: {
           'arg0': label,
-          'arg1': connected ? 'connected' : 'not connected',
+          'arg1': lokalText(connected ? 'Connected' : 'Not connected')
+              .toLowerCase(),
         },
       ),
       excludeSemantics: true,
@@ -1221,8 +1254,10 @@ class _AccountChip extends StatelessWidget {
           thickness: LokalGlassThickness.thin,
           shadow: false,
           padding: const EdgeInsets.fromLTRB(12, 9, 14, 9),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Container(
                 width: 8,
@@ -1232,7 +1267,6 @@ class _AccountChip extends StatelessWidget {
                   color: connected ? t.accent : t.muted2,
                 ),
               ),
-              const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
@@ -1241,7 +1275,6 @@ class _AccountChip extends StatelessWidget {
                   color: t.text,
                 ),
               ),
-              const SizedBox(width: 8),
               Text(
                 state.toUpperCase(),
                 style: LokalTheme.label(
