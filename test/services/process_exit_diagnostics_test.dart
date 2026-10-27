@@ -14,7 +14,7 @@ void main() {
   });
 
   test('native fatal signals and known Android failure reasons remain crashes', () {
-    for (final signal in [6, 11]) {
+    for (final signal in [4, 5, 6, 7, 8, 11]) {
       expect(
         ProcessExitDiagnosticsService.isLikelyCrash(reason: 2, status: signal),
         isTrue,
