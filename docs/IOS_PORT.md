@@ -1044,3 +1044,15 @@ locking and current/previous cover retention. Its nineteen real filesystem/image
 process cases and iOS 16 SDK checks are prepared but require hosted execution.
 App Group publishing, extension UI, commands and Windows signing remain disabled
 or pending; see [storage architecture and limits](IOS_WIDGETKIT.md).
+
+
+### Build 41 audio evidence and WebKit frame observation
+
+Build 41 passes the ordinary iOS 18.6 app/codec suite plus posted audio reset,
+retained session interruption/Lost/Reset, stale HTTP and radio checks. Its new
+WebKit gate sees actual source time advance but receives zero quality frames,
+then fails. The next fixture uses real presentation callbacks where available,
+keeps the requirement for newly delivered frames and records raw counter evidence
+before failing. The complete native run is not accepted; physical daemon/device
+checks and production observation remain deferred. See [exact measured evidence
+and the revised frame gate](IOS_MEDIA_RESET_ARCHITECTURE.md).
