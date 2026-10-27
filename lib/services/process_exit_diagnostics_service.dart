@@ -27,8 +27,10 @@ class ProcessExitDiagnosticsService {
         final timestamp = (info['timestamp'] as num?)?.toInt() ?? 0;
         if (timestamp <= lastSeen) continue;
         final reason = (info['reason'] as num?)?.toInt() ?? 0;
-        final failure = {2, 3, 4, 5, 6, 7, 9, 12}.contains(reason);
-        final source = failure ? LogSource.crash : LogSource.platform;
+        final status = (info['status'] as num?)?.toInt() ?? 0;
+        final source = isLikelyCrash(reason: reason, status: status)
+            ? LogSource.crash
+            : LogSource.platform;
         AppLog.instance.add(_describe(info), source: source);
         final trace = info['trace'];
         if (trace is String && trace.isNotEmpty) {
@@ -45,11 +47,22 @@ class ProcessExitDiagnosticsService {
     }
   }
 
+  /// Android's REASON_SIGNALED does not mean the app crashed. In
+  /// particular SIGKILL (9) can be a system kill or user/OEM action, and
+  /// should not be counted as a confirmed native crash without a trace.
+  /// Fatal native signals (SIGILL, SIGTRAP, SIGABRT, SIGBUS, SIGFPE,
+  /// SIGSEGV) provide stronger crash evidence.
+  static bool isLikelyCrash({required int reason, required int status}) {
+    if (reason == 2) return {4, 5, 6, 7, 8, 11}.contains(status);
+    return {3, 4, 5, 6, 7, 9, 12}.contains(reason);
+  }
+
   String _describe(Map<String, Object?> info) {
     final timestamp = (info['timestamp'] as num?)?.toInt() ?? 0;
     final reason = (info['reason'] as num?)?.toInt() ?? 0;
     final parts = <String>[
-      'previous run ended: ${_reasonLabel(reason)} (reason $reason)',
+      'previous run ended: ${_reasonLabel(reason)} (reason $reason)'
+          '${reason == 2 && info['status'] == 9 ? ' [SIGKILL; source unknown]' : ''}',
       if (timestamp > 0)
         'at ${DateTime.fromMillisecondsSinceEpoch(timestamp).toIso8601String()}',
       'importance ${info['importance'] ?? '?'}',
