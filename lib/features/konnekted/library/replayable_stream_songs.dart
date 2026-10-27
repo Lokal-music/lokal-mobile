@@ -120,10 +120,7 @@ List<Song> replayableStreamQueue(
   );
   final refreshed = <Song>[
     for (final item in queue)
-      if (item.id == selected.id &&
-          (item.filePath != selected.filePath ||
-           item.sourcePackage != selected.sourcePackage))
-        prepared
+      if (item.id == selected.id) prepared
       else
         replayableStreamSong(item, queueResolver: resolver, lookup: lookup),
   ];
