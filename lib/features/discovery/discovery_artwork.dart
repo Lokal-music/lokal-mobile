@@ -25,6 +25,7 @@ import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:flick/services/graceful_http_client.dart';
 
 import 'discovery_http.dart';
 import 'discovery_sources.dart';
@@ -529,7 +530,7 @@ DiscoveryArtworkResolver createDiscoveryArtworkResolver(
 final discoveryArtworkResolverProvider = Provider<DiscoveryArtworkResolver>((
   ref,
 ) {
-  final client = http.Client();
+  final client = GracefulHttpClient();
   ref.onDispose(client.close);
   return createDiscoveryArtworkResolver(
     DiscoveryHttp(client, timeout: const Duration(seconds: 4)),
