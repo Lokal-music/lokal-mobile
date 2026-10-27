@@ -52,13 +52,18 @@ and exits with the cached waveform profile. If the audio was copied from a
 desktop computer and its modification timestamp changed, Android performs
 asynchronous SHA-256 validation of the local file **only for that sidecar**.
 The next-track lookup is capped by a short deadline; an unavailable report
-never blocks an otherwise playable stream.
+never blocks an otherwise playable stream. Once a model sidecar has been
+validated against a specific source and sidecar revision, its cue profile is
+persisted in the derived cache, avoiding repeated SHA-256 of large unchanged
+files on subsequent app launches.
 
-When both roles have usable model cues, Android may move its usual fade to a
-source-validated structural overlap, capped to the last 30 seconds. This
-still uses the existing two-decoder crossfader; it is **not stem mixing** and
-does not pitch-preserve independent stems. Files with missing or invalid cues
-use the previous crossfade behavior.
+When both roles have usable model cues, Android may move the fade to a
+source-validated structural overlap, capped to the last 30 seconds. When the
+model BPMs agree within 1%, a full **32-beat** equal-power native transition
+is available without tempo correction; otherwise the configured short fade
+remains. This still uses the existing two-decoder crossfader; it is **not
+stem mixing**. Files with missing or invalid cues use the previous crossfade
+behavior.
 
 The optional upstream Demucs `--prepare-only` step can cache stem windows
 outside the app. Those windows cannot be rendered by the current Android or
