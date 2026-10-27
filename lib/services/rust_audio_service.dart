@@ -685,8 +685,12 @@ class RustAudioService {
   void _startEventPolling() {
     _stopEventPolling();
     if (!_initialized) return;
-    _pollEvents();
-    _scheduleEventPoll();
+    try {
+      _pollEvents();
+    } finally {
+      // A throwing user callback must not disable native event delivery.
+      if (_eventPollTimer == null) _scheduleEventPoll();
+    }
   }
 
   void _scheduleEventPoll() {
@@ -697,8 +701,13 @@ class RustAudioService {
     );
     _eventPollTimer = Timer(interval, () {
       _eventPollTimer = null;
-      _pollEvents();
-      _scheduleEventPoll();
+      try {
+        _pollEvents();
+      } finally {
+        // Keep polling even when an event callback throws. Do not overwrite
+        // a timer installed by a synchronous transport transition.
+        if (_eventPollTimer == null) _scheduleEventPoll();
+      }
     });
   }
 
