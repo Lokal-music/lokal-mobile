@@ -309,6 +309,7 @@ void main() {
     expect(identical(tester.state(find.byKey(survivingKey)), survivingState),
         isTrue, reason: 'The remaining lyric should not remount on shift');
     await tester.pump(const Duration(milliseconds: 330));
+    await tester.pump(); // Flush AnimatedBuilder's completion/removal callback.
     expect(find.byType(LyricMotionLine), findsOneWidget);
     expect(find.byKey(survivingKey), findsOneWidget);
     expect(identical(tester.state(find.byKey(survivingKey)), survivingState),
