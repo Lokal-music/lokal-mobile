@@ -3,6 +3,10 @@ name: iPhone widget data contracts
 on:
   pull_request:
     paths:
+      - 'ios/Runner/LokalWidgetBridge.swift'
+      - 'ios/Runner/LokalPlatform.swift'
+      - 'ios/Runner.xcodeproj/project.pbxproj'
+      - 'integration_test/ios_widget_transport_probe.dart'
       - 'ios/Widgets/Contracts/**'
       - 'ios/Widgets/Tests/**'
       - 'ios/Widgets/Storage/**'
@@ -11,6 +15,8 @@ on:
       - 'ios/Widgets/PublicationTests/**'
       - 'lib/models/ios_widget_snapshot.dart'
       - 'lib/services/ios_widget_snapshot_builder.dart'
+      - 'lib/services/ios_widget_publication_coordinator.dart'
+      - 'lib/services/ios_widget_method_channel_transport.dart'
       - 'test/widgets/ios/**'
       - 'test/services/android_widget_contract_test.dart'
       - 'test/fixtures/ios_widget/**'
@@ -27,7 +33,7 @@ concurrency:
 jobs:
   metadata:
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CI: 'true'
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
@@ -44,7 +50,7 @@ jobs:
       - name: Check the Dart writer against the shared corpus
         run: |
           flutter pub get --enforce-lockfile
-          flutter analyze --no-pub --fatal-infos lib/models/ios_widget_snapshot.dart lib/services/ios_widget_snapshot_builder.dart test/widgets/ios
+          flutter analyze --no-pub --fatal-infos lib/models/ios_widget_snapshot.dart lib/services/ios_widget_snapshot_builder.dart lib/services/ios_widget_publication_coordinator.dart lib/services/ios_widget_method_channel_transport.dart test/widgets/ios
           flutter test --no-pub test/widgets/ios test/services/android_widget_contract_test.dart
       - name: Compile and exercise the actual Foundation reader
         run: |
@@ -55,6 +61,39 @@ jobs:
         run: |
           swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/Publication/LokalWidgetPublisher.swift
           swiftc -swift-version 6 -warnings-as-errors -target arm64-apple-ios16.0-simulator -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -typecheck ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/Publication/LokalWidgetPublisher.swift
+      - name: Type-check the real Flutter host bridge on both iOS 16 SDK targets
+        run: |
+          flutter precache --ios
+          plutil -lint ios/Runner.xcodeproj/project.pbxproj ios/Runner/Info.plist
+          python3 - <<'PYTHON'
+          import os
+          import pathlib
+          import plistlib
+          import subprocess
+          engine = pathlib.Path(os.environ['FLUTTER_ROOT']) / 'bin/cache/artifacts/engine/ios/Flutter.xcframework'
+          with (engine / 'Info.plist').open('rb') as source:
+              libraries = plistlib.load(source)['AvailableLibraries']
+          files = [
+              'ios/Widgets/Contracts/LokalWidgetSnapshot.swift',
+              'ios/Widgets/Storage/LokalWidgetStore.swift',
+              'ios/Widgets/Publication/LokalWidgetPublisher.swift',
+              'ios/Runner/LokalWidgetBridge.swift',
+          ]
+          for variant, sdk, target in [
+              (None, 'iphoneos', 'arm64-apple-ios16.0'),
+              ('simulator', 'iphonesimulator', 'arm64-apple-ios16.0-simulator'),
+          ]:
+              item = next(row for row in libraries
+                          if row['SupportedPlatform'] == 'ios'
+                          and row.get('SupportedPlatformVariant') == variant
+                          and 'arm64' in row['SupportedArchitectures'])
+              framework = (engine / item['LibraryIdentifier']).resolve()
+              assert framework.is_relative_to(engine.resolve())
+              sdk_path = subprocess.check_output(['xcrun', '--sdk', sdk, '--show-sdk-path'], text=True).strip()
+              subprocess.run(['swiftc', '-swift-version', '6', '-warnings-as-errors',
+                              '-target', target, '-sdk', sdk_path, '-F', str(framework),
+                              '-typecheck', *files], check=True)
+          PYTHON
       - name: Exercise actual atomic storage, images and concurrent processes
         run: |
           swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/StorageTests/main.swift -o "$RUNNER_TEMP/lokal-widget-store-contracts"

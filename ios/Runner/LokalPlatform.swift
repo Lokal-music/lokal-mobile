@@ -21,6 +21,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
   private var spotify: LokalSpotifySession?
   private var cast: LokalCastBridge?
   private var audioLifecycle: LokalAudioLifecycle?
+  private var widgetPublication: LokalWidgetBridge?
   private let desktopDiscovery = LokalDesktopDiscovery()
   private let fileQueue = DispatchQueue(label: "app.lokal.mobile.import", qos: .userInitiated)
 
@@ -42,6 +43,7 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
     }
     spotify = LokalSpotifySession(messenger: messenger, presenter: { [weak self] in self?.presenter })
     cast = LokalCastBridge(messenger: messenger)
+    widgetPublication = LokalWidgetBridge(messenger: messenger)
     register("lokal/desktop_link", messenger) { [weak self] call, result in
       guard call.method == "discover" else { result(FlutterMethodNotImplemented); return }
       self?.desktopDiscovery.discover(result)

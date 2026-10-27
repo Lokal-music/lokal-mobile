@@ -8,41 +8,43 @@ import '../../fixtures/generated_ios_video.dart';
 import '../../fixtures/native_web_video_document.dart';
 
 void main() {
-  test(
-    'offline iframe scripts forward real media commands without autoplay',
-    () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'lokal-native-video-',
-      );
-      try {
-        for (final paused in [false, true]) {
-          final file = File('${directory.path}/fixture.html');
-          await file.writeAsString(
-            nativeWebVideoFixtureDocument(
-              videoId: 'abcdefghijk',
-              appId: 'app.lokal.mobile',
-              deferAutoplayToHost: true,
-              startPaused: paused,
-              initialPosition: const Duration(milliseconds: 2345),
-            ),
-          );
-          final result = await Process.run('node', [
-            'test/fixtures/native_video_fixture_contract.mjs',
-            file.path,
-            paused ? 'paused' : 'ready',
-          ]);
-          expect(
-            result.exitCode,
-            0,
-            reason: '${result.stdout}\n${result.stderr}',
-          );
-          expect((jsonDecode(result.stdout as String) as Map)['checks'], 24);
-        }
-      } finally {
-        await directory.delete(recursive: true);
+  test('offline iframe scripts forward real media commands without autoplay', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'lokal-native-video-',
+    );
+    try {
+      for (final paused in [false, true]) {
+        final file = File('${directory.path}/fixture.html');
+        await file.writeAsString(
+          nativeWebVideoFixtureDocument(
+            videoId: 'abcdefghijk',
+            appId: 'app.lokal.mobile',
+            deferAutoplayToHost: true,
+            startPaused: paused,
+            initialPosition: const Duration(milliseconds: 2345),
+          ),
+        );
+        final result = await Process.run('node', [
+          'test/fixtures/native_video_fixture_contract.mjs',
+          file.path,
+          paused ? 'paused' : 'ready',
+        ]);
+        expect(
+          result.exitCode,
+          0,
+          reason: '${result.stdout}\n${result.stderr}',
+        );
+        final checks =
+            (jsonDecode(result.stdout as String) as Map)['checks'] as int;
+        expect(checks, greaterThanOrEqualTo(27));
+        stdout.writeln(
+          'Native fixture scripts: $checks actual assertions (${paused ? 'paused' : 'ready'})',
+        );
       }
-    },
-  );
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
   test('offline native fixture retains the exact production bridge and reset flags', () {
     for (final paused in [false, true]) {
       final production = musicVideoEmbedHtml(

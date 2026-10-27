@@ -49,6 +49,7 @@ import 'ios_media_reset_probe.dart';
 import 'ios_radio_reset_probe.dart';
 import 'ios_webkit_reset_probe.dart';
 import 'ios_session_reset_probe.dart';
+import 'ios_widget_transport_probe.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -254,6 +255,7 @@ void main() {
       'post172_search_scopes_and_four_exclusive_filters': 'passed',
       'post172_profile_editor_above_dock': 'passed',
     };
+    await probeIosWidgetTransport(binding);
 
     final directory = await (await getTemporaryDirectory()).createTemp(
       'ios-native-smoke-',

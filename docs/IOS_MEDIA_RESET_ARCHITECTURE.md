@@ -508,3 +508,34 @@ flowchart LR
   Frames --> Gate
   Gate --> Evidence[Independent iOS 18.6 and 26 reports]
 ```
+
+
+### Build 46: metadata-only seeking isolated
+
+[Build 46](https://github.com/lokal-music/lokal-mobile/actions/runs/40468683255)
+keeps the 47-PR source at `f817fb0cbe16ec53fbc9de10ae26151cd1928a14`, tree
+`913a7c044251c3df5453a7ee1fb0e52f8aa3cb60`. Both full native suites still fail
+explicit local-fixture WebKit replay. The Blob resource alone did not resolve
+it. The verified iOS 18.6 report now shows why cue ordering needs investigation:
+
+- The paused replacement has readiness **1** (metadata only), no buffered data,
+  raw position **0.39 s** and `seeking = true`.
+- After explicit Play, readiness reaches 4 and buffered/seekable ranges cover
+  0–12 s; 85 actual callbacks reach presented time 11.9 s, while `currentTime`
+  remains 0.39 s and seeking remains true.
+
+Runtime artifact `12718973894`, SHA-256
+`85472690c4de8df09b27a05f6b99c49ad53291f40f80aef828d0fe730ca3ecad`, is preserved
+and verified locally. This concerns the controlled provider adapter; no
+production YouTube or physical-daemon behavior is inferred.
+
+The fixture now queues cue/seek intent until actual decoded future data is
+available (`loadeddata` / `canplay`, readiness at least 3). It reports the queued
+intent separately; its position field remains raw `media.currentTime`.
+The native progress probe additionally requires seeking to finish and the queued
+intent to clear **before** establishing clock/frame baselines. A seek jump cannot
+qualify as elapsed playback. Existing >350 ms native/bridge progress and more
+than two newly delivered frames remain required. The unchanged production bridge
+and generated MP4 bytes are still used. Actual fixture/production scripts pass
+**44 counted assertions in each start mode**; native acceptance of the new cue
+ordering remains pending.
