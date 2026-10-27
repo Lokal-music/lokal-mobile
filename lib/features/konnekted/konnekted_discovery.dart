@@ -42,6 +42,7 @@ import 'package:flick/services/player_service.dart';
 import 'package:flick/services/queue_pre_resolver.dart';
 import 'package:flick/services/playback_source_priority.dart';
 import 'package:flick/services/catalogue_quality.dart';
+import 'package:flick/services/graceful_http_client.dart';
 import 'package:flick/features/search/online_song_save.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -1411,7 +1412,7 @@ Future<Song> playOnlineTrack(
     }
   }
   final owned = client == null;
-  final transport = client ?? http.Client();
+  final transport = client ?? GracefulHttpClient();
   try {
     final web = DiscoveryHttp(transport);
     final canonicalId = _canonicalOnlineSourceId(sourceId, track);
@@ -1554,7 +1555,7 @@ Future<Song?> findDiscoverySong(
     // Unreadable add-on settings still leave YouTube Music.
   }
   final owned = client == null;
-  final transport = client ?? http.Client();
+  final transport = client ?? GracefulHttpClient();
   try {
     final web = DiscoveryHttp(transport);
     final youtube = YoutubeAudio(web);
