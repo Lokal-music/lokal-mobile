@@ -168,9 +168,17 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
 
   Future<void> _saveLyricsFile(
     LyricsData lyrics, {
+    required String expectedSongId,
     bool includeDisplayedSubline = false,
   }) async {
-    if (_savingLyricsFile || _loadedSongId != widget.song.id) return;
+    // Save-sheet callbacks outlive the row they were opened from. Reject
+    // selections captured for a previous track even once new lyrics load.
+    if (!mounted ||
+        _savingLyricsFile ||
+        widget.song.id != expectedSongId ||
+        _loadedSongId != expectedSongId) {
+      return;
+    }
     final song = widget.song;
     setState(() => _savingLyricsFile = true);
     try {
@@ -187,8 +195,16 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
     }
   }
 
+  VoidCallback _saveOriginalLyricsAction(LyricsData lyrics) {
+    final songId = widget.song.id;
+    return () => unawaited(
+      _saveLyricsFile(lyrics, expectedSongId: songId),
+    );
+  }
+
   VoidCallback? _saveTranslatedLyricsAction() {
     final selected = _sublineLyrics;
+    final songId = widget.song.id;
     if (selected == null ||
         !selected.lines.any((line) =>
             line.translation?.trim().isNotEmpty == true &&
@@ -198,7 +214,11 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
     // Capture the selected result; a subsequent translation change must not
     // silently replace the version chosen in the save options sheet.
     return () => unawaited(
-      _saveLyricsFile(selected, includeDisplayedSubline: true),
+      _saveLyricsFile(
+        selected,
+        expectedSongId: songId,
+        includeDisplayedSubline: true,
+      ),
     );
   }
 
@@ -469,7 +489,7 @@ class _InlineLyricsPanelState extends ConsumerState<InlineLyricsPanel> {
             LyricsSaveButton(
               key: const ValueKey('save-inline-lyrics-file'),
               saving: _savingLyricsFile,
-              onSaveOriginal: () => unawaited(_saveLyricsFile(lyrics)),
+              onSaveOriginal: _saveOriginalLyricsAction(lyrics),
               onSaveWithTranslation: _saveTranslatedLyricsAction(),
             ),
           if (_lyricsData case final lyrics?)
