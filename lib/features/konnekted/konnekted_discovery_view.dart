@@ -119,7 +119,16 @@ class _KonnektedDiscoveryViewState
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  lokalText('Customize ${source.name == 'youtube' ? 'YouTube Music' : source.name == 'lastfm' ? 'Last.fm' : 'Spotify'}'),
+                  lokalText(
+                    'Customize {arg0}',
+                    args: {
+                      'arg0': switch (source) {
+                        KonnektedDiscoverySource.youtube => 'YouTube Music',
+                        KonnektedDiscoverySource.lastfm => 'Last.fm',
+                        KonnektedDiscoverySource.spotify => 'Spotify',
+                      },
+                    },
+                  ),
                   style: Theme.of(sheetContext).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 6),
@@ -1011,6 +1020,8 @@ class _ProviderChip extends StatelessWidget {
       button: true,
       selected: selected,
       enabled: onTap != null,
+      onTap: onTap,
+      onLongPress: onLongPress,
       label: comingSoon
           ? lokalText("{arg0}, coming soon", args: {'arg0': label})
           : label,
