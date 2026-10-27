@@ -199,7 +199,7 @@ class AppPreferences {
     this.miniPlayerSwipeAction = 'switchSongs',
     this.separateMiniPlayerFromNavBar = false,
     this.keepPlayingOnQuit = false,
-    this.priorityAnchorEnabled = true,
+    this.priorityAnchorEnabled = false,
     this.motionArtDuringBitPerfect = false,
     this.pauseOnBluetoothDisconnect = true,
     this.resumeOnBluetoothReconnect = false,
@@ -772,7 +772,7 @@ class AppPreferencesService {
       separateMiniPlayerFromNavBar:
           prefs.getBool(_separateMiniPlayerFromNavBarKey) ?? false,
       keepPlayingOnQuit: prefs.getBool(_keepPlayingOnQuitKey) ?? false,
-      priorityAnchorEnabled: prefs.getBool(_priorityAnchorEnabledKey) ?? true,
+      priorityAnchorEnabled: prefs.getBool(_priorityAnchorEnabledKey) ?? false,
       motionArtDuringBitPerfect:
           prefs.getBool(_motionArtDuringBitPerfectKey) ?? false,
       pauseOnBluetoothDisconnect:
@@ -1604,7 +1604,7 @@ class AppPreferencesService {
 
   Future<bool> getPriorityAnchorEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_priorityAnchorEnabledKey) ?? true;
+    return prefs.getBool(_priorityAnchorEnabledKey) ?? false;
   }
 
   Future<void> setPriorityAnchorEnabled(bool value) async {
