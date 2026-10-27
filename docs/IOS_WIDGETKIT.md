@@ -369,3 +369,8 @@ child wrapper previously discarded the underlying error. Diagnostics now retain
 the child's error, exit status and termination reason, and identify the fixed or
 opaque owned filename for failed regular-file opens. No private source path or
 credential is logged. The investigation remains open.
+
+The widget workflow now runs native Foundation/storage/image checks in an
+independent macOS job, alongside Dart and real-Flutter bridge checks. The failing
+filesystem probe no longer waits for Flutter setup/downloads. Both job outcomes
+remain required for overall workflow success; no storage or SDK gate is removed.
