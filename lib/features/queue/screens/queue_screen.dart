@@ -26,7 +26,7 @@ List<String> queueRowIdentities(List<Song> songs, String section) {
 /// One post-removal target index for both queue screens and player backends.
 /// SliverReorderableList sends the destination BEFORE the old row is removed.
 int queueDropIndex(int oldIndex, int newIndex, int length) =>
-    (newIndex > oldIndex ? newIndex - 1 : newIndex).clamp(0, length - 1);
+    (newIndex > oldIndex ? newIndex - 1 : newIndex).clamp(0, length - 1).toInt();
 
 class QueueScreen extends StatelessWidget {
   const QueueScreen({super.key});
@@ -179,7 +179,7 @@ class _QueueListState extends ConsumerState<QueueList> {
               key: const ValueKey('queue-select'),
               tooltip: l10n.selectAll,
               onPressed: () => setState(() => _selectionMode = true),
-              icon: const Icon(LucideIcons.listChecks, size: 20),
+              icon: const Icon(LucideIcons.checkCheck, size: 20),
             ),
             TextButton(
               onPressed: () async {
@@ -313,7 +313,7 @@ class _QueueListState extends ConsumerState<QueueList> {
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(h, 5, h, 5),
                   sliver: SliverToBoxAdapter(
-                    child: Text('AUTOPLAY',
+                    child: Text('Autoplay',
                         style: TextStyle(
                           color: t.muted, fontWeight: FontWeight.w700,
                           fontSize: 12, letterSpacing: 1.2,
@@ -392,7 +392,7 @@ class _QueueRow extends StatelessWidget {
                   child: Row(
                     children: [
                       if (selecting) ...[
-                        Icon(selected ? LucideIcons.checkCircle2
+                        Icon(selected ? LucideIcons.check
                                       : LucideIcons.circle,
                             color: selected ? t.accent : t.muted, size: 20),
                         const SizedBox(width: 10),
