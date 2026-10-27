@@ -794,7 +794,7 @@ List<LokalDiscoveryCategory> parseYoutubeMusicHomeCategories(Object? root) {
         tracks: <String, LokalDiscoveryTrack>{
           for (final group in entry.value)
             for (final track in group.tracks)
-              track.videoId ?? track.key: track,
+              (track.videoId ?? track.key): track,
         }.values.toList(),
         mixes: <String, LokalDiscoveryMix>{
           for (final group in entry.value)
