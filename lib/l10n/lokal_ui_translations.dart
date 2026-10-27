@@ -1,5 +1,6 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Customize {arg0}": "Personnaliser {arg0}",
   "Video quality": "Qualité vidéo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Résolution maximale des clips musicaux. Une qualité supérieure consomme plus de données ; la meilleure résolution disponible dans cette limite sera utilisée.",
   "Auto (best available)": "Auto (meilleure qualité disponible)",
@@ -522,6 +523,7 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Customize {arg0}": "{arg0} anpassen",
   "Video quality": "Videoqualität",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maximale Auflösung für Musikvideos. Höhere Qualität verbraucht mehr Daten; die beste verfügbare Auflösung bis zu dieser Grenze wird verwendet.",
   "Auto (best available)": "Automatisch (beste verfügbare Qualität)",
@@ -1037,6 +1039,7 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Customize {arg0}": "Personalizar {arg0}",
   "Video quality": "Calidad de vídeo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Resolución máxima de los vídeos musicales. Una calidad más alta consume más datos; se elegirá la mejor resolución disponible dentro del límite.",
   "Auto (best available)": "Automático (mejor disponible)",
@@ -1560,6 +1563,7 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Customize {arg0}": "Personalizza {arg0}",
   "Video quality": "Qualità video",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Risoluzione massima per i video musicali. Una qualità più alta consuma più dati; verrà scelta la migliore risoluzione disponibile entro questo limite.",
   "Auto (best available)": "Auto (migliore disponibile)",
@@ -2085,6 +2089,7 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Customize {arg0}": "Personalizar {arg0}",
   "Video quality": "Qualidade do vídeo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Resolução máxima dos videoclipes. Qualidades maiores usam mais dados; a melhor resolução disponível dentro do limite será selecionada.",
   "Auto (best available)": "Automático (melhor disponível)",
@@ -2605,6 +2610,7 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Customize {arg0}": "{arg0} aanpassen",
   "Video quality": "Videokwaliteit",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maximale resolutie voor muziekvideo's. Hogere kwaliteit verbruikt meer data; de hoogst beschikbare resolutie binnen de limiet wordt gekozen.",
   "Auto (best available)": "Automatisch (beste beschikbaar)",
@@ -3137,6 +3143,7 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Customize {arg0}": "Dostosuj {arg0}",
   "Video quality": "Jakość wideo",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Maksymalna rozdzielczość teledysków. Wyższa jakość zużywa więcej danych; zostanie wybrana najlepsza dostępna rozdzielczość w tym limicie.",
   "Auto (best available)": "Automatycznie (najlepsza dostępna)",
@@ -3659,6 +3666,7 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Customize {arg0}": "Anpassa {arg0}",
   "Video quality": "Videokvalitet",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Högsta upplösning för musikvideor. Högre kvalitet använder mer data; den bästa tillgängliga upplösningen inom gränsen väljs.",
   "Auto (best available)": "Automatiskt (bästa tillgängliga)",
@@ -4187,6 +4195,7 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Customize {arg0}": "自定义{arg0}",
   "Video quality": "视频画质",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "音乐视频的最高分辨率。更高画质会消耗更多流量，播放时会选择不超过该上限的最佳可用清晰度。",
   "Auto (best available)": "自动（最佳可用画质）",
@@ -4714,6 +4723,7 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Customize {arg0}": "{arg0} özelleştir",
   "Video quality": "Video kalitesi",
   "Maximum resolution for music videos. Higher quality uses more data; the nearest available stream is selected.": "Müzik videoları için en yüksek çözünürlük. Yüksek kalite daha fazla veri kullanır; bu sınır içindeki en iyi mevcut çözünürlük seçilir.",
   "Auto (best available)": "Otomatik (mevcut en iyi kalite)",

@@ -120,6 +120,21 @@ class LokalDiscoveryMix {
   final String artworkUrl;
 }
 
+/// A named category returned by the source, with no synthesized content.
+class LokalDiscoveryCategory {
+  const LokalDiscoveryCategory({
+    required this.id,
+    this.tracks = const [],
+    this.mixes = const [],
+    this.albums = const [],
+  });
+  final String id;
+  final List<LokalDiscoveryTrack> tracks;
+  final List<LokalDiscoveryMix> mixes;
+  final List<LokalDiscoveryAlbum> albums;
+  bool get isEmpty => tracks.isEmpty && mixes.isEmpty && albums.isEmpty;
+}
+
 /// Discovery's shelves. A shelf whose request failed is null, so the app can
 /// keep showing the last one that loaded.
 class LokalDiscovery {
@@ -129,6 +144,7 @@ class LokalDiscovery {
     this.warnings = const [],
     this.mixes,
     this.mixError,
+    this.categories,
     this.liked,
     this.quickPicks,
     this.history,
@@ -143,6 +159,7 @@ class LokalDiscovery {
   final List<String> warnings;
   final List<LokalDiscoveryMix>? mixes;
   final String? mixError;
+  final List<LokalDiscoveryCategory>? categories;
   final List<LokalDiscoveryTrack>? liked;
   final List<LokalDiscoveryTrack>? quickPicks;
   final List<LokalDiscoveryTrack>? history;
@@ -160,6 +177,7 @@ class LokalDiscovery {
           warnings: warnings,
           mixes: mixes ?? previous.mixes,
           mixError: mixError,
+          categories: categories ?? previous.categories,
           liked: liked ?? previous.liked,
           quickPicks: quickPicks ?? previous.quickPicks,
           history: history ?? previous.history,
@@ -170,6 +188,7 @@ class LokalDiscovery {
         );
 
   bool get isEmpty =>
+      (categories ?? const []).every((category) => category.isEmpty) &&
       (mixes ?? const []).isEmpty &&
       (liked ?? const []).isEmpty &&
       (quickPicks ?? const []).isEmpty &&

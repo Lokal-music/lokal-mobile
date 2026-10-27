@@ -1,4 +1,5 @@
 import 'package:flick/widgets/lokal/lokal_discord_button.dart';
+import 'package:flick/features/flow/flow_screen.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
@@ -23,10 +24,11 @@ import 'konnekted_destination.dart';
 import 'konnekted_discovery_view.dart';
 import 'konnekted_style.dart';
 
-/// Home's tabs, as desktop's: your library, and Discovery.
+/// Home modes: local library, online discovery, and Flow.
 enum KonnektedHomeTab {
   local('Local'),
-  discovery('Discovery');
+  discovery('Discovery'),
+  flow('Flow');
 
   const KonnektedHomeTab(this.label);
   final String label;
@@ -73,6 +75,25 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(konnektedLibraryProvider);
+    final topBar = KonnektedHomeTopBar(
+      greeting: ref.watch(konnektedGreetingProvider).value,
+      selectedTab: _tab,
+      onTabChanged: _select,
+      onSettings: () => onNavigate(KonnektedDestination.settings),
+      onAppearance: () => onNavigate(
+        const KonnektedDestination.settingsAt(LokalSettingsGroup.themeAccent),
+      ),
+    );
+    // Flow uses its own scrolling surface while sharing the Home header.
+    if (_tab == KonnektedHomeTab.flow) {
+      return SafeArea(
+        bottom: false,
+        child: Column(children: [
+          topBar,
+          const Expanded(child: FlowScreen(embedded: true)),
+        ]),
+      );
+    }
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
@@ -86,40 +107,7 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
           physics: const AlwaysScrollableScrollPhysics(),
           key: const PageStorageKey('konnekted-listen'),
           slivers: [
-            SliverToBoxAdapter(
-              child: KonnektedHomeTopBar(
-                greeting: ref.watch(konnektedGreetingProvider).value,
-                onSettings: () => onNavigate(KonnektedDestination.settings),
-                onAppearance: () => onNavigate(
-                  const KonnektedDestination.settingsAt(
-                    LokalSettingsGroup.themeAccent,
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Center(
-                  child: LokalGlass.capsule(
-                    thickness: LokalGlassThickness.thin,
-                    shadow: false,
-                    padding: const EdgeInsets.all(4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final tab in KonnektedHomeTab.values)
-                          _ShelfChip(
-                            label: tab.label,
-                            selected: tab == _tab,
-                            onTap: () => _select(tab),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            SliverToBoxAdapter(child: topBar),
             if (_tab == KonnektedHomeTab.discovery)
               SliverToBoxAdapter(
                 child: KonnektedDiscoveryView(
@@ -131,7 +119,6 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
               SliverToBoxAdapter(
                 child: KonnektedCoverFlowSection(
                   onPlay: onPlay,
-                  onOpenFlow: () => onNavigate(KonnektedDestination.flow),
                 ),
               ),
               SliverToBoxAdapter(
@@ -227,6 +214,8 @@ class KonnektedHomeTopBar extends StatelessWidget {
     super.key,
     required this.onSettings,
     required this.onAppearance,
+    this.selectedTab = KonnektedHomeTab.local,
+    this.onTabChanged,
     this.greeting,
     this.now,
   });
@@ -235,6 +224,8 @@ class KonnektedHomeTopBar extends StatelessWidget {
 
   /// Opens Appearance, from the logo.
   final VoidCallback onAppearance;
+  final KonnektedHomeTab selectedTab;
+  final ValueChanged<KonnektedHomeTab>? onTabChanged;
 
   /// The personal line under the salutation; a time-of-day line until
   /// history has loaded.
@@ -285,6 +276,31 @@ class KonnektedHomeTopBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          // Keep the Home mode switch in the header, but give it its own
+          // horizontal space instead of shrinking tap targets beside actions.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: LokalGlass.capsule(
+                thickness: LokalGlassThickness.thin,
+                shadow: false,
+                padding: const EdgeInsets.all(3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final tab in KonnektedHomeTab.values)
+                      _ShelfChip(
+                        label: lokalText(tab.label),
+                        selected: tab == selectedTab,
+                        onTap: () => onTabChanged?.call(tab),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           // Desktop's greeting: a salutation, then a line from your listening.
           Semantics(
             header: true,
@@ -317,17 +333,14 @@ class KonnektedHomeTopBar extends StatelessWidget {
   }
 }
 
-/// Cover Flow of Made for you's songs, with the Flow button. One tap on a cover plays that song, with the
-/// whole shelf as the queue.
+/// Local Cover Flow. One tap plays the selected album with the shelf queued.
 class KonnektedCoverFlowSection extends ConsumerStatefulWidget {
   const KonnektedCoverFlowSection({
     super.key,
     required this.onPlay,
-    required this.onOpenFlow,
   });
 
   final void Function(Song song, List<Song> shelf) onPlay;
-  final VoidCallback onOpenFlow;
 
   @override
   ConsumerState<KonnektedCoverFlowSection> createState() =>
@@ -341,24 +354,10 @@ class _KonnektedCoverFlowSectionState
     final t = context.lokal;
     final list =
         ref.watch(konnektedCoverAlbumsProvider).value ?? const <AlbumGroup>[];
-    // Flow needs no library, so an empty one still gets the way in.
-    if (list.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 20),
-        child: Center(child: _FlowButton(onTap: widget.onOpenFlow)),
-      );
-    }
+    if (list.isEmpty) return const SizedBox.shrink();
     return Column(
       children: [
         const SizedBox(height: 18),
-        Semantics(
-          header: true,
-          child: Text(
-            lokalText('MADE FOR YOU'),
-            style: LokalTheme.label(t, color: t.accent),
-          ),
-        ),
-        const SizedBox(height: 8),
         LokalCoverFlow(
           // Match desktop: land on the middle pick, not the first. Recreate
           // the flow if the shelf length changes so the initial index updates.
@@ -384,61 +383,7 @@ class _KonnektedCoverFlowSectionState
             );
           },
         ),
-        const SizedBox(height: 14),
-        _FlowButton(onTap: widget.onOpenFlow),
       ],
-    );
-  }
-}
-
-class _FlowButton extends StatelessWidget {
-  const _FlowButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.lokal;
-    return Semantics(
-      button: true,
-      label: lokalText('Open Flow'),
-      excludeSemantics: true,
-      child: LokalGlass.capsule(
-        thickness: LokalGlassThickness.thin,
-        shadow: false,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const StadiumBorder(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: SweepGradient(
-                      colors: [
-                        const Color(0xFF7C6AFF),
-                        const Color(0xFFFF6AA8),
-                        t.accent,
-                        const Color(0xFF7C6AFF),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  lokalText('FLOW'),
-                  style: LokalTheme.label(t, color: t.text),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -461,12 +406,15 @@ class _ShelfChip extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 44, minWidth: 56),
+          alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: selected
