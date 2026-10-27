@@ -154,7 +154,7 @@ jobs:
       - name: Verify the optional standalone target and localized resources
         run: |
           xcodebuild -version
-          plutil -lint ios/Widgets/LokalWidgets.xcodeproj/project.pbxproj ios/Widgets/Extension/Info.plist
+          plutil -lint ios/Widgets/LokalWidgets.xcodeproj/project.pbxproj ios/Widgets/Extension/Info.plist ios/Widgets/RenderHarness/Info.plist
           find ios/Widgets/Resources -name Localizable.strings -exec plutil -lint {} +
       - name: Link the real WidgetKit extension for iOS 16 devices
         run: |

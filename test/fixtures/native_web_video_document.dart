@@ -59,6 +59,7 @@ function report(kind) {
   const droppedFrames = quality && Number.isFinite(quality.droppedVideoFrames) ? quality.droppedVideoFrames : 0;
   const decodedFrames = Number.isFinite(media.webkitDecodedFrameCount) ? media.webkitDecodedFrameCount : 0;
   const callbackSupported = typeof media.requestVideoFrameCallback === 'function';
+  const rect = typeof media.getBoundingClientRect === 'function' ? media.getBoundingClientRect() : null;
   parent.postMessage({fixture: 'lokal-native-video', kind: kind,
     position: media.currentTime, duration: Number.isFinite(media.duration) ? media.duration : 0,
     state: media.ended ? 0 : media.paused ? 2 : media.readyState < 3 ? 3 : 1,
@@ -70,6 +71,12 @@ function report(kind) {
     videoWidth: media.videoWidth, videoHeight: media.videoHeight,
     readyState: media.readyState,
     seeking: media.seeking, pendingSeekSeconds: pendingSeekSeconds,
+    documentVisibility: typeof document.visibilityState === 'string' ? document.visibilityState : 'unknown',
+    documentHidden: document.hidden === true,
+    documentFocused: typeof document.hasFocus === 'function' ? document.hasFocus() : null,
+    viewportWidth: Number.isFinite(window.innerWidth) ? window.innerWidth : null,
+    viewportHeight: Number.isFinite(window.innerHeight) ? window.innerHeight : null,
+    videoRectangle: rect ? {left: rect.left, top: rect.top, width: rect.width, height: rect.height} : null,
     paused: media.paused, ended: media.ended,
     playbackRate: media.playbackRate,
     seekable: ranges(media.seekable), buffered: ranges(media.buffered),

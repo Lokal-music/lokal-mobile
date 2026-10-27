@@ -31,6 +31,7 @@ The new probe retains phase/view/timing/native-document diagnostics for this gat
 | [Build 53](https://github.com/lokal-music/lokal-mobile/actions/runs/40483603986) / PR #252 | Complete iOS 18.6 and 26 acceptance through #246. Actual queue reorder and unavailable widget protocol checks pass. WebKit explicit replay advances bridge/native time and new frames. Preserved tree `eaa818198e4fe6988416ff8696f36dcb29738831`. |
 | [Widget run 14](https://github.com/lokal-music/lokal-mobile/actions/runs/40504214809) / PR #253 | 23 actual store cases, including 50×24-worker POSIX creation and 50×24-worker real publication/read rounds; 45 reader, 14 publisher and 88 Flutter cases plus both real Flutter bridge SDK checks pass. This later lock correction is outside the build-53 IPA. |
 | Build 56 / live-sampling candidate | iOS 18.6 times out awaiting paused WebKit replacement; iOS 26 passes. The candidate adds gate diagnostics and live widget sampling; full native acceptance remains pending. |
+| [Build 59](https://github.com/lokal-music/lokal-mobile/actions/runs/40510204116) / PR #259 | Complete iOS 18.6 pass for the live-sampler source; iOS 26 explicit replay reaches source end but presents only two new frames after its settled baseline, failing the unchanged three-frame gate. This is not a complete dual-runtime acceptance. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
@@ -1257,3 +1258,26 @@ and actual iOS 16 device/simulator extension linkage. The continuation adds a
 simulator-only native render app and a 441-image language/family/accessibility
 matrix. Rendering, installed WidgetKit behavior and physical signing remain
 separate from the accepted linker/test result.
+
+
+### WebKit presentation evidence continuation
+
+Build 59's iOS 26 report now isolates the failed phase: paused replacement and
+settled explicit replay both occur. At the replay baseline, the real source is
+1.975s with five frame callbacks and presented media time 1.9s. At timeout it is
+ended at 12s with seven callbacks and presented media time 2.7s. Two new callbacks
+do not satisfy the existing strictly-more-than-two gate; source time alone is
+not presentation evidence. The generated MP4 is separately verified as 120 real
+H.264 frames at 10 fps for the full 12 seconds, with a matching 12-second AAC
+track and unchanged SHA-256 `416a7558921761a26aca370a294be0080ae969afb3249acfef720b3d54b24f37`.
+A short/truncated video track is not the explanation.
+
+The controlled document additionally reports actual document visibility/focus,
+viewport dimensions and video bounds. Gate failure requests a bounded screenshot
+before tearing down the app's video surface. These are observability changes;
+there is no guessed production playback fix, synthetic frame or relaxed gate.
+The exact production iframe bridge remains embedded unchanged. Three local
+fixture tests pass; Node executes 50 actual assertions in each ready/paused mode,
+including forwarding the added DOM observations. Hosted replay acceptance of
+this diagnostic source remains pending. The build-53 dual-runtime IPA remains
+the preserved complete checkpoint.
