@@ -2,8 +2,74 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/features/music_videos/music_video_controller.dart';
+import 'package:flick/services/external_playback_owner.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
 void main() {
+  test(
+    'native quiet failure stays observed while the release sender is pending',
+    () async {
+      final video = Media3MusicVideoController(
+        trackNativeOutputQuiescence: true,
+      );
+      addTearDown(video.dispose);
+      final sender = Completer<void>();
+      final owner = video.attach((_, _) => sender.future);
+      final release = expectLater(video.releaseAudio(), throwsStateError);
+      video.acknowledgeNativeQuiet(
+        owner,
+        error: StateError('native suspension failed'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      sender.completeError(StateError('release failed'));
+      await release;
+    },
+  );
+  test(
+    'reset retires a pending video release without losing selected ownership',
+    () async {
+      final video = Media3MusicVideoController(
+        trackNativeOutputQuiescence: true,
+      );
+      addTearDown(video.dispose);
+      final quiet = Completer<void>();
+      video.attach((_, _) => quiet.future);
+      final owner = ExternalPlaybackOwner();
+      final lease = owner.claim(
+        video.releaseAudio,
+        onMediaReset: video.retireForMediaReset,
+      );
+      final releasing = expectLater(
+        lease.release(),
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      final resetting = owner.retireForMediaReset();
+      quiet.complete();
+      await Future.wait([releasing, resetting]);
+      expect(lease.isReleased, isFalse);
+      expect(lease.isLatest, isTrue);
+      video.attach(
+        (_, _) async {},
+      ); // Confirmed cleanup permits a fresh paused view.
+      await owner.releaseCurrent();
+      expect(lease.isReleased, isTrue);
+    },
+  );
+
+  test('an old release rejects replacement ownership instead of waiting on its future', () async {
+    final video = Media3MusicVideoController(trackNativeOutputQuiescence: true);
+    addTearDown(video.dispose);
+    final oldQuiet = Completer<void>();
+    video.attach((_, _) => oldQuiet.future);
+    final release = expectLater(
+      video.releaseAudio(),
+      throwsA(isA<LocalAudioRequestRetired>()),
+    );
+    video.attach((_, _) async {});
+    oldQuiet.complete();
+    await release;
+    await video.releaseAudio();
+  });
   test(
     'disposed or detached iPhone video waits for actual native suspension',
     () async {

@@ -58,6 +58,8 @@ jobs:
           cache: true
       - name: Configure the Apple build
         run: |
+          xcode-select -p
+          sudo xcode-select --switch "$DEVELOPER_DIR"
           xcodebuild -version
           flutter config --no-enable-swift-package-manager
           rustup toolchain install 1.98.0 --profile minimal --no-self-update
@@ -284,6 +286,8 @@ jobs:
       - name: Configure the isolated runtime host
         run: |
           printf 'LOKAL_IOS_RUNTIME_EVIDENCE_DIR=%s/ios-runtime-26\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          xcode-select -p
+          sudo xcode-select --switch "$DEVELOPER_DIR"
           xcodebuild -version
           flutter config --no-enable-swift-package-manager
           flutter pub get --enforce-lockfile

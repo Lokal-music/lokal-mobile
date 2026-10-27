@@ -7,7 +7,7 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone app.
 **Build 34 passes both complete native suites on iOS 18.6 and 26.0**, using
 a fresh Mac for iOS 26. It is the current complete checkpoint through #217.
-Build 36 also passes the ordinary iOS 18.6 suite through #219; its iOS 26 host fails before simulator boot. The connected reset candidate still requires native acceptance. The iOS 16+
+Build 39 passes the complete iOS 18.6 suite through #219, including posted-reset/HTTP/radio acceptance. Build 40 passes that complete suite on iOS 26 with the 44-PR parity source through #225; its iOS 18.6 run exposes an uncaught background gain-update retirement, now corrected in the next candidate. The WebKit/session continuation still requires native acceptance. The iOS 16+
 unsigned engineering IPA passes inspection of 34 device binaries, Cast resources,
 privacy metadata, source/notices and matching symbols. See the exact source,
 checksum and native evidence in the build-34 checkpoint below. Installation still
@@ -980,3 +980,39 @@ Build 39 covers the reset queue/evidence correction through the earlier 40 PRs,
 not these later feature changes. Build 38 reaches native reset selection checks
 but fails on an incorrect unrotated-queue test expectation; it is not a recovery
 pass. Build 34 remains the latest complete dual-runtime checkpoint.
+
+
+### Native reset and owner-lifetime acceptance
+
+Build 39 passes the complete iOS 18.6 suite with posted AVPlayer/Rust resets,
+canonical newer-selection retention, stale native HTTP rejection and actual
+radio reopening. Actual paused/recovering screenshots and the JSON report are
+preserved. Its iOS 26 host times out during inventory before the app runs.
+Build 34 remains the latest complete dual-runtime checkpoint.
+
+The next stacked continuation adds an offline real-WebKit decoder/reset gate
+using generated H.264/AAC and the exact production bridge. It also fixes a
+reproduced session-observer lifetime bug, fences stale errors before fallback,
+and retires an in-flight video release without losing selection ownership.
+The expanded workflow selection passes 304 Flutter tests, with no lib/integration
+analysis errors. Native execution of these new gates is pending; production
+observation remains deferred. See [the precise scopes, measured results and
+remaining gates](IOS_MEDIA_RESET_ARCHITECTURE.md).
+
+
+### Build 40: current parity source and gain-update race
+
+[Build 40](https://github.com/lokal-music/lokal-mobile/actions/runs/40438681830)
+builds and packages the 44-PR source through #225, and passes the complete native
+suite on iOS 26.0, including posted system/Rust resets, newer selection, delayed
+native HTTP and radio. Its iOS 18.6 run passes the system/Rust reset cases, then
+fails on an uncaught retired background Rust volume acknowledgement. It is not
+a dual-runtime pass. The complete iOS 26 report and failed iOS 18 report/logs are
+preserved with verified artifact checksums.
+
+The continuation keeps cancellation observable by awaited policy callers, while
+background diagnostics/route gain updates observe expected reset retirement.
+Late native failures remain observed and cannot publish stale gain; unrelated
+current errors remain failures. This correction and the new actual WebKit/session
+gates require another complete native run. Production reset observation remains
+deferred; Build 34 remains the latest complete dual-runtime checkpoint.

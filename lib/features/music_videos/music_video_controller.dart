@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
 
 /// One clock and transport interface for the native video and the regular
 /// Full Player chrome/Space subtitles. Album playback has a separate clock.
@@ -31,6 +32,7 @@ class Media3MusicVideoController {
   bool _buffering = true;
   int _owner = 0;
   bool _disposed = false;
+  int _resetRevision = 0;
 
   int attach(
     Future<void> Function(String, Map<String, Object?>) command, {
@@ -60,9 +62,15 @@ class Media3MusicVideoController {
     }
   }
 
-  Future<void> _awaitNativeQuiet() => Future.wait<void>([
-    for (final quiet in _nativeQuiet.values.toList()) quiet.future,
-  ]).then<void>((_) {});
+  Future<void> _awaitNativeQuiet() {
+    final work = Future.wait<void>([
+      for (final quiet in _nativeQuiet.values.toList()) quiet.future,
+    ]).then<void>((_) {});
+    // A native failure can arrive while the sender is still pending. Observe
+    // it immediately and retain the same failing future for the actual waiter.
+    work.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return work;
+  }
 
   bool owns(int? owner) => !_disposed && owner == _owner;
 
@@ -153,11 +161,18 @@ class Media3MusicVideoController {
   Future<void> releaseAudio() async {
     final owner = _owner;
     final send = _send;
+    final reset = _resetRevision;
+    final quiet = _awaitNativeQuiet();
     if (!_disposed && send != null) {
       await send('release', const {});
       acknowledgeNativeQuiet(owner);
     }
-    await _awaitNativeQuiet();
+    await quiet;
+    if (_trackQuiescence &&
+        !_disposed &&
+        (reset != _resetRevision || owner != _owner)) {
+      throw const LocalAudioRequestRetired();
+    }
     if (owns(owner)) {
       _ticker?.cancel();
       _ticker = null;
@@ -168,8 +183,10 @@ class Media3MusicVideoController {
 
   /// Preserve the raw transport position, never the interpolated UI clock.
   Future<void> retireForMediaReset() async {
+    _resetRevision++;
     final owner = _owner;
     final send = _send;
+    final quiet = _awaitNativeQuiet();
     if (!_disposed) {
       _ticker?.cancel();
       _ticker = null;
@@ -182,7 +199,7 @@ class Media3MusicVideoController {
       await send('mediaReset', {'positionMs': _samplePosition.inMilliseconds});
       acknowledgeNativeQuiet(owner);
     }
-    await _awaitNativeQuiet();
+    await quiet;
   }
 
   Future<void> togglePlayPause() =>
