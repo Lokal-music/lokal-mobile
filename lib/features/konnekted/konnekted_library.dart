@@ -1,4 +1,3 @@
-import 'package:flick/widgets/lokal/lokal_discord_button.dart';
 import 'package:flick/l10n/l10n.dart';
 
 import 'dart:async';
@@ -107,31 +106,44 @@ class KonnektedLibrary extends ConsumerWidget {
             child: LokalPageBar(
               padding: konnektedTopBarPadding,
               showBack: false,
-              leading: LokalRoundAction(
-                icon: Icons.add_rounded,
-                iconSize: 24,
-                label: lokalText('Add music, playlists and folders'),
-                onPressed: () => _showAdd(context, ref),
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LokalRoundAction(
+                    icon: Icons.add_rounded,
+                    iconSize: 24,
+                    label: lokalText('Add music, playlists and folders'),
+                    onPressed: () => _showAdd(context, ref),
+                  ),
+                  const SizedBox(width: 12),
+                  Semantics(
+                    header: true,
+                    child: GestureDetector(
+                      // Preserve the Classipod easter egg on the new title.
+                      onLongPress: () => Navigator.of(context)
+                          .push(ClassipodScreen.route(context)),
+                      child: Text(
+                        lokalText('Library'),
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -.8,
+                          color: context.lokal.text,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               actions: [
-                const LokalDiscordButton(),
-                LokalRoundAction(
-                  icon: Icons.settings_rounded,
-                  iconSize: 24,
-                  label: lokalText('Settings'),
-                  onPressed: () => onNavigate(KonnektedDestination.settings),
+                KonnektedHeaderActions(
+                  onSettings: () => onNavigate(KonnektedDestination.settings),
                 ),
               ],
             ),
           ),
-          SliverToBoxAdapter(
-            // Easter egg: a long press on the title opens Classipod.
-            child: LokalLargeTitle(
-              title: lokalText('Library'),
-              onLongPress: () =>
-                  Navigator.of(context).push(ClassipodScreen.route(context)),
-            ),
-          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 18)),
           if (library.hasError && songs == null)
             SliverToBoxAdapter(
               child: KonnektedMessage(
