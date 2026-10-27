@@ -81,6 +81,9 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
 
   LyricsData? _preparedSource;
   List<LyricsLine> _preparedLines = const [];
+  // The Space ticker builds every frame. Cache translated/romaji projection
+  // once per lyrics update so glyph layout and syllable runs remain stable.
+  List<LyricsLine?> _preparedSublines = const [];
   late final Ticker _ticker;
   final ValueNotifier<Duration> _framePosition =
       ValueNotifier<Duration>(Duration.zero);
@@ -149,6 +152,14 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
     _preparedLines = _preparedSource == null
         ? const []
         : LyricsService().playbackLines(_preparedSource!);
+    _preparedSublines = [
+      for (final line in _preparedLines)
+        if (line.words?.isNotEmpty == true &&
+            line.translation?.trim().isNotEmpty == true)
+          projectLyricsSubline(line, line.translation!)
+        else
+          null,
+    ];
   }
 
   Duration _interpolated(Duration frame) {
@@ -276,9 +287,9 @@ class _ImmersiveLyricsSubtitleState extends State<ImmersiveLyricsSubtitle>
           const SizedBox(height: 5),
           // Reuse the very same frame-interpolated playhead as the original.
           // Without source syllables, leave the subline static.
-          if (line.words?.isNotEmpty == true)
+          if (_preparedSublines[index] != null)
             LyricMotionLine(
-              line: projectLyricsSubline(line, line.translation!),
+              line: _preparedSublines[index]!,
               position: position,
               textAlign: TextAlign.center,
               lightweight: true,
