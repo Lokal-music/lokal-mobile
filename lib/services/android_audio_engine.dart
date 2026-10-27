@@ -461,6 +461,34 @@ class AndroidAudioEngine implements AudioEngine {
         decodedDuration.inMilliseconds * 2 < song.duration.inMilliseconds;
   }
 
+  /// Reject an active preview without allowing Media3 to advance the queue.
+  /// This also handles items reached through native playlist auto-advance.
+  bool _rejectTruncatedActiveHttpTrack(
+    just_audio.AudioPlayer player,
+    Song? track,
+    Duration? decodedDuration,
+  ) {
+    if (!identical(_player, player) ||
+        _sourceFailed ||
+        !isTruncatedHttpAddonAudio(track, decodedDuration)) return false;
+    _sourceFailed = true;
+    AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected: '
+        'expectedMs=${track!.duration.inMilliseconds} '
+        'decodedMs=${decodedDuration!.inMilliseconds}');
+    _emit(_state.copyWith(
+      currentTrack: track,
+      isPlaying: false,
+      position: Duration.zero,
+      bufferedPosition: Duration.zero,
+      duration: decodedDuration,
+    ));
+    _onTrackError?.call(track);
+    // Pause immediately, before the asynchronous decoder retirement.
+    unawaited(player.pause().catchError((Object _) {}));
+    unawaited(_retireTimedOutPlayer(player));
+    return true;
+  }
+
   void _attachListeners(just_audio.AudioPlayer player) {
     _subscriptions.add(
       player.playerStateStream.listen((state) {
@@ -514,8 +542,13 @@ class AndroidAudioEngine implements AudioEngine {
 
     _subscriptions.add(
       player.durationStream.listen((dur) {
-        if (!identical(player, _player)) return;
+        if (!identical(player, _player) || _sourceFailed) return;
         if (dur == null) return;
+        // The next item's decoded duration may arrive after its index.
+        if (!_awaitingInitialSeek && !_shouldSuppressTrackSync() &&
+            _rejectTruncatedActiveHttpTrack(
+              player, _resolveTrack(player.currentIndex), dur,
+            )) return;
         _emit(_state.copyWith(duration: dur));
       }),
     );
@@ -539,17 +572,9 @@ class AndroidAudioEngine implements AudioEngine {
         if (!identical(player, _player)) return;
         if (state == just_audio.ProcessingState.completed) {
           if (_sourceFailed) return;
-          if (isTruncatedHttpAddonAudio(_loadedTrack, player.duration)) {
-            final rejected = _loadedTrack;
-            _sourceFailed = true;
-            AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected at EOF: '
-                'expectedMs=${rejected?.duration.inMilliseconds} '
-                'decodedMs=${player.duration?.inMilliseconds}');
-            _emit(_state.copyWith(isPlaying: false));
-            if (rejected != null) _onTrackError?.call(rejected);
-            unawaited(_retireTimedOutPlayer(player));
-            return; // Never count this sample as a completed song or advance.
-          }
+          if (_rejectTruncatedActiveHttpTrack(
+            player, _resolveTrack(player.currentIndex), player.duration,
+          )) return; // A preview is not a completed track.
           if (_loadedTrack?.atmosEncoded == true) {
             AtmosDiagnostics.record('playback_end', {
               'codec': 'eac3_joc', 'outcome': 'completed',
@@ -597,7 +622,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _syncTrackFromIndex(int? index) {
-    if (_restoringFastStartPlaylist) return;
+    if (_restoringFastStartPlaylist || _sourceFailed) return;
     _syncPlaylistStateFromPlayer();
     if (_shouldSuppressTrackSync()) return;
     if (_awaitingInitialSeek) return;
@@ -605,6 +630,15 @@ class AndroidAudioEngine implements AudioEngine {
     if (nextTrack != null && _shouldIgnoreTrack(nextTrack)) {
       return;
     }
+    // A global player.duration may still belong to the previous item.
+    // Check the current IndexedAudioSource instead, then watch durationStream
+    // for delayed decoder metadata.
+    final player = _player;
+    if (player != null && index != null &&
+        index >= 0 && index < player.sequence.length &&
+        _rejectTruncatedActiveHttpTrack(
+          player, nextTrack, player.sequence[index].duration,
+        )) return;
     if (nextTrack == _state.currentTrack) return;
     _loadedTrack = nextTrack ?? _loadedTrack;
     _emit(
@@ -1212,10 +1246,21 @@ class AndroidAudioEngine implements AudioEngine {
         if (!valid()) { releaseIfOwned(); return; }
         // A muted track must stay muted through the preparation and ramp.
         _rampUserVolume = outgoing.volume;
-        await incoming
+        final incomingDuration = await incoming
             .setAudioSource(source, preload: true)
             .timeout(const Duration(seconds: 30));
         if (!valid()) { releaseIfOwned(); return; }
+        // This crossfade decoder bypasses _loadSource. Never commit or
+        // advance the queue with a 30-second preview.
+        final actualDuration = incomingDuration ?? incoming.duration;
+        if (isTruncatedHttpAddonAudio(next, actualDuration)) {
+          AppLog.instance.add('[Playback] HTTP add-on crossfade preview rejected: '
+              'expectedMs=${next.duration.inMilliseconds} '
+              'decodedMs=${actualDuration?.inMilliseconds}');
+          releaseIfOwned();
+          try { await incoming.stop(); } catch (_) {}
+          return; // Keep outgoing audio until normal completion.
+        }
         final entrance = modelPair ? modelEntry! :
             (upcomingProfile?.leadInSeconds ?? 0);
         final entry = (modelEntry != null || (entrance >= 0.4 && entrance <= 3)) &&
