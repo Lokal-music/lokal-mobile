@@ -18,6 +18,9 @@ class SoundCloudSource {
       RegExp(r'client_id\s*:\s*"([A-Za-z0-9]{32})"'),
       RegExp(r'"client_id"\s*:\s*"([A-Za-z0-9]{32})"'),
       RegExp(r'clientId\s*:\s*"([A-Za-z0-9]{32})"'),
+      // SoundCloud sometimes exposes the same public key through
+      // window.__sc_hydration's apiClient.data.id instead of client_id.
+      RegExp(r'apiClient.{0,800}?"id"\s*:\s*"([A-Za-z0-9]{32})"', dotAll: true),
     ]) {
       final found = expression.firstMatch(content)?.group(1);
       if (found != null) return found;
@@ -148,8 +151,11 @@ class SoundCloudSource {
       final mediaUrl = Uri.tryParse(resolved['url']?.toString() ?? '');
       if (mediaUrl == null || mediaUrl.scheme != 'https' ||
           mediaUrl.userInfo.isNotEmpty || mediaUrl.hasFragment ||
-          mediaUrl.host.isEmpty || mediaUrl.host == 'localhost' ||
-          mediaUrl.host == '127.0.0.1' || mediaUrl.host.endsWith('.local')) continue;
+          mediaUrl.host.isEmpty ||
+          !(mediaUrl.host == 'sndcdn.com' ||
+              mediaUrl.host.endsWith('.sndcdn.com') ||
+              mediaUrl.host == 'soundcloud.com' ||
+              mediaUrl.host.endsWith('.soundcloud.com'))) continue;
       final mime = format is Map ? format['mime_type']?.toString() ?? '' : '';
       final codec = mime.contains('mpeg') ? 'MP3' : 'AAC';
       return ResolvedDiscoveryAudio(mediaUrl, codec: codec, quality: codec);
