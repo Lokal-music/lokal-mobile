@@ -452,9 +452,27 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     final shownSong = _videoOverrideSong ?? widget.videoSong ??
         _player.currentSongNotifier.value;
     final source = _lyrics;
+    void saveFromSheet({required bool includeTranslation}) {
+      final currentSong = _videoOverrideSong ?? widget.videoSong ??
+          _player.currentSongNotifier.value;
+      if (shownSong == null ||
+          currentSong?.id != shownSong.id ||
+          _lyricsForSongId != shownSong.id) {
+        return;
+      }
+      final selected = includeTranslation ? _sublineLyrics : _lyrics;
+      if (selected == null || !hasUsableLyrics(selected)) return;
+      unawaited(_saveLyricsFile(
+        shownSong,
+        selected,
+        includeDisplayedSubline: includeTranslation,
+      ));
+    }
+
     showModalBottomSheet<void>(
       context: context,
-      builder: (sheetContext) => SafeArea(
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, refreshSheet) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
           child: Column(
@@ -471,28 +489,27 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               if (source != null && hasUsableLyrics(source))
                 ListTile(
                   leading: const Icon(LucideIcons.download),
-                  title: Text(l10n.saveLyrics),
+                  title: const Text('Save original lyrics'),
                   enabled: !_savingLyricsFile,
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    // The sheet may outlive the song that supplied its lyrics.
-                    // Also use the latest displayed translation/romanization
-                    // when the subline controls changed inside this sheet.
-                    final currentSong = _videoOverrideSong ?? widget.videoSong ??
-                        _player.currentSongNotifier.value;
-                    if (shownSong == null ||
-                        currentSong?.id != shownSong.id ||
-                        _lyricsForSongId != shownSong.id) {
-                      return;
-                    }
-                    final displayed = _sublineLyrics ?? _lyrics;
-                    if (displayed != null && hasUsableLyrics(displayed)) {
-                      unawaited(_saveLyricsFile(
-                        shownSong,
-                        displayed,
-                        includeDisplayedSubline: _sublineLyrics != null,
-                      ));
-                    }
+                    saveFromSheet(includeTranslation: false);
+                  },
+                ),
+              if (source != null && hasUsableLyrics(source))
+                ListTile(
+                  leading: const Icon(Icons.translate_rounded),
+                  title: const Text('Save with selected translation'),
+                  subtitle: const Text(
+                    'Includes the active translation or romanization.',
+                  ),
+                  enabled: !_savingLyricsFile &&
+                      _sublineLyrics?.lines.any((line) =>
+                          line.translation?.trim().isNotEmpty == true &&
+                          line.translation!.trim() != line.text.trim()) == true,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    saveFromSheet(includeTranslation: true);
                   },
                 ),
               if (source != null)
@@ -501,12 +518,14 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   onChanged: (updated) {
                     if (mounted && identical(_lyrics, source)) {
                       setState(() => _sublineLyrics = updated);
+                      refreshSheet(() {});
                     }
                   },
                 ),
             ],
           ),
         ),
+      ),
       ),
     );
   }
