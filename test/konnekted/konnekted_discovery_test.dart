@@ -12,6 +12,7 @@ import 'package:flick/features/konnekted/konnekted_home.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -564,7 +565,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Albums For You'), findsOneWidget);
-    await tester.longPress(find.text('Last.fm'));
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+    final provider = tester.getSemantics(find.bySemanticsLabel('Last.fm'));
+    expect(provider.hasAction(SemanticsAction.longPress), isTrue);
+    tester.binding.pipelineOwner.semanticsOwner!.performAction(
+      provider.id, SemanticsAction.longPress,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Choose sections to show and drag to reorder.'),
         findsOneWidget);
