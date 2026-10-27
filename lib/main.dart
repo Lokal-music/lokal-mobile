@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/services/playback_cache_maintenance.dart';
 import 'package:flick/services/process_exit_diagnostics_service.dart';
+import 'package:flick/services/motion_art/motion_art_memory_pressure.dart';
 import 'package:flick/services/uac2_preferences_service.dart';
 import 'package:flick/services/uac2_service.dart';
 import 'package:flick/core/utils/app_log.dart';
@@ -36,6 +37,8 @@ Future<void> main() async {
 
 Future<void> _bootstrapApp() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Observe memory pressure even when no Now Playing artwork is mounted.
+  MotionArtMemoryPressure.instance.start();
 
   // Snapshot install freshness before anything can write to the preference
   // store: new installations start on the adaptive refresh-rate default.
