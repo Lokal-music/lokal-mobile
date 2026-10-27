@@ -101,3 +101,29 @@ List<Song> replayableStreamQueue(
   for (final song in songs)
     replayableStreamSong(song, queueResolver: resolver, lookup: lookup),
 ];
+
+/// Refresh every expired HTTP/Morneye handle before an existing playback
+/// queue is submitted to Media3. A queue can remain open for hours, longer
+/// than its registered HTTP URL or live-transfer session. Keeping a stale
+/// resolved Song in a future slot bypasses the existing Likes-page repair.
+///
+/// [selected] remains authoritative when the user explicitly picks another
+/// recording/source for the same logical song ID.
+({Song selected, List<Song> queue}) replayableStreamSelection(
+  Song selected,
+  List<Song> queue, {
+  QueuePreResolver? resolver,
+  StreamTrackLookup? lookup,
+}) {
+  final prepared = replayableStreamSong(
+    selected, queueResolver: resolver, lookup: lookup,
+  );
+  final refreshed = <Song>[
+    for (final item in queue)
+      if (item.id == selected.id) prepared
+      else
+        replayableStreamSong(item, queueResolver: resolver, lookup: lookup),
+  ];
+  return (selected: prepared, queue: refreshed);
+}
+

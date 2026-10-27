@@ -314,10 +314,13 @@ class MorneyeNetwork {
     caseSensitive: false,
   );
 
-  Future<void> _checkAddress(Uri url) async {
+  Future<void> _checkAddress(Uri url, Duration timeout) async {
     final host = url.host;
     final literal = InternetAddress.tryParse(host);
-    final addresses = literal != null ? [literal] : await _lookup(host);
+    // Unlike openUrl/request.close, DNS had no deadline: a stalled Qobuz
+    // hostname lookup could hold the foreground playback resolver forever.
+    final addresses = literal != null ? [literal]
+        : await _lookup(host).timeout(timeout);
     final explicitLocal =
         permissions.network.contains(host) &&
         (host == 'localhost' ||
@@ -347,7 +350,7 @@ class MorneyeNetwork {
         if (!_dropped.hasMatch(entry.key)) entry.key: entry.value,
     };
     for (var hop = 0; hop <= 5; hop++) {
-      await _checkAddress(url);
+      await _checkAddress(url, deadline);
       final request = await _client.openUrl(method, url).timeout(deadline);
       request.followRedirects = false;
       final names = sent.keys.map((k) => k.toLowerCase()).toSet();

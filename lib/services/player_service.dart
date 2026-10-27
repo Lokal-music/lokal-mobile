@@ -1,6 +1,7 @@
 import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/morneye/morneye_live_playback.dart';
+import 'package:flick/features/konnekted/library/replayable_stream_songs.dart';
 import 'package:flick/services/online_radio_recommendations.dart';
 import 'package:flick/services/automix_analysis_cache.dart';
 import 'package:flick/services/automix_stem_clip.dart';
@@ -5356,6 +5357,41 @@ class PlayerService {
   }
 
   Future<void> _playInternal(Song song, {List<Song>? playlist}) async {
+    // Qobuz/Morneye and HTTP add-on handles are ephemeral. The Likes-page
+    // conversion alone cannot protect an ordinary queue left open longer
+    // than the media registration lifetime. Re-arm stale queue entries
+    // before the Android player builds any future audio sources.
+    final recovered = replayableStreamSelection(song, playlist ?? _playlist);
+    if (!identical(song, recovered.selected) && recovered.selected.isPending) {
+      AppLog.instance.add(
+        '[Playback] Refreshing expired online stream for ' + song.title,
+      );
+    }
+    song = recovered.selected;
+    if (playlist != null) {
+      playlist = recovered.queue;
+    } else {
+      var changed = false;
+      for (var i = 0; i < _playlist.length; i++) {
+        if (identical(_playlist[i], recovered.queue[i])) continue;
+        _playlist[i] = recovered.queue[i];
+        changed = true;
+      }
+      // Shuffle restoration must not resurrect the expired descriptors.
+      if (changed) {
+        final replacements = {
+          for (final entry in recovered.queue) entry.id: entry,
+        };
+        for (var i = 0; i < _originalPlaylist.length; i++) {
+          final original = _originalPlaylist[i];
+          if (needsStreamReResolution(original) &&
+              replacements.containsKey(original.id)) {
+            _originalPlaylist[i] = replacements[original.id]!;
+          }
+        }
+        _notifyUpNextChanged();
+      }
+    }
     await initAudio();
     final loadingGen = ++_networkLoadingGen;
     _markOnlinePreparation(song);
