@@ -285,6 +285,7 @@ class AndroidAudioEngine implements AudioEngine {
   just_audio.AudioPlayer? _stemPlayer;
   Timer? _stemTimer;
   bool _stemHandoffStarted = false;
+  bool _stemPausedByUser = false;
   AutoMixProfile? _currentAutoMixProfile;
   int _autoMixProfileGeneration = 0;
   final AndroidNextSongProvider? _onNextSong;
@@ -889,6 +890,7 @@ class AndroidAudioEngine implements AudioEngine {
   Future<void> play() async {
     final stem = _stemPlayer;
     if (stem != null) {
+      _stemPausedByUser = false;
       unawaited(stem.play().catchError((Object _) {}));
       if (_stemHandoffStarted && _player != null) {
         unawaited(_player!.play().catchError((Object _) {}));
@@ -938,6 +940,7 @@ class AndroidAudioEngine implements AudioEngine {
   Future<void> pause() async {
     final stem = _stemPlayer;
     if (stem != null) {
+      _stemPausedByUser = true;
       try { await stem.pause(); } catch (_) {}
       try { await _player?.pause(); } catch (_) {}
       try { await _secondary?.pause(); } catch (_) {}
@@ -1114,7 +1117,7 @@ class AndroidAudioEngine implements AudioEngine {
             (phraseSecs == null || phraseCompatible);
         AutoMixStemClip? preparedStem;
         final lookup = _stemClipLookup;
-        if (lookup != null && modelPair) {
+        if (lookup != null && hasPairedCues && (outgoing.speed - 1).abs() < .001) {
           final id = '${androidAudioSourceIdentity(outgoingTrack)}->${nextIdentity}';
           try {
             final pending = _stemCandidateIdentity == id
@@ -1133,9 +1136,13 @@ class AndroidAudioEngine implements AudioEngine {
             }
           } catch (_) { preparedStem = null; }
         }
-        final overlapMs = modelPair && phraseCompatible
-            ? (phraseSecs! * 1000).round() : fadeMs;
-        final mixEnd = modelPair ? modelMixEnd! : normalMixEnd;
+        final overlapMs = preparedStem != null
+            ? preparedStem.length.inMilliseconds
+            : modelPair && phraseCompatible
+                ? (phraseSecs! * 1000).round() : fadeMs;
+        final mixEnd = preparedStem != null
+            ? preparedStem.start + preparedStem.length
+            : modelPair ? modelMixEnd! : normalMixEnd;
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
         // A muted track must stay muted through the preparation and ramp.
@@ -1280,6 +1287,7 @@ class AndroidAudioEngine implements AudioEngine {
       }
       _stemPlayer = mixed;
       _stemHandoffStarted = false;
+      _stemPausedByUser = false;
       _rampUserVolume = outgoing.volume;
       // just_audio.play returns only when playback completes: never await.
       unawaited(mixed.play().catchError((Object error) {
@@ -1304,13 +1312,20 @@ class AndroidAudioEngine implements AudioEngine {
       _stemTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
         if (epoch != _crossfadeEpoch || !identical(_stemPlayer, mixed)) return;
         if (!mixed!.playing) {
-          if (mixed.processingState == just_audio.ProcessingState.completed) {
+          if (!_stemPausedByUser &&
+              mixed.processingState == just_audio.ProcessingState.completed) {
             unawaited(_finishStemClip(epoch, clip, outgoing, incoming, mixed));
           }
           return;
         }
         final position = mixed.position.inMilliseconds;
         final total = clip.length.inMilliseconds;
+        if (!_stemHandoffStarted) {
+          _emit(_state.copyWith(
+            position: Duration(milliseconds:
+                (clip.inStart * 1000).round() + position),
+          ));
+        }
         final initial = (position / 180).clamp(0.0, 1.0);
         if (!_stemHandoffStarted) {
           unawaited(outgoing.setVolume(_rampUserVolume * (1 - initial)));
@@ -1360,6 +1375,7 @@ class AndroidAudioEngine implements AudioEngine {
     _stemPlayer = null;
     final hadHandoff = _stemHandoffStarted;
     _stemHandoffStarted = false;
+    _stemPausedByUser = false;
     try {
       if (!hadHandoff || !incoming.playing) {
         await incoming.seek(clip.resume);
@@ -1379,6 +1395,7 @@ class AndroidAudioEngine implements AudioEngine {
     _stemTimer?.cancel();
     _stemTimer = null;
     _stemHandoffStarted = false;
+    _stemPausedByUser = false;
     final mixed = _stemPlayer;
     _stemPlayer = null;
     if (mixed != null) {
