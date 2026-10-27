@@ -48,6 +48,101 @@ Song _track(String id) => Song(
 );
 
 void main() {
+  testWidgets('Home and Library use identical trailing header coordinates', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _app(
+        SafeArea(
+          bottom: false,
+          child: KonnektedHomeTopBar(
+            onSettings: () {},
+            onAppearance: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final homeDiscord = tester.getRect(find.byTooltip('Discord'));
+    final homeSettings = tester.getRect(find.byTooltip('Settings'));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          konnektedLibraryProvider.overrideWithValue(const AsyncData([])),
+        ],
+        child: _app(KonnektedLibrary(onNavigate: (_) {})),
+      ),
+    );
+    await tester.pump();
+    final libraryDiscord = tester.getRect(find.byTooltip('Discord'));
+    final librarySettings = tester.getRect(find.byTooltip('Settings'));
+    expect(libraryDiscord.center, homeDiscord.center);
+    expect(librarySettings.center, homeSettings.center);
+    expect(find.text('Library'), findsOneWidget);
+    final addButton = tester.getRect(
+      find.bySemanticsLabel('Add music, playlists and folders'),
+    );
+    final title = tester.getRect(find.text('Library'));
+    expect(title.left, greaterThanOrEqualTo(addButton.right));
+    expect((title.center.dy - addButton.center.dy).abs(), lessThan(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('2x text keeps Library title visible and Home actions aligned', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _app(
+        SafeArea(
+          bottom: false,
+          child: KonnektedHomeTopBar(
+            onSettings: () {},
+            onAppearance: () {},
+          ),
+        ),
+        scale: 2,
+      ),
+    );
+    await tester.pump();
+    final homeDiscord = tester.getRect(find.byTooltip('Discord'));
+    final homeSettings = tester.getRect(find.byTooltip('Settings'));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          konnektedLibraryProvider.overrideWithValue(const AsyncData([])),
+        ],
+        child: _app(
+          KonnektedLibrary(onNavigate: (_) {}),
+          scale: 2,
+        ),
+      ),
+    );
+    await tester.pump();
+    final title = tester.getRect(find.text('Library'));
+    final row = tester.getRect(
+      find.ancestor(of: find.text('Library'), matching: find.byType(Row)).first,
+    );
+    expect(row.height, greaterThan(44));
+    expect(title.height, greaterThan(44));
+    expect(title.top, greaterThanOrEqualTo(row.top));
+    expect(title.bottom, lessThanOrEqualTo(row.bottom));
+    expect(tester.getRect(find.byTooltip('Discord')).center, homeDiscord.center);
+    expect(tester.getRect(find.byTooltip('Settings')).center, homeSettings.center);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Home modes share the logo and header actions row', (
     tester,
   ) async {

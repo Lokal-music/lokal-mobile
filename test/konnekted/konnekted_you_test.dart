@@ -1,5 +1,6 @@
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
+import 'package:flick/widgets/common/overflow_marquee_title.dart';
 import 'package:flick/data/repositories/recently_played_repository.dart';
 import 'package:flick/features/konnekted/konnekted_destination.dart';
 import 'package:flick/features/konnekted/konnekted_you.dart';
@@ -69,6 +70,7 @@ Widget _app({
   int? streak,
   List<MilestoneRecord> milestones = const [],
   bool persistentDock = false,
+  double textScale = 1,
   VoidCallback? onDockTap,
 }) => ProviderScope(
   overrides: [
@@ -80,9 +82,10 @@ Widget _app({
   child: MaterialApp(
     theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
     home: MediaQuery(
-      data: const MediaQueryData(
-        size: Size(390, 2400),
-        padding: EdgeInsets.only(top: 24, bottom: 24),
+      data: MediaQueryData(
+        size: const Size(390, 2400),
+        padding: const EdgeInsets.only(top: 24, bottom: 24),
+        textScaler: TextScaler.linear(textScale),
         disableAnimations: true,
       ),
       child: Scaffold(
@@ -127,6 +130,73 @@ void _tall(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('You profile and edit action share the aligned header', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    _tall(tester);
+    const longName = 'This is a very long Lokal profile name for scrolling';
+    await tester.pumpWidget(
+      _app(
+        onNavigate: (_) {},
+        accounts: const YouAccounts(lastFm: longName),
+      ),
+    );
+    await tester.pump();
+
+    final avatar = tester.getRect(find.bySemanticsLabel('Edit profile photo'));
+    final profileName = tester.widget<OverflowMarqueeTitle>(
+      find.byType(OverflowMarqueeTitle),
+    );
+    final edit = tester.getRect(find.byTooltip('Edit profile'));
+    final discord = tester.getRect(find.byTooltip('Discord'));
+    final settings = tester.getRect(find.byTooltip('Settings'));
+    expect(profileName.title, longName);
+    // The shared OverflowMarqueeTitle animates when motion is enabled.
+    // These widget tests disable animations to avoid scheduling a perpetual ticker.
+    expect(avatar.right, lessThan(edit.left));
+    expect(edit.right + 10, closeTo(discord.left, .1));
+    expect(discord.right + 10, closeTo(settings.left, .1));
+    expect(settings.right, closeTo(390 - 16, .1));
+    expect((avatar.center.dy - settings.center.dy).abs(), lessThan(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('2x text scales profile name without clipping or moving actions', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    _tall(tester);
+    const longName = 'Long accessibility profile name that needs scrolling';
+    await tester.pumpWidget(
+      _app(
+        onNavigate: (_) {},
+        accounts: const YouAccounts(lastFm: longName),
+        textScale: 2,
+      ),
+    );
+    await tester.pump();
+
+    final name = tester.getRect(find.byType(OverflowMarqueeTitle));
+    final row = tester.getRect(
+      find.ancestor(
+        of: find.byType(OverflowMarqueeTitle),
+        matching: find.byType(Row),
+      ).first,
+    );
+    final discord = tester.getRect(find.byTooltip('Discord'));
+    final settings = tester.getRect(find.byTooltip('Settings'));
+
+    expect(row.height, greaterThan(44));
+    expect(name.height, greaterThan(44));
+    expect(name.top, greaterThanOrEqualTo(row.top));
+    expect(name.bottom, lessThanOrEqualTo(row.bottom));
+    expect(discord.center.dy, closeTo(settings.center.dy, .1));
+    expect(discord.center.dy, closeTo(row.center.dy, .1));
+    expect(settings.right, closeTo(390 - 16, .1));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('empty: a default name, placeholders and no badges', (
     tester,
   ) async {
