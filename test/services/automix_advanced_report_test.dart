@@ -113,6 +113,18 @@ void main() {
     expect(second!.modelEntrances,[6]);
     expect(waveformCalls,1);
 
+    // A fresh app session reuses the separately saved verified cues without
+    // consulting Isar again. The presence and positive BPM are persisted.
+    final restarted = AutoMixAnalysisCache(
+      directory:() async => Directory('${dir.path}/derived'),
+      loadWaveform:(id) async {
+        fail('validated model report must not require fresh Isar data');
+      },
+    );
+    final afterRestart = await restarted.read(track);
+    expect(afterRestart?.modelEntrances, [6]);
+    expect(afterRestart?.analyzedBpm, 120);
+
     await sidecar.writeAsString('corrupt');
     expect(await cache.read(track), isNull);
   });
