@@ -26,6 +26,9 @@ class _Player extends PlayerNotifier {
   final played = <String>[];
   final upNextMoves = <(int, int)>[];
   final manualMoves = <(int, int)>[];
+  List<String> get upNextIds => state.upNext.map((s) => s.id).toList();
+  List<String> get manualIds => state.queue.map((s) => s.id).toList();
+
   @override
   Future<void> moveUpNextItem(int from, int to) async {
     upNextMoves.add((from, to));
@@ -278,7 +281,7 @@ void main() {
         reason: 'Drag handle in the mini-player sheet must invoke the callback');
     expect(player.upNextMoves.last.$1, 0);
     expect(player.upNextMoves.last.$2, greaterThan(0));
-    expect(player.state.upNext.first.id, isNot('Next0'));
+    expect(player.upNextIds.first, isNot('Next0'));
 
     // Make sure the second list is independently reorderable, not just Up Next.
     await drag(tester, find.byKey(const ValueKey('manual-queue-drag-1')),
@@ -286,7 +289,7 @@ void main() {
     expect(player.manualMoves, isNotEmpty);
     expect(player.manualMoves.last.$1, 1);
     expect(player.manualMoves.last.$2, 0);
-    expect(player.state.queue.first.id, 'Manual1');
+    expect(player.manualIds.first, 'Manual1');
     expect(tester.takeException(), isNull);
   });
 
