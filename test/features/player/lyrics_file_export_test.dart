@@ -174,7 +174,7 @@ void main() {
       rawContent: 'Same\nBlank\nDifferent',
     );
     expect(prepareLyricsFileExport(_song, lyrics).content,
-      'Same\nBlank\nDifferent\n');
+      'Same\nBlank\nDifferent');
     expect(prepareLyricsFileExport(
       _song, lyrics, includeDisplayedSubline: true,
     ).content, 'Same\nBlank\nDifferent\nAutre\n');
