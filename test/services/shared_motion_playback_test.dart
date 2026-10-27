@@ -78,4 +78,39 @@ void main() {
     await full.release(immediate: true);
     expect(full.resource.disposed, isTrue);
   });
+  test('last lease pauses during handoff and resumes without decoding again', () async {
+    var created = 0;
+    var disposed = 0;
+    final transitions = <bool>[];
+    final pool = SharedMotionPlayback<Clip>(
+      create: (_) async {
+        created++;
+        return Clip();
+      },
+      activate: (clip, active) async {
+        clip.playing = active;
+        transitions.add(active);
+      },
+      dispose: (clip) async {
+        clip.disposed = true;
+        disposed++;
+      },
+    );
+
+    final first = await pool.acquire('song', 'https://video.test/loop.mp4');
+    await first.setActive(true);
+    await first.release();
+    expect(first.resource.playing, isFalse);
+    expect(disposed, 0, reason: 'retain the decoder for a short handoff');
+
+    final next = await pool.acquire('song', 'https://video.test/loop.mp4');
+    expect(next.resource, same(first.resource));
+    await next.setActive(true);
+    expect(next.resource.playing, isTrue);
+    expect(created, 1);
+    await next.release(immediate: true);
+    expect(disposed, 1);
+    expect(transitions, [true, false, true, false]);
+  });
+
 }
