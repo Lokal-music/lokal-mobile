@@ -5,10 +5,13 @@ class AnimatedLyricSubline extends StatelessWidget {
     super.key,
     required this.text,
     required this.style,
+    this.motionChild,
     this.textAlign = TextAlign.start,
   });
   final String? text;
   final TextStyle style;
+  /// Uses the existing karaoke clock when the original lyrics have timings.
+  final Widget? motionChild;
   final TextAlign textAlign;
   @override
   Widget build(BuildContext context) => AnimatedSize(
@@ -46,7 +49,7 @@ class AnimatedLyricSubline extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
               child: SizedBox(
                 width: double.infinity,
-                child: Text(text!, textAlign: textAlign, style: style),
+                child: motionChild ?? Text(text!, textAlign: textAlign, style: style),
               ),
             )
           : const SizedBox(width: double.infinity, key: ValueKey('empty')),

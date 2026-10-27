@@ -1088,3 +1088,23 @@ The next controlled WebKit experiment loads the same generated MP4 bytes as a
 Blob resource and records real seek/buffer state around replay. Both native
 source-clock and delivered-frame gates remain required; no passing native result
 is claimed before that workflow completes. See [reset evidence and experiment](IOS_MEDIA_RESET_ARCHITECTURE.md#build-45-presentation-proven-restored-html-clock-still-fails).
+
+
+### Current continuation through #239
+
+The post-172 audit now covers **53 merged mobile PRs**. SoundCloud is optional
+and off until enabled; iPhone stream selection avoids unsupported Ogg HLS,
+keeps signed URLs out of persistence and labels actual preview renditions.
+Eco Data Mode has a localized, accessible control in Data → Mobile data and
+preserves explicit source choices. Folder cards use a full-size single cover;
+classic, Space and main-player translations/romaji follow projected source
+vocal timing, with untimed fallback and Unicode grapheme preservation.
+
+[Build 46](https://github.com/lokal-music/lokal-mobile/actions/runs/40468683255)
+checks the preceding 47-PR snapshot independently. The new source/UI changes
+require their own native acceptance. No provider, cellular, hardware, widget
+extension or Windows sideload qualification is implied by host tests.
+
+The expanded regression selection plus widget contracts passes 504 Flutter
+tests; 23 further lyric/Space cases pass after the theme check. Whole app and
+integration analysis reports no errors. This is host evidence only.

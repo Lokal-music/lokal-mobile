@@ -34,8 +34,24 @@ class OptInSourceNotifier extends Notifier<bool> {
     final revision = ++_revision;
     final next = alwaysEnabled ? true : value;
     final prefs = await _preferences();
-    if (!await prefs.setBool(key, next)) {
-      throw StateError('Source preference could not be saved.');
+    final previous = prefs.getBool(key);
+    try {
+      if (!await prefs.setBool(key, next)) {
+        throw StateError('Source preference could not be saved.');
+      }
+    } catch (_) {
+      // Legacy preferences update their cache before disk acknowledgement.
+      // A rejected save must not enable a source through that attempted value.
+      if (revision == _revision) {
+        try {
+          if (previous == null) {
+            await prefs.remove(key);
+          } else {
+            await prefs.setBool(key, previous);
+          }
+        } catch (_) {}
+      }
+      rethrow;
     }
     if (ref.mounted && revision == _revision) state = next;
   }
@@ -52,6 +68,24 @@ Future<bool> isMonochromeEnabled() async {
   try {
     return (await SharedPreferences.getInstance()).getBool(
           monochromeEnabledPreferenceKey,
+        ) ??
+        false;
+  } catch (_) {
+    return false;
+  }
+}
+
+const soundCloudEnabledPreferenceKey = 'lokal_soundcloud_enabled';
+
+final soundCloudEnabledProvider = NotifierProvider<OptInSourceNotifier, bool>(
+  () => OptInSourceNotifier(soundCloudEnabledPreferenceKey),
+);
+
+/// Optional catalogue access is disabled until the listener enables it.
+Future<bool> isSoundCloudEnabled() async {
+  try {
+    return (await SharedPreferences.getInstance()).getBool(
+          soundCloudEnabledPreferenceKey,
         ) ??
         false;
   } catch (_) {

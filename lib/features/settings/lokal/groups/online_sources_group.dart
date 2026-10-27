@@ -52,6 +52,28 @@ List<LokalSettingsSection> onlineSourcesSettings(
           }
         }()),
       ),
+      LokalSettingRow.toggle(
+        key: const ValueKey('soundcloud-source-toggle'),
+        label: 'SoundCloud',
+        description: lokalText('Search and stream audio from SoundCloud.'),
+        value: ref.watch(soundCloudEnabledProvider),
+        onChanged: (enabled) => unawaited(() async {
+          try {
+            await ref.read(soundCloudEnabledProvider.notifier).set(enabled);
+          } catch (_) {
+            if (context.mounted) {
+              LokalToast.fromSnackBar(
+                context,
+                SnackBar(
+                  content: Text(
+                    lokalText('Could not save source settings. Try again.'),
+                  ),
+                ),
+              );
+            }
+          }
+        }()),
+      ),
       LokalSettingCustom(
         label: lokalText('Global search catalogue'),
         description: lokalText(
@@ -65,7 +87,7 @@ List<LokalSettingsSection> onlineSourcesSettings(
           'Try sources from top to bottom when finding a song to play. Installed add-ons appear here too.',
         ),
         child: PlaybackSourcePriorityPanel(
-          key: ValueKey(ref.watch(monochromeEnabledProvider)),
+          key: ValueKey((ref.watch(monochromeEnabledProvider), ref.watch(soundCloudEnabledProvider))),
         ),
       ),
       LokalSettingLink(

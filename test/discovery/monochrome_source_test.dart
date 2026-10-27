@@ -72,4 +72,21 @@ void main() {
       source: DiscoverySource.youtubeMusic,
     )), throwsA(isA<DiscoveryException>()));
   });
+
+  test('Monochrome retains artist object credits and album in downloaded metadata', () async {
+    final client = MockClient((_) async => http.Response(jsonEncode({
+      'tracks': [{
+        'trackId': '155142501534011393',
+        'title': 'Get Lucky',
+        'artists': [{'name': 'Daft Punk'}, {'name': 'Pharrell Williams'}],
+        'releaseTitle': 'Random Access Memories',
+        'playable': true,
+      }],
+    }), 200));
+    addTearDown(client.close);
+    final found = (await MonochromeSource.search(DiscoveryHttp(client), 'Get Lucky')).single;
+    expect(found.artist, 'Daft Punk, Pharrell Williams');
+    expect(found.album, 'Random Access Memories');
+    expect(found.sourceName, 'Monochrome');
+  });
 }

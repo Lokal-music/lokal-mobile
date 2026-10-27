@@ -18,6 +18,7 @@ import 'package:flick/features/discovery/discovery_registry.dart';
 import 'package:flick/features/discovery/discovery_settings.dart';
 import 'package:flick/features/discovery/discovery_sources.dart';
 import 'package:flick/features/discovery/monochrome_source.dart';
+import 'package:flick/features/discovery/soundcloud_source.dart';
 import 'package:flick/providers/opt_in_source_provider.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/features/discovery/lastfm_discovery.dart';
@@ -1300,6 +1301,34 @@ Future<List<OnlineSource>> _playbackSources(
           return progressiveAddonSong(found, audio);
         },
       ),
+    // Built-in SoundCloud source: no HTTP addon or Morneye installation.
+    if (!httpOnly &&
+        (selectedSourceId == null || selectedSourceId == 'sc') &&
+        await isSoundCloudEnabled())
+    OnlineSource(
+      id: 'sc',
+      name: 'SoundCloud',
+      results: (query) async => [
+        for (final track in await SoundCloudSource(web).search(query))
+          OnlineResult(track, artwork: track.artwork),
+      ],
+      play: (found) async {
+        onStatus?.call(lokalText('Connecting to SoundCloud…'));
+        final audio = await SoundCloudSource(web).resolve(
+          found, forDownload: forDownload,
+        );
+        if (forDownload) {
+          onStatus?.call(lokalText('Downloading from SoundCloud…'));
+          return cache().prepare(found, audio, cancel: cancel);
+        }
+        onStatus?.call(lokalText('Buffering from SoundCloud…'));
+        return progressiveAddonSong(found, audio).copyWith(
+          sourceDisplayName: audio.isPreview
+              ? lokalText('SoundCloud (preview)')
+              : 'SoundCloud',
+        );
+      },
+    ),
     for (final addon in registry.addons)
       if (selectedSourceId == null || selectedSourceId == 'w-${addon.configId}')
       OnlineSource(
@@ -1337,7 +1366,8 @@ Future<List<OnlineSource>> _playbackSources(
       ...await _morneyeSources(morneye, cache, onStatus,
         cancel: cancel, forDownload: forDownload,
         selectedSourceId: selectedSourceId),
-  ], (source) => source.id, aliases: legacyLabels);
+  ], (source) => source.id, aliases: legacyLabels,
+    ecoOnCellular: respectEnabledDiscoverySources && selectedSourceId == null);
 }
 
 /// The sources Search offers for songs you don't have. [onStatus] hears
@@ -1425,7 +1455,11 @@ Future<Song> playOnlineTrack(
       );
     }
     final resolved = await source.play(track);
-    final song = resolved.copyWith(sourceDisplayName: source.name);
+    final song = resolved.copyWith(
+      sourceDisplayName: source.id == 'sc'
+          ? (resolved.sourceDisplayName ?? source.name)
+          : source.name,
+    );
     if (!forDownload && sourceId.startsWith('a-')) {
       _rememberOnlineAddon(song, sourceId.substring(2), track);
     }

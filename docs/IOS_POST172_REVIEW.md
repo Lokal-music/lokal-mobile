@@ -1,8 +1,8 @@
 # iPhone review of mobile PRs after #172
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196.
-The parity continuation carries **47 reviewed merged PRs through #231**, including
-merged source `3484844e17d89b45d18d7f27d9a1d7371b3d4487`. Build 34 passes both complete
+The parity continuation carries **53 reviewed merged PRs through #239**, including
+merged source `4e9a627d91c7b9485d62588c6ed3e6842cb80a7b`. Build 34 passes both complete
 iOS 18.6/26.0 native suites through #217. Later reset and lyrics changes require
 their own fresh native acceptance and do not borrow build-34 qualification.
 The initial iPhone merge below used main `b705c10e37ea606a5154253413f82b3ebf7f846a` directly
@@ -678,3 +678,44 @@ checks pass. The latest shared-engine/queue subset passes 35 cases, including
 actual cached profiles/stem transitions on the Android test engine and disabled
 advanced lookups on the iPhone engine. Native acceptance of this 47-PR source
 is still required; no physical device or live provider result is claimed.
+
+
+### Parity through #239 — 27 October 2026
+
+Six further merged product PRs bring the review to **53**. PR #234 was closed
+without merging and is excluded: this does not enable scanning arbitrary folder
+images as designated covers. The new continuation leaves [PR #240](https://github.com/lokal-music/lokal-mobile/pull/240)
+and its [Build 46](https://github.com/lokal-music/lokal-mobile/actions/runs/40468683255)
+source unchanged while the hosted native check runs.
+
+| PR / exact merged source | iPhone behavior and adaptation |
+| --- | --- |
+| [233](https://github.com/lokal-music/lokal-mobile/pull/233) / `958b216a1d85f8cc8cef4840c462c5bc7ea58aaf` | Native SoundCloud search/resolution, verified downloaded Monochrome artist/album tags and opt-in cellular Eco Data Mode. SoundCloud additionally has a persisted, default-off source switch, as required for new services in this branch. Its signed stream references remain in memory. iPhone HLS skips Ogg/Opus/Vorbis renditions and chooses compatible AAC/MP3; previews cannot be saved and retain an explicit preview label even when confirmed only during resolution. Real SoundCloud/HLS and cellular acceptance remain pending. |
+| [235](https://github.com/lokal-music/lokal-mobile/pull/235) / `2e415b8310178ad8f379ab4edb02b576b6c653c9` | Carry the direct resolved-audio import and the supported accessibility wrapper instead of the invalid Switch API; the later settings-row implementation supersedes that wrapper. |
+| [236](https://github.com/lokal-music/lokal-mobile/pull/236) / `2877fc40270f4281a003577e58a013211781274f` | A single distinct folder cover fills the tile; multiple covers keep the mosaic, and absent covers retain placeholders. Share the renderer between root and nested cards and request full tile resolution for a single image. Host file creation/writing runs outside Flutter's fake clock so the actual widget tests can complete. |
+| [237](https://github.com/lokal-music/lokal-mobile/pull/237) / `29b4b708f2a7bf7b3a7f33085aa1f7e8a2fe7722` | Project source vocal windows onto translated/romaji text in classic and Space lyrics. Preserve gaps and static untimed lines; no independent translation alignment is claimed. Cache projections when lyrics change. Use grapheme clusters so combining accents and joined emoji remain intact. Retain the port's independent native video clock. |
+| [238](https://github.com/lokal-music/lokal-mobile/pull/238) / `f1cddc8b51ee8f63f7dcc06b8a38ddfebcfc2e38` | Extend that projected animation to the actual main full-player flowing renderer. Active translated rows use the existing painter; inactive/stale/untimed rows remain static. iPhone subline colors derive from the supplied style/theme. |
+| [239](https://github.com/lokal-music/lokal-mobile/pull/239) / `4e9a627d91c7b9485d62588c6ed3e6842cb80a7b` | Put the visible, searchable, whole-row Eco Data control in Data → Mobile data. Keep Wi-Fi/manual source order and HTTP-only choices; enabled sources alone can be prioritized. Failed saves restore cached/UI state and show localized feedback. |
+
+All new source/data labels, help, status and preview text have translations in
+all ten non-English phrase maps. The real settings controls fit all eleven
+locales at 200% text on 320px using the bundled fonts. Source opt-in tests cover
+persisted enable/disable and rejected cache writes; actual playback selection
+rejects a disabled SoundCloud source without a network request. HLS codec
+selection and newly discovered preview labels are checked with bounded provider
+fixtures; these are not live provider or native HLS acceptance.
+
+The Android HLS dependency from #233 is retained for Android compatibility;
+Android CI remains manually disabled. Rust, native PCM/DSD/USB, package locks and
+iPhone provisioning are unchanged. Widget host publication/layouts/actions,
+suspension-safe transfers and physical iPhone/Windows acceptance remain open.
+
+
+Validation: the expanded iPhone workflow selection plus the 64 widget contracts
+passes **504 Flutter tests**. A further 23 focused lyric/Space tests pass after
+checking theme-derived subline colors. Whole app/integration analysis has no
+errors (616 warning/information items remain), and actionlint/diff checks pass.
+The new source and controls additionally pass actual enable/disable, preview,
+AAC-HLS selection and all-locale/large-text cases. Native acceptance of this
+53-PR source, live providers, actual cellular routing and physical listening
+are still pending.

@@ -358,8 +358,11 @@ class ResolvedDiscoveryAudio {
     this.quality,
     this.bitDepth,
     this.sampleRate,
+    this.isPreview = false,
   });
   final Uri url;
+  /// True only when the resolver confirms a limited preview rendition.
+  final bool isPreview;
   /// Resolved stream metadata, never inferred from a catalogue maximum.
   final String? codec;
   /// Bits per second for the exact selected rendition, when the resolver knows it.

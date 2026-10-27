@@ -451,6 +451,23 @@ class _SyncedLyricsViewState extends ConsumerState<SyncedLyricsView> {
                     height: 1.3,
                     color: Colors.white.withValues(alpha: isActive ? .72 : .35),
                   ),
+                  motionChild: isActive && karaokeEnabled &&
+                          line.words?.isNotEmpty == true &&
+                          line.translation?.trim().isNotEmpty == true
+                      ? KaraokeLyricLine(
+                          playerService: widget.playerService,
+                          lyricsService: widget.lyricsService,
+                          lyrics: widget.lyrics,
+                          lineIndex: index,
+                          sublineText: line.translation,
+                          textAlign: alignment.textAlign,
+                          style: const TextStyle(fontSize: 15, height: 1.3),
+                          sungColor: _sungColor.withValues(alpha: .86),
+                          unsungColor: Colors.white.withValues(alpha: .35),
+                          positionNotifier: _positionNotifier,
+                          active: widget.active,
+                        )
+                      : null,
                 ),
               ],
             ),

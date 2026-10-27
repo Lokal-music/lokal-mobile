@@ -104,12 +104,18 @@ class DiscoveryHttp {
             return response;
           final target = next.url.resolve(location);
           await response.stream.listen(null).cancel();
+          // Only the selected CDN may redirect its own signed media URL:
+          // do not forward bearer headers to a different site or private IP.
+          final googleVideo = url.host.endsWith('.googlevideo.com');
+          final soundCloudCdn = url.host.endsWith('.sndcdn.com');
+          final sameTrustedCdn = (googleVideo &&
+                  target.host.endsWith('.googlevideo.com')) ||
+              (soundCloudCdn && target.host.endsWith('.sndcdn.com'));
           if (redirects >= 3 ||
               body != null ||
-              !url.host.endsWith('.googlevideo.com') ||
               target.scheme != 'https' ||
               target.userInfo.isNotEmpty ||
-              !target.host.endsWith('.googlevideo.com')) {
+              !sameTrustedCdn) {
             throw const DiscoveryException(
               'The source returned an unsupported media redirect.',
             );

@@ -115,7 +115,9 @@ class DiscoveryPlaybackCache {
           maxBytes: maxFileBytes,
           deadline: downloadTimeout,
           cancel: cancel,
-          followMediaRedirects: audio.url.host.endsWith('.googlevideo.com'),
+          followMediaRedirects:
+              audio.url.host.endsWith('.googlevideo.com') ||
+              audio.url.host.endsWith('.sndcdn.com'),
           onChunk: write,
         );
       } else {
