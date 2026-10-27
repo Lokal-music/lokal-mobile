@@ -1,0 +1,30 @@
+name: Mobile queue redesign checks
+
+on:
+  pull_request:
+    paths:
+      - 'lib/features/queue/**'
+      - 'test/widgets/lokal/queue_*.dart'
+      - '.github/workflows/queue-redesign-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  queue:
+    name: Queue widget drags and Android compilation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/android-toolchain
+      - name: Test mini-player and full-player queue drag behavior
+        run: >-
+          flutter test --no-pub
+          test/widgets/lokal/queue_reordering_test.dart
+          test/widgets/lokal/queue_sheet_test.dart
+      - name: Compile Android debug APK
+        run: flutter build apk --debug --no-pub
