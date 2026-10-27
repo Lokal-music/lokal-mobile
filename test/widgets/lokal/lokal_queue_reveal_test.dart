@@ -305,7 +305,7 @@ void main() {
       expect(find.text('Song b'), findsOneWidget);
       expect(find.text('Song q'), findsOneWidget);
       expect(find.text('Song now'), findsNothing);
-      expect(find.byType(ReorderableDragStartListener), findsNWidgets(3));
+      expect(find.byType(ReorderableDelayedDragStartListener), findsNWidgets(3));
     },
   );
 }
