@@ -1308,6 +1308,20 @@ fn audit_pcm_payload(buffer: &[u8], subslot_size: u8, channels: u16) -> bool {
     })
 }
 
+/// Silence by itself does not prove the USB pipeline died. Once real PCM
+/// verified this stream, a fully buffered silent passage must not revoke the
+/// claim. Missing producer data (an underrun) still counts against the latch,
+/// and initial digital silence cannot establish bit-perfect verification.
+fn pcm_wire_has_signal_or_valid_silence(
+    wire: &[u8],
+    subslot_size: u8,
+    channels: u16,
+    underrun: bool,
+    already_verified: bool,
+) -> bool {
+    audit_pcm_payload(wire, subslot_size, channels) || (!underrun && already_verified)
+}
+
 pub fn set_android_direct_usb_enabled(enabled: bool) {
     ANDROID_DIRECT_USB_ENABLED.store(enabled, Ordering::Release);
 }
@@ -5227,17 +5241,13 @@ fn prepare_iso_transfer_payload(
             candidate.channels,
         ));
     } else {
-        let varying_samples = audit_pcm_payload(
+        let live_or_silent = pcm_wire_has_signal_or_valid_silence(
             &transfer_buffer,
             candidate.subslot_size,
             candidate.channels,
+            underrun,
+            usb_pcm_payload_verified(),
         );
-        // Digital silence is valid PCM and not evidence of a lost USB path.
-        // Once non-constant samples verified this session, retain that claim
-        // through fully buffered silent passages. Only sustained underruns
-        // (no PCM available to feed the DAC) should fail the liveness latch.
-        // Never promote an unverified stream on silence alone.
-        let live_or_silent = varying_samples || (!underrun && usb_pcm_payload_verified());
         observe_pcm_payload_audit(live_or_silent);
     }
 
@@ -8195,6 +8205,20 @@ mod dsd_bitperfect_tests {
             0x00, 0x00, 0x01, 0x00,
         ];
         assert!(!audit_pcm_payload(&buf, 2, 2));
+    }
+
+    #[test]
+    fn verified_pcm_stays_valid_across_buffered_digital_silence() {
+        let silence = [0u8; 64];
+        assert!(!pcm_wire_has_signal_or_valid_silence(
+            &silence, 2, 2, false, false,
+        )); // Do not claim bit-perfect before hearing real PCM.
+        assert!(pcm_wire_has_signal_or_valid_silence(
+            &silence, 2, 2, false, true,
+        )); // An already-verified stream may play digital silence.
+        assert!(!pcm_wire_has_signal_or_valid_silence(
+            &silence, 2, 2, true, true,
+        )); // A real buffer underrun must still count against the latch.
     }
 
     #[test]
