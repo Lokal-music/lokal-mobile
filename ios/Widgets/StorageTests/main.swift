@@ -114,6 +114,43 @@ do {
     }
     try require(try revision(reader) == 2, "Rejected candidate replaced current state")
   }
+  try check("POSIX-only concurrent lock creation on stable directory descriptors") {
+    for exclusive in [false, true] {
+      for round in 0..<20 {
+        let root = try folder("posix-\(exclusive)-\(round)")
+        try manager.createDirectory(at: owned(root), withIntermediateDirectories: false)
+        let ownedPath = owned(root).path
+        let errors = Errors()
+        DispatchQueue.concurrentPerform(iterations: 24) { _ in
+          let (directory, directoryError) = ownedPath.withCString { path in
+            let value = Darwin.open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            return (value, errno)
+          }
+          guard directory >= 0 else { errors.add(Failure.check("Direct directory open \(directoryError)")); return }
+          defer { Darwin.close(directory) }
+          let flags = O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | (exclusive ? O_EXCL : 0)
+          var (file, code) = "writer.lock".withCString { path in
+            let value = openat(directory, path, flags, 0o600)
+            return (value, errno)
+          }
+          if exclusive && file < 0 && code == EEXIST {
+            (file, code) = "writer.lock".withCString { path in
+              let value = openat(directory, path, O_RDWR | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+              return (value, errno)
+            }
+          }
+          guard file >= 0 else {
+            var info = stat()
+            let inspected = fstat(directory, &info)
+            errors.add(Failure.check("Direct lock open exclusive=\(exclusive), code=\(code), flags=\(flags), directory_stat=\(inspected), links=\(info.st_nlink)"))
+            return
+          }
+          Darwin.close(file)
+        }
+        try require(errors.empty, "POSIX control round \(round): " + errors.summary)
+      }
+    }
+  }
   try check("separate instances serialize concurrent publishers and atomic readers") {
     let rounds = min(100, max(1, Int(ProcessInfo.processInfo.environment["LOKAL_WIDGET_CONCURRENCY_ROUNDS"] ?? "1") ?? 1))
     for round in 0..<rounds {

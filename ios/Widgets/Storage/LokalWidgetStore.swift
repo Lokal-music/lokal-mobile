@@ -216,8 +216,17 @@ final class LokalWidgetStore: @unchecked Sendable {
   }
 
   private func openRegular(_ name: String, flags: Int32, allowUnlinkedRead: Bool = false) throws -> Int32 {
-    let fd = openat(directory, name, flags | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
-    guard fd >= 0 else { let code = errno; throw LokalWidgetStoreError.posix(operation: "open_regular:" + name, code: code) }
+    let requested = flags | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC
+    let (fd, code) = name.withCString { path in
+      let value = openat(directory, path, requested, 0o600)
+      return (value, errno)
+    }
+    guard fd >= 0 else {
+      var directoryInfo = stat()
+      let inspected = fstat(directory, &directoryInfo)
+      let context = "open_regular:" + name + ":flags=\(requested):directory_stat=\(inspected):links=\(directoryInfo.st_nlink)"
+      throw LokalWidgetStoreError.posix(operation: context, code: code)
+    }
     if allowUnlinkedRead { afterReadOpenForTesting?(name) }
     var info = stat()
     guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),

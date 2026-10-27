@@ -374,3 +374,11 @@ The widget workflow now runs native Foundation/storage/image checks in an
 independent macOS job, alongside Dart and real-Flutter bridge checks. The failing
 filesystem probe no longer waits for Flutter setup/downloads. Both job outcomes
 remain required for overall workflow success; no storage or SDK gate is removed.
+
+Native run 12 localizes the thread-contention failure to `open_regular:writer.lock`
+with ENOENT at stress round six. The next source captures openat's result/errno
+inside the C-string lifetime and includes requested flags plus held-directory
+status/link count. A separate POSIX-only control uses stable directory descriptors
+and compares ordinary concurrent O_CREAT with O_EXCL/EEXIST fallback, without the
+publisher, pruning, snapshots or locks. This isolates syscall/creation behavior
+before choosing a production correction; no resolution is claimed yet.
