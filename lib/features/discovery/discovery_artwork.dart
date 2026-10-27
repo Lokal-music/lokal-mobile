@@ -24,7 +24,6 @@ import 'package:flick/models/song.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:flick/services/graceful_http_client.dart';
 
 import 'discovery_http.dart';
