@@ -103,7 +103,19 @@ class AutoMixStemClipCache {
         incoming.startOffsetMs != null || incoming.endOffsetMs != null) {
       return null;
     }
-    final key = '$a\u0000$b';
+    FileStat firstStamp, secondStamp;
+    try {
+      firstStamp = await File(a).stat();
+      secondStamp = await File(b).stat();
+      if (firstStamp.type != FileSystemEntityType.file ||
+          secondStamp.type != FileSystemEntityType.file) return null;
+    } catch (_) { return null; }
+    // Prevent reusing a previously verified pair after an in-place replace.
+    final key = jsonEncode([
+      a, b,
+      firstStamp.size, firstStamp.modified.millisecondsSinceEpoch,
+      secondStamp.size, secondStamp.modified.millisecondsSinceEpoch,
+    ]);
     if (_pending[key] case final cached?) return cached;
     final future = _resolve(a, b);
     _pending[key] = future;
@@ -124,6 +136,14 @@ class AutoMixStemClipCache {
         final wavStat = await candidate.stat();
         if (wavStat.type != FileSystemEntityType.file ||
             wavStat.size < 128 || wavStat.size > 100 * 1024 * 1024) continue;
+        // Reject non-WAV payloads before passing any sidecar to Media3.
+        final handle = await candidate.open();
+        List<int> header;
+        try { header = await handle.read(12); }
+        finally { await handle.close(); }
+        if (header.length != 12 ||
+            !['RIFF', 'RF64'].contains(ascii.decode(header.sublist(0, 4))) ||
+            ascii.decode(header.sublist(8, 12)) != 'WAVE') continue;
         final manifest = File('${candidate.path}.json');
         final mstat = await manifest.stat();
         if (mstat.size < 100 || mstat.size > 16 * 1024) continue;
