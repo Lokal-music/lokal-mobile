@@ -77,6 +77,7 @@ dependencies:
   share_plus: ^13.3.1
   skeletonizer: ^3.0.0
   url_launcher: ^6.3.2
+  unorm_dart: ^0.3.2
   video_player: ^2.9.5
   xml: ^7.0.1
   mobile_scanner: ^7.4.2
