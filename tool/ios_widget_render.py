@@ -100,6 +100,36 @@ def verify(directory: Path):
     print(f"PASS: {total} actual native SwiftUI images, 11 locales, all families/configurations")
 
 
+def collect_failure(output: Path, stage: str, error: Exception):
+    """Keep installer/launch evidence without replacing the original failure."""
+    (output / "failure.json").write_text(json.dumps({
+        "stage": stage, "error_type": type(error).__name__, "error": str(error),
+    }, indent=2) + "\n")
+    for name in ("stdout", "stderr"):
+        value = getattr(error, name, None)
+        if value:
+            if isinstance(value, bytes):
+                value = value.decode("utf-8", errors="replace")
+            (output / f"failure-{name}.log").write_text(value)
+    udid = os.environ.get("IOS_SIMULATOR_UDID")
+    if not udid:
+        return
+    probes = [
+        (["xcrun", "simctl", "list", "devices", "available", "--json"], "failure-devices.log"),
+        (["xcrun", "simctl", "spawn", udid, "log", "show", "--last", "3m", "--style", "compact",
+          "--predicate", 'process == "installd" OR process == "installcoordinationd" OR process == "SpringBoard"'],
+         "failure-install-services.log"),
+        (["xcrun", "simctl", "io", udid, "screenshot", str(output / "failure-screen.png")],
+         "failure-screen.log"),
+    ]
+    for args, name in probes:
+        with (output / name).open("w") as log:
+            try:
+                subprocess.run(args, stdout=log, stderr=subprocess.STDOUT, check=False, timeout=20)
+            except (OSError, subprocess.SubprocessError) as probe_error:
+                log.write(str(probe_error) + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
@@ -109,18 +139,32 @@ def main():
     if info.get("CFBundleIdentifier") != BUNDLE:
         raise ValueError("Only the isolated native widget render app may run")
     args.output.mkdir(parents=True, exist_ok=False)
-    boot_render_simulator()
-    udid = os.environ["IOS_SIMULATOR_UDID"]
-    command("xcrun", "simctl", "install", udid, str(args.app), timeout=90)
-    container = Path(command("xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"))
-    for locale in LOCALES:
-        with (args.output / f"launch-{locale}.log").open("w") as log:
-            subprocess.run([
-                "xcrun", "simctl", "launch", "--console", udid, BUNDLE,
-                "--render-locale", locale, "-AppleLanguages", f'("{locale}")',
-            ], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=150)
-    shutil.copytree(container / "Documents/WidgetRenderProof", args.output / "images")
-    verify(args.output / "images")
+    stage = "boot"
+    try:
+        boot_render_simulator()
+        udid = os.environ["IOS_SIMULATOR_UDID"]
+        stage = "install"
+        command("xcrun", "simctl", "install", udid, str(args.app), timeout=120)
+        stage = "container"
+        container = Path(command("xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"))
+        for locale in LOCALES:
+            stage = "render-" + locale
+            with (args.output / f"launch-{locale}.log").open("w") as log:
+                subprocess.run([
+                    "xcrun", "simctl", "launch", "--console", udid, BUNDLE,
+                    "--render-locale", locale, "-AppleLanguages", f'("{locale}")',
+                ], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=150)
+        stage = "export"
+        shutil.copytree(container / "Documents/WidgetRenderProof", args.output / "images")
+        stage = "verify"
+        verify(args.output / "images")
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        try:
+            collect_failure(args.output, stage, error)
+        except OSError as evidence_error:
+            print(f"Could not preserve render failure evidence: {evidence_error}", flush=True)
+        raise
+
 
 
 if __name__ == "__main__":

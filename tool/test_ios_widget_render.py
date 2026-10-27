@@ -58,6 +58,7 @@ class WidgetRenderStartupTest(unittest.TestCase):
             with patch("sys.argv", ["render", str(app), "--output", str(root / "proof")]), \
                  patch.dict(os.environ, {"IOS_SIMULATOR_UDID": "owned"}, clear=True), \
                  patch.object(ios_widget_render, "boot_render_simulator") as boot, \
+                 patch.object(ios_widget_render, "collect_failure") as evidence, \
                  patch.object(ios_widget_render, "command", side_effect=["", str(root)]) as command, \
                  patch.object(ios_widget_render.subprocess, "run",
                               side_effect=subprocess.CalledProcessError(1, "native render")) as launch:
@@ -65,6 +66,8 @@ class WidgetRenderStartupTest(unittest.TestCase):
                     ios_widget_render.main()
                 boot.assert_called_once()
                 launch.assert_called_once()
+                evidence.assert_called_once()
+                self.assertEqual(evidence.call_args.args[1], "render-en")
                 self.assertEqual(command.call_count, 2)
 
 

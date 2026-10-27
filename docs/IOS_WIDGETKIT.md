@@ -559,3 +559,14 @@ selection/boot, app installation, rendering, matrix validation and second-attemp
 failures propagate normally; no app test is retried. Seven local gate-policy
 cases pass, including a real main-flow render-process error without another
 boot/launch. Hosted captures remain pending after this infrastructure correction.
+
+
+Run 18 (`40519562953`, source tree `48bfa0de0503e9c3c19013aa0480d9b8db3c75b0`)
+passes the seven startup-policy cases and all existing native/metadata/bridge/
+extension gates. The render app links; this time inventory and the full boot
+complete, but first installation times out at 90 seconds. No native image pass is
+inferred. The continuation uses the same 120-second installation allowance as
+the already validated main-app harness and records the exact failing phase,
+partial command output, installer/SpringBoard logs, device inventory and a
+failure screenshot. Installation/render failures still propagate without retry.
+This is a diagnostic/readiness correction, not proof of a packaging fix.
