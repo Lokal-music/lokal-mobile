@@ -11,7 +11,88 @@ import Vision
 struct LokalWidgetPreview: App {
   var body: some Scene {
     WindowGroup {
-      Color.clear.task { await LokalWidgetRenderProof.run() }
+      if ProcessInfo.processInfo.arguments.contains("--live-progress-proof") {
+        LokalWidgetLiveProgressProof()
+      } else {
+        Color.clear.task { await LokalWidgetRenderProof.run() }
+      }
+    }
+  }
+}
+
+/// Actual displayed SwiftUI/UIView composition, captured externally by simctl.
+/// ImageRenderer cannot rasterize the native timer ProgressView used here.
+@MainActor
+private struct LokalWidgetLiveProgressProof: View {
+  private let snapshot: LokalWidgetSnapshot
+  private let artwork: [String: Data]
+  private let appearance: String
+  private let token: String
+
+  init() {
+    let args = ProcessInfo.processInfo.arguments
+    func argument(_ name: String) -> String {
+      guard let index = args.firstIndex(of: name), args.indices.contains(index + 1) else { return "" }
+      return args[index + 1]
+    }
+    token = argument("--live-progress-proof")
+    appearance = argument("--live-appearance")
+    let (seed, art) = LokalWidgetRenderProof.fixture(shortNames: true)
+    var fields = seed.json
+    fields["updatedAtMs"] = LokalWidgetPresentation.milliseconds(Date()) ?? 0
+    fields["positionMs"] = 10_000
+    fields["durationMs"] = 60_000
+    snapshot = LokalWidgetSnapshot(raw: fields)
+    artwork = art
+  }
+
+  var body: some View {
+    let model = LokalWidgetPresentation(snapshot: snapshot, at: Date())
+    let theme = LokalWidgetTheme(argb: model.accentArgb)
+    VStack(spacing: 20) {
+      Text("Native widget preview").font(.headline)
+      LokalWidgetView(configuration: .nowPlaying, model: model,
+        artwork: artwork, family: .systemMedium)
+        .layout.padding(16)
+        .frame(width: 338, height: 158)
+        .background(LokalWidgetSurface(accent: theme.accent, surface: theme.surface))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Color(uiColor: .systemBackground))
+    .environment(\.colorScheme, appearance == "dark" ? .dark : .light)
+    .preferredColorScheme(appearance == "dark" ? .dark : .light)
+    .environment(\.dynamicTypeSize, .large)
+    .task {
+      do {
+        guard Bundle.main.bundleIdentifier == "app.lokal.widgetPreview",
+              UUID(uuidString: token) != nil, ["light", "dark"].contains(appearance) else {
+          throw LokalWidgetRenderProof.Failure.render("Invalid live proof identity")
+        }
+        // Readiness requires a foreground native scene, not merely a process.
+        for _ in 0..<40 {
+          if UIApplication.shared.applicationState == .active { break }
+          try await Task.sleep(for: .milliseconds(50))
+        }
+        guard UIApplication.shared.applicationState == .active else {
+          throw LokalWidgetRenderProof.Failure.render("Live proof scene is not active")
+        }
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+          .appendingPathComponent("WidgetRenderProof", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let report: [String: Any] = [
+          "token": token, "appearance": appearance,
+          "bundle": Bundle.main.bundleIdentifier ?? "",
+          "active_scene": true,
+          "snapshot_updated_ms": snapshot.json["updatedAtMs"] ?? 0,
+          "scope": "Actual foreground app-hosted shared widget layout; not installed WidgetKit or audio playback",
+        ]
+        try JSONSerialization.data(withJSONObject: report, options: [.sortedKeys])
+          .write(to: directory.appendingPathComponent("live-ready-\(token).json"), options: .atomic)
+      } catch {
+        print("FAIL: live native widget proof: \(error)")
+        exit(1)
+      }
     }
   }
 }

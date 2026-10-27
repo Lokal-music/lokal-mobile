@@ -301,8 +301,7 @@ class _KonnektedRuntimeState extends ConsumerState<KonnektedRuntime>
     if (state == AppLifecycleState.detached) {
       _run('Persist playback', _player.persistLastPlayed);
       _run('Widget shutdown sync', WidgetSyncService.instance.pushKilled);
-      // Match MainShell: this also deactivates the Android floating overlay.
-      _run('Detached player cleanup', _player.onAppResumed);
+      _run('Detached player cleanup', _player.onAppDetached);
       _run('Flush app log', AppLog.instance.flushToDisk);
       return;
     }

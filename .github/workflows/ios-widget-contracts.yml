@@ -18,6 +18,8 @@ on:
       - 'ios/Widgets/RenderHarness/**'
       - 'tool/ios_widget_render.py'
       - 'tool/test_ios_widget_render.py'
+      - 'tool/ios_widget_live_capture.py'
+      - 'tool/test_ios_widget_live_capture.py'
       - 'ios/Widgets/Timeline/**'
       - 'ios/Widgets/Extension/**'
       - 'ios/Widgets/Resources/**'
@@ -115,7 +117,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify render startup gate boundaries
-        run: python3 -m unittest discover -s tool -p test_ios_widget_render.py
+        run: |
+          python3 -m unittest discover -s tool -p test_ios_widget_render.py
+          python3 -m unittest discover -s tool -p test_ios_widget_live_capture.py
       - name: Compile and exercise the actual Foundation reader
         run: |
           xcodebuild -version
@@ -190,7 +194,7 @@ jobs:
       - name: Link the isolated native SwiftUI render app
         run: |
           xcodebuild -project ios/Widgets/LokalWidgets.xcodeproj -scheme LokalWidgetPreview -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/lokal-widget-preview" CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/lokal-widget-preview.log" 2>&1
-      - name: Render all families, languages, contrast and accessibility layouts
+      - name: Render layout matrix and capture displayed native progress
         run: |
           python3 tool/ios_widget_render.py "$RUNNER_TEMP/lokal-widget-preview/Build/Products/Release-iphonesimulator/LokalWidgetPreview.app" --output "$RUNNER_TEMP/lokal-widget-renders"
       - name: Preserve native rendered images and failures

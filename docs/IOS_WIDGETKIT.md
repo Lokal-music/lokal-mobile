@@ -647,3 +647,20 @@ placeholder; the static capture path does not establish correct timer drawing
 or animation. Validate that separately in a hosted view and installed widget.
 Signed App Group access, Home Screen installation/scheduling, application-language
 binding and commands remain separate unfinished gates.
+
+## Displayed native progress follow-up
+
+The preview app now has an isolated foreground mode that hosts the same shared
+medium Now Playing layout in a real SwiftUI scene. After the 450-image matrix
+passes, the simulator captures two compositor screenshots three seconds apart
+in each appearance. A unique launch token, fixed preview bundle and native
+active-scene report gate each capture. The test preserves its primary failure
+if cleanup also fails, and does not retry an application failure.
+
+The four images and readiness records are exported under
+`native-screen-progress/`. Fifteen local Python policy/orchestration tests pass;
+their PNG headers are fixtures, not native rendering evidence. Hosted Swift 6
+compilation, compositor captures and visual timer review remain pending.
+`CAPTURED.json` explicitly leaves automatic progress-animation acceptance false.
+This exercises the displayed app-hosted layout; installed WidgetKit, Home Screen
+scheduling, App Group provisioning and actual playback remain separate gates.

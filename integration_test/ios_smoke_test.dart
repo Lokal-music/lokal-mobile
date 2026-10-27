@@ -46,6 +46,7 @@ import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import '../test/fixtures/generated_audio.dart';
 import 'ios_live_video_probe.dart';
 import 'ios_media_reset_probe.dart';
+import 'ios_rust_polling_probe.dart';
 import 'ios_radio_reset_probe.dart';
 import 'ios_webkit_reset_probe.dart';
 import 'ios_session_reset_probe.dart';
@@ -519,6 +520,8 @@ void main() {
     final dspProgress = await _expectPlaybackProgress(tester, player);
     expect(player.currentEngineType, AudioEngineType.iosRust);
     binding.reportData!['rust_dsp_progress_ms'] = dspProgress;
+    await probeIosRustPolling(tester, binding, player,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
     await probeIosMediaReset(tester, binding, player,
       engine: AudioEngineType.iosRust, song: song,
       expectProgress: () => _expectPlaybackProgress(tester, player));

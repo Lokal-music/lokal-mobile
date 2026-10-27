@@ -1503,3 +1503,53 @@ download ZIP is removed after verification. Earlier complete packages remain
 preserved. Installation needs local signing; physical Windows/iPhone installation,
 actual iOS 16 runtime, live provider/receiver, signed widgets and newer source
 acceptance remain separate unfinished gates.
+
+
+### Shared power follow-up: adaptive Rust observation
+
+The next #257 continuation changes Dart observation scheduling, not native
+rendering or output construction. Active foreground progress/events retain the
+existing 50 ms cadence. Background active observations use 250 ms; paused
+progress has no recurring timer, while events remain observable at 500 ms in
+foreground and one second in background. Idle/stopped events use one/two
+seconds. Foreground changes rearm only already-owned observations and cannot
+restart retirement/shutdown callbacks. Native event draining also stops when
+its owner retires, including retirement triggered synchronously by a listener.
+
+Inspection of the actual Rust API is necessary here: iOS Pause waits for native
+acknowledgement, while Play/Resume/Seek/Stop enqueue commands. A one-off read
+immediately after a paused Seek can still observe the previous cursor. Explicit
+transport commands therefore get prompt event observations for at most two
+seconds, ending earlier when the actual state/cursor is observed; steady idle
+rates resume afterward. The native Paused event triggers one final progress/
+label sample, and backward seeks refresh labels. No requested position is
+fabricated as elapsed native playback. Rejected Pause retains existing active
+observations because scheduling changes occur only after acknowledgement.
+
+The iPhone lifecycle hook now applies the background budget too. Detaching its
+last UI keeps that budget; Android retains its established detached overlay/
+route-cleanup behavior. Epoch-scoped native mutation waits remain unchanged.
+Independent timer generations prevent an old callback's finalizer from
+resurrecting retired work or duplicating a synchronously replaced session.
+
+Twelve scheduler regressions pass using actual timers on a controlled clock:
+foreground/background work counts, paused/idle behavior, delayed transitions,
+bounded prompt observation, callback errors/replacement, native reset and a late
+pause acknowledgement through the actual request-retirement coordinator. New
+source/integration/test files pass analysis with fatal infos. The full combined
+selection passes **815 tests**. A native probe additionally checks the real
+Rust engine's steady paused callback counts, forward/backward seek cursor and
+labels, no resume on foreground, and progress after explicit Play. Its scope is
+budget hooks in a foreground simulator app; hosted results, actual suspension
+and physical battery profiling are separate gates. Debug observation counters
+are assertion-only; release builds do not increment them. Native Rust/FFI,
+dependencies and PCM/DSD/USB rendering paths remain unchanged. The paused-position
+persistence portion of #257 is still pending.
+
+The widget preview additionally hosts its shared medium layout in an active
+native scene and captures four actual simulator screens across light/dark
+appearance, with two frames three seconds apart. This addresses the static
+ImageRenderer timer limitation as a separate capture path. Fifteen Python
+policy/orchestration tests pass. Hosted compilation/captures and visual review
+are pending; this does not qualify installed WidgetKit or automatically assert
+progress animation. The accepted 450-image checkpoint remains unchanged.

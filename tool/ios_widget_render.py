@@ -15,6 +15,7 @@ import struct
 import subprocess
 
 import ios_simulator
+from ios_widget_live_capture import capture
 
 
 LOCALES = ("en", "fr", "de", "es", "it", "pt-BR", "nl", "pl", "sv", "tr", "zh-Hans")
@@ -193,6 +194,8 @@ def main():
         shutil.copytree(container / "Documents/WidgetRenderProof", args.output / "images")
         stage = "verify"
         verify(args.output / "images")
+        stage = "native-screen-progress"
+        capture(udid, container, args.output / "native-screen-progress", command=command)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         try:
             collect_failure(args.output, stage, error)
