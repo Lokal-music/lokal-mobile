@@ -1349,6 +1349,18 @@ Future<List<OnlineSource>> onlineSources(
   );
 }
 
+/// Preserve source pinning when a legacy queued HTTP ID used a mutable name.
+String _canonicalOnlineSourceId(String sourceId, DiscoveryTrack track) {
+  if (!sourceId.startsWith('w-') ||
+      track.source != DiscoverySource.addon ||
+      track.addonId == null) {
+    return sourceId;
+  }
+  final stable = 'w-' + track.addonId!;
+  final legacy = track.sourceName == null ? null : 'w-' + track.sourceName!;
+  return sourceId == stable || sourceId == legacy ? stable : sourceId;
+}
+
 /// Gets [track], found earlier on the source [sourceId] (an [OnlineSource.id]),
 /// ready to play, with its own connection so it outlives the Search page:
 /// for a song queued from Search or saved to the library. [onStatus] hears
@@ -1378,6 +1390,7 @@ Future<Song> playOnlineTrack(
   final transport = client ?? http.Client();
   try {
     final web = DiscoveryHttp(transport);
+    final canonicalId = _canonicalOnlineSourceId(sourceId, track);
     final sources = await _playbackSources(
       web,
       settings,
@@ -1386,18 +1399,10 @@ Future<Song> playOnlineTrack(
       morneye ?? MorneyeService.instance,
       cancel: cancel,
       forDownload: forDownload,
-      // HTTP and native YouTube playback must not wait for unrelated Morneye
-      // add-on initialization or verification before source resolution.
-      includeMorneye: sourceId.startsWith('a-'),
-      selectedSourceId: sourceId.startsWith('w-') &&
-              track.source == DiscoverySource.addon && track.addonId != null
-          ? 'w-${track.addonId}' : sourceId,
+      // HTTP playback never waits for unrelated Morneye initialization.
+      includeMorneye: canonicalId.startsWith('a-'),
+      selectedSourceId: canonicalId,
     );
-    // Legacy queue entries used the HTTP display name as their source ID.
-    // Resolve by the track's immutable config ID, not a mutable label.
-    final canonicalId = sourceId.startsWith('w-') &&
-            track.source == DiscoverySource.addon && track.addonId != null
-        ? 'w-${track.addonId}' : sourceId;
     final source = sources.where((s) => s.id == canonicalId).firstOrNull;
     if (source == null) {
       throw DiscoveryException(
