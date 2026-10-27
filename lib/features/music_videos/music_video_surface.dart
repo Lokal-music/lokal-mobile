@@ -4,6 +4,7 @@ import 'dart:io';
 import 'music_video_controller.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -135,13 +136,38 @@ window.onYouTubeIframeAPIReady = function() {
 </body></html>''';
 }
 
-/// Reusable in-full-player music video stage. Kept alive while toggling
-/// fullscreen so the YouTube iframe does not restart mid-video.
+/// Debug acceptance document seam; product routes use the official embed.
+typedef NativeAcceptanceVideoDocument = String Function({
+  required String videoId,
+  required String? appId,
+  required bool deferAutoplayToHost,
+  required bool startPaused,
+  required Duration initialPosition,
+});
+
+/// In-full-player video stage, retained while toggling fullscreen/Space.
 class MusicVideoSurface extends StatefulWidget {
-  const MusicVideoSurface({super.key, required this.videoId, this.controller});
+  const MusicVideoSurface({super.key, required this.videoId, this.controller})
+    : _acceptanceDocument = null,
+      _onAcceptanceViewCreated = null;
+
+  /// Runs the production owner/bridge against controlled local media in debug
+  /// acceptance. Product routes always use the official document above.
+  @visibleForTesting
+  const MusicVideoSurface.forNativeAcceptance({
+    super.key,
+    required this.videoId,
+    this.controller,
+    required NativeAcceptanceVideoDocument document,
+    required void Function(InAppWebViewController) onViewCreated,
+  }) : _acceptanceDocument = document,
+       _onAcceptanceViewCreated = onViewCreated,
+       assert(kDebugMode);
 
   final String videoId;
   final Media3MusicVideoController? controller;
+  final NativeAcceptanceVideoDocument? _acceptanceDocument;
+  final void Function(InAppWebViewController)? _onAcceptanceViewCreated;
 
   @override
   State<MusicVideoSurface> createState() => _MusicVideoSurfaceState();
@@ -324,7 +350,7 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
           'seek' => "window.lokalVideoCommand('seek', $ms)",
           _ => throw ArgumentError.value(method, 'method'),
         };
-      if (method == 'seek') output.initialPositionConfirmed = true;
+        if (method == 'seek') output.initialPositionConfirmed = true;
         final accepted = await IosLocalAudioRequests.wait(
           view.evaluateJavascript(source: command),
         );
@@ -586,6 +612,7 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
                       }
                       return;
                     }
+                    widget._onAcceptanceViewCreated?.call(view);
                     view.addJavaScriptHandler(
                       handlerName: 'LokalVideo',
                       callback: (arguments) {
@@ -597,13 +624,21 @@ class _MusicVideoSurfaceState extends State<MusicVideoSurface>
                     );
                   },
                   initialData: InAppWebViewInitialData(
-                    data: musicVideoEmbedHtml(
-                      widget.videoId,
-                      appId: _appId,
-                      deferAutoplayToHost: Platform.isIOS,
-                      startPaused: output.startPaused,
-                      initialPosition: output.position,
-                    ),
+                    data:
+                        widget._acceptanceDocument?.call(
+                          videoId: widget.videoId,
+                          appId: _appId,
+                          deferAutoplayToHost: Platform.isIOS,
+                          startPaused: output.startPaused,
+                          initialPosition: output.position,
+                        ) ??
+                        musicVideoEmbedHtml(
+                          widget.videoId,
+                          appId: _appId,
+                          deferAutoplayToHost: Platform.isIOS,
+                          startPaused: output.startPaused,
+                          initialPosition: output.position,
+                        ),
                     baseUrl: WebUri('$_appOrigin/'),
                     historyUrl: WebUri('$_appOrigin/'),
                   ),

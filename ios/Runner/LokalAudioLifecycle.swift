@@ -90,7 +90,13 @@ final class LokalAudioLifecycle: NSObject, FlutterStreamHandler {
   #if DEBUG
   /// App-path validation only; posting is not an actual media-daemon restart.
   func postResetForIntegrationTest() {
-    NotificationCenter.default.post(name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+    NotificationCenter.default.post(name: AVAudioSession.mediaServicesWereResetNotification,
+                                    object: AVAudioSession.sharedInstance())
+  }
+
+  func postLostForIntegrationTest() {
+    NotificationCenter.default.post(name: AVAudioSession.mediaServicesWereLostNotification,
+                                    object: AVAudioSession.sharedInstance())
   }
   #endif
 }

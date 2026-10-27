@@ -47,6 +47,8 @@ import '../test/fixtures/generated_audio.dart';
 import 'ios_live_video_probe.dart';
 import 'ios_media_reset_probe.dart';
 import 'ios_radio_reset_probe.dart';
+import 'ios_webkit_reset_probe.dart';
+import 'ios_session_reset_probe.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -354,6 +356,8 @@ void main() {
     binding.reportData!['system_wav_progress_ms'] = systemProgress;
     await probeIosMediaReset(tester, binding, player,
       engine: AudioEngineType.iosSystem, song: song,
+      expectProgress: () => _expectPlaybackProgress(tester, player));
+    await probeIosSessionAfterReset(tester, binding, player,
       expectProgress: () => _expectPlaybackProgress(tester, player));
     await probeIosNewSelectionDuringReset(tester, binding, player, song,
       expectProgress: () => _expectPlaybackProgress(tester, player));
@@ -834,6 +838,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     }
 
+    await probeIosWebKitReset(tester, binding, player);
     if (const bool.fromEnvironment('LOKAL_IOS_VIDEO_PROBE')) {
       await probeLiveIosVideo(tester, binding);
     }

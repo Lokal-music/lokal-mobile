@@ -132,6 +132,26 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
         }
       case "libraryRoot": result(try? self?.libraryRoot().path)
       #if DEBUG
+      case "postMediaServicesLostForIntegrationTest":
+        guard let lifecycle = self?.audioLifecycle else {
+          result(FlutterError(code: "AUDIO_LIFECYCLE_UNAVAILABLE", message: "Audio lifecycle observer has not started", details: nil))
+          return
+        }
+        lifecycle.postLostForIntegrationTest()
+        result(nil)
+      case "postAudioInterruptionForIntegrationTest":
+        guard let began = (call.arguments as? [String: Any])?["begin"] as? Bool else {
+          result(FlutterError(code: "INVALID_INTERRUPTION", message: "Interruption phase is required", details: nil))
+          return
+        }
+        let type: AVAudioSession.InterruptionType = began ? .began : .ended
+        var info: [String: Any] = [AVAudioSessionInterruptionTypeKey: type.rawValue]
+        if !began {
+          info[AVAudioSessionInterruptionOptionKey] = AVAudioSession.InterruptionOptions.shouldResume.rawValue
+        }
+        NotificationCenter.default.post(name: AVAudioSession.interruptionNotification,
+                                        object: AVAudioSession.sharedInstance(), userInfo: info)
+        result(nil)
       case "postMediaServicesResetForIntegrationTest":
         guard let lifecycle = self?.audioLifecycle else {
           result(FlutterError(code: "AUDIO_LIFECYCLE_UNAVAILABLE", message: "Audio lifecycle observer has not started", details: nil))

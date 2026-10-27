@@ -1,11 +1,12 @@
 # iPhone media-services reset recovery
 
-Status: implementation and native acceptance candidate, 26 October 2026
-(Europe/Paris). **Production observation remains deferred.** PlayerService,
-radio, the native player registry, retained video and the recovery notice are
-connected. The native integration suite explicitly starts the Swift observer;
-its new posted-notification and delayed-HTTP checks have not run on a Mac yet.
-They are acceptance gates, not reported passes.
+Status: hosted iOS 18.6 reset-path validation and continued acceptance,
+27 October 2026 (Europe/Paris). **Production observation remains deferred.**
+Build 39 passes the complete iOS 18.6 suite, including actual posted reset,
+late-native-HTTP and radio checks. Build 40 passes the complete iOS 26 suite on the parity source through #225,
+but exposes a background gain retirement race on iOS 18.6. The corrected WebKit
+and retained-session-observer continuation passes host tests and requires native execution.
+Physical daemon/background/accessory acceptance remains open.
 
 Apple's [media-services reset contract](https://developer.apple.com/documentation/avfaudio/avaudiosession/mediaserviceswereresetnotification)
 requires orphaned audio objects and session configuration to be recreated, without
@@ -30,7 +31,7 @@ stateDiagram-v2
   Ready --> Lost: media services lost
   Ready --> Recovering: media services reset
   Lost --> Recovering: media services reset
-  Recovering --> Paused: every old local output is confirmed destroyed
+  Recovering --> Paused: every old local output is confirmed retired
   Recovering --> Blocked: cleanup cannot be confirmed
   Paused --> Ready: explicit Play / new selection recreates the intended backend
   Paused --> Recovering: another reset
@@ -318,3 +319,111 @@ the exact selected device before bootstatus, retaining the same boot/control/app
 gates. Display-service logs are preserved on failure. This is a host startup
 correction awaiting native validation, not a proven iOS 26 recovery fix.
 All sixteen dependency/simulator/control Python tests pass.
+
+
+## Build 39: confirmed iOS 18.6 recovery path
+
+[Build 39](https://github.com/lokal-music/lokal-mobile/actions/runs/40435716700)
+passes the complete iOS 18.6 suite at candidate head
+`c2ee76b9f3c5b52831849cd2b24b8c8eef4a1f79` (candidate tree
+`63f4e889a5f8b8ced7c0daea2a2a20793e88405e`). The preserved runtime report
+records compiled PR-merge source `168230c85616c0c793abe0f04c6e1a7eb00d1af5`.
+The runtime artifact SHA-256 is
+`a0e000016c4cf610527fd9d40d1bb39dbb5d4b9d2cb87dc3f3c20e888e3e703f`.
+JSON and actual system/Rust paused/recovering screenshots are now exported.
+
+| Native case | Confirmed result |
+| --- | --- |
+| AVPlayer playing + paused reset | Two posted notifications; queue, preferences and paused position retained; explicit replay advances 304 ms. |
+| New selection during repeated reset | Waiting Play retires; canonical order/index and newer selection retained paused; explicit replay advances 303 ms. |
+| Rust DSP playing + paused reset | Two posted notifications; retained paused state; explicit replay advances 309 ms. |
+| Delayed native HTTP | Actual loopback probe is released only after replacement starts, is rejected as stale and does not displace replacement; further progress 544 ms. |
+| Radio | Actual AVPlayer Ready, two resets, retained station paused and four real loopback HTTP opens across explicit replay. |
+
+These are app/notification-path checks, not a media-daemon restart, audible
+hardware proof or live public-service qualification. The separate iOS 26 job
+fails listing available devices after ninety seconds, before selection/boot or
+application launch. Simulator GUI startup is therefore not exercised there.
+The next workflow pins the system-selected Xcode to the same declared build
+installation before simulator services are used; its effect is pending validation.
+The required iOS 26 boot/control/full-suite gates remain intact.
+
+## Final owner/event lifetime continuation
+
+The new host regression reproduces a persistent session subscription inheriting
+the request generation that installed it. After reset its next interruption
+could no longer enter local playback. Session/noisy observers now register with
+neutral local/remote tickets while preserving their error zone; each subsequent
+event captures a fresh request. Pending loads and retries retain their original
+tickets. Expected reset retirement of background pause/duck/resume is observed,
+and a phone noisy event does not pause an active receiver.
+
+Both successful and failed awaited results are fenced before fallback/error
+publication, including native invalidation before Dart receives the event.
+A video release captures its owned native acknowledgements at submission and
+retires if reset or replacement ownership arrives meanwhile. It cannot clear
+the retained video selection, authorize another output, or wait indefinitely
+on a replacement view's future. Native-quiet failures stay observed while the
+command sender is pending and remain failures for the actual waiter.
+
+The additional native gate posts Lost/Reset and interruption notifications via
+the real audio_session plugin, requires old interruption-end to stay paused and
+requires a fresh interruption to pause/resume after recovery. These additions
+are pending Mac execution.
+
+## Offline real-WebKit media acceptance
+
+The new debug-only document seam runs the exact production Lokal iframe bridge
+against a generated twelve-second 96x54 H.264/AAC video in an iframe. Data URIs
+eliminate public-network/provider availability from this gate. FFprobe confirms
+both codec tracks, duration and 49,935 bytes; fixture SHA-256:
+`416a7558921761a26aca370a294be0080ae969afb3249acfef720b3d54b24f37`.
+The generation command is retained beside the base64 test asset. Product routes
+continue to construct the official YouTube embed.
+
+The native check requires actual WKWebView creation, real decoded-frame counts
+and un-interpolated HTML media time. Space must preserve the presentation and
+current native view; reset must acknowledge quiescence, replace that view,
+retain the selected video/time/Space paused, and advance again only after Play.
+A second paused reset must reconstruct another paused view. This is prepared
+native acceptance, **not a reported native pass or YouTube qualification**.
+The public YouTube probe remains separate and opt-in.
+
+The exact expanded workflow selection passes **304 Flutter tests**; sixteen
+Python dependency/simulator/control tests and actionlint pass. Whole lib and
+integration analysis reports no errors (571 warning/information items). Native
+Rust, API 141 bindings and dependency locks are unchanged. The ordinary Android
+transport/interruption path is retained by the iPhone-only facade boundaries.
+
+
+## Build 40: iOS 26 pass and background gain acknowledgement race
+
+[Build 40](https://github.com/lokal-music/lokal-mobile/actions/runs/40438681830)
+uses head `07eb69f3468ad4fce42eb33cb6d1dea12a5f88d2`, tree
+`bd50a0c83d58894717abcb2ba9e691842d0960fc` and compiled PR merge
+`ccfb0170bc9385889aeec79239bcb75ba59036cd`. The complete iOS 26 report passes:
+system reset replay 303 ms, newer selection 304 ms, Rust reset replay 554 ms,
+late HTTP replacement progress 502 ms and four radio HTTP opens. Artifact
+`12707319273` SHA-256:
+`52225bef7c5ea9c36ea5f47f2ae3851aae6feb5e0d5db6975b2415b2b6c79e41`.
+The GUI-before-bootstatus strategy therefore reaches app acceptance on this host;
+earlier intermittent inventory failures are not proven resolved.
+
+On iOS 18.6 the system and Rust reset checks pass, then an unawaited diagnostics
+volume reconciliation exposes `LocalAudioRequestRetired` from
+`RustAudioService.setVolume` after reset. The native fence correctly rejects the
+old acknowledgement, but the background owner does not observe cancellation.
+The test fails; subsequent missing-fixture errors are teardown after that failure,
+not a separate codec diagnosis. Runtime artifact `12706658265` SHA-256:
+`41207cb74c5307d434138bca2b6e684feedbd9fcf70f876843ba3e8985b0cdb6`.
+Full diagnostics artifact `12706683331` SHA-256:
+`b08df97e41d7ffa7277a024a1a4a9ebd033e9b1409449b4554d85503cafc4e43`.
+
+All background gain reconciliations, including system ReplayGain folds, now
+explicitly observe expected retirement.
+The whole reconciliation enters the original request scope; awaited callers still
+receive cancellation so they cannot continue stale work. The host regression
+holds a native gain acknowledgement across reset, observes prompt background
+cancellation and a later native error, forbids stale publication, and verifies
+that an unrelated current gain failure still propagates. No global error-handler
+filter, refreshed request ticket, weakened assertion or automatic retry is used.

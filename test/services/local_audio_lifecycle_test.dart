@@ -4,6 +4,107 @@ import 'package:flick/services/local_audio_lifecycle.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('background gain update observes retirement and late native failure', () async {
+    var epoch = BigInt.zero;
+    final lifecycle = LocalAudioLifecycle(
+      nativeEpoch: () => epoch,
+      destroyNativeOutput: () async {},
+      restoreSession: () async {},
+    );
+    final nativeGain = Completer<void>();
+    var publishedGain = false;
+    final background = LocalAudioLifecycle.ignoreRetired(
+      lifecycle.run(() async {
+        await lifecycle.waitFor(nativeGain.future);
+        publishedGain = true;
+      }),
+    );
+    epoch = BigInt.one;
+    await lifecycle.accept(LocalAudioNativeEvent.reset, epoch);
+    await background; // Expected retirement is observed before native settles.
+    nativeGain.completeError(StateError('old native gain acknowledgement'));
+    await Future<void>.delayed(Duration.zero);
+    expect(publishedGain, isFalse);
+    await expectLater(
+      LocalAudioLifecycle.ignoreRetired(
+        lifecycle.run(() async => throw StateError('current gain failure')),
+      ),
+      throwsStateError,
+    );
+    await LocalAudioLifecycle.ignoreRetired(
+      Future<void>.error(LocalAudioUnavailable(LocalAudioPhase.lost)),
+    );
+  });
+
+  test(
+    'a late native error is retired before fallback can publish it',
+    () async {
+      var epoch = BigInt.zero;
+      final lifecycle = LocalAudioLifecycle(
+        nativeEpoch: () => epoch,
+        destroyNativeOutput: () async {},
+        restoreSession: () async {},
+      );
+      final native = Completer<void>();
+      var staleFailures = 0;
+      final action = lifecycle.run(() async {
+        try {
+          await lifecycle.waitFor(native.future);
+        } catch (error) {
+          if (error is! LocalAudioRequestRetired) staleFailures++;
+          rethrow;
+        }
+      });
+      final retired = expectLater(
+        action,
+        throwsA(isA<LocalAudioRequestRetired>()),
+      );
+      epoch = BigInt.one; // Native invalidation, before the Dart event arrives.
+      native.completeError(StateError('old decoder failed'));
+      await retired;
+      expect(staleFailures, 0);
+      await lifecycle.accept(LocalAudioNativeEvent.reset, epoch);
+      await expectLater(
+        lifecycle.run(
+          () => lifecycle.waitFor(
+            Future<void>.error(StateError('current decoder failed')),
+          ),
+        ),
+        throwsStateError,
+      );
+    },
+  );
+  test(
+    'persistent session observers capture fresh requests after a reset',
+    () async {
+      var epoch = BigInt.zero;
+      final lifecycle = LocalAudioLifecycle(
+        nativeEpoch: () => epoch,
+        destroyNativeOutput: () async {},
+        restoreSession: () async {},
+      );
+      final events = StreamController<void>.broadcast(sync: true);
+      final requests = <Future<void>>[];
+      final observed = <BigInt>[];
+      late StreamSubscription<void> subscription;
+      await lifecycle.run(() async {
+        lifecycle.registerPersistentObserver(() {
+          subscription = events.stream.listen((_) {
+            requests.add(
+              lifecycle.run(() async => observed.add(lifecycle.requestEpoch)),
+            );
+          });
+        });
+      });
+      epoch = BigInt.one;
+      await lifecycle.accept(LocalAudioNativeEvent.reset, epoch);
+      events.add(null);
+      await Future.wait(requests);
+      expect(observed, [BigInt.one]);
+      await subscription.cancel();
+      await events.close();
+    },
+  );
   late BigInt nativeEpoch;
   late int destroyed;
   late int restored;

@@ -1227,7 +1227,11 @@ class PlayerService {
       _hardwareVolumeGeneration = null;
       _activeUsbDsdMode = null;
       _activeUsbDsdSongId = null;
-      unawaited(_reconcileVolumeForTier(_determineCurrentTier()));
+      unawaited(
+        IosLocalAudioRequests.ignoreRetired(
+          _reconcileVolumeForTier(_determineCurrentTier()),
+        ),
+      );
       return;
     }
     if (!Platform.isAndroid) return;
@@ -1240,9 +1244,17 @@ class PlayerService {
       if (v == null || !v.isFinite) return;
       if ((v - _currentVolume).abs() <= 0.000001) return;
       _currentVolume = v.clamp(0.0, 1.0);
-      unawaited(_reconcileVolumeForTier(_determineCurrentTier()));
+      unawaited(
+        IosLocalAudioRequests.ignoreRetired(
+          _reconcileVolumeForTier(_determineCurrentTier()),
+        ),
+      );
     } else {
-      unawaited(_reconcileVolumeForTier(_determineCurrentTier()));
+      unawaited(
+        IosLocalAudioRequests.ignoreRetired(
+          _reconcileVolumeForTier(_determineCurrentTier()),
+        ),
+      );
     }
   }
 
@@ -2394,19 +2406,22 @@ class PlayerService {
       try {
         final session = await IosLocalAudioRequests.wait(AudioSession.instance);
         await IosLocalAudioRequests.wait(_applySystemAudioSessionConfig());
-        _audioFocusSubscription ??= session.interruptionEventStream.listen((
-          event,
-        ) {
-          _onAudioInterruptionEvent(event);
-        });
-        if (Platform.isIOS) {
-          _noisyAudioSubscription ??= session.becomingNoisyEventStream.listen((
-            _,
+        IosLocalAudioRequests.registerPersistentObserver(() {
+          _audioFocusSubscription ??= session.interruptionEventStream.listen((
+            event,
           ) {
-            _wasPlayingBeforeAudioInterruption = false;
-            unawaited(pause());
+            _onAudioInterruptionEvent(event);
           });
-        }
+          if (Platform.isIOS) {
+            _noisyAudioSubscription ??= session.becomingNoisyEventStream.listen(
+              (_) {
+                _wasPlayingBeforeAudioInterruption = false;
+                if (_castingService.isActive) return;
+                unawaited(pause());
+              },
+            );
+          }
+        });
         _audioSessionConfigured = true;
       } catch (e) {
         _debugLog('[AudioFocus] Failed to configure Android audio session: $e');
@@ -2450,13 +2465,13 @@ class PlayerService {
           duckOnInterruptionNotifier.value) {
         // Transient loss (notification sound): dip volume, keep playing.
         if (isPlayingNotifier.value) {
-          unawaited(_setDucked(true));
+          unawaited(IosLocalAudioRequests.ignoreRetired(_setDucked(true)));
         }
         return;
       }
       if (isPlayingNotifier.value) {
         _wasPlayingBeforeAudioInterruption = true;
-        unawaited(_pauseInternal());
+        unawaited(IosLocalAudioRequests.ignoreRetired(_pauseInternal()));
       }
       return;
     }
@@ -2465,7 +2480,7 @@ class PlayerService {
     // started; otherwise a manual pause during the interruption would cause
     // an unwanted auto-resume.
     if (event.type == AudioInterruptionType.duck && _isDucked) {
-      unawaited(_setDucked(false));
+      unawaited(IosLocalAudioRequests.ignoreRetired(_setDucked(false)));
       return;
     }
     if (!_wasPlayingBeforeAudioInterruption) {
@@ -2476,7 +2491,9 @@ class PlayerService {
     switch (event.type) {
       case AudioInterruptionType.pause:
       case AudioInterruptionType.duck:
-        unawaited(_resumeAfterAudioInterruption());
+        unawaited(
+          IosLocalAudioRequests.ignoreRetired(_resumeAfterAudioInterruption()),
+        );
       case AudioInterruptionType.unknown:
         // Permanent focus loss (e.g. another app started long-form playback).
         // Stay paused and let the user explicitly resume.
@@ -2853,7 +2870,11 @@ class PlayerService {
 
   void _onHwVolumeResult(bool success) {
     _hwVolumeFailed = !success;
-    unawaited(_reconcileVolumeForTier(_determineCurrentTier()));
+    unawaited(
+      IosLocalAudioRequests.ignoreRetired(
+        _reconcileVolumeForTier(_determineCurrentTier()),
+      ),
+    );
   }
 
   /// True when the Rust pipeline runs its pure passthrough callback, which
@@ -2966,37 +2987,38 @@ class PlayerService {
     usingRustBackend: _usingRustBackend,
   );
 
-  Future<void> _reconcileVolumeForTier(VolumeTier tier) async {
-    _activeTier = tier;
-    if (tier == VolumeTier.hardware) {
-      _startHwVolumeHealthTimer();
-    } else {
-      _stopHwVolumeHealthTimer();
-    }
-    if (!_rustAudioService.isInitialized) return;
-    if (_switchingDsdForVolume) return;
-    if (_usbDsdWireActive) {
-      // The software tier here means opt-in conversion is available, not
-      // permission to scale the still-active DSD stream.
-      await _rustAudioService.setVolume(1.0);
-      return;
-    }
-    switch (tier) {
-      case VolumeTier.hardware:
-        // DAC Feature Unit is the only volume authority — engine at unity.
-        await _rustAudioService.setVolume(1.0);
-        break;
-      case VolumeTier.software:
-        await _rustAudioService.setVolume(_currentVolume);
-        break;
-      case VolumeTier.system:
-        await _rustAudioService.setVolume(_currentVolume);
-        break;
-      case VolumeTier.unavailable:
-        await _rustAudioService.setVolume(1.0);
-        break;
-    }
-  }
+  Future<void> _reconcileVolumeForTier(VolumeTier tier) =>
+      IosLocalAudioRequests.run(() async {
+        _activeTier = tier;
+        if (tier == VolumeTier.hardware) {
+          _startHwVolumeHealthTimer();
+        } else {
+          _stopHwVolumeHealthTimer();
+        }
+        if (!_rustAudioService.isInitialized) return;
+        if (_switchingDsdForVolume) return;
+        if (_usbDsdWireActive) {
+          // The software tier here means opt-in conversion is available, not
+          // permission to scale the still-active DSD stream.
+          await _rustAudioService.setVolume(1.0);
+          return;
+        }
+        switch (tier) {
+          case VolumeTier.hardware:
+            // DAC Feature Unit is the only volume authority — engine at unity.
+            await _rustAudioService.setVolume(1.0);
+            break;
+          case VolumeTier.software:
+            await _rustAudioService.setVolume(_currentVolume);
+            break;
+          case VolumeTier.system:
+            await _rustAudioService.setVolume(_currentVolume);
+            break;
+          case VolumeTier.unavailable:
+            await _rustAudioService.setVolume(1.0);
+            break;
+        }
+      });
 
   /// Prefer [primary], then the current-song notifier, then the last engine
   /// playback snapshot so USB focus stays latched when Rust is ahead of or
@@ -3486,7 +3508,11 @@ class PlayerService {
       dsdEffectiveMode: dsdEffectiveMode,
       dsdTransport: dsdTransport,
     );
-    unawaited(_reconcileVolumeForTier(_determineCurrentTier()));
+    unawaited(
+      IosLocalAudioRequests.ignoreRetired(
+        _reconcileVolumeForTier(_determineCurrentTier()),
+      ),
+    );
 
     _debugLog(
       '[Diagnostics] $reason: mode=${mode.logLabel}, '
@@ -3911,7 +3937,11 @@ class PlayerService {
           // just_audio keeps its own volume per player: fold the new track's
           // ReplayGain in whenever playback advances (auto-advance incl.).
           if (!_usingRustBackend) {
-            unawaited(_applyReplayGainForSystemTier(state.currentTrack!));
+            unawaited(
+              IosLocalAudioRequests.ignoreRetired(
+                _applyReplayGainForSystemTier(state.currentTrack!),
+              ),
+            );
           }
           unawaited(
             _syncUac2PlaybackStatus(
@@ -5998,7 +6028,11 @@ class PlayerService {
             'engine': activeEngine.name,
           });
         if (!_usingRustBackend && !song.atmosEncoded) {
-          unawaited(_applyReplayGainForSystemTier(song));
+          unawaited(
+            IosLocalAudioRequests.ignoreRetired(
+              _applyReplayGainForSystemTier(song),
+            ),
+          );
         }
         _ensurePositionSaveTimer();
         _updatePriorityAnchor();
@@ -6347,8 +6381,10 @@ class PlayerService {
       await _castingService.delegatePause();
       return;
     }
-    await _externalPlaybackOwner.releaseCurrent();
-    return IosLocalAudioRequests.run(_pauseLocalOutput);
+    return IosLocalAudioRequests.run(() async {
+      await IosLocalAudioRequests.wait(_externalPlaybackOwner.releaseCurrent());
+      return _pauseLocalOutput();
+    });
   }
 
   Future<void> _pauseLocalOutput() async {

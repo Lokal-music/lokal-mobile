@@ -1,0 +1,207 @@
+import 'package:flick/core/theme/app_theme.dart';
+import 'package:flick/features/music_videos/music_video_controller.dart';
+import 'package:flick/features/music_videos/music_video_surface.dart';
+import 'package:flick/features/player/widgets/video_space_layout.dart';
+import 'package:flick/services/ios_local_audio_requests.dart';
+import 'package:flick/services/local_audio_lifecycle.dart';
+import 'package:flick/services/player_service.dart';
+import 'package:flick/widgets/common/ios_audio_recovery_host.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+
+import '../test/fixtures/native_web_video_document.dart';
+
+/// Real WKWebView, generated H.264/AAC and the exact production iframe bridge.
+/// This establishes local decoder/retirement behavior, not YouTube acceptance.
+Future<void> probeIosWebKitReset(
+  WidgetTester tester,
+  IntegrationTestWidgetsFlutterBinding binding,
+  PlayerService player,
+) async {
+  final video = Media3MusicVideoController(trackNativeOutputQuiescence: true);
+  final space = ValueNotifier(false);
+  final key = GlobalKey();
+  final views = <InAppWebViewController>[];
+  final lifecycle = IosLocalAudioRequests.lifecycle;
+  await player.pause();
+  final lease = await player.acquireExternalPlayback(
+    video.releaseAudio,
+    onMediaReset: video.retireForMediaReset,
+  );
+
+  Future<void> until(bool Function() ready, String reason) async {
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        lifecycle.phase.value,
+        isNot(LocalAudioPhase.blocked),
+        reason: '$reason: ${lifecycle.cleanupError}',
+      );
+      expect(
+        video.embedErrorNotifier.value,
+        isNull,
+        reason: '$reason: generated local media did not become playable',
+      );
+      if (ready()) return;
+    }
+    fail(reason);
+  }
+
+  Future<Map> nativeSnapshot() async {
+    final value = await views.last.evaluateJavascript(
+      source: 'window.__lokalNativeVideoSnapshot && window.__lokalNativeVideoSnapshot()',
+    );
+    expect(value, isA<Map>());
+    return value as Map;
+  }
+
+  Future<int> progress() async {
+    final before = video.sourcePosition;
+    await until(
+      () =>
+          video.playingNotifier.value &&
+          video.sourcePosition - before > const Duration(milliseconds: 350),
+      'Real WebKit source time did not advance',
+    );
+    final snapshot = await nativeSnapshot();
+    expect(snapshot['state'], 1);
+    expect(
+      snapshot['frames'],
+      greaterThan(2),
+      reason: 'The real WebKit video decoder must deliver frames',
+    );
+    return (video.sourcePosition - before).inMilliseconds;
+  }
+
+  Widget surface() => MusicVideoSurface.forNativeAcceptance(
+    key: key,
+    videoId: 'abcdefghijk',
+    controller: video,
+    document: nativeWebVideoFixtureDocument,
+    onViewCreated: views.add,
+  );
+
+  try {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: IosAudioRecoveryHost(
+            child: ValueListenableBuilder(
+              valueListenable: space,
+              builder: (context, active, _) => active
+                  ? VideoSpaceLayout(
+                      player: surface(),
+                      subtitles: const Text('Generated local video'),
+                      onExit: () => space.value = false,
+                      onOptions: () {},
+                    )
+                  : Center(
+                      child: SizedBox(
+                        width: 320,
+                        height: 320,
+                        child: surface(),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await until(
+      () => video.timingAvailableNotifier.value && views.length == 1,
+      'Production video bridge did not observe the local decoder',
+    );
+    final initialProgress = await progress();
+    final presentation = key.currentState;
+    space.value = true;
+    await tester.pump();
+    expect(key.currentState, same(presentation));
+    expect(
+      views,
+      hasLength(1),
+      reason: 'Space must retain the same native view',
+    );
+    final before = video.sourcePosition;
+    final oldView = views.single;
+    await const MethodChannel('lokal/ios')
+        .invokeMethod<void>('postMediaServicesResetForIntegrationTest');
+    await until(
+      () =>
+          lifecycle.phase.value == LocalAudioPhase.paused &&
+          views.length == 2 &&
+          video.timingAvailableNotifier.value,
+      'WebKit reset did not acknowledge retirement and create a paused replacement',
+    );
+    expect(views.last, isNot(same(oldView)));
+    expect(key.currentState, same(presentation));
+    expect(space.value, isTrue);
+    expect(
+      lease.isReleased,
+      isFalse,
+      reason: 'Retain selected video ownership',
+    );
+    expect(
+      video.sourcePosition.inMilliseconds,
+      inInclusiveRange(
+        (before.inMilliseconds - 350).clamp(0, 12000),
+        before.inMilliseconds + 1000,
+      ),
+    );
+    expect(video.playingNotifier.value, isFalse);
+    final pausedAt = video.sourcePosition;
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(video.playingNotifier.value, isFalse);
+    expect(
+      (video.sourcePosition - pausedAt).abs(),
+      lessThan(const Duration(milliseconds: 100)),
+    );
+    await binding.takeScreenshot('ios-webkit-reset-paused-space');
+    await video.command('play');
+    final replayProgress = await progress();
+    expect(lifecycle.phase.value, LocalAudioPhase.ready);
+
+    await video.command('pause');
+    await until(
+      () => !video.playingNotifier.value,
+      'Native video Pause not observed',
+    );
+    final pausedBeforeSecondReset = video.sourcePosition;
+    await const MethodChannel('lokal/ios')
+        .invokeMethod<void>('postMediaServicesResetForIntegrationTest');
+    await until(
+      () =>
+          lifecycle.phase.value == LocalAudioPhase.paused &&
+          views.length == 3 &&
+          video.timingAvailableNotifier.value,
+      'Repeated paused video reset did not reconstruct the selected source',
+    );
+    expect(key.currentState, same(presentation));
+    expect(video.playingNotifier.value, isFalse);
+    expect(
+      (video.sourcePosition - pausedBeforeSecondReset).abs(),
+      lessThan(const Duration(milliseconds: 350)),
+    );
+    expect(player.isPlayingNotifier.value, isFalse);
+    binding.reportData!['media_reset_webkit_local_video'] = {
+      'scope': 'Generated H.264/AAC decoded by real WKWebView; controlled provider API, not YouTube or a daemon restart',
+      'native_views_created': views.length,
+      'initial_progress_ms': initialProgress,
+      'explicit_replay_progress_ms': replayProgress,
+      'space_and_selected_video_retained': true,
+      'playing_and_paused_reset_preserved': true,
+      'native_cleanup_acknowledged': true,
+    };
+  } finally {
+    try {
+      await lease.release().timeout(const Duration(seconds: 12));
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      video.dispose();
+      space.dispose();
+    }
+  }
+}

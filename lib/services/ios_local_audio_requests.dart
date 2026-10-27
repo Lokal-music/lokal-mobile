@@ -164,6 +164,16 @@ abstract final class IosLocalAudioRequests {
   static Future<T> runRemote<T>(Future<T> Function() action) =>
       Platform.isIOS ? lifecycle.runRemote(action) : action();
 
+  static T registerPersistentObserver<T>(T Function() register) =>
+      Platform.isIOS
+      ? lifecycle.registerPersistentObserver(register)
+      : register();
+
+  /// Background session callbacks may be retired by a simultaneous reset.
+  /// Preserve ordinary failures; cancellation must not become an uncaught error.
+  static Future<void> ignoreRetired(Future<void> work) =>
+      !Platform.isIOS ? work : LocalAudioLifecycle.ignoreRetired(work);
+
   static BigInt? get epoch => Platform.isIOS ? lifecycle.requestEpoch : null;
 
   static void check() {
@@ -171,17 +181,7 @@ abstract final class IosLocalAudioRequests {
   }
 
   static Future<T> wait<T>(Future<T> result) =>
-      Platform.isIOS ? _checkedWait(result) : result;
+      Platform.isIOS ? lifecycle.waitFor(result) : result;
 
-  static Future<T> _checkedWait<T>(Future<T> result) async {
-    final value = await result;
-    lifecycle.checkAfterAwait();
-    return value;
-  }
-
-  static bool isRetired(Object error) =>
-      error is LocalAudioRequestRetired ||
-      error is LocalAudioUnavailable ||
-      error.toString().contains('AUDIO_LOCAL_REQUEST_RETIRED') ||
-      error.toString().contains('AUDIO_LOCAL_CLEANUP_UNCONFIRMED');
+  static bool isRetired(Object error) => LocalAudioLifecycle.isRetired(error);
 }

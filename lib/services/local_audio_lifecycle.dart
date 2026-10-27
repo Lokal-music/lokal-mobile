@@ -85,6 +85,25 @@ class LocalAudioLifecycle {
 
   void unregister(Object owner) => _participants.remove(owner);
 
+  /// Session observers outlive the request that installed them. Register their
+  /// streams outside temporary local/receiver tickets, preserving the caller's
+  /// error zone. Each subsequent event must capture its own fresh request.
+  T registerPersistentObserver<T>(T Function() register) =>
+      runZoned(register, zoneValues: {_zoneKey: null, _remoteEpochKey: null});
+
+  /// Cancellation is expected for background policy updates racing with reset.
+  /// Keep unrelated errors visible to the caller's existing error handler.
+  static Future<void> ignoreRetired(Future<void> work) =>
+      work.catchError((Object error, StackTrace stack) {
+        if (!isRetired(error)) Error.throwWithStackTrace(error, stack);
+      });
+
+  static bool isRetired(Object error) =>
+      error is LocalAudioRequestRetired ||
+      error is LocalAudioUnavailable ||
+      error.toString().contains('AUDIO_LOCAL_REQUEST_RETIRED') ||
+      error.toString().contains('AUDIO_LOCAL_CLEANUP_UNCONFIRMED');
+
   BigInt get requestEpoch {
     final request = Zone.current[_zoneKey] as _LocalAudioRequest?;
     if (request == null) {
@@ -106,6 +125,19 @@ class LocalAudioLifecycle {
       checkRequest();
     }
   }
+
+  /// Fence failures as well as values before a caller can publish an error or
+  /// enter fallback. Native invalidation can precede Dart's reset notification.
+  Future<T> waitFor<T>(Future<T> result) => result.then<T>(
+    (value) {
+      checkAfterAwait();
+      return value;
+    },
+    onError: (Object error, StackTrace stack) {
+      checkAfterAwait();
+      Error.throwWithStackTrace(error, stack);
+    },
+  );
 
   /// The returned future retires promptly even when an old HTTP/native future
   /// cannot be cancelled. Its eventual completion/error remains observed.
@@ -137,9 +169,14 @@ class LocalAudioLifecycle {
       if (phase.value == LocalAudioPhase.blocked) {
         throw LocalAudioUnavailable(phase.value);
       }
-      final result = await action();
-      request.check();
-      return result;
+      try {
+        final result = await action();
+        request.check();
+        return result;
+      } catch (error, stack) {
+        request.check();
+        Error.throwWithStackTrace(error, stack);
+      }
     }, zoneValues: {_zoneKey: request});
     return request.wait(work).whenComplete(() => _requests.remove(request));
   }
