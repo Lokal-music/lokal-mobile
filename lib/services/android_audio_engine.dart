@@ -449,6 +449,17 @@ class AndroidAudioEngine implements AudioEngine {
     return player;
   }
 
+  /// Refuse an online sample in place of a longer catalogue recording.
+  /// Local files and genuinely short songs are intentionally excluded.
+  static bool isTruncatedHttpAddonAudio(Song? song, Duration? decodedDuration) {
+    if (song?.sourcePackage != 'konnekted.progressive' ||
+        decodedDuration == null) return false;
+    return song!.duration >= const Duration(seconds: 90) &&
+        decodedDuration >= const Duration(seconds: 10) &&
+        decodedDuration <= const Duration(seconds: 60) &&
+        decodedDuration.inMilliseconds * 2 < song.duration.inMilliseconds;
+  }
+
   void _attachListeners(just_audio.AudioPlayer player) {
     _subscriptions.add(
       player.playerStateStream.listen((state) {
@@ -526,6 +537,18 @@ class AndroidAudioEngine implements AudioEngine {
       player.processingStateStream.listen((state) {
         if (!identical(player, _player)) return;
         if (state == just_audio.ProcessingState.completed) {
+          if (_sourceFailed) return;
+          if (isTruncatedHttpAddonAudio(_loadedTrack, player.duration)) {
+            final rejected = _loadedTrack;
+            _sourceFailed = true;
+            devLog('[Playback] HTTP add-on truncated audio rejected at EOF: '
+                'expectedMs=${rejected?.duration.inMilliseconds} '
+                'decodedMs=${player.duration?.inMilliseconds}');
+            _emit(_state.copyWith(isPlaying: false));
+            if (rejected != null) _onTrackError?.call(rejected);
+            unawaited(_retireTimedOutPlayer(player));
+            return; // Never count this sample as a completed song or advance.
+          }
           if (_loadedTrack?.atmosEncoded == true) {
             AtmosDiagnostics.record('playback_end', {
               'codec': 'eac3_joc', 'outcome': 'completed',
@@ -694,6 +717,14 @@ class AndroidAudioEngine implements AudioEngine {
       await player
           .setAudioSource(source, initialIndex: initialIndex, preload: true)
           .timeout(const Duration(seconds: 30));
+      if (isTruncatedHttpAddonAudio(_loadedTrack, player.duration)) {
+        devLog('[Playback] HTTP add-on truncated audio rejected at load: '
+            'expectedMs=${_loadedTrack?.duration.inMilliseconds} '
+            'decodedMs=${player.duration?.inMilliseconds}');
+        throw const FormatException(
+          'The HTTP add-on returned a preview or truncated audio stream.',
+        );
+      }
       _sourceFailed = false;
     } catch (error) {
       // A failed source must never be reused by seek/resume. stop() also
