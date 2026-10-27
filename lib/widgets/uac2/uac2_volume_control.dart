@@ -90,10 +90,7 @@ class _Uac2VolumeControlState extends ConsumerState<Uac2VolumeControl> {
   Widget build(BuildContext context) {
     final deviceStatus = ref.watch(uac2DeviceStatusProvider);
 
-    if (deviceStatus == null ||
-        deviceStatus.state == Uac2State.idle ||
-        (!deviceStatus.hasVolumeControl &&
-            !ref.read(playerServiceProvider).isVolumeAvailable)) {
+    if (deviceStatus == null || deviceStatus.state == Uac2State.idle) {
       return const SizedBox.shrink();
     }
 
@@ -115,7 +112,8 @@ class _Uac2VolumeControlState extends ConsumerState<Uac2VolumeControl> {
         (!hardwareAuthority || deviceStatus.volumeControlWritable) &&
         !_muteUpdateInFlight;
     final showDb =
-        isSoftwareVolume || deviceStatus.volumeMode == Uac2VolumeMode.hardware;
+        isSoftwareVolume || deviceStatus.volumeMode == Uac2VolumeMode.hardware ||
+        (!hardwareAuthority && isAvailable);
 
     final t = context.lokal;
     final useGradient = widget.useGradientBackground;
