@@ -10,6 +10,17 @@ import 'package:flick/core/theme/lokal_tokens.dart';
 /// Shared tab header geometry keeps the settings button stationary on navigation.
 const konnektedTopBarPadding = LokalPageGeometry.barPadding;
 
+/// One shared height for the three primary tab headers. At large accessibility
+/// text sizes the Library title (26sp) is taller than a 44dp action button;
+/// size the row for its text instead of clipping You's scrolling profile name.
+/// Every tab uses this same height so Discord/Settings stay vertically aligned.
+double konnektedHeaderHeight(BuildContext context) {
+  final textHeight = MediaQuery.textScalerOf(context).scale(26) * 1.2 + 12;
+  return textHeight > LokalPageGeometry.barHeight
+      ? textHeight
+      : LokalPageGeometry.barHeight;
+}
+
 /// Identical trailing header actions across Home, Library and You.
 ///
 /// Keeping Discord and Settings as the final fixed-width buttons means their
