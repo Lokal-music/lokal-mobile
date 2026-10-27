@@ -290,7 +290,7 @@ void main() {
       (tester) async {
     await pump(tester, reorderDemo: true);
     final titleX = tester.getTopLeft(find.text('QUEUE')).dx;
-    final upcomingX = tester.getTopLeft(find.text('Up Next')).dx;
+    final upcomingX = tester.getTopLeft(find.text('Up next')).dx;
     expect(titleX, closeTo(upcomingX, 1),
         reason: 'Popup Queue title was too far left of the content');
     expect(tester.takeException(), isNull);
