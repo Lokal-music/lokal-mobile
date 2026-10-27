@@ -58,7 +58,6 @@ void main() {
   });
 
   test('Discovery explicit cancellation still aborts a blocked request', () async {
-    final pending = Completer<void>();
     final cancelling = Completer<void>();
     final client = _NeverReplyClient();
     final operation = DiscoveryHttp(client).json(
@@ -69,7 +68,6 @@ void main() {
     cancelling.complete();
     await expectLater(operation, throwsA(isA<Exception>()));
     expect(client.aborted, isTrue);
-    pending.complete();
   });
 }
 
