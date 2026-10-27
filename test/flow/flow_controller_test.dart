@@ -163,7 +163,7 @@ void main() {
   );
 
   test(
-    'queue prefetches while three tracks remain without replay or duplicates',
+    'queue prefetches while up to four tracks remain without replay or duplicates',
     () async {
       await controller.play();
       final initial = [...playback.lastPlaylist];

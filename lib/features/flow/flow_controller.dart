@@ -9,6 +9,7 @@ import '../../services/online_playlist_reference.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/playlist_provider.dart';
 import '../../services/online_radio_recommendations.dart';
+import '../../services/automix_analysis_cache.dart';
 import 'domain/flow_models.dart';
 import 'flow_library.dart';
 import 'flow_playback.dart';
@@ -139,7 +140,7 @@ class FlowController extends AsyncNotifier<FlowData> {
     final session = state.requireValue.session;
     final growthKey = '${session.seed}:${song.id}:${session.trackIds.length}';
     if (!_growthScheduled &&
-        player.upNext.length <= 3 &&
+        player.upNext.length <= 4 &&
         _lastGrowthAttempt != growthKey &&
         playback.ownsSession(session.seed)) {
       _growthScheduled = true;
@@ -197,7 +198,7 @@ class FlowController extends AsyncNotifier<FlowData> {
     final target = songId ?? data.session.currentId;
     final first = available.where((s) => s.id == target).firstOrNull ??
         available.first;
-    // Playback begins immediately with a small local anchor. The online
+    // Playback begins immediately with a short local anchor. The online
     // radio lookup then fills the queue while the first song is playing.
     // This avoids blocking Play on network/auth and prevents a 24-track
     // downloaded queue from hiding online discoveries for an hour.
@@ -213,11 +214,15 @@ class FlowController extends AsyncNotifier<FlowData> {
     );
     await _commit(data);
     await ref.read(flowPlaybackProvider).play(songs, first, data.session.seed);
-    // The player observation schedules the first background radio top-up.
-    // A test adapter without player events may request growth explicitly.
+    // Warm only the near queue, from already-computed waveforms. Never hold
+    // initial audio start while reading persistent transition profiles.
+    unawaited(AutoMixAnalysisCache.instance.warm(songs).catchError((Object _) {}));
+    // The player-state observation asynchronously tops up at four or fewer
+    // upcoming songs. Never block the initial playback on online lookups;
+    // injected headless adapters may explicitly request grow().
   });
 
-  /// Grow when at most three tracks remain; appending to the context tail
+  /// Grow when at most four tracks remain; appending to the context tail
   /// preserves user-selected songs and gives network streams time to preload.
   Future<void> grow({bool onlyWhenLast = false}) => _serialize(() async {
     final playback = ref.read(flowPlaybackProvider);
@@ -226,10 +231,10 @@ class FlowController extends AsyncNotifier<FlowData> {
     if (onlyWhenLast &&
         (!active ||
             !playback.state.isPlaying ||
-            playback.state.upNext.length > 3)) {
+            playback.state.upNext.length > 4)) {
       return;
     }
-    if (active && playback.state.upNext.length > 3) return;
+    if (active && playback.state.upNext.length > 4) return;
     final library = await ref.read(flowLibraryProvider.future);
     if (data.session.trackIds.isEmpty ||
         (!active && !data.session.isFresh(DateTime.now()))) {
@@ -257,11 +262,30 @@ class FlowController extends AsyncNotifier<FlowData> {
     }
     if (!ref.mounted ||
         (active && !playback.ownsSession(data.session.seed))) return;
-    library.rememberOnline(online);
-    final local = library.topUp(data).take(
-      (remaining.clamp(0, FlowRules.topUpTracks) - online.length)
-          .clamp(0, FlowRules.topUpTracks),
+    // The online provider is a discovery boundary, not a policy bypass:
+    // apply the same bans, genre exclusions and recording deduplication.
+    online = library.eligibleOnline(
+      data,
+      online,
+      limit: remaining.clamp(0, FlowRules.topUpTracks),
     );
+    library.rememberOnline(online);
+    final onlineRecordings = online
+        .map((song) => radioRecordingKey(song.artist, song.title))
+        .toSet();
+    final local = library.topUp(
+          data,
+          trailingArtists: online.map((song) => song.artist),
+        )
+        .where(
+          (song) => !onlineRecordings.contains(
+            radioRecordingKey(song.artist, song.title),
+          ),
+        )
+        .take(
+          (remaining.clamp(0, FlowRules.topUpTracks) - online.length)
+              .clamp(0, FlowRules.topUpTracks),
+        );
     final extra = [...online, ...local];
     if (extra.isEmpty) return;
     // Persist the plan before touching the player. If a platform append fails,
@@ -276,6 +300,7 @@ class FlowController extends AsyncNotifier<FlowData> {
         ),
       ),
     );
+    unawaited(AutoMixAnalysisCache.instance.warm(extra).catchError((Object _) {}));
     for (final song in extra) {
       if (active) {
         if (!playback.ownsSession(data.session.seed)) break;
