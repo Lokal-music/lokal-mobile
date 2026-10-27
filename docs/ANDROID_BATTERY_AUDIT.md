@@ -20,9 +20,10 @@ savings until profiling on real phones is complete.
 - `AppLog.initializePersistence()` started a repeating 5-second timer even
   when the log buffer was empty.
 - `PriorityAnchorService` continuously writes silent PCM on an independent
-  Java `AudioTrack` when the optional anchor feature is active. Its existing
-  preference defaults to enabled, but it may be required for compatibility
-  with certain direct/high-resolution routes. It is NOT disabled in this PR.
+  Java `AudioTrack` when the optional anchor feature is active. The previous
+  preference default was enabled, including when users had never opted in.
+  This PR changes the fallback default to disabled. Persisted explicit
+  `true`/ `false` settings remain unchanged.
 - `MusicNotificationService` owns a partial wake lock while playing. Removing
   it unconditionally could interrupt screen-off playback, so this PR does not
   change it.
@@ -44,6 +45,21 @@ savings until profiling on real phones is complete.
   the UI is backgrounded; audio still plays there.
 - **Logging:** schedule disk flushes only when the queue contains entries,
   retain flush-on-lifecycle and retry-on-error semantics, and serialize writes.
+- **Priority Anchor:** disable the silent 48 kHz companion AudioTrack by default
+  for existing installations with no saved preference and new installations.
+  Keep the setting as an opt-in compatibility workaround for screen-off
+  bit-perfect audio on devices that need it. Preserve explicit saved choices;
+  do not clear user preferences. Add opt-in/change/start/stop diagnostic logs,
+  reliably stop on playback-state transitions and player disposal, release
+  the track on worker failure or Activity destruction, and always attempt
+  release even when AudioTrack.stop() throws.
+
+**Compatibility trade-off:** users whose device depended on the previous
+default-on Anchor may experience screen-off stalls with Rust/USB output.
+They can opt back into Settings > Playback > Background > Background playback
+anchor. Capture Lokal logs, device model, Android build, route/backend,
+and whether enabling the switch fixes the issue. Screen-off playback with
+Anchor disabled is a release validation scenario.
 
 ## Required device A/B profiling before merge
 
@@ -80,8 +96,9 @@ battery drain and app CPU measurements no worse than baseline.
 - **Partial wake lock ownership:** confirm whether the media engine and
   `MusicNotificationService` both hold locks. Preserve a correct lock for
   screen-off streaming; narrow ownership rather than deleting blindly.
-- **Priority Anchor:** quantify the extra silent 48 kHz AudioTrack thread and
-  route persistence benefit on affected devices before changing its default.
+- **Priority Anchor (now default-off):** quantify the extra silent 48 kHz
+  AudioTrack thread versus screen-off playback reliability, and use
+  reproducible bug logs to refine device/route-specific fallback if needed.
 - **Notification refresh:** the Rust position listener publishes every ~2s
   through `_updateNotificationState()`, including favorite lookup and album
   color handling. Separate position-only updates from metadata reconstruction
