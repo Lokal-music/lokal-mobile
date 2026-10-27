@@ -35,6 +35,8 @@ void main() {
     );
 
     expect(sources.singleWhere((source) => source.id == 'mono').name, 'Monochrome');
+    expect(sources.singleWhere((source) => source.id == 'sc').name, 'SoundCloud');
+    expect(sources.singleWhere((source) => source.id == 'sc').addon, isFalse);
     expect(sources.singleWhere((source) => source.id == 'mono').addon, isFalse);
     expect(sources.singleWhere((source) => source.id == 'yt').addon, isFalse);
 
