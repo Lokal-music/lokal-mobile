@@ -1170,13 +1170,12 @@ class AndroidAudioEngine implements AudioEngine {
             }
           } catch (_) { preparedStem = null; }
         }
-        final overlapMs = preparedStem != null
-            ? preparedStem.length.inMilliseconds
-            : modelPair && phraseCompatible
-                ? (phraseSecs! * 1000).round() : fadeMs;
-        final mixEnd = preparedStem != null
-            ? preparedStem.start + preparedStem.length
-            : modelPair ? modelMixEnd! : normalMixEnd;
+        final fallbackOverlapMs = modelPair && phraseCompatible
+            ? (phraseSecs! * 1000).round() : fadeMs;
+        final fallbackMixEnd = modelPair ? modelMixEnd! : normalMixEnd;
+        var overlapMs = preparedStem?.length.inMilliseconds ?? fallbackOverlapMs;
+        var mixEnd = preparedStem == null
+            ? fallbackMixEnd : preparedStem.start + preparedStem.length;
         final source = await _sourceBuilder(next);
         if (!valid()) { releaseIfOwned(); return; }
         // A muted track must stay muted through the preparation and ramp.
@@ -1197,6 +1196,36 @@ class AndroidAudioEngine implements AudioEngine {
         await incoming.setSpeed(outgoing.speed);
         await incoming.setLoopMode(just_audio.LoopMode.off);
         if (!valid()) { releaseIfOwned(); return; }
+        // Decoder preparation must happen *before* the cue, not at its
+        // musical start. Otherwise a cold Media3 decoder misses the precise
+        // overlap even with a cached WAV. The last 8 seconds are reserved
+        // for starting the already-prepared third player.
+        just_audio.AudioPlayer? preparedStemPlayer;
+        if (preparedStem != null) {
+          try {
+            preparedStemPlayer = _stemPlayerProvider != null
+                ? await _stemPlayerProvider!()
+                : just_audio.AudioPlayer(useProxyForRequestHeaders: false);
+            await preparedStemPlayer.setVolume(0);
+            await preparedStemPlayer.setLoopMode(just_audio.LoopMode.off);
+            await preparedStemPlayer.setAudioSource(
+              just_audio.AudioSource.uri(Uri.file(preparedStem.path)),
+              preload: true,
+            ).timeout(const Duration(seconds: 8));
+            if (!valid()) {
+              await preparedStemPlayer.dispose();
+              releaseIfOwned();
+              return;
+            }
+          } catch (error) {
+            devLog('[automix] third decoder unavailable: $error');
+            try { await preparedStemPlayer?.dispose(); } catch (_) {}
+            preparedStemPlayer = null;
+            preparedStem = null;
+            overlapMs = fallbackOverlapMs;
+            mixEnd = fallbackMixEnd;
+          }
+        }
 
         // Do not advance the queue while the next song is only buffered.
         // Poll the media position rather than wall time so pause/buffering
@@ -1205,6 +1234,9 @@ class AndroidAudioEngine implements AudioEngine {
         while (valid()) {
           final remainingMs = (mixEnd - outgoing.position).inMilliseconds;
           if (outgoing.processingState == just_audio.ProcessingState.completed) {
+            if (preparedStemPlayer != null) {
+              unawaited(preparedStemPlayer.dispose().catchError((Object _) {}));
+            }
             _crossfadeArmed = false; // normal end-of-track takes over
             return;
           }
@@ -1214,7 +1246,13 @@ class AndroidAudioEngine implements AudioEngine {
           if (outgoing.playing && remainingMs <= overlapMs) break;
           await Future<void>.delayed(const Duration(milliseconds: 80));
         }
-        if (!valid()) { releaseIfOwned(); return; }
+        if (!valid()) {
+          if (preparedStemPlayer != null) {
+            unawaited(preparedStemPlayer.dispose().catchError((Object _) {}));
+          }
+          releaseIfOwned();
+          return;
+        }
         // Volume may change while the incoming decoder is buffering.
         _rampUserVolume = outgoing.volume;
 
@@ -1234,14 +1272,19 @@ class AndroidAudioEngine implements AudioEngine {
               ? math.min(remainingMs, physicalRemainingMs)
               : physicalRemainingMs,
         );
-        if (preparedStem != null &&
+        if (preparedStem != null && preparedStemPlayer != null &&
             (outgoing.position - preparedStem.start).inMilliseconds.abs() <= 650 &&
             await _commitStemClip(
-              clip: preparedStem, outgoing: outgoing, incoming: incoming,
+              clip: preparedStem, preparedPlayer: preparedStemPlayer,
+              outgoing: outgoing, incoming: incoming,
               next: next, nextProfile: upcomingProfile,
               valid: valid, epoch: epoch,
             )) {
           return;
+        }
+        if (preparedStemPlayer != null &&
+            !identical(_stemPlayer, preparedStemPlayer)) {
+          unawaited(preparedStemPlayer.dispose().catchError((Object _) {}));
         }
         unawaited(
           incoming.play().catchError((Object error, StackTrace stackTrace) {
@@ -1292,6 +1335,7 @@ class AndroidAudioEngine implements AudioEngine {
   /// It is never used for network sources, bit-perfect routes or Atmos.
   Future<bool> _commitStemClip({
     required AutoMixStemClip clip,
+    required just_audio.AudioPlayer preparedPlayer,
     required just_audio.AudioPlayer outgoing,
     required just_audio.AudioPlayer incoming,
     required Song next,
@@ -1299,16 +1343,13 @@ class AndroidAudioEngine implements AudioEngine {
     required bool Function() valid,
     required int epoch,
   }) async {
-    just_audio.AudioPlayer? mixed;
+    just_audio.AudioPlayer? mixed = preparedPlayer;
     try {
-      mixed = _stemPlayerProvider != null
-          ? await _stemPlayerProvider!()
-          : just_audio.AudioPlayer(useProxyForRequestHeaders: false);
-      await mixed.setVolume(0);
-      await mixed.setLoopMode(just_audio.LoopMode.off);
-      await mixed.setAudioSource(
-        just_audio.AudioSource.uri(Uri.file(clip.path)), preload: true,
-      ).timeout(const Duration(seconds: 8));
+      // Already source-decoded ahead of the model cue.
+      if (mixed.processingState == just_audio.ProcessingState.idle) {
+        await mixed.dispose();
+        return false;
+      }
       final lateMs = (outgoing.position - clip.start).inMilliseconds;
       if (!valid() || !outgoing.playing || lateMs.abs() > 650) {
         await mixed.dispose();
