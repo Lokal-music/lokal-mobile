@@ -43,6 +43,37 @@ void main() {
     expect(accepted.map((s) => s.id).toList(), ['new-1', 'new-3']);
   });
 
+  test('top-ups space artists against online discoveries appended first', () {
+    final locals = [
+      for (var i = 0; i < 48; i++)
+        song('local-$i', artist: 'Artist ${i % 12}', title: 'Track $i'),
+    ];
+    final library = FlowLibrary(
+      songs: locals,
+      favoriteIds: locals.take(20).map((song) => song.id).toSet(),
+    );
+    final data = FlowData(session: FlowSession(
+      trackIds: ['local-0', 'local-1', 'local-2'],
+      seed: 31,
+    ));
+    final appended = library.topUp(
+      data, trailingArtists: const ['Artist 3', 'Artist 4'],
+    );
+    expect(appended, isNotEmpty);
+    final artists = [
+      'Artist 0', 'Artist 1', 'Artist 2', 'Artist 3', 'Artist 4',
+      ...appended.map((s) => s.artist),
+    ];
+    // Only the last three artists can block the first new pick. Later
+    // picks should also avoid the most recent three when choices remain.
+    for (var i = 5; i < artists.length; i++) {
+      for (var j = 1; j <= 3; j++) {
+        expect(artists[i], isNot(artists[i - j]),
+            reason: 'duplicate artist at appended position $i');
+      }
+    }
+  });
+
   test('online filtering keeps unknown genre candidates and obeys caps', () {
     final library = FlowLibrary(songs: [], favoriteIds: {});
     final accepted = library.eligibleOnline(
