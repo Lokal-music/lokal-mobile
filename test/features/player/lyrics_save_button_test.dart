@@ -19,11 +19,17 @@ void main() {
       ),
     );
 
+    // The button's tooltip must not install its own long-press recognizer.
+    final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+    expect(tooltip.triggerMode, TooltipTriggerMode.manual);
+    expect(tester.widget<IconButton>(find.byType(IconButton)).tooltip, isNull);
+
     await tester.tap(find.byType(IconButton));
     expect(originalSaves, 1);
     expect(translatedSaves, 0);
 
-    await tester.longPress(find.byType(LyricsSaveButton));
+    // Press the actual icon, rather than the enclosing widget's center.
+    await tester.longPress(find.byType(IconButton));
     await tester.pumpAndSettle();
     expect(find.text('Save original lyrics'), findsOneWidget);
     expect(find.text('Save with selected translation'), findsOneWidget);
@@ -47,7 +53,7 @@ void main() {
       ),
     );
 
-    await tester.longPress(find.byType(LyricsSaveButton));
+    await tester.longPress(find.byType(IconButton));
     await tester.pumpAndSettle();
     final translation = tester.widget<ListTile>(
       find.ancestor(
@@ -76,7 +82,7 @@ void main() {
     );
 
     await tester.tap(find.byType(IconButton));
-    await tester.longPress(find.byType(LyricsSaveButton));
+    await tester.longPress(find.byType(IconButton));
     await tester.pumpAndSettle();
     expect(saves, 0);
     expect(find.text('Save original lyrics'), findsNothing);
