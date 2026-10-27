@@ -273,7 +273,10 @@ class FlowController extends AsyncNotifier<FlowData> {
     final onlineRecordings = online
         .map((song) => radioRecordingKey(song.artist, song.title))
         .toSet();
-    final local = library.topUp(data)
+    final local = library.topUp(
+          data,
+          trailingArtists: online.map((song) => song.artist),
+        )
         .where(
           (song) => !onlineRecordings.contains(
             radioRecordingKey(song.artist, song.title),
