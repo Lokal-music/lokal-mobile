@@ -544,10 +544,18 @@ class AndroidAudioEngine implements AudioEngine {
       player.durationStream.listen((dur) {
         if (!identical(player, _player) || _sourceFailed) return;
         if (dur == null) return;
-        // The next item's decoded duration may arrive after its index.
+        // A duration event at a sequence transition may still represent the
+        // previous item. Prefer the newly indexed source's own duration.
+        final index = player.currentIndex;
+        final indexedDuration = index != null && index >= 0 &&
+                index < player.sequence.length
+            ? player.sequence[index].duration
+            : null;
+        final verifiedDuration = indexedDuration ??
+            (_loadedSingleTrackOnly ? dur : null);
         if (!_awaitingInitialSeek && !_shouldSuppressTrackSync() &&
             _rejectTruncatedActiveHttpTrack(
-              player, _resolveTrack(player.currentIndex), dur,
+              player, _resolveTrack(index), verifiedDuration,
             )) return;
         _emit(_state.copyWith(duration: dur));
       }),
@@ -749,13 +757,14 @@ class AndroidAudioEngine implements AudioEngine {
     int? initialIndex,
   }) async {
     try {
-      await player
+      final loadedDuration = await player
           .setAudioSource(source, initialIndex: initialIndex, preload: true)
           .timeout(const Duration(seconds: 30));
-      if (isTruncatedHttpAddonAudio(_loadedTrack, player.duration)) {
+      final actualDuration = loadedDuration ?? player.duration;
+      if (isTruncatedHttpAddonAudio(_loadedTrack, actualDuration)) {
         AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected at load: '
             'expectedMs=${_loadedTrack?.duration.inMilliseconds} '
-            'decodedMs=${player.duration?.inMilliseconds}');
+            'decodedMs=${actualDuration?.inMilliseconds}');
         throw const FormatException(
           'The HTTP add-on returned a preview or truncated audio stream.',
         );
