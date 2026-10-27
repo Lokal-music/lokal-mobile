@@ -11,8 +11,14 @@ void main() {
     (tester) async {
       var playing = false, l = 0.0;
       late StateSetter change;
+      SharedPreferences.setMockInitialValues({});
       await tester.pumpWidget(
-        MaterialApp(
+        ProviderScope(
+          overrides: [
+            lokalInitialAppearanceProvider.overrideWithValue(
+              const LokalAppearance()),
+          ],
+          child: MaterialApp(
           home: Scaffold(
             body: Center(
               child: SizedBox(
@@ -34,6 +40,7 @@ void main() {
                 ),
               ),
             ),
+          ),
           ),
         ),
       );
