@@ -291,6 +291,8 @@ class AndroidAudioEngine implements AudioEngine {
   bool _stemHandoffStarted = false;
   bool _stemPausedByUser = false;
   bool _stemOutgoingStopped = false;
+  int _stemLastPositionMs = 0;
+  DateTime? _stemLastProgressAt;
   AutoMixStemClip? _activeStemClip;
   just_audio.AudioPlayer? _stemOutgoing;
   just_audio.AudioPlayer? _stemIncoming;
@@ -901,6 +903,7 @@ class AndroidAudioEngine implements AudioEngine {
     final stem = _stemPlayer;
     if (stem != null) {
       _stemPausedByUser = false;
+      _stemLastProgressAt = DateTime.now();
       if (stem.processingState == just_audio.ProcessingState.completed &&
           _activeStemClip != null && _stemOutgoing != null &&
           _stemIncoming != null) {
@@ -1323,6 +1326,8 @@ class AndroidAudioEngine implements AudioEngine {
       _stemHandoffStarted = false;
       _stemPausedByUser = false;
       _stemOutgoingStopped = false;
+      _stemLastPositionMs = 0;
+      _stemLastProgressAt = DateTime.now();
       _activeStemClip = clip;
       _stemOutgoing = outgoing;
       _stemIncoming = incoming;
@@ -1332,6 +1337,9 @@ class AndroidAudioEngine implements AudioEngine {
       // just_audio.play returns only when playback completes: never await.
       unawaited(clipPlayer.play().catchError((Object error) {
         devLog('[automix] stem render failed: $error');
+        if (!_stemPausedByUser) {
+          unawaited(_finishStemClip(epoch, clip, outgoing, incoming, clipPlayer));
+        }
       }));
       _loadedTrack = next;
       ++_autoMixProfileGeneration;
@@ -1353,6 +1361,14 @@ class AndroidAudioEngine implements AudioEngine {
       _stemTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
         if (epoch != _crossfadeEpoch || !identical(_stemPlayer, clipPlayer)) return;
         if (!clipPlayer.playing) {
+          // A prepared decoder can fail silently before entering the ready
+          // state. Never keep Flow blocked indefinitely on a missing play.
+          if (!_stemPausedByUser && _stemLastProgressAt != null &&
+              DateTime.now().difference(_stemLastProgressAt!) >
+                  const Duration(seconds: 6)) {
+            unawaited(_finishStemClip(epoch, clip, outgoing, incoming, clipPlayer));
+            return;
+          }
           if (!_stemPausedByUser &&
               clipPlayer.processingState == just_audio.ProcessingState.completed) {
             unawaited(_finishStemClip(epoch, clip, outgoing, incoming, clipPlayer));
@@ -1360,6 +1376,15 @@ class AndroidAudioEngine implements AudioEngine {
           return;
         }
         final position = clipPlayer.position.inMilliseconds;
+        if (position > _stemLastPositionMs + 10) {
+          _stemLastPositionMs = position;
+          _stemLastProgressAt = DateTime.now();
+        } else if (!_stemPausedByUser && _stemLastProgressAt != null &&
+            DateTime.now().difference(_stemLastProgressAt!) >
+                const Duration(seconds: 10)) {
+          unawaited(_finishStemClip(epoch, clip, outgoing, incoming, clipPlayer));
+          return;
+        }
         final total = clip.length.inMilliseconds;
         final userVolume = _stemVolumeProvider?.call() ?? _rampUserVolume;
         if (!_stemHandoffStarted) {
@@ -1442,6 +1467,7 @@ class AndroidAudioEngine implements AudioEngine {
     _stemHandoffStarted = false;
     _stemPausedByUser = false;
     _stemOutgoingStopped = false;
+    _stemLastProgressAt = null;
     try {
       if (!hadHandoff || !incoming.playing) {
         await incoming.seek(clip.resume);
@@ -1465,6 +1491,7 @@ class AndroidAudioEngine implements AudioEngine {
     _stemHandoffStarted = false;
     _stemPausedByUser = false;
     _stemOutgoingStopped = false;
+    _stemLastProgressAt = null;
     _activeStemClip = null;
     _stemOutgoing = null;
     _stemIncoming = null;
