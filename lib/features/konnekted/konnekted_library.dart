@@ -17,15 +17,10 @@ import 'konnekted_data.dart';
 import 'konnekted_destination.dart';
 import 'konnekted_home.dart';
 import 'konnekted_style.dart';
+import 'library/lokal_library_add_sheet.dart';
 import 'library/lokal_library_kit.dart';
 import 'library/lokal_playlists.dart';
 import 'library/lokal_song_browser.dart';
-
-/// Settings › Library › Folders: "Add folder" is its first row.
-const _folders = KonnektedDestination.settingsAt(
-  LokalSettingsGroup.library,
-  section: 'Folders',
-);
 
 /// Settings › Data › Accounts, where Spotify is.
 const _accounts = KonnektedDestination.settingsAt(
@@ -53,43 +48,21 @@ class KonnektedLibrary extends ConsumerWidget {
       : unawaited(LibraryScanFlow.addFolder(context));
 
   Future<void> _showAdd(BuildContext context, WidgetRef ref) async {
-    final t = context.lokal;
-    Widget row(IconData icon, String label, String value) => ListTile(
-      leading: Icon(icon, color: t.accent),
-      title: Text(label),
-      onTap: () => Navigator.pop(context, value),
-    );
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: t.surface,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            row(Icons.queue_music_rounded, 'New playlist', 'playlist'),
-            row(Icons.link_rounded, 'Import a playlist link', 'link'),
-            row(Icons.playlist_add_rounded, 'Import M3U', 'm3u'),
-            row(
-              Icons.create_new_folder_rounded,
-              'Add a music folder',
-              'folder',
-            ),
-          ],
-        ),
-      ),
-    );
+    final choice = await showLokalLibraryAddSheet(context);
     if (!context.mounted) return;
     switch (choice) {
-      case 'playlist':
+      case LokalLibraryAddAction.playlist:
         await lokalCreatePlaylist(context, ref);
-      case 'link':
+      case LokalLibraryAddAction.link:
         onNavigate(KonnektedDestination.linkedPlaylists);
-      case 'm3u':
+      case LokalLibraryAddAction.m3u:
         await lokalImportM3u(context, ref);
-      case 'folder':
-        onNavigate(_folders);
+      case LokalLibraryAddAction.folder:
+        // The action promises to add a folder; go straight to Android's
+        // persisted folder picker and start its library scan.
+        _addFolder(context);
+      case null:
+        break;
     }
   }
 
