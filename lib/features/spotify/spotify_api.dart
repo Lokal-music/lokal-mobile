@@ -7,6 +7,7 @@ import 'spotify_models.dart';
 import 'spotify_oauth.dart';
 import 'spotify_storage.dart';
 import 'spotify_http.dart';
+import 'package:flick/services/graceful_http_client.dart';
 
 class SpotifyApiException implements Exception {
   const SpotifyApiException(this.message, {this.statusCode});
@@ -43,7 +44,7 @@ class SpotifyApi implements SpotifyLibraryApi {
     http.Client? client,
     SpotifyDelay? delay,
   }) : _delay = delay ?? ((duration) => Future<void>.delayed(duration)),
-       _http = SpotifyHttp(client ?? http.Client());
+       _http = SpotifyHttp(client ?? GracefulHttpClient());
 
   static final apiOrigin = Uri.parse('https://api.spotify.com');
   static const _pageSize = 50;

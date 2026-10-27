@@ -24,6 +24,8 @@ import 'package:flick/providers/providers.dart';
 import 'package:flick/widgets/lokal/lokal_status_snack.dart';
 import 'package:flick/widgets/lokal/lokal_quality.dart';
 import 'package:flick/services/catalogue_quality.dart';
+import 'package:flick/services/graceful_http_client.dart';
+import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/features/discovery/youtube_audio.dart';
 import 'package:flick/services/queue_pre_resolver.dart';
 import 'package:flick/services/atmos_playback_support.dart';
@@ -117,7 +119,7 @@ class OnlineSearchSection extends ConsumerStatefulWidget {
 class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
   static String? _remembered; // The chosen source, for the app's lifetime.
 
-  final _client = http.Client();
+  final _client = GracefulHttpClient();
   late final _progress = LokalStatusSnack(
     () => mounted ? context : null,
   );
@@ -209,8 +211,14 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
     List<OnlineSource> sources;
     try {
       sources = await load(_client, _status);
-    } catch (_) {
-      sources = const [];
+    } catch (error) {
+      // An add-on registry/network failure must not erase previously loaded
+      // sources or silently make all providers disappear from Search.
+      AppLog.instance.add(
+        '[OnlineSource] source list refresh failed '
+        'errorClass=${error.runtimeType}',
+      );
+      sources = _sources ?? const [];
     }
     if (!mounted) return;
     setState(() {
@@ -279,7 +287,15 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
     // status snackbar for preparing, downloading and saving a selected song.
     await Future<void>.delayed(Duration.zero);
     if (!mounted || generation != _searchGeneration) return const [];
-    return source.results(query);
+    try {
+      return await source.results(query);
+    } catch (error) {
+      AppLog.instance.add(
+        '[OnlineSource] Search failed source=${source.id} '
+        'errorClass=${error.runtimeType}',
+      );
+      rethrow;
+    }
   }
 
   /// Download progress: one line, updated in place, only while a song is

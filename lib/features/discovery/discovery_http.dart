@@ -58,13 +58,17 @@ class DiscoveryHttp {
     final abort = Completer<void>();
     var timedOut = false;
     var cancelled = false;
+    var finished = false;
+    var succeeded = false;
     final timer = Timer(deadline, () {
+      if (finished) return;
       timedOut = true;
       if (!abort.isCompleted) abort.complete();
     });
     if (cancel != null) {
       unawaited(
         cancel.then((_) {
+          if (finished) return;
           cancelled = true;
           if (!abort.isCompleted) abort.complete();
         }),
@@ -189,6 +193,7 @@ class DiscoveryHttp {
           'The source returned an empty or incomplete response.',
         );
       }
+      succeeded = true;
       return received;
     } catch (error) {
       if (timedOut) {
@@ -201,7 +206,12 @@ class DiscoveryHttp {
       );
     } finally {
       timer.cancel();
-      if (!abort.isCompleted) abort.complete();
+      finished = true;
+      // The same abort trigger belongs to the underlying IOClient. Completing
+      // it after a fully consumed successful response races with Dart's
+      // asynchronous keep-alive connection handoff (_returnConnection).
+      // Abort only failed/incomplete requests, never a completed transfer.
+      if (!succeeded && !abort.isCompleted) abort.complete();
       await chunks?.cancel();
     }
   }
