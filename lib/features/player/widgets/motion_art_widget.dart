@@ -390,6 +390,7 @@ class _MotionArtViewState extends State<MotionArtView>
         !_loading &&
         widget.enabled &&
         !_suppressed &&
+        !_suspendedForMemoryPressure &&
         !_reduceMotion &&
         _routeIsCurrent &&
         _lifecycle == AppLifecycleState.resumed) {
@@ -578,7 +579,10 @@ class _MotionArtViewState extends State<MotionArtView>
   Widget build(BuildContext context) {
     Widget present(Widget child, {bool canvas = false}) =>
         widget.presentationBuilder?.call(context, child, canvas) ?? child;
-    if (_suppressed || _performance || !widget.enabled)
+    if (_suppressed ||
+        _suspendedForMemoryPressure ||
+        _performance ||
+        !widget.enabled)
       return present(widget.fallback);
     final controller = _controller;
     if (!_hasVideo || controller == null || !controller.value.isInitialized) {
