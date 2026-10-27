@@ -299,3 +299,9 @@ read materialized owned artwork, and budget state/seek/heartbeat updates. Do not
 submit every position tick or replace sampling timestamps with image completion
 time. Actual shared-profile publication, extension rendering/actions and the
 Windows install/upgrade/refresh path remain independent qualification gates.
+
+The first real-Flutter bridge SDK check caught Swift 6 rejecting Flutter's
+imported mutable Objective-C `FlutterMethodNotImplemented` global. The private
+channel now returns an explicit `UNSUPPORTED_WIDGET_METHOD` error through its
+existing typed, main-queue reply path. No concurrency checks were disabled.
+The revised bridge still requires the next hosted SDK check.

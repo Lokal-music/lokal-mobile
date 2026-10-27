@@ -97,7 +97,9 @@ final class LokalWidgetBridge: @unchecked Sendable {
           }
         }
       default:
-        result(FlutterMethodNotImplemented)
+        // The private protocol rejects unsupported operations explicitly. Avoid
+        // importing Flutter's mutable ObjC sentinel into Swift 6 concurrency.
+        reply.send(.failure(code: "UNSUPPORTED_WIDGET_METHOD", message: "Unknown widget publication operation."))
       }
     }
   }
