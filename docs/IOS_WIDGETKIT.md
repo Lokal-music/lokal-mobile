@@ -224,3 +224,25 @@ targets before running those cases. Swift is unavailable locally: **execution
 and SDK acceptance of this new policy are pending**. The preceding reader/store
 passes remain scoped to their original source; no app bridge, WidgetKit layout,
 App Group provisioning, timeline or physical-device acceptance is inferred.
+
+
+### Held-reader inode replacement correction
+
+The first publication workflow passes the unchanged 64 Flutter contracts, all
+45 Swift reader cases, and both actual iOS 16 SDK checks **including the new
+publisher**. Its storage concurrency case then fails; publication execution is
+skipped in that run. The reader previously required `st_nlink == 1` after
+`openat`. A writer can legitimately replace that exact pathname between open
+and fstat, reducing the held old descriptor's link count to zero even though
+its complete immutable bytes remain readable.
+
+Bounded reads now accept a regular held descriptor with zero or one link.
+`O_NOFOLLOW`, nonregular/FIFO rejection, hard-link rejection (`> 1`), and strict
+single-link writer/cleanup descriptors remain. A deterministic new storage case
+performs an actual independent-store commit immediately after the reader's open
+and before its fstat: the held read must return complete revision one, and the
+next read complete revision two. The test hook is absent by default. Native
+storage now has twenty cases and logs the actual concurrency errors if any
+recur. The publication suite runs independently after prior failures while the
+workflow retains every failing gate. Acceptance of this correction remains
+pending until its hosted SDK and actual execution checks pass.

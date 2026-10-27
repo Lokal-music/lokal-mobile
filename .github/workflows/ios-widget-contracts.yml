@@ -60,6 +60,7 @@ jobs:
           swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/StorageTests/main.swift -o "$RUNNER_TEMP/lokal-widget-store-contracts"
           "$RUNNER_TEMP/lokal-widget-store-contracts"
       - name: Exercise actual host metadata and artwork publication
+        if: success() || failure()
         run: |
           swiftc -swift-version 6 -warnings-as-errors ios/Widgets/Contracts/LokalWidgetSnapshot.swift ios/Widgets/Storage/LokalWidgetStore.swift ios/Widgets/Publication/LokalWidgetPublisher.swift ios/Widgets/PublicationTests/main.swift -o "$RUNNER_TEMP/lokal-widget-publication-contracts"
           "$RUNNER_TEMP/lokal-widget-publication-contracts"

@@ -47,6 +47,25 @@ final class Errors: @unchecked Sendable {
   private var messages: [String] = []
   func add(_ error: Error) { lock.lock(); defer { lock.unlock() }; messages.append(String(describing: error)) }
   var empty: Bool { lock.lock(); defer { lock.unlock() }; return messages.isEmpty }
+  var summary: String { lock.lock(); defer { lock.unlock() }; return messages.joined(separator: "; ") }
+}
+
+/// Force an actual writer rename after another store has opened snapshot.json
+/// and before its first fstat. No timing assumption or scheduler luck required.
+final class ReplaceAfterOpen: @unchecked Sendable {
+  private let lock = NSLock()
+  private let writer: LokalWidgetStore
+  private var replaced = false
+  let errors = Errors()
+  init(writer: LokalWidgetStore) { self.writer = writer }
+  func opened(_ name: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard name == "snapshot.json", !replaced else { return }
+    replaced = true
+    do { try writer.publish(candidate(2, title: "New complete snapshot")) }
+    catch { errors.add(error) }
+  }
 }
 
 // An actual independent process participates in the same writer lock.
@@ -110,8 +129,23 @@ do {
         }
       } catch { errors.add(error) }
     }
-    try require(errors.empty, "Concurrent publication failed")
+    try require(errors.empty, "Concurrent publication failed: " + errors.summary)
     try require(try revision(LokalWidgetStore(container: root)) == 24, "Highest revision did not win")
+  }
+  try check("an atomically replaced snapshot remains readable through its held old descriptor") {
+    let root = try folder("read-replaced-inode")
+    let writer = try LokalWidgetStore(container: root, createIfMissing: true)
+    try writer.publish(candidate(1, title: "Old complete snapshot"))
+    let replacement = ReplaceAfterOpen(writer: writer)
+    let reader = try LokalWidgetStore(container: root,
+        afterReadOpenForTesting: { replacement.opened($0) })
+    let old = try reader.readSnapshot()!.json
+    try require(replacement.errors.empty, "Controlled replacement failed: " + replacement.errors.summary)
+    try require(old["revision"] as? Int == 1, "Held descriptor did not retain old revision")
+    try require((old["current"] as? [String: Any])?["title"] as? String == "Old complete snapshot", "Old read was torn")
+    let latest = try reader.readSnapshot()!.json
+    try require(latest["revision"] as? Int == 2, "Subsequent read missed new revision")
+    try require((latest["current"] as? [String: Any])?["title"] as? String == "New complete snapshot", "New read was torn")
   }
   try check("independent native processes honor the same revision lock") {
     let root = try folder("processes")
