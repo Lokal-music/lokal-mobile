@@ -405,7 +405,7 @@ class _YouHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            height: 44,
+            height: konnektedHeaderHeight(context),
             child: Row(
               children: [
                 SizedBox.square(
