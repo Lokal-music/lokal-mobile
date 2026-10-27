@@ -1365,3 +1365,26 @@ gates remain unchanged. Local music-video/owner regression coverage passes
 **41 cases**, including original-error/stack retention across multiple cleanup
 failures, cleanup failure after a successful body, and actual lease exclusion
 until a late native acknowledgement. Hosted main-app acceptance is still needed.
+
+
+### Shared idle-power work: demand-driven logging
+
+The shared logging portion of reviewed #257 now schedules a single delayed flush
+only while unsaved entries exist. There is no repeating empty five-second timer.
+An explicit lifecycle flush joins an active write and drains entries added during
+that write before completing. Failed appends retain their batch and schedule a
+delayed retry, rather than spinning. Successful append data is not requeued if
+subsequent trimming fails.
+
+Disk operations are serialized across clear/delete and append. A clear revision
+prevents an old failed batch or initialization replay from resurrecting discarded
+history; entries added after Clear survive the queued deletion. The log format,
+source labels, filtering and existing sharing/upload consent remain unchanged.
+Nine persistence regressions pass, including actual JSONL Unicode/source replay,
+concurrent lifecycle flushes, clear during successful/failed writes and startup,
+delayed failure recovery and direct timer creation/firing observations across idle
+time. Together with existing motion-art gating, **11 focused tests** pass. The
+new persistence suite is included in the iPhone workflow. Changed files pass
+analysis with fatal infos. This establishes scheduling/storage behavior, not a
+measured physical-iPhone battery reduction. Paused-position and Rust foreground/
+background polling adaptations remain separate pending work.

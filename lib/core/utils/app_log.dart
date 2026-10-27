@@ -18,7 +18,9 @@ class LogEntry {
 }
 
 class AppLog extends ChangeNotifier {
-  AppLog._();
+  AppLog._() : _openLogFile = _defaultLogFile;
+  @visibleForTesting
+  AppLog.forTesting(this._openLogFile);
   static final AppLog instance = AppLog._();
 
   static const int maxEntries = 2000;
@@ -29,6 +31,42 @@ class AppLog extends ChangeNotifier {
   final List<String> _pendingLines = [];
   File? _logFile;
   bool _persistenceInitialized = false;
+  final Future<File> Function() _openLogFile;
+  Timer? _flushTimer;
+  Future<bool>? _flushInProgress;
+  Future<void> _diskTail = Future<void>.value();
+  int _clearRevision = 0;
+  bool _disposed = false;
+
+  static Future<File> _defaultLogFile() async {
+    final support = await getApplicationSupportDirectory();
+    final directory = Directory(p.join(support.path, 'logs'));
+    await directory.create(recursive: true);
+    return File(p.join(directory.path, 'flick_log.jsonl'));
+  }
+
+  void _scheduleFlush() {
+    // No repeating idle wakeup, including while a write is already draining.
+    if (_disposed ||
+        _logFile == null ||
+        _pendingLines.isEmpty ||
+        _flushTimer != null ||
+        _flushInProgress != null) {
+      return;
+    }
+    _flushTimer = Timer(_flushInterval, () {
+      _flushTimer = null;
+      unawaited(flushToDisk());
+    });
+  }
+
+  Future<T> _serializeDisk<T>(Future<T> Function() operation) {
+    final result = _diskTail.then((_) => operation());
+    // Keep later operations possible after a failed operation; the caller still
+    // receives the original failure through result.
+    _diskTail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
 
   List<LogEntry> get entries => _entries;
 
@@ -39,11 +77,14 @@ class AppLog extends ChangeNotifier {
       _entries.removeRange(0, _entries.length - maxEntries);
     }
     if (_persistenceInitialized) {
-      _pendingLines.add(jsonEncode({
-        't': entry.timestamp.millisecondsSinceEpoch,
-        's': source.name,
-        'm': message,
-      }));
+      _pendingLines.add(
+        jsonEncode({
+          't': entry.timestamp.millisecondsSinceEpoch,
+          's': source.name,
+          'm': message,
+        }),
+      );
+      _scheduleFlush();
     }
     notifyListeners();
   }
@@ -51,28 +92,27 @@ class AppLog extends ChangeNotifier {
   Future<void> initializePersistence() async {
     if (_persistenceInitialized) return;
     _persistenceInitialized = true;
+    final revision = _clearRevision;
     try {
-      final support = await getApplicationSupportDirectory();
-      final directory = Directory(p.join(support.path, 'logs'));
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
+      final file = await _openLogFile();
+      _logFile = file;
+      if (revision != _clearRevision) {
+        await _serializeDisk(() => _deleteFile(file));
       }
-      _logFile = File(p.join(directory.path, 'flick_log.jsonl'));
       await _replayPersisted();
-      Timer.periodic(
-        _flushInterval,
-        (_) => unawaited(flushToDisk()),
-      );
+      _scheduleFlush();
     } catch (error) {
       debugPrint('AppLog persistence unavailable: $error');
     }
   }
 
   Future<void> _replayPersisted() async {
+    final revision = _clearRevision;
     final file = _logFile;
     if (file == null || !await file.exists()) return;
     try {
       final lines = await file.readAsLines();
+      if (revision != _clearRevision) return;
       final start = math.max(0, lines.length - maxEntries);
       for (final line in lines.sublist(start)) {
         final entry = _decodeEntry(line);
@@ -90,23 +130,54 @@ class AppLog extends ChangeNotifier {
   }
 
   Future<void> flushToDisk() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    final active = _flushInProgress;
+    if (active != null) {
+      final succeeded = await active;
+      if (succeeded && _pendingLines.isNotEmpty) await flushToDisk();
+      return;
+    }
     final file = _logFile;
     if (file == null || _pendingLines.isEmpty) return;
-    final lines = List<String>.of(_pendingLines);
-    _pendingLines.clear();
+    final revision = _clearRevision;
+    final flush = _serializeDisk(() => _drainPendingLines(file, revision));
+    _flushInProgress = flush;
     try {
-      await file.writeAsString(
-        '${lines.join('\n')}\n',
-        mode: FileMode.append,
-        flush: true,
-      );
-      if (await file.length() > _maxFileBytes) {
-        await _trimFile(file);
-      }
-    } catch (error) {
-      _pendingLines.insertAll(0, lines);
-      debugPrint('AppLog flush failed: $error');
+      await flush;
+    } finally {
+      _flushInProgress = null;
+      _scheduleFlush();
     }
+  }
+
+  Future<bool> _drainPendingLines(File file, int revision) async {
+    while (revision == _clearRevision && _pendingLines.isNotEmpty) {
+      final lines = List<String>.of(_pendingLines);
+      _pendingLines.clear();
+      try {
+        await file.writeAsString(
+          '${lines.join('\n')}\n',
+          mode: FileMode.append,
+          flush: true,
+        );
+      } catch (error) {
+        // Clear must not resurrect a failed, already-discarded batch.
+        final discarded = revision != _clearRevision;
+        if (!discarded) _pendingLines.insertAll(0, lines);
+        debugPrint('AppLog flush failed: $error');
+        return discarded;
+      }
+      if (revision != _clearRevision) return true;
+      try {
+        if (await file.length() > _maxFileBytes) await _trimFile(file);
+      } catch (error) {
+        // The append succeeded. Requeueing it after a trim failure duplicates
+        // persisted entries; leave trimming for a later write instead.
+        debugPrint('AppLog trim failed: $error');
+      }
+    }
+    return true;
   }
 
   Future<void> _trimFile(File file) async {
@@ -139,11 +210,16 @@ class AppLog extends ChangeNotifier {
   }
 
   void clear() {
+    _clearRevision++;
     _entries.clear();
     _pendingLines.clear();
+    _flushTimer?.cancel();
+    _flushTimer = null;
     final file = _logFile;
     if (file != null) {
-      unawaited(_deleteFile(file));
+      // Delete behind the old write and before any later append. New entries
+      // cannot be swallowed by a late delete or by the retired batch's retry.
+      unawaited(_serializeDisk(() => _deleteFile(file)));
     }
     notifyListeners();
   }
@@ -156,5 +232,13 @@ class AppLog extends ChangeNotifier {
     } catch (error) {
       debugPrint('AppLog delete failed: $error');
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    super.dispose();
   }
 }
