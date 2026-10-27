@@ -46,12 +46,25 @@ def boot_render_simulator():
         ios_simulator.main()
 
 
+def verify_visible_content(case):
+    recognized = "".join(case.get("recognized_text", [])).lower()
+    recognized = "".join(char for char in recognized if char.isalpha())
+    if case["kind"] == "coverFlow" and case["family"] != "small":
+        expected = ("songb", "songc", "songd")
+    elif case["kind"] == "coverFlow":
+        expected = ("songb", "artistb")
+    else:
+        expected = ("songa", "artista")
+    if not all(word in recognized for word in expected):
+        raise ValueError(f"Required visible content missing from OCR: {case['name']}")
+
+
 def verify(directory: Path):
     total = 0
     for locale in LOCALES:
         report = json.loads((directory / f"report-{locale}.json").read_text())
         cases = report["cases"]
-        expected = 81 if locale == "en" else 36
+        expected = 90 if locale == "en" else 36
         if report["locale"] != locale or len(cases) != expected or report["scale"] != 2:
             raise ValueError(f"Incomplete render matrix for {locale}")
         expected_names = {
@@ -68,6 +81,12 @@ def verify(directory: Path):
                 for family in ("small", "medium", "large")
                 for state in ("paused", "buffering", "stale", "empty", "unavailable")
             )
+        if locale == "en":
+            expected_names.update(
+                f"en-{kind}-{family}-content-proof"
+                for kind in ("nowPlaying", "flowRadio", "coverFlow")
+                for family in ("small", "medium", "large")
+            )
         names = set()
         for case in cases:
             name = case["name"]
@@ -83,10 +102,12 @@ def verify(directory: Path):
                 raise ValueError(f"Incorrect rendered bounds: {name}")
             if image.stat().st_size <= 500:
                 raise ValueError(f"Empty rendered image: {name}")
+            if case["state"] == "content-proof":
+                verify_visible_content(case)
         if names != expected_names:
             raise ValueError(f"Missing or unexpected render cases for {locale}")
         total += len(cases)
-    if total != 441:
+    if total != 450:
         raise ValueError("Incomplete aggregate render matrix")
     (directory / "VERIFIED.json").write_text(json.dumps({
         "scope": "shared SwiftUI layout in isolated native app; not installed WidgetKit",
@@ -96,6 +117,7 @@ def verify(directory: Path):
         "text_sizes": ["large", "accessibility5"],
         "appearance": ["light", "dark"],
         "additional_english_states": ["paused", "buffering", "stale", "empty", "unavailable"],
+        "independent_pixel_ocr_cases": 9,
     }, indent=2) + "\n")
     print(f"PASS: {total} actual native SwiftUI images, 11 locales, all families/configurations")
 
@@ -114,6 +136,13 @@ def collect_failure(output: Path, stage: str, error: Exception):
     udid = os.environ.get("IOS_SIMULATOR_UDID")
     if not udid:
         return
+    try:
+        container = Path(command("xcrun", "simctl", "get_app_container", udid, BUNDLE, "data", timeout=15))
+        partial = container / "Documents/WidgetRenderProof"
+        if partial.is_dir():
+            shutil.copytree(partial, output / "partial-images")
+    except (OSError, subprocess.SubprocessError) as export_error:
+        (output / "partial-export-error.log").write_text(str(export_error) + "\n")
     probes = [
         (["xcrun", "simctl", "list", "devices", "available", "--json"], "failure-devices.log"),
         (["xcrun", "simctl", "spawn", udid, "log", "show", "--last", "3m", "--style", "compact",

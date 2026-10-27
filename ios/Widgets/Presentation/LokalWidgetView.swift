@@ -71,7 +71,7 @@ struct LokalWidgetView: View {
   }
 
   @ViewBuilder private func content(compact: Bool) -> some View {
-    VStack(alignment: .leading, spacing: compact ? 5 : 10) {
+    VStack(alignment: .leading, spacing: compact ? 5 : 8) {
       HStack {
         Text(heading).font(.caption.weight(.semibold)).lineLimit(1)
         Spacer(minLength: 4)
@@ -82,8 +82,14 @@ struct LokalWidgetView: View {
           HStack(alignment: .top, spacing: 10) {
             ForEach(model.recommendations) { item in
               VStack(alignment: .leading, spacing: 5) {
-                cover(item.artwork).frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit).clipped()
-                Text(title(item)).font(.caption.weight(.semibold)).lineLimit(1)
+                cover(item.artwork)
+                  .frame(width: family == .systemMedium ? 56 : 96,
+                         height: family == .systemMedium ? 56 : 96).clipped()
+                Text(title(item)).font(.caption.weight(.semibold))
+                  .lineLimit(family == .systemLarge ? 2 : 1)
+                if family == .systemLarge {
+                  Text(item.artist).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
               }.frame(maxWidth: .infinity)
             }
           }
@@ -95,9 +101,11 @@ struct LokalWidgetView: View {
                        height: family == .systemSmall ? 44 : 64).clipped()
             }
             VStack(alignment: .leading, spacing: 3) {
-              Text(title(track)).font(.headline).lineLimit(2)
+              Text(title(track))
+                .font(family == .systemSmall ? .subheadline.weight(.semibold) : .headline).lineLimit(2)
               if !compact {
-                Text(track.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                Text(track.artist).font(family == .systemSmall ? .caption : .subheadline)
+                  .foregroundStyle(.secondary).lineLimit(1)
               }
             }
           }
@@ -105,18 +113,15 @@ struct LokalWidgetView: View {
         if configuration == .nowPlaying && !compact && model.durationMs > 0 {
           if let interval = model.progressInterval {
             ProgressView(timerInterval: interval, countsDown: false)
-              .labelsHidden().accessibilityHidden(true)
+              .progressViewStyle(.linear).labelsHidden()
+              .frame(height: 4).clipped().accessibilityHidden(true)
           } else {
             ProgressView(value: Double(model.positionMs), total: Double(model.durationMs))
+              .progressViewStyle(.linear).frame(height: 4).clipped()
               .accessibilityLabel(Text(lokalWidgetText("Playback progress")))
           }
         }
-        if configuration == .flowRadio && !model.flowStatus.isEmpty && !compact {
-          Text(model.flowStatus).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-        }
-        Text(lokalWidgetText(model.availability == .stale ? "Open Lokal to refresh" :
-          (model.isBuffering ? "Buffering" : "Open Lokal")))
-          .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        Text(footer).font(.caption).foregroundStyle(.secondary).lineLimit(1)
       } else {
         if !compact && !typeSize.isAccessibilitySize {
           Image(systemName: configuration == .coverFlow ? "square.stack" : "music.note")
@@ -144,12 +149,32 @@ struct LokalWidgetView: View {
     track.title.isEmpty ? lokalWidgetText("Unknown track") : track.title
   }
 
+  private var footer: String {
+    if model.availability == .stale { return lokalWidgetText("Open Lokal to refresh") }
+    if model.isBuffering { return lokalWidgetText("Buffering") }
+    if configuration == .flowRadio && !model.flowStatus.isEmpty { return model.flowStatus }
+    return lokalWidgetText("Open Lokal")
+  }
+
+  private func mediaTime(_ milliseconds: Int) -> String {
+    let seconds = milliseconds / 1000
+    if seconds >= 3600 {
+      return String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+    }
+    return String(format: "%d:%02d", seconds / 60, seconds % 60)
+  }
+
   private var accessibilitySummary: String {
     var parts = [heading]
     if hasContent, let track = primary {
       parts += [title(track), track.artist]
       if configuration == .coverFlow {
         parts += model.recommendations.dropFirst().map { "\(title($0)), \($0.artist)" }
+      }
+      if configuration == .flowRadio && !model.flowStatus.isEmpty { parts.append(model.flowStatus) }
+      if configuration == .nowPlaying && model.durationMs > 0 {
+        parts.append(lokalWidgetText("Playback progress") + ", "
+          + mediaTime(model.positionMs) + " / " + mediaTime(model.durationMs))
       }
       if model.isBuffering { parts.append(lokalWidgetText("Buffering")) }
       if model.availability == .stale { parts.append(lokalWidgetText("Open Lokal to refresh")) }
@@ -163,7 +188,9 @@ struct LokalWidgetSurface: View {
   let accent: Color
   let surface: Color
   var body: some View {
-    LinearGradient(colors: [surface, accent.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    surface.overlay {
+      LinearGradient(colors: [accent.opacity(0.10), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
   }
 }
 

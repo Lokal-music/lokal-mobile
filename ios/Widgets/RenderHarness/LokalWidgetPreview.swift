@@ -3,6 +3,7 @@ import WidgetKit
 import UIKit
 import CryptoKit
 import Darwin
+import Vision
 
 /// A CI-only native app, never embedded in Runner or the widget product.
 /// It renders the shared layout into PNGs, not a simulated Home Screen install.
@@ -42,6 +43,7 @@ private enum LokalWidgetRenderProof {
         .appendingPathComponent("WidgetRenderProof", isDirectory: true)
       try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
       let (snapshot, art) = fixture()
+      let (contentSnapshot, contentArt) = fixture(shortNames: true)
       var rows: [[String: Any]] = []
       for kind in kinds {
         for (familyName, family, size) in families {
@@ -56,6 +58,14 @@ private enum LokalWidgetRenderProof {
             }
           }
           if locale == "en" {
+            let proofName = "en-\(kind.rawValue)-\(familyName)-content-proof"
+            let recognized = try render(name: proofName, kind: kind, family: family, size: size,
+              snapshot: contentSnapshot, art: contentArt, dark: true,
+              accessibility: false, verifyContent: true, to: output)
+            rows.append(["name": proofName, "kind": kind.rawValue, "family": familyName,
+              "width": Int(size.width), "height": Int(size.height),
+              "dark": true, "accessibility5": false, "state": "content-proof",
+              "recognized_text": recognized])
             for state in ["paused", "buffering", "stale", "empty", "unavailable"] {
               var fields = snapshot.json
               if state == "paused" { fields["isPlaying"] = false }
@@ -94,31 +104,54 @@ private enum LokalWidgetRenderProof {
     }
   }
 
+  @discardableResult
   static func render(name: String, kind: LokalWidgetConfiguration, family: WidgetFamily,
       size: CGSize, snapshot: LokalWidgetSnapshot, art: [String: Data],
-      dark: Bool, accessibility: Bool, unavailable: Bool = false, to directory: URL) throws {
-    try autoreleasepool {
-    let model = LokalWidgetPresentation(snapshot: snapshot, at: Date(), unavailable: unavailable)
-    let theme = LokalWidgetTheme(argb: model.accentArgb)
-    let layout = LokalWidgetView(configuration: kind, model: model, artwork: art, family: family)
-      .layout.padding(16)
-      .frame(width: size.width, height: size.height)
-      .background(LokalWidgetSurface(accent: theme.accent, surface: theme.surface))
-      .environment(\.colorScheme, dark ? .dark : .light)
-      .environment(\.dynamicTypeSize, accessibility ? .accessibility5 : .large)
-    let renderer = ImageRenderer(content: layout)
-    renderer.scale = 2
-    renderer.isOpaque = true
-    guard let image = renderer.uiImage, let pixels = image.cgImage,
-          pixels.width == Int(size.width * 2), pixels.height == Int(size.height * 2),
-          let data = image.pngData(), data.count > 500 else {
-      throw Failure.render("Missing or incorrect rendered dimensions: \(name)")
-    }
-    try data.write(to: directory.appendingPathComponent(name + ".png"), options: .atomic)
+      dark: Bool, accessibility: Bool, unavailable: Bool = false,
+      verifyContent: Bool = false, to directory: URL) throws -> [String] {
+    return try autoreleasepool {
+      let model = LokalWidgetPresentation(snapshot: snapshot, at: Date(), unavailable: unavailable)
+      let theme = LokalWidgetTheme(argb: model.accentArgb)
+      let layout = LokalWidgetView(configuration: kind, model: model, artwork: art, family: family)
+        .layout.padding(16)
+        .frame(width: size.width, height: size.height)
+        .background(LokalWidgetSurface(accent: theme.accent, surface: theme.surface))
+        .environment(\.colorScheme, dark ? .dark : .light)
+        .environment(\.dynamicTypeSize, accessibility ? .accessibility5 : .large)
+      let renderer = ImageRenderer(content: layout)
+      renderer.scale = 2
+      renderer.isOpaque = true
+      guard let image = renderer.uiImage, let pixels = image.cgImage,
+            pixels.width == Int(size.width * 2), pixels.height == Int(size.height * 2),
+            let data = image.pngData(), data.count > 500 else {
+        throw Failure.render("Missing or incorrect rendered dimensions: \(name)")
+      }
+      try data.write(to: directory.appendingPathComponent(name + ".png"), options: .atomic)
+      if verifyContent {
+        // Independent OS OCR checks actual rendered pixels, not accessibility
+        // metadata or the SwiftUI view tree. Normal families must retain artist
+        // context; medium/large Cover Flow must retain all three recommendations.
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["en-US"]
+        request.usesLanguageCorrection = false
+        try VNImageRequestHandler(cgImage: pixels, options: [:]).perform([request])
+        let recognized = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        let normalized = recognized.joined().lowercased().filter { $0.isLetter }
+        let expected: [String]
+        if kind == .coverFlow && family != .systemSmall { expected = ["songb", "songc", "songd"] }
+        else if kind == .coverFlow { expected = ["songb", "artistb"] }
+        else { expected = ["songa", "artista"] }
+        guard expected.allSatisfy({ normalized.contains($0) }) else {
+          throw Failure.render("Required content missing from pixels: \(name); recognized=\(recognized)")
+        }
+        return recognized
+      }
+      return []
     }
   }
 
-  static func fixture() -> (LokalWidgetSnapshot, [String: Data]) {
+  static func fixture(shortNames: Bool = false) -> (LokalWidgetSnapshot, [String: Data]) {
     var artwork: [String: Data] = [:]
     let tracks: [[String: Any]] = (0..<4).map { index in
       let colors: [UIColor] = [.systemBlue, .systemTeal, .systemOrange, .systemPink]
@@ -130,10 +163,13 @@ private enum LokalWidgetRenderProof {
       }
       let digest = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined() + ".png"
       artwork[digest] = image
+      let letter = ["A", "B", "C", "D"][index]
       return [
         "id": String(repeating: String(index, radix: 16), count: 64),
-        "title": index == 0 ? "Late night listening — a long recording title" : "Recommendation \(index)",
-        "artist": "Native layout fixture", "album": "Generated fixture", "artwork": digest,
+        "title": shortNames ? "Song\(letter)" :
+          (index == 0 ? "Late night listening — a long recording title" : "Recommendation \(index)"),
+        "artist": shortNames ? "Artist\(letter)" : "Native layout fixture",
+        "album": "Generated fixture", "artwork": digest,
       ]
     }
     return (LokalWidgetSnapshot(raw: [
