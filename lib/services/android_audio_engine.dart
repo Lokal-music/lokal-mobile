@@ -282,6 +282,7 @@ class AndroidAudioEngine implements AudioEngine {
   final Future<just_audio.AudioPlayer> Function()? _stemPlayerProvider;
   Future<AutoMixStemClip?>? _stemCandidate;
   String? _stemCandidateIdentity;
+  AutoMixStemClip? _stemReady;
   just_audio.AudioPlayer? _stemPlayer;
   Timer? _stemTimer;
   bool _stemHandoffStarted = false;
@@ -1024,7 +1025,12 @@ class AndroidAudioEngine implements AudioEngine {
     final id = '${androidAudioSourceIdentity(outgoing)}->${androidAudioSourceIdentity(next)}';
     if (id == _stemCandidateIdentity) return;
     _stemCandidateIdentity = id;
-    _stemCandidate = lookup(outgoing, next).catchError((Object _) => null);
+    _stemReady = null;
+    final task = lookup(outgoing, next).catchError((Object _) => null);
+    _stemCandidate = task;
+    unawaited(task.then((clip) {
+      if (_stemCandidateIdentity == id) _stemReady = clip;
+    }));
   }
 
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
@@ -1034,10 +1040,13 @@ class AndroidAudioEngine implements AudioEngine {
     final duration = player.duration;
     final audibleDuration = _audibleTransitionEnd(duration);
     final phraseSecs = automixPhraseOverlapSeconds(_currentAutoMixProfile);
-    final modelEnd = automixModelEnd(
-      duration ?? Duration.zero, _currentAutoMixProfile,
-      phraseSecs ?? cfg.durationSecs,
-    );
+    // A verified offline render has its own exact outgoing and incoming
+    // timeline. It can run even when separate model sidecars were not copied.
+    final prepared = _stemReady;
+    final modelEnd = prepared != null
+        ? prepared.start + prepared.length
+        : automixModelEnd(duration ?? Duration.zero,
+            _currentAutoMixProfile, phraseSecs ?? cfg.durationSecs);
     // If the model cue passed during a seek or late analysis, revert to
     // the ordinary end-of-track transition instead of disabling AutoMix.
     final usableModelEnd = modelEnd != null && modelEnd > pos ? modelEnd : null;
@@ -1046,8 +1055,9 @@ class AndroidAudioEngine implements AudioEngine {
       enabled: cfg.enabled,
       duration: targetEnd,
       position: pos,
-      fadeSecs: usableModelEnd != null && phraseSecs != null
-          ? phraseSecs : cfg.durationSecs,
+      fadeSecs: prepared != null ? prepared.durationSeconds
+          : usableModelEnd != null && phraseSecs != null
+              ? phraseSecs : cfg.durationSecs,
     )) {
       return;
     }
@@ -1117,7 +1127,7 @@ class AndroidAudioEngine implements AudioEngine {
             (phraseSecs == null || phraseCompatible);
         AutoMixStemClip? preparedStem;
         final lookup = _stemClipLookup;
-        if (lookup != null && hasPairedCues && (outgoing.speed - 1).abs() < .001) {
+        if (lookup != null && (outgoing.speed - 1).abs() < .001) {
           final id = '${androidAudioSourceIdentity(outgoingTrack)}->${nextIdentity}';
           try {
             final pending = _stemCandidateIdentity == id
@@ -1127,7 +1137,7 @@ class AndroidAudioEngine implements AudioEngine {
               const Duration(milliseconds: 450), onTimeout: () => null,
             );
             if (!valid()) { releaseIfOwned(); return; }
-            if (preparedStem != null &&
+            if (preparedStem != null && hasPairedCues &&
                 !AutoMixStemClip.suitableForCues(preparedStem,
                   outgoingStart: _currentAutoMixProfile?.modelExits.isNotEmpty == true
                       ? _currentAutoMixProfile!.modelExits.last : null,
