@@ -138,6 +138,12 @@ def main():
     info = plistlib.loads((args.app / "Info.plist").read_bytes())
     if info.get("CFBundleIdentifier") != BUNDLE:
         raise ValueError("Only the isolated native widget render app may run")
+    orientations = info.get("UISupportedInterfaceOrientations")
+    allowed = {"UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown",
+               "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"}
+    if (not isinstance(orientations, list) or not orientations
+            or any(value not in allowed for value in orientations)):
+        raise ValueError("The native render app must declare valid interface orientations")
     args.output.mkdir(parents=True, exist_ok=False)
     stage = "boot"
     try:

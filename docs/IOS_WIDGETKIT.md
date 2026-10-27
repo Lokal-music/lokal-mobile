@@ -570,3 +570,16 @@ the already validated main-app harness and records the exact failing phase,
 partial command output, installer/SpringBoard logs, device inventory and a
 failure screenshot. Installation/render failures still propagate without retry.
 This is a diagnostic/readiness correction, not proof of a packaging fix.
+
+
+Run 19 (`40521765024`, tree `e6e8a0e9e5c26888305f103fd67110baf092bba3`)
+passes the native/metadata/linkage gates and successfully installs the render
+app. Launch then times out before producing a report. The preserved SpringBoard
+log explicitly says the preview app does not support any valid orientations and
+cannot generate a launch snapshot; the failure screenshot remains on SpringBoard.
+The isolated target's generated manifest omitted orientations. The correction
+uses an explicit simulator-app manifest with portrait orientation, launch screen
+and SwiftUI scene metadata, and rejects missing/invalid built orientations before
+booting or installing. Eight local policy cases and actual project/plist parsing
+pass. Hosted launch/render acceptance is still required. This correction affects
+the CI-only app, not Runner or the separately linked extension.

@@ -54,6 +54,7 @@ class WidgetRenderStartupTest(unittest.TestCase):
             app.mkdir()
             (app / "Info.plist").write_bytes(plistlib.dumps({
                 "CFBundleIdentifier": ios_widget_render.BUNDLE,
+                "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
             }))
             with patch("sys.argv", ["render", str(app), "--output", str(root / "proof")]), \
                  patch.dict(os.environ, {"IOS_SIMULATOR_UDID": "owned"}, clear=True), \
@@ -69,6 +70,25 @@ class WidgetRenderStartupTest(unittest.TestCase):
                 evidence.assert_called_once()
                 self.assertEqual(evidence.call_args.args[1], "render-en")
                 self.assertEqual(command.call_count, 2)
+
+    def test_invalid_or_missing_orientations_fail_before_boot_or_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = root / "Preview.app"
+            app.mkdir()
+            for orientations in (None, [], ["InvalidOrientation"], "UIInterfaceOrientationPortrait"):
+                with self.subTest(orientations=orientations):
+                    info = {"CFBundleIdentifier": ios_widget_render.BUNDLE}
+                    if orientations is not None:
+                        info["UISupportedInterfaceOrientations"] = orientations
+                    (app / "Info.plist").write_bytes(plistlib.dumps(info))
+                    with patch("sys.argv", ["render", str(app), "--output", str(root / "proof")]), \
+                         patch.object(ios_widget_render, "boot_render_simulator") as boot, \
+                         patch.object(ios_widget_render, "command") as command:
+                        with self.assertRaisesRegex(ValueError, "orientations"):
+                            ios_widget_render.main()
+                        boot.assert_not_called()
+                        command.assert_not_called()
 
 
 if __name__ == "__main__":
