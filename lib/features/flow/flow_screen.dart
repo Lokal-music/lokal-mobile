@@ -15,7 +15,10 @@ import 'flow_tuner_sheet.dart';
 
 /// Drop-in shell entry point. Requires the app's existing ProviderScope.
 class FlowScreen extends ConsumerStatefulWidget {
-  const FlowScreen({super.key});
+  const FlowScreen({super.key, this.embedded = false});
+
+  /// Hide the standalone AppBar when Flow is shown inside Home.
+  final bool embedded;
 
   @override
   ConsumerState<FlowScreen> createState() => _FlowScreenState();
@@ -87,6 +90,23 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
     final data = flowAsync.value;
     final library = libraryAsync.value;
     final error = flowAsync.error ?? libraryAsync.error;
+    final body = SafeArea(
+      top: false,
+      child: error != null
+          ? _StateCard(
+              icon: Icons.error_outline,
+              title: 'Could not load Flow',
+              message: '$error',
+              action: 'Try again',
+              onAction: _retry,
+            )
+          : data == null || library == null
+          ? const Center(
+              child: CircularProgressIndicator(semanticsLabel: 'Loading Flow'),
+            )
+          : _content(data, library, player, backgroundError),
+    );
+    if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Flow'),
@@ -98,24 +118,7 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: error != null
-            ? _StateCard(
-                icon: Icons.error_outline,
-                title: 'Could not load Flow',
-                message: '$error',
-                action: 'Try again',
-                onAction: _retry,
-              )
-            : data == null || library == null
-            ? const Center(
-                child: CircularProgressIndicator(
-                  semanticsLabel: 'Loading Flow',
-                ),
-              )
-            : _content(data, library, player, backgroundError),
-      ),
+      body: body,
     );
   }
 
