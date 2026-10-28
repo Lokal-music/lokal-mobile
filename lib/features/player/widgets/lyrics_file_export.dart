@@ -41,7 +41,18 @@ String _timestamp(Duration time) {
 
 String _renderLyrics(LyricsData lyrics, {bool includeDisplayedSubline = false}) {
   final output = <String>[];
-  for (final line in lyrics.lines) {
+  // Same-time vocals are not necessarily a bilingual pair. For collisions,
+  // emit a non-singing Lokal association tag before the translated LRC row
+  // so re-import never mistakes that row for a third singer.
+  final timestampCounts = <int, int>{};
+  if (includeDisplayedSubline && lyrics.isSynchronized) {
+    for (final line in lyrics.lines) {
+      final time = line.timestamp.inMilliseconds;
+      timestampCounts[time] = (timestampCounts[time] ?? 0) + 1;
+    }
+  }
+  for (var index = 0; index < lyrics.lines.length; index++) {
+    final line = lyrics.lines[index];
     final words = line.words;
     // Bilingual files use ordinary line-timed LRC for widest compatibility.
     // Keep enhanced word timing for original-only exports.
@@ -59,6 +70,10 @@ String _renderLyrics(LyricsData lyrics, {bool includeDisplayedSubline = false}) 
       // Unstamped translation lines work in Lokal but are not reliably
       // recognized by other players. Same-timestamp pairs are conventional
       // bilingual LRC and remain valid timed lyric records.
+      if (lyrics.isSynchronized &&
+          (timestampCounts[line.timestamp.inMilliseconds] ?? 0) > 1) {
+        output.add('[lokaltr:$index]');
+      }
       output.add(lyrics.isSynchronized ? '$stamp$translation' : translation);
     }
   }
