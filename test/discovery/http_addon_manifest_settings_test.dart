@@ -59,6 +59,67 @@ void main() {
         'https://addons.example/private/a/Qobuz-Token');
   });
 
+  test('encoded manifest path survives secure settings and later checks', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final store = DiscoverySettingsStore();
+    const exact = 'https://addons.example/private/a%40b/manifest.json';
+    final endpoint = normalizeAddonEndpoint(exact).toString();
+    await store.save(DiscoverySettings(addons: [
+      DiscoveryAddonConfig(
+        id: 'encoded',
+        endpoint: endpoint,
+        manifestUrl: exact,
+        label: 'Private source',
+        enabled: true,
+      ),
+    ]));
+    final saved = (await store.load()).addons.single;
+    expect(saved.manifestUrl, exact);
+    final requests = <Uri>[];
+    final client = MockClient((request) async {
+      requests.add(request.url);
+      if (request.url.toString() == exact) return _json(_manifest);
+      if (request.url.path.endsWith('/stream/track')) {
+        return _json({'url': 'https://media.example/song.flac'});
+      }
+      return http.Response('Not found', 404);
+    });
+    addTearDown(client.close);
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(client),
+      endpoint: saved.endpoint,
+      exactManifestUrl: Uri.parse(saved.manifestUrl!),
+      configId: saved.id,
+    );
+    expect((await addon.health()).cacheAllowed, isTrue);
+    expect(requests.single.toString(), exact);
+    final song = DiscoveryTrack(
+      id: 'track', title: 'Song', artist: 'Artist',
+      source: DiscoverySource.addon,
+      addonId: saved.id,
+      addonBase: addon.base,
+    );
+    await addon.resolve(song, forDownload: true);
+    expect(requests[1].toString(), exact);
+  });
+
+  test('rejects foreign and malformed persisted manifest URLs', () {
+    for (final manifestUrl in [
+      'https://other.example/private/manifest.json',
+      'https://addon.example/path/manifest.json?token=secret',
+      'http://addon.example/path/manifest.json',
+      'https://addon.example/path/other.json',
+    ]) {
+      expect(
+        () => DiscoveryAddonConfig(
+          id: 'bad', endpoint: 'https://addon.example/path',
+          manifestUrl: manifestUrl,
+        ).validated(),
+        throwsA(isA<DiscoveryException>()),
+      );
+    }
+  });
+
   test('manifest probes cannot send credentials to a foreign origin', () async {
     final client = MockClient((_) async => fail('No network expected'));
     addTearDown(client.close);
