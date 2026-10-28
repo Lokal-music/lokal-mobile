@@ -3971,13 +3971,11 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        if (result.isEmpty()) {
+        if (result.isEmpty() && !routeLabelHint.isNullOrBlank()) {
             Log.i(
                 "UAC2",
-                "No eligible live UsbManager DAC candidates (routeType=" +
-                    "${describeCurrentOutputRoute(getSystemService(Context.AUDIO_SERVICE) as? AudioManager)[\"routeType\"]}; " +
-                    "USB inventory=${deviceList.size}, routeHint=${routeLabelHint ?: "none"}). " +
-                    "No saved device is registered until physically rediscovered.",
+                "No UsbManager DAC candidates matched route \"$routeLabelHint\". Inventory: " +
+                    deviceList.values.joinToString { device -> usbDeviceDebugSummary(device) },
             )
         }
         if (result.isNotEmpty()) {
@@ -4131,20 +4129,6 @@ class MainActivity: FlutterActivity() {
         }
 
         if (deviceHasIsochronousEndpoint(device) && hasUsbAudioOutputViaDeviceInfo()) {
-            return true
-        }
-
-        // A few USB-C DACs expose vendor-specific interfaces without the
-        // standard audio class markers. Only trust Android's own USB audio
-        // output signal if this is the sole physically attached USB device.
-        // Never promote a saved/past selection, or an arbitrary accessory in
-        // a multi-device hub, to a DAC.
-        val usbManager = getSystemService(Context.USB_SERVICE) as? UsbManager
-        val attached = usbManager?.deviceList
-        if (attached != null &&
-            attached.size == 1 &&
-            attached.containsKey(device.deviceName) &&
-            hasUsbAudioOutputViaDeviceInfo()) {
             return true
         }
 
