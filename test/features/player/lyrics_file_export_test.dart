@@ -117,12 +117,10 @@ void main() {
       lyrics,
       includeDisplayedSubline: true,
     );
-    expect(file.extension, 'lrc');
+    expect(file.extension, 'elrc');
     expect(file.mimeType, 'text/plain');
-    expect(file.content, '[00:01.25]さくら\n[00:01.25]Sakura\n');
-    final restored = LyricsService().parseLyricsText(file.content);
-    expect(restored.lines, hasLength(1));
-    expect(restored.lines.single.translation, 'Sakura');
+    expect(file.content, '[00:01.25]<00:01.25>さくら\n'
+        '[00:01.25]<00:01.25>Sakura\n');
   });
 
   test('does not overwrite verbatim TTML or LRC when no overlay is displayed', () {
@@ -262,12 +260,113 @@ void main() {
     final withTranslation = prepareLyricsFileExport(
       _song, lyrics, includeDisplayedSubline: true,
     );
-    expect(withTranslation.extension, 'lrc');
+    expect(withTranslation.extension, 'elrc');
     expect(withTranslation.content,
-        '[00:01.05]Hello world\n[00:01.05]Bonjour monde\n');
-    final restored = LyricsService().parseLyricsText(withTranslation.content);
-    expect(restored.lines.single.text, 'Hello world');
-    expect(restored.lines.single.translation, 'Bonjour monde');
+        startsWith('[00:01.05]<00:01.05>Hello <00:01.40>world\n'
+            '[00:01.05]<00:01.05>'));
+    final translatedLine = withTranslation.content.trim().split('\n').last;
+    expect(translatedLine.replaceAll(RegExp(r'<[0-9:.]+>'), ''),
+        '[00:01.05]Bonjour monde');
+  });
+
+  test('enhanced bilingual save interleaves original and translated timing', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(milliseconds: 10380),
+          text: 'How can you',
+          words: [
+            LyricsWord(start: Duration(milliseconds: 10380),
+                end: Duration(milliseconds: 11740), text: 'How '),
+            LyricsWord(start: Duration(milliseconds: 11740),
+                end: Duration(milliseconds: 12160), text: 'can '),
+            LyricsWord(start: Duration(milliseconds: 12160),
+                end: Duration(milliseconds: 12600), text: 'you'),
+          ],
+          translation: 'Cómo puedes ver',
+        ),
+        LyricsLine(
+          timestamp: Duration(milliseconds: 16470),
+          text: 'Open doors',
+          words: [
+            LyricsWord(start: Duration(milliseconds: 16470),
+                end: Duration(milliseconds: 17500), text: 'Open '),
+            LyricsWord(start: Duration(milliseconds: 17500),
+                end: Duration(milliseconds: 18300), text: 'doors'),
+          ],
+          translation: 'Puertas abiertas',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final saved = prepareLyricsFileExport(
+      _song, lyrics, includeDisplayedSubline: true,
+    );
+    expect(saved.extension, 'elrc');
+    expect(saved.fileName, endsWith('.elrc'));
+    final rows = saved.content.trim().split('\n');
+    expect(rows, hasLength(4));
+    expect(rows[0], '[00:10.38]<00:10.38>How <00:11.74>can <00:12.16>you');
+    expect(rows[1], startsWith('[00:10.38]<00:10.38>'));
+    expect(rows[2], startsWith('[00:16.47]<00:16.47>'));
+    expect(rows[3], startsWith('[00:16.47]<00:16.47>'));
+    // Every original line is followed immediately by its selected subline.
+    expect(rows[1].replaceAll(RegExp(r'<[0-9:.]+>'), ''),
+        '[00:10.38]Cómo puedes ver');
+    expect(rows[3].replaceAll(RegExp(r'<[0-9:.]+>'), ''),
+        '[00:16.47]Puertas abiertas');
+    expect(RegExp(r'<[0-9:.]+>').allMatches(rows[1]).length,
+        greaterThan(1));
+    expect(RegExp(r'<[0-9:.]+>').allMatches(rows[3]).length,
+        greaterThan(1));
+    expect(saved.content, isNot(contains('[lokaltr:')),
+        reason: 'ordinary bilingual pairs need no proprietary markers');
+  });
+
+  test('source vocal gaps remain gaps in projected translation timing', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: 'one two',
+          words: [
+            LyricsWord(start: Duration(seconds: 1),
+                end: Duration(milliseconds: 1500), text: 'one '),
+            LyricsWord(start: Duration(seconds: 3),
+                end: Duration(milliseconds: 3500), text: 'two'),
+          ],
+          translation: 'un dos',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final saved = prepareLyricsFileExport(
+      _song, lyrics, includeDisplayedSubline: true,
+    );
+    expect(saved.extension, 'elrc');
+    final second = saved.content.trim().split('\n')[1];
+    expect(second, contains('<00:01.00>'));
+    expect(second, contains('<00:03.00>'));
+    expect(second.replaceAll(RegExp(r'<[0-9:.]+>'), ''), '[00:01.00]un dos');
+  });
+
+  test('line-only synchronized lyrics never fabricate word timestamps', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(timestamp: Duration(seconds: 4), text: 'Salut',
+            translation: 'Hello'),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final saved = prepareLyricsFileExport(
+      _song, lyrics, includeDisplayedSubline: true,
+    );
+    expect(saved.extension, 'lrc');
+    expect(saved.content, '[00:04.00]Salut\n[00:04.00]Hello\n');
+    expect(saved.content, isNot(contains('<00:')));
   });
 
   test('legacy unstamped translated LRC exports as portable timed pairs', () {
