@@ -23,6 +23,28 @@ import 'replayable_stream_songs.dart';
 /// Shared pieces of Lokal's Library screens: Apple Music's iOS layout on the
 /// theme's own solid background, glass only for the small round buttons.
 
+/// Prefer an on-device recording; if there are none, use a cached or
+/// reachable desktop recording. A missing desktop must never block Play All
+/// when all remaining audio is already cached from that desktop.
+@visibleForTesting
+Future<Song?> firstAvailableLibraryFallback(
+  List<Song> queue,
+  Future<bool> Function(Song song) desktopAvailable,
+) async {
+  for (final song in queue) {
+    if (!song.isNetworkSource && !song.isPending &&
+        song.filePath?.isNotEmpty == true) {
+      return song;
+    }
+  }
+  for (final song in queue) {
+    if (song.sourceType == 'lokal' && await desktopAvailable(song)) {
+      return song;
+    }
+  }
+  return null;
+}
+
 /// Plays [queue] from [start] (or its first song); [shuffle] plays it in a
 /// random order. A failure shows a short message instead of throwing.
 Future<void> lokalPlay(
@@ -51,26 +73,12 @@ Future<void> lokalPlay(
       // queue order, starting on the first device-local recording instead.
       // An explicit tap must not silently select a different recording.
       if (start == null) {
-        // Prefer phone-local recordings without making network requests.
-        for (final candidate in list) {
-          if (!candidate.isNetworkSource &&
-              !candidate.isPending &&
-              candidate.filePath?.isNotEmpty == true) {
-            selected = candidate;
-            break;
-          }
-        }
-        // A Library can consist entirely of desktop originals already cached
-        // for offline playback. They remain valid network-source Song rows.
-        if (selected.sourceType == 'lokal') {
-          for (final candidate in list) {
-            if (candidate.sourceType == 'lokal' &&
-                await ref.read(lokalSongAvailableProvider(candidate).future)) {
-              selected = candidate;
-              break;
-            }
-          }
-        }
+        final fallback = await firstAvailableLibraryFallback(
+          list,
+          (candidate) =>
+              ref.read(lokalSongAvailableProvider(candidate).future),
+        );
+        if (fallback != null) selected = fallback;
       }
       if (selected.sourceType == 'lokal') {
         if (context.mounted) {
