@@ -124,6 +124,27 @@ Future<bool> restartDirectUsbSessionSequence({
   return true;
 }
 
+/// A restart is healthy only if the requested direct route has been
+/// verified and the USB consumer has actually progressed. Registration or
+/// selecting USB_DAC_EXPERIMENTAL alone is not proof that packets are flowing.
+@visibleForTesting
+bool isVerifiedUsbRestartPlayback({
+  required bool directRouteSelected,
+  required bool streamActive,
+  required bool streamStable,
+  required bool bitPerfectVerified,
+  required int consumerFrames,
+  required int? previousConsumerFrames,
+  required bool transportError,
+}) =>
+    directRouteSelected &&
+    streamActive &&
+    streamStable &&
+    bitPerfectVerified &&
+    !transportError &&
+    previousConsumerFrames != null &&
+    consumerFrames > previousConsumerFrames;
+
 /// A temporary Android route for one recording (unsupported PCM format,
 /// Atmos or signed HTTP add-on) must not disable the user's preferred direct
 /// USB route for future compatible recordings. Do not retry for the same
@@ -2275,8 +2296,8 @@ class PlayerService {
   /// after Android fallback and does not require a physical USB replug.
   ///
   /// It runs inside the playback request queue so taps/auto-skip cannot
-  /// reconfigure USB while a new source is being resolved. Preserve user
-  /// intent (playing vs paused), playlist, exact track occurrence and position.
+  /// reconfigure USB while a new source is being resolved. Keep the playlist
+  /// but always restart the selected track from 0:00 and verify live output.
   Future<bool> forceRestartUsbAudioEngine() {
     final pending = _manualUsbRestartInFlight;
     if (pending != null) return pending;
@@ -2311,7 +2332,9 @@ class PlayerService {
         song != null && !song.isPending && (song.filePath?.isNotEmpty ?? false)
             ? song
             : null;
-    final position = positionNotifier.value;
+    // A recovery is not a seek. Start at the beginning to avoid exercising
+    // stale decoder/seek state while the USB device is being re-claimed.
+    const position = Duration.zero;
     final wasPlaying = isPlayingNotifier.value;
     // Do not guess a playable track's bit depth from a previous recording:
     // the normal engine-preparation path probes missing metadata itself.
@@ -2325,7 +2348,13 @@ class PlayerService {
         'positionMs=${position.inMilliseconds})');
 
     try {
-      final success = await restartDirectUsbSessionSequence(
+      // A newly selected USB route is not necessarily usable: libusb can
+      // acknowledge opening a stale handle and fail on the very next URB.
+      // Retry the entire stop/reset/reopen cycle within ONE button press.
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        AppLog.instance.add('[USB] Manual restart attempt $attempt/3');
+        try {
+          final success = await restartDirectUsbSessionSequence(
         stopEngine: () async {
           // This lazy switch detaches the active engine, including the Rust
           // callback, before the native USB interface is released.
@@ -2364,25 +2393,41 @@ class PlayerService {
             await _playbackManager.playTrack(
               playableSong,
               initialPosition: position,
-              autoPlay: wasPlaying,
+              autoPlay: playableSong != null,
             );
           });
-          if (wasPlaying) {
+          if (playableSong != null) {
             _ensurePositionSaveTimer();
           }
         },
       );
-      if (!success) {
-        throw StateError('Native DAC reset or direct route selection failed');
+          if (!success) {
+            throw StateError('Native DAC reset or direct route selection failed');
+          }
+          if (playableSong != null &&
+              !await _verifyManualUsbRestartPlayback()) {
+            throw StateError('USB stream did not sustain verified audio');
+          }
+          _sessionManager.clearFallbackReason();
+          await _refreshAudioOutputDiagnostics(
+            reason: 'manual USB engine restart verified',
+            activeSong: playableSong,
+          );
+          AppLog.instance.add('[USB] Manual engine restart verified '
+              '(attempt=$attempt, fromBeginning=true, directRoute=true)');
+          return true;
+        } catch (attemptError) {
+          AppLog.instance.add('[USB] Manual restart attempt $attempt/3 '
+              'failed: $attemptError');
+          if (attempt == 3) rethrow;
+          // Drain callbacks from the failed endpoint before trying a new
+          // native registration, not just another play() on the same handle.
+          await Future<void>.delayed(
+            Duration(milliseconds: attempt * 350),
+          );
+        }
       }
-      _sessionManager.clearFallbackReason();
-      await _refreshAudioOutputDiagnostics(
-        reason: 'manual USB engine restart',
-        activeSong: playableSong,
-      );
-      AppLog.instance.add('[USB] Manual engine restart complete '
-          '(resumed=$wasPlaying, directRoute=true)');
-      return true;
+      return false;
     } catch (error) {
       AppLog.instance.add('[USB] Manual restart could not restore direct '
           'USB output: $error');
@@ -2406,7 +2451,7 @@ class PlayerService {
             await _playbackManager.playTrack(
               playableSong,
               initialPosition: position,
-              autoPlay: wasPlaying,
+              autoPlay: playableSong != null,
             );
           });
         }
@@ -2417,6 +2462,58 @@ class PlayerService {
       await _refreshAudioOutputDiagnostics(reason: 'manual USB restart failed');
       return false;
     }
+  }
+
+  Future<bool> _verifyManualUsbRestartPlayback() async {
+    int? previousFrames;
+    var healthySamples = 0;
+    // The native bit-perfect flag is only asserted once real audio has
+    // reached the USB endpoint. Observe it over time; a stale handle can
+    // disappear milliseconds after the Rust play() call has returned.
+    for (var sample = 0; sample < 12; sample++) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (currentEngineType != AudioEngineType.usbDacExperimental ||
+          _sessionManager.selectedMode != AudioEngineType.usbDacExperimental) {
+        return false;
+      }
+      final debug = await _uac2Service.getAndroidPlaybackDebugState();
+      final rust = _mapValue(debug?['rustAudioState']);
+      final usb = _mapValue(rust?['direct_usb']);
+      final consumerFrames = _intValue(
+        usb?['consumer_frames'] ?? usb?['consumerFrames'],
+      );
+      final error = _stringValue(usb?['last_error'] ?? usb?['lastError']);
+      final hasError = error != null && error.isNotEmpty &&
+          error.toLowerCase() != 'none';
+      if (hasError ||
+          usb?['registered'] != true && debug?['directUsbRegistered'] != true) {
+        return false;
+      }
+      final healthy = isVerifiedUsbRestartPlayback(
+        directRouteSelected: true,
+        streamActive: usb?['stream_active'] == true ||
+            usb?['streamActive'] == true,
+        streamStable: usb?['usb_stream_stable'] == true ||
+            usb?['usbStreamStable'] == true,
+        bitPerfectVerified: usb?['bit_perfect_verified'] == true ||
+            usb?['bitPerfectVerified'] == true,
+        consumerFrames: consumerFrames ?? 0,
+        previousConsumerFrames: previousFrames,
+        transportError: hasError,
+      );
+      if (healthy) {
+        healthySamples++;
+      } else {
+        healthySamples = 0;
+      }
+      previousFrames = consumerFrames;
+      // Require an observation window, not a single momentary successful
+      // status sample immediately followed by LIBUSB_NO_DEVICE.
+      if (sample >= 5 && healthySamples >= 3) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<bool> isHiFiModeEnabled() async {
