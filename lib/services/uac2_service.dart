@@ -387,8 +387,15 @@ class Uac2Service {
     );
   }
 
-  Future<List<Uac2DeviceInfo>> listDevices() async {
+  Future<List<Uac2DeviceInfo>> listDevices({
+    bool verifyPhysicalAttachment = false,
+  }) async {
     if (Platform.isAndroid) {
+      // On USB transfer failure, the frozen direct session may be stale.
+      // A forced query reads UsbManager's live inventory without opening or
+      // claiming an interface; only use it when diagnosing an already failed
+      // stream, never in the normal hot playback path.
+      if (verifyPhysicalAttachment) return _listDevicesAndroid();
       final currentPlaybackDevice = _currentAndroidPlaybackDeviceIfReusable(
         requireActivatableDeviceName: false,
       );
@@ -632,6 +639,84 @@ class Uac2Service {
     }
   }
 
+  /// Inspect native alternate settings rather than crossing independent
+  /// sample-rate and bit-depth capability lists. A DAC may advertise 96 kHz
+  /// and 16-bit separately without any 96k/16 isochronous OUT endpoint.
+  Future<List<Map<String, dynamic>>> _androidPcmAltSettings() async {
+    final state = await getAndroidPlaybackDebugState();
+    final rust = state?['rustAudioState'];
+    if (rust is! Map) return const [];
+    final direct = rust['direct_usb'] ?? rust['directUsb'];
+    if (direct is! Map) return const [];
+    final alts = direct['available_alt_settings'] ??
+        direct['availableAltSettings'];
+    if (alts is! List) return const [];
+    return [
+      for (final alt in alts)
+        if (alt is Map)
+          Map<String, dynamic>.from(alt),
+    ];
+  }
+
+  @visibleForTesting
+  static Uac2AudioFormat? choosePcmUsbAltFormat(
+    Uac2AudioFormat requested,
+    List<Map<String, dynamic>> alts, {
+    required bool bitPerfect,
+    Set<int> disallowedSampleRates = const {},
+  }) {
+    final compatible = <Uac2AudioFormat>[];
+    for (final alt in alts) {
+      final formatTag = (alt['format_tag'] ?? alt['formatTag'])
+          ?.toString().toLowerCase();
+      if (formatTag != 'pcm') continue;
+      final resolution = (alt['bit_resolution'] ?? alt['bitResolution']) as num?;
+      final channels = alt['channels'] as num?;
+      final subslot = (alt['subslot_size'] ?? alt['subslotSize']) as num?;
+      final interval = (alt['service_interval_us'] ??
+          alt['serviceIntervalUs']) as num?;
+      final packetSize = (alt['max_packet_bytes'] ??
+          alt['maxPacketBytes']) as num?;
+      final rates = alt['sample_rates'] ?? alt['sampleRates'];
+      if (resolution == null || channels == null || subslot == null ||
+          interval == null || packetSize == null || rates is! List ||
+          resolution.toInt() != resolution ||
+          !const {16, 24, 32}.contains(resolution.toInt()) ||
+          channels.toInt() != requested.channels ||
+          subslot.toInt() * 8 < resolution.toInt() ||
+          interval.toInt() <= 0) continue;
+      for (final rate in rates.whereType<num>()) {
+        final hz = rate.toInt();
+        if (hz <= 0 || disallowedSampleRates.contains(hz)) continue;
+        final bytesPerFrame = subslot.toInt() * channels.toInt();
+        final framesPerPacket =
+            (hz * interval.toInt() + 999999) ~/ 1000000;
+        if (framesPerPacket * bytesPerFrame > packetSize.toInt()) continue;
+        compatible.add(Uac2AudioFormat(
+          sampleRate: hz,
+          bitDepth: resolution.toInt(),
+          channels: requested.channels,
+          isDop: requested.isDop,
+          isNativeDsd: requested.isNativeDsd,
+        ));
+      }
+    }
+    for (final fmt in compatible) {
+      if (fmt.sampleRate == requested.sampleRate &&
+          fmt.bitDepth == requested.bitDepth) return requested;
+    }
+    if (bitPerfect || compatible.isEmpty) return null;
+    compatible.sort((a, b) {
+      // Prefer preserving depth over rate. This is a non-bit-perfect path
+      // only; the decoder may adapt its output when explicitly allowed.
+      int score(Uac2AudioFormat f) =>
+          (f.bitDepth == requested.bitDepth ? 0 : 1000000) +
+          (f.sampleRate - requested.sampleRate).abs();
+      return score(a).compareTo(score(b));
+    });
+    return compatible.first;
+  }
+
   Future<bool> prepareAndroidExperimentalUsbPlayback({
     required Uac2AudioFormat format,
     Set<int> disallowedSampleRates = const <int>{},
@@ -657,11 +742,20 @@ class Uac2Service {
     }
 
     final capabilities = await getDeviceCapabilities(resolvedDevice);
-    final selectedFormat = _chooseAndroidExperimentalUsbOutputFormat(
-      format,
-      capabilities,
-      disallowedSampleRates: disallowedSampleRates,
-    );
+    final alts = format.isDop || format.isNativeDsd
+        ? const <Map<String, dynamic>>[]
+        : await _androidPcmAltSettings();
+    final selectedFormat = alts.isNotEmpty
+        ? choosePcmUsbAltFormat(
+            format, alts,
+            bitPerfect: isBitPerfectEnabledSync,
+            disallowedSampleRates: disallowedSampleRates,
+          )
+        : _chooseAndroidExperimentalUsbOutputFormat(
+            format,
+            capabilities,
+            disallowedSampleRates: disallowedSampleRates,
+          );
     if (selectedFormat == null) {
       devLog(
         'Uac2Service.prepareAndroidExperimentalUsbPlayback: no compatible '
@@ -674,6 +768,16 @@ class Uac2Service {
         selectedFormat.sampleRate != format.sampleRate ||
         selectedFormat.bitDepth != format.bitDepth ||
         selectedFormat.channels != format.channels;
+    if (usingFallbackFormat && isBitPerfectEnabledSync) {
+      devLog(
+        'Uac2Service.prepareAndroidExperimentalUsbPlayback: refusing '
+        'non-exact format during bit-perfect playback '
+        '(requested ${format.sampleRate}Hz/${format.bitDepth}-bit/'
+        '${format.channels}ch, candidate ${selectedFormat.sampleRate}Hz/'
+        '${selectedFormat.bitDepth}-bit/${selectedFormat.channels}ch)',
+      );
+      return false;
+    }
     if (usingFallbackFormat) {
       devLog(
         'Uac2Service.prepareAndroidExperimentalUsbPlayback: using fallback '
@@ -751,11 +855,20 @@ class Uac2Service {
     final capabilities = device == null
         ? null
         : await getDeviceCapabilities(device);
-    return _chooseAndroidExperimentalUsbOutputFormat(
-      requested,
-      capabilities,
-      disallowedSampleRates: disallowedSampleRates,
-    );
+    final alts = requested.isDop || requested.isNativeDsd
+        ? const <Map<String, dynamic>>[]
+        : await _androidPcmAltSettings();
+    return alts.isNotEmpty
+        ? choosePcmUsbAltFormat(
+            requested, alts,
+            bitPerfect: isBitPerfectEnabledSync,
+            disallowedSampleRates: disallowedSampleRates,
+          )
+        : _chooseAndroidExperimentalUsbOutputFormat(
+            requested,
+            capabilities,
+            disallowedSampleRates: disallowedSampleRates,
+          );
   }
 
   Uac2AudioFormat? _chooseAndroidExperimentalUsbOutputFormat(

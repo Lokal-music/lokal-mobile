@@ -69,6 +69,18 @@ const Duration previousButtonRestartThreshold = Duration(seconds: 10);
 bool shouldRestartCurrentTrackOnPrevious(Duration position) =>
     position >= previousButtonRestartThreshold;
 
+/// A failed libusb submit can be a transient host-controller error during
+/// a PCM format transition. It is not equivalent to a physically unplugged
+/// DAC. Attempt a bounded stop/drain/re-register before Android fallback.
+@visibleForTesting
+bool isRecoverableDirectUsbTransportError(String message) {
+  final normalized = message.toLowerCase();
+  return normalized.contains('libusb_submit_transfer failed with code -1') ||
+      normalized.contains('libusb_submit_transfer failed with code -6') ||
+      normalized.contains('isochronous transfer failed') ||
+      normalized.contains('libusb_handle_events failed');
+}
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -2535,6 +2547,41 @@ class PlayerService {
     );
   }
 
+  /// Do not infer 16-bit audio from a sample rate alone. A 24-bit FLAC
+  /// labelled only as 96 kHz previously started as 96k/16, causing an
+  /// avoidable 'No isochronous OUT endpoint' refusal on some USB DACs.
+  /// Returning null asks the caller to probe the actual file first.
+  @visibleForTesting
+  static Uac2AudioFormat? derivePcmDirectUsbFormat({
+    int? sampleRate,
+    int? bitDepth,
+    String? resolution,
+  }) {
+    final label = resolution ?? '';
+    final labelBits = int.tryParse(
+      RegExp(r'(\d+)\s*[- ]?bit', caseSensitive: false)
+          .firstMatch(label)?.group(1) ?? '',
+    );
+    final labelKhz = double.tryParse(
+      RegExp(r'(\d+(?:\.\d+)?)\s*kHz', caseSensitive: false)
+          .firstMatch(label)?.group(1) ?? '',
+    );
+    final labelRate = labelKhz == null ? null : (labelKhz * 1000).round();
+    // Conflicting structured and display metadata are not reliable enough
+    // for direct USB: probe the actual file rather than choosing arbitrarily.
+    if (bitDepth != null && labelBits != null && bitDepth != labelBits) {
+      return null;
+    }
+    if (sampleRate != null && labelRate != null && sampleRate != labelRate) {
+      return null;
+    }
+    final rate = sampleRate ?? labelRate;
+    final bits = bitDepth ?? labelBits;
+    if (rate == null || rate <= 0 || bits == null ||
+        !const {16, 24, 32}.contains(bits)) return null;
+    return Uac2AudioFormat(sampleRate: rate, bitDepth: bits, channels: 2);
+  }
+
   Uac2AudioFormat? _deriveUac2FormatFromSong(Song? song) {
     if (song == null) return null;
 
@@ -2571,38 +2618,10 @@ class PlayerService {
       }
     }
 
-    final structuredSampleRate = song.sampleRate;
-    final structuredBitDepth = song.bitDepth;
-    if (structuredSampleRate != null || structuredBitDepth != null) {
-      return Uac2AudioFormat(
-        sampleRate: structuredSampleRate ?? 44100,
-        bitDepth: structuredBitDepth ?? 16,
-        channels: 2,
-      );
-    }
-
-    final resolution = song.resolution ?? '';
-    final bitDepthMatch = RegExp(
-      r'(\d+)-bit',
-      caseSensitive: false,
-    ).firstMatch(resolution);
-    final sampleRateMatch = RegExp(
-      r'(\d+(?:\.\d+)?)\s*kHz',
-      caseSensitive: false,
-    ).firstMatch(resolution);
-
-    final bitDepth = int.tryParse(bitDepthMatch?.group(1) ?? '');
-    final sampleRateKhz = double.tryParse(sampleRateMatch?.group(1) ?? '');
-    final sampleRate = sampleRateKhz != null
-        ? (sampleRateKhz * 1000).round()
-        : null;
-
-    if (bitDepth == null && sampleRate == null) return null;
-
-    return Uac2AudioFormat(
-      sampleRate: sampleRate ?? 44100,
-      bitDepth: bitDepth ?? 16,
-      channels: 2,
+    return derivePcmDirectUsbFormat(
+      sampleRate: song.sampleRate,
+      bitDepth: song.bitDepth,
+      resolution: song.resolution,
     );
   }
 
@@ -3534,22 +3553,28 @@ class PlayerService {
         _midStreamUsbFallbackActive = true;
         final song = currentSongNotifier.value;
         final position = _lastPlaybackState?.position ?? Duration.zero;
-        unawaited(() async {
+        // Serialize recovery with user-requested track changes. The native
+        // stream must never be reset while a new track is being prepared.
+        unawaited(_enqueuePlaybackRequest(() async {
           try {
+            if (song == null ||
+                currentSongNotifier.value?.id != song.id ||
+                currentEngineType != AudioEngineType.usbDacExperimental) {
+              return; // The failure belongs to a superseded stream.
+            }
             // Mid-stream USB error = DAC lost while playing. Respect the
             // pause-on-disconnect pref instead of resuming on the fallback.
             final pauseOnDisconnect = await _appPreferencesService
                 .getPauseOnUsbDacDisconnect();
             var autoResumeAfterFallback = !pauseOnDisconnect;
             if (pauseOnDisconnect) {
-              // "USB DAC disconnected" is often a lie (e.g. Samsung One UI
-              // suspends userspace USB transfers when the app is backgrounded
-              // while the DAC stays attached). Release the frozen direct-USB
-              // session first so listDevices() does a real UsbManager query,
-              // then only honour pause-on-disconnect for a genuine unplug.
-              await _uac2Service.releaseAndroidDirectUsbRuntime();
+              // A libusb I/O failure is not proof of a physical unplug.
+              // Query UsbManager without releasing the runtime prematurely:
+              // recovery needs the old session to stop in a controlled order.
               final stillAttached =
-                  (await _uac2Service.listDevices()).isNotEmpty;
+                  (await _uac2Service.listDevices(
+                    verifyPhysicalAttachment: true,
+                  )).isNotEmpty;
               if (stillAttached) {
                 _debugLog(
                   '[Engine] Direct USB failed but DAC still attached; '
@@ -3573,7 +3598,7 @@ class PlayerService {
           } finally {
             _midStreamUsbFallbackActive = false;
           }
-        }());
+        }));
         return;
       }
       if (isDeadRustEngineError(message)) {
@@ -5158,17 +5183,23 @@ class PlayerService {
               final probed = await rust_audio.audioProbeFormat(
                 path: resolvedPath,
               );
-              final probedBitDepth = probed.bitsPerSample ?? 16;
+              final probedBitDepth = probed.bitsPerSample;
               _debugLog(
                 '[Engine] Metadata missing — probed format: '
                 '${probed.sampleRate}Hz/$probedBitDepth-bit/'
                 '${probed.channels}ch',
               );
-              trackFormat = Uac2AudioFormat(
-                sampleRate: probed.sampleRate,
-                bitDepth: probedBitDepth,
-                channels: probed.channels,
-              );
+              if (probedBitDepth != null &&
+                  const {16, 24, 32}.contains(probedBitDepth)) {
+                trackFormat = Uac2AudioFormat(
+                  sampleRate: probed.sampleRate,
+                  bitDepth: probedBitDepth,
+                  channels: probed.channels,
+                );
+              } else {
+                _debugLog('[Engine] Direct USB requires measured PCM depth; '
+                    'probe returned ${probed.bitsPerSample}, not assuming 16-bit');
+              }
             } catch (e) {
               _debugLog('[Engine] Format probe failed: $e');
             }
@@ -5193,7 +5224,11 @@ class PlayerService {
             _sessionManager.initializedMode ==
                 AudioEngineType.usbDacExperimental &&
             _rustEngine != null;
-        final requestedUsbOutputFormat = alreadyInUsbMode
+        // In bit-perfect mode, a candidate rate/depth from independent
+        // capability lists is not proof the DAC supports that combination.
+        // Never replace the track's verified PCM format with a fallback.
+        final requestedUsbOutputFormat =
+            alreadyInUsbMode && !isBitPerfectModeEnabled
             ? await _uac2Service.suggestAndroidExperimentalUsbOutputFormat(
                 requested: trackFormat,
               )
@@ -5206,7 +5241,19 @@ class PlayerService {
             alreadyInUsbMode &&
             _sameUac2Format(currentUsbFormat, targetUsbOutputFormat);
 
+        var lostNativeRegistration = false;
         if (formatMatches) {
+          // A failed native transfer can leave the cached format unchanged
+          // even after libusb has released its registration.
+          final debug = await _uac2Service.getAndroidPlaybackDebugState();
+          final rust = _mapValue(debug?['rustAudioState']);
+          final usb = _mapValue(rust?['direct_usb']);
+          final explicitlyUnregistered = usb?['registered'] == false;
+          if (explicitlyUnregistered) {
+            lostNativeRegistration = true;
+            _debugLog('[Engine] Cached USB format matches but native DAC is '
+                'not registered; re-preparing instead of reusing stale state');
+          } else {
           _debugLog(
             '[Engine] USB engine already active with matching format '
             '(${targetUsbOutputFormat.sampleRate}Hz/'
@@ -5215,6 +5262,17 @@ class PlayerService {
           );
           _sessionManager.clearFallbackReason();
           return normalizedEngine;
+          }
+        }
+
+        // Change the USB alternate setting only after the previous stream
+        // has stopped. Updating native playback format while an old 16-bit
+        // URB queue is still submitting can fail the next libusb transfer.
+        if (alreadyInUsbMode &&
+            (!formatMatches || lostNativeRegistration) &&
+            _rustAudioService.isInitialized) {
+          _debugLog('[Engine] Stopping old USB stream before PCM renegotiation');
+          await _rustAudioService.stop();
         }
 
         final prepared = await _uac2Service
@@ -5241,7 +5299,8 @@ class PlayerService {
             trackFormat;
         final needsDirectUsbPrewarm =
             alreadyInUsbMode &&
-            !_sameUac2Format(currentUsbFormat, preparedUsbFormat);
+            (lostNativeRegistration ||
+                !_sameUac2Format(currentUsbFormat, preparedUsbFormat));
         if (needsDirectUsbPrewarm && _rustAudioService.isInitialized) {
           _debugLog(
             '[Engine] Prewarming active USB engine for '
@@ -5983,6 +6042,8 @@ class PlayerService {
   }
 
   bool _isDirectUsbStartupRefusal(String message) {
+    // Native event-loop faults lack the "Android USB direct" prefix.
+    if (isRecoverableDirectUsbTransportError(message)) return true;
     final normalized = message.toLowerCase();
     return message.contains('Requested ') ||
         message.contains('No isochronous OUT endpoint can carry') ||
@@ -6039,6 +6100,88 @@ class PlayerService {
         normalized.contains('permission denied');
   }
 
+  /// A failed transfer can leave a native endpoint, format, and Rust engine
+  /// out of sync. Merely replaying the same track reuses that broken session.
+  /// Recover at most twice: stop the source, release/drain the old USB session,
+  /// re-register the *current track's* PCM format and reopen the engine.
+  Future<bool> _recoverDirectUsbTransport({
+    required Song song,
+    required Duration initialPosition,
+    required bool autoPlay,
+  }) async {
+    Uac2AudioFormat? format = _deriveUac2FormatFromSong(song);
+    if (format == null && !song.isDsd) {
+      final path = await _resolveRustPath(song);
+      if (path != null) {
+        try {
+          final probe = await rust_audio.audioProbeFormat(path: path);
+          if (probe.bitsPerSample case final bits?
+              when const {16, 24, 32}.contains(bits)) {
+            format = Uac2AudioFormat(
+              sampleRate: probe.sampleRate,
+              bitDepth: bits,
+              channels: probe.channels,
+            );
+          }
+        } catch (e) {
+          _debugLog('[USB] Recovery PCM format probe failed: $e');
+        }
+      }
+    }
+    if (format == null) {
+      AppLog.instance.add('[USB] Cannot recover direct USB: PCM/DSD '
+          'format of selected track is not verified');
+      return false;
+    }
+
+    final selection = _selectionGeneration;
+    for (final delay in const [
+      Duration(milliseconds: 350),
+      Duration(milliseconds: 1000),
+    ]) {
+      await Future<void>.delayed(delay);
+      if (selection != _selectionGeneration ||
+          currentSongNotifier.value?.id != song.id ||
+          currentEngineType != AudioEngineType.usbDacExperimental) {
+        return false; // User already selected a different track or route.
+      }
+      try {
+        await _rustAudioService.stop();
+        final reset = await _uac2Service.resetAndroidDirectUsbPath(
+          format: format,
+        );
+        if (!reset) {
+          AppLog.instance.add('[USB] Recovery deferred: native interface '
+              'still stopping or activation declined');
+          continue;
+        }
+        await _refreshRustCapabilityInfo();
+        await _rustAudioService.prepareEngine(
+          preferredSampleRate: format.sampleRate,
+        );
+        await _applyRustPlaybackProcessingPolicy(
+          AudioEngineType.usbDacExperimental,
+        );
+        await _prepareImmediatePlaybackAsset(song);
+        await _runWithSuppressedSequenceStateUpdates(() async {
+          await _playbackManager.playTrack(
+            song,
+            initialPosition: initialPosition,
+            autoPlay: autoPlay,
+          );
+        });
+        _sessionManager.clearFallbackReason();
+        AppLog.instance.add('[USB] Recovered direct USB after transport '
+            'failure: ${format.sampleRate}Hz/${format.bitDepth}-bit/'
+            '${format.channels}ch');
+        return true;
+      } catch (e) {
+        AppLog.instance.add('[USB] Session reset retry failed: $e');
+      }
+    }
+    return false;
+  }
+
   static const List<Duration> _directUsbRetryDelays = [
     Duration(milliseconds: 150),
     Duration(milliseconds: 400),
@@ -6091,10 +6234,31 @@ class PlayerService {
       '[Engine] Direct USB startup refused: $message. Falling back to NORMAL_ANDROID',
     );
     final permissionFailure = _isDirectUsbPermissionFailure(message);
+    final transportFailure =
+        isRecoverableDirectUsbTransportError(message);
     final transientBusFailure =
-        _isExclusiveUsbUnavailableFailure(message) && !permissionFailure;
+        (_isExclusiveUsbUnavailableFailure(message) || transportFailure) &&
+        !permissionFailure;
 
-    if (transientBusFailure && song != null) {
+    // A failed isochronous submit cannot be fixed by just replaying the
+    // same source: re-register and reopen the native endpoint first.
+    if (transportFailure && song != null) {
+      final recovered = await _recoverDirectUsbTransport(
+        song: song,
+        initialPosition: initialPosition,
+        autoPlay: autoResumeAfterFallback,
+      );
+      if (recovered) {
+        _ensurePositionSaveTimer();
+        await _refreshAudioOutputDiagnostics(
+          reason: 'direct USB transport reset recovered',
+          activeSong: song,
+        );
+        return true;
+      }
+    }
+
+    if (transientBusFailure && !transportFailure && song != null) {
       final recovered = await _retryDirectUsbStart(
         song: song,
         initialPosition: initialPosition,
@@ -6114,7 +6278,9 @@ class PlayerService {
     await _uac2Service.markAndroidDirectUsbFallback(message);
     await _uac2Service.releaseAndroidDirectUsbRuntime();
     await _rustAudioService.setHighResMode(false);
-    if (transientBusFailure) {
+    // A single USB I/O/URB failure must not blacklist a still attached DAC
+    // for every following track. Keep manual retry available on that route.
+    if (transientBusFailure && !transportFailure) {
       await _sessionManager.suppressExperimentalUsbForCurrentDevice(
         reason: message,
       );
