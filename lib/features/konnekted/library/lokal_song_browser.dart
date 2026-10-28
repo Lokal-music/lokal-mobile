@@ -140,7 +140,8 @@ class LokalSongBrowser extends ConsumerStatefulWidget {
   final LokalSongSort initialSort;
   /// Supplied only by Likes: hearts sort chronologically, not by import date.
   final Map<String, int>? recentlyAddedRanks;
-  /// Optional persisted-view key, scoped to Likes rather than all song lists.
+  /// Optional stable persistence key, scoped per list (Likes, Library,
+  /// Downloads, recently played/added, genre, or individual playlist).
   final String? preferencesKey;
 
   /// Offers [LokalSongSort.original] under this name, e.g. "Playlist order".
@@ -361,10 +362,9 @@ class _LokalSongBrowserState extends ConsumerState<LokalSongBrowser> {
       ],
     );
     if (selected == null || !mounted) return;
-    _updateView(() {
-      _sort = selected;
-      _descending = _defaultDescending(selected);
-    });
+    // Changing the sort criterion must not silently reset the user's
+    // chosen ascending/descending direction or any active filters.
+    _updateView(() => _sort = selected);
   }
 
   Future<void> _chooseLocation() async {
