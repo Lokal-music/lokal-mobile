@@ -43,6 +43,16 @@ UsbDacClaimPresentation classifyUsbDacClaim({
       : UsbDacClaimPresentation.inactive;
 }
 
+/// A displayed USB status may be synthesized from physical detection rather
+/// than a playback session. Re-tapping that row should retry selection, not
+/// disconnect a non-existent session.
+@visibleForTesting
+bool shouldDisconnectUsbDacOnTap({
+  required bool isConnected,
+  required bool isSelected,
+  required bool hasLiveStatus,
+}) => isConnected && isSelected && hasLiveStatus;
+
 /// Match the physical USB inventory, not just vendor/product IDs: several
 /// identical DACs can be attached at once, and an old playback status might
 /// belong to a device which has since been unplugged.
@@ -265,7 +275,11 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
         // Only disconnect a genuine live session. A selected device with
         // merely detected/synthetic status must remain reselectable if its
         // first selection did not initialize the DAC.
-        isConnected && isSelected && hasLiveStatus,
+        shouldDisconnectUsbDacOnTap(
+          isConnected: isConnected,
+          isSelected: isSelected,
+          hasLiveStatus: hasLiveStatus,
+        ),
       ),
     );
   }
