@@ -158,6 +158,7 @@ class _FoldersScreenState extends ConsumerState<FoldersScreen> {
   bool _sortWasChanged = false;
   FolderViewMode _viewMode = FolderViewMode.grid;
   bool _viewWasChanged = false;
+  Future<void> _preferenceWrites = Future<void>.value();
 
   @override
   void initState() {
@@ -193,8 +194,11 @@ class _FoldersScreenState extends ConsumerState<FoldersScreen> {
   Future<void> _setSortOption(FolderRootSortOption option) async {
     _sortWasChanged = true;
     if (mounted) setState(() => _sortOption = option);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('folder_root_sort_option', option.name);
+    _preferenceWrites = _preferenceWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('folder_root_sort_option', option.name);
+    }).catchError((Object _) {});
+    await _preferenceWrites;
   }
 
   Future<void> _loadViewMode() async {
@@ -213,8 +217,11 @@ class _FoldersScreenState extends ConsumerState<FoldersScreen> {
   Future<void> _setViewMode(FolderViewMode mode) async {
     _viewWasChanged = true;
     if (mounted) setState(() => _viewMode = mode);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('folder_view_mode', mode.name);
+    _preferenceWrites = _preferenceWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('folder_view_mode', mode.name);
+    }).catchError((Object _) {});
+    await _preferenceWrites;
   }
 
   void _toggleViewMode() {
@@ -741,6 +748,7 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
   bool _filterWasChanged = false;
   FolderViewMode _viewMode = FolderViewMode.grid;
   bool _viewWasChanged = false;
+  Future<void> _preferenceWrites = Future<void>.value();
 
   @override
   void initState() {
@@ -791,15 +799,21 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
   Future<void> _setSortOption(FolderBrowserSortOption option) async {
     _sortWasChanged = true;
     if (mounted) setState(() => _sortOption = option);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('folder_browser_sort_option', option.name);
+    _preferenceWrites = _preferenceWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('folder_browser_sort_option', option.name);
+    }).catchError((Object _) {});
+    await _preferenceWrites;
   }
 
   Future<void> _setFilterOption(SongFileTypeFilter option) async {
     _filterWasChanged = true;
     if (mounted) setState(() => _filterOption = option);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('folder_browser_filter_option', option.name);
+    _preferenceWrites = _preferenceWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('folder_browser_filter_option', option.name);
+    }).catchError((Object _) {});
+    await _preferenceWrites;
   }
 
   Future<void> _loadViewMode() async {
@@ -818,8 +832,11 @@ class _FolderBrowserScreenState extends ConsumerState<FolderBrowserScreen> {
   Future<void> _setViewMode(FolderViewMode mode) async {
     _viewWasChanged = true;
     if (mounted) setState(() => _viewMode = mode);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('folder_view_mode', mode.name);
+    _preferenceWrites = _preferenceWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('folder_view_mode', mode.name);
+    }).catchError((Object _) {});
+    await _preferenceWrites;
   }
 
   void _showSortSheet() {
