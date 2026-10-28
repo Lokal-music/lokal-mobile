@@ -81,6 +81,19 @@ void main() {
       expect(lyrics.lines.every((line) => line.translation == null), isTrue);
     });
 
+    test('explicit tagged translation only binds to matching source time', () {
+      final lyrics = service.parseLyricsText(
+        '[00:01.00]Voice one\n'
+        '[lokaltr:0]\n[00:01.00]Translated voice one\n'
+        '[00:01.00]Voice two\n'
+        '[00:03.00]Next',
+      );
+      expect(lyrics.lines.map((line) => line.text),
+        ['Voice one', 'Voice two', 'Next']);
+      expect(lyrics.lines.map((line) => line.translation),
+        ['Translated voice one', null, null]);
+    });
+
     test('identical simultaneous lyric text is not mistaken for translation', () {
       final lyrics = service.parseLyricsText(
         '[00:01.00]Repeat\n[00:01.00]Repeat',
