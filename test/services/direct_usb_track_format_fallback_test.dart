@@ -3,6 +3,68 @@ import 'package:flick/services/player_service.dart';
 import 'package:flick/services/uac2_service.dart';
 
 void main() {
+  group('manual direct USB restart verification', () {
+    test('rejects route selection without actual streaming', () {
+      expect(
+        isVerifiedUsbRestartPlayback(
+          directRouteSelected: true,
+          streamActive: false,
+          streamStable: false,
+          bitPerfectVerified: false,
+          consumerFrames: 0,
+          previousConsumerFrames: 0,
+          transportError: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects a stream that stopped consuming frames', () {
+      expect(
+        isVerifiedUsbRestartPlayback(
+          directRouteSelected: true,
+          streamActive: true,
+          streamStable: true,
+          bitPerfectVerified: true,
+          consumerFrames: 700,
+          previousConsumerFrames: 700,
+          transportError: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects a transport failure even after bit-perfect verified', () {
+      expect(
+        isVerifiedUsbRestartPlayback(
+          directRouteSelected: true,
+          streamActive: true,
+          streamStable: true,
+          bitPerfectVerified: true,
+          consumerFrames: 900,
+          previousConsumerFrames: 700,
+          transportError: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('accepts only live, verified USB consumption', () {
+      expect(
+        isVerifiedUsbRestartPlayback(
+          directRouteSelected: true,
+          streamActive: true,
+          streamStable: true,
+          bitPerfectVerified: true,
+          consumerFrames: 900,
+          previousConsumerFrames: 700,
+          transportError: false,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('direct USB exact PCM compatibility', () {
     const pcm44116 = Uac2AudioFormat(
       sampleRate: 44100,
