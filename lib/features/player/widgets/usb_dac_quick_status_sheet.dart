@@ -6,7 +6,6 @@ import 'package:flick/models/audio_engine_type.dart';
 import 'package:flick/models/audio_output_diagnostics.dart';
 import 'package:flick/providers/uac2_provider.dart';
 import 'package:flick/providers/player_provider.dart';
-import 'package:flick/services/player_service.dart';
 import 'package:flick/services/uac2_service.dart';
 import 'package:flick/features/settings/screens/uac2_settings_screen.dart'
     show UsbDacClaimPresentation, classifyUsbDacClaim, sameUsbDacDevice;
