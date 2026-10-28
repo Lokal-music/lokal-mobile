@@ -367,9 +367,11 @@ void main() {
     expect(LokalSettingsGroup.listed.map((g) => g.label), [
       'Online sources',
       'Playback',
+      'Advanced output',
       'Library',
       'Appearance',
       'Data',
     ]);
+    expect(LokalSettingsGroup.output.parent, isNull);
   });
 }
