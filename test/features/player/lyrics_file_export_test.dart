@@ -270,6 +270,30 @@ void main() {
     expect(restored.lines.single.translation, 'Bonjour monde');
   });
 
+  test('legacy unstamped translated LRC exports as portable timed pairs', () {
+    final source = LyricsService().parseLyricsText(
+      '[00:19.51]De mi tierra bella\n'
+      'From my beautiful land\n'
+      '[00:21.99]De mi tierra santa\n'
+      'From my holy land',
+    );
+    expect(source.lines.map((line) => line.translation),
+      ['From my beautiful land', 'From my holy land']);
+    final export = prepareLyricsFileExport(
+      _song, source, includeDisplayedSubline: true,
+    );
+    expect(export.extension, 'lrc');
+    expect(export.content,
+      '[00:19.51]De mi tierra bella\n'
+      '[00:19.51]From my beautiful land\n'
+      '[00:21.99]De mi tierra santa\n'
+      '[00:21.99]From my holy land\n',
+    );
+    final reparsed = LyricsService().parseLyricsText(export.content);
+    expect(reparsed.lines.map((line) => line.translation),
+      ['From my beautiful land', 'From my holy land']);
+  });
+
   test('portable bilingual LRC retains partially translated rows', () {
     const lyrics = LyricsData(
       lines: [
