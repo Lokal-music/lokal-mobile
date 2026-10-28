@@ -103,10 +103,14 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
         throw const DiscoveryException('This source is already added.');
       }
 
+      final pastedUri = requireHttps(raw);
+      final exactManifest = pastedUri.pathSegments.lastOrNull == 'manifest.json'
+          ? pastedUri
+          : null;
       final health = await DiscoveryAddon(
         DiscoveryHttp(_client),
         endpoint: endpoint,
-      ).health();
+      ).health(exactManifestUrl: exactManifest);
       // Streaming-only addons (allowDownloads: 0) are valid sources.
       // Explicit saves remain blocked by DiscoveryAddon.resolve(forDownload: true).
 
