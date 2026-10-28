@@ -11,6 +11,7 @@ import 'package:flick/src/rust/api/uac2_api.dart' as rust_uac2;
 import 'package:flick/services/uac2_preferences_service.dart';
 import 'package:flick/services/uac2_exception.dart';
 import 'package:flick/core/utils/dev_log.dart';
+import 'package:flick/core/utils/app_log.dart';
 
 const Object _unset = Object();
 
@@ -276,6 +277,8 @@ class Uac2Service {
         if (accepted == false) {
           throw StateError('Android rejected direct USB playback-active=$active');
         }
+        AppLog.instance.add('[USB] Direct playback ownership '
+            '${active ? 'acquired' : 'released'}');
       });
   bool? get _lastDirectUsbPlaybackActive => _directUsbActivityWriter.applied;
   int _playbackStatusSyncGeneration = 0;
