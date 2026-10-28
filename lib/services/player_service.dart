@@ -81,6 +81,20 @@ bool isRecoverableDirectUsbTransportError(String message) {
       normalized.contains('libusb_handle_events failed');
 }
 
+/// An online placeholder is only a candidate, not a playable track.
+/// Keep the verified direct-USB source running until a real successor is
+/// resolved; otherwise an unavailable entry tears down the exclusive USB
+/// stream just to auto-skip immediately to another candidate.
+@visibleForTesting
+bool shouldKeepDirectUsbAliveDuringPendingLookup({
+  required AudioEngineType engine,
+  required bool hasAttachedEngine,
+  required bool hasLoadedSource,
+}) =>
+    engine == AudioEngineType.usbDacExperimental &&
+    hasAttachedEngine &&
+    hasLoadedSource;
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -922,6 +936,19 @@ class PlayerService {
   /// next song when it can't be found. Runs outside the playback request
   /// queue so another tap isn't kept waiting for the download.
   Future<void> _playPendingSong(Song pending) async {
+    // The requested online recording might not exist. On a live direct-USB
+    // session, stopping the currently verified stream before its lookup
+    // finishes closes the isochronous endpoint; a chain of missing tracks
+    // repeatedly tears down/re-opens the DAC and may lose bit-perfect.
+    final preserveDirectUsb = shouldKeepDirectUsbAliveDuringPendingLookup(
+      engine: currentEngineType,
+      hasAttachedEngine: _playbackManager.hasAttachedEngine,
+      hasLoadedSource: _rustAudioService.currentPath?.isNotEmpty == true,
+    );
+    if (preserveDirectUsb) {
+      AppLog.instance.add('[USB] Keeping verified direct-USB stream active '
+          'while resolving pending track ${pending.title}');
+    }
     final generation = ++_pendingPlaybackGeneration;
     _pendingPlaybackId = pending.id;
     onlinePlaybackError.value = null;
@@ -932,7 +959,11 @@ class PlayerService {
     bufferedPositionNotifier.value = Duration.zero;
     durationNotifier.value = pending.duration;
     currentSongNotifier.value = pending;
-    _playbackManager.updateTrack(pending);
+    // This is only a UI placeholder. Do not replace the active Rust engine's
+    // loaded track while that earlier source is still audibly playing.
+    if (!preserveDirectUsb) {
+      _playbackManager.updateTrack(pending);
+    }
     // Start the selected song's resolver *before* stopping the previous audio
     // engine. That stop can take time on the first media handoff, and waiting
     // for it used to leave the first provider request queued behind prefetch.
@@ -950,10 +981,12 @@ class PlayerService {
       }
     }
     final lookup = resolveSelected();
-    try {
-      await _playbackManager.stop();
-    } catch (e) {
-      _debugLog('[Playback] stop while preparing ${pending.title}: $e');
+    if (!preserveDirectUsb) {
+      try {
+        await _playbackManager.stop();
+      } catch (e) {
+        _debugLog('[Playback] stop while preparing ${pending.title}: $e');
+      }
     }
     if (generation != _pendingPlaybackGeneration ||
         _pendingPlaybackId != pending.id)
@@ -1001,7 +1034,8 @@ class PlayerService {
         _debugLog('[Playback] ${pending.title} waiting for verification');
         return;
       }
-      _debugLog('[Playback] ${pending.title} not found; skipping');
+      _debugLog('[Playback] ${pending.title} not found; skipping '
+          '(directUsbPreserved=$preserveDirectUsb)');
       if (++_pendingFailures >= _playlist.length) {
         _pendingFailures = 0;
         if (_pendingPresentationTrackId == pending.id) {
