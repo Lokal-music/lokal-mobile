@@ -93,7 +93,10 @@ void main() {
     // Switching the criterion must preserve the descending selection.
     await tester.tap(find.byTooltip('Sort: Title'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Artist').last);
+    await tester.tap(find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.text('Artist'),
+    ));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Descending · switch to ascending'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
