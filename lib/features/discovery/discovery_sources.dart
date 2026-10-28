@@ -519,8 +519,28 @@ class DiscoveryAddon {
     cancel: cancel,
   );
 
-  Future<AddonHealth> health({Future<void>? cancel}) async {
-    final json = await _get(['manifest.json'], cancel: cancel);
+  Future<AddonHealth> health({
+    Future<void>? cancel,
+    Uri? exactManifestUrl,
+  }) async {
+    // An installation with an explicit manifest.json URL should verify
+    // precisely that URI. The normalized base is retained for subsequent
+    // /search and /stream calls, but must not rewrite the initial probe.
+    // Never forward bearer credentials to a different origin.
+    if (exactManifestUrl != null &&
+        (exactManifestUrl.origin != base.origin ||
+            exactManifestUrl.pathSegments.lastOrNull != 'manifest.json' ||
+            exactManifestUrl.hasQuery ||
+            exactManifestUrl.hasFragment)) {
+      throw const DiscoveryException('Invalid add-on manifest URL.');
+    }
+    final json = exactManifestUrl == null
+        ? await _get(['manifest.json'], cancel: cancel)
+        : await http.json(
+            exactManifestUrl,
+            headers: {if (_token.isNotEmpty) 'Authorization': 'Bearer $_token'},
+            cancel: cancel,
+          );
     final id = discoveryText(json['id']);
     final resources = json['resources'];
     if (id == null ||
