@@ -872,10 +872,13 @@ class LyricsService {
       } else {
         buffer.writeln('${formatTimestamp(line.timestamp)}${line.text}');
       }
-      // Kept the way it's read: unstamped, right under its line.
+      // Duplicate the timestamp so external bilingual-LRC parsers can pair
+      // the translated line with the original rather than treating it as
+      // unsynchronized commentary.
       if (line.translation case final translation?
-          when translation.trim().isNotEmpty) {
-        buffer.writeln(translation.trim());
+          when translation.trim().isNotEmpty &&
+              translation.trim() != line.text.trim()) {
+        buffer.writeln('${formatTimestamp(line.timestamp)}${translation.trim()}');
       }
     }
     return buffer.toString().trimRight();
@@ -1045,6 +1048,436 @@ class LyricsService {
     // line is that line's translation; the rest are notes and credits.
     final plainLines = <LyricsLine>[];
     final translations = <(List<int>, String)>[];
+    // An optional association tag is emitted only for simultaneous vocal
+    // groups, where an otherwise portable timestamped translation would be
+    // indistinguishable from another sung voice.
+    final taggedTranslation = RegExp(r'^\[lokaltr:(\d+)\]$');
+    int? taggedSourceIndex;
+    var previous = <int>[]; // indexes the last stamped row made
+
+    for (final row in rows) {
+      final line = row.trimRight();
+      if (line.trim().isEmpty) {
+        previous = [];
+        continue;
+      }
+
+      final offsetMatch = offsetPattern.firstMatch(line);
+      if (offsetMatch != null) {
+        offsetMs = int.tryParse(offsetMatch.group(1) ?? '') ?? offsetMs;
+        continue;
+      }
+
+      final marker = taggedTranslation.firstMatch(line.trim());
+      if (marker != null) {
+        taggedSourceIndex = int.tryParse(marker.group(1)!);
+        previous = [];
+        continue;
+      }
+
+      final matches = timestampPattern.allMatches(line).toList();
+      if (matches.isNotEmpty) {
+        hasTimestamps = true;
+        final body = line.replaceAll(timestampPattern, '');
+        final words = _extractWords(body, offsetMs);
+        final lyricText = body.replaceAll(_wordTimestampPattern, '').trim();
+        previous = [];
+        final target = taggedSourceIndex;
+        taggedSourceIndex = null;
+        if (target != null &&
+            target >= 0 &&
+            target < parsedLines.length &&
+            matches.length == 1 &&
+            lyricText.isNotEmpty &&
+            parsedLines[target].translation == null) {
+          final time = _parseTimestamp(matches.single.group(1) ?? '');
+          if (time != null &&
+              parsedLines[target].timestamp.inMilliseconds ==
+                  (time.inMilliseconds + offsetMs).clamp(0, 1 << 62)) {
+            parsedLines[target] =
+                parsedLines[target].withTranslation(lyricText);
+            continue;
+          }
+        }
+        for (final match in matches) {
+          final parsedTime = _parseTimestamp(match.group(1) ?? '');
+          if (parsedTime == null) continue;
+
+          final adjustedMs = parsedTime.inMilliseconds + offsetMs;
+          final clamped = Duration(
+            milliseconds: adjustedMs < 0 ? 0 : adjustedMs,
+          );
+          if (lyricText.isEmpty) continue;
+          previous.add(parsedLines.length);
+          parsedLines.add(
+            LyricsLine(timestamp: clamped, text: lyricText, words: words),
+          );
+        }
+        continue;
+      }
+
+      if (metadataPattern.hasMatch(line)) {
+        previous = [];
+        continue;
+      }
+
+      final text = line.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (previous.isNotEmpty) translations.add((previous, text));
+      previous = [];
+      plainLines.add(LyricsLine(timestamp: Duration.zero, text: line.trim()));
+    }
+
+    if (hasTimestamps) {
+      // A stray note isn't a translation: a translated file has one under at
+      // least half its sung lines.
+      final sung = parsedLines.map((line) => line.timestamp).toSet().length;
+      if (translations.isNotEmpty && translations.length >= sung / 2) {
+        for (final (indexes, text) in translations) {
+          for (final index in indexes) {
+            parsedLines[index] = parsedLines[index].withTranslation(text);
+          }
+        }
+      }
+      // Bilingual LRC commonly repeats the original timestamp for its
+      // translation. Fold adjacent pairs before sorting so original/subline
+      // ordering survives; leave simultaneous word-timed or 3+ vocal parts
+      // separate. Unstamped translations above remain supported.
+      final bilingualLines = <LyricsLine>[];
+      for (var i = 0; i < parsedLines.length;) {
+        var end = i + 1;
+        while (end < parsedLines.length &&
+            parsedLines[end].timestamp == parsedLines[i].timestamp) {
+          end++;
+        }
+        if (end == i + 2 &&
+            parsedLines[i].translation == null &&
+            parsedLines[i + 1].translation == null &&
+            parsedLines[i + 1].words == null &&
+            parsedLines[i].text.trim() != parsedLines[i + 1].text.trim()) {
+          bilingualLines.add(
+            parsedLines[i].withTranslation(parsedLines[i + 1].text),
+          );
+        } else {
+          bilingualLines.addAll(parsedLines.getRange(i, end));
+        }
+        i = end;
+      }
+      bilingualLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return LyricsData(
+        lines: bilingualLines,
+        isSynchronized: true,
+        source: source,
+        rawContent: raw,
+      );
+    }
+
+    return LyricsData(
+      lines: plainLines.where((line) => line.text.isNotEmpty).toList(),
+      isSynchronized: false,
+      source: source,
+      rawContent: raw,
+    );
+  }
+
+  LyricsData? _parseXmlLyrics(String xml, {String? source}) {
+    try {
+      final document = XmlDocument.parse(xml);
+      Duration? time(String? value) {
+        if (value == null) return null;
+        if (value.endsWith('ms'))
+          return Duration(
+            microseconds:
+                ((double.tryParse(value.substring(0, value.length - 2)) ?? 0) *
+                        1000)
+                    .round(),
+          );
+        if (value.endsWith('s'))
+          return Duration(
+            microseconds:
+                ((double.tryParse(value.substring(0, value.length - 1)) ?? 0) *
+                        1000000)
+                    .round(),
+          );
+        final parts = value.split(':');
+        if (parts.isEmpty) return null;
+        var seconds = 0.0;
+        for (final part in parts) {
+          final number = double.tryParse(part);
+          if (number == null) return null;
+          seconds = seconds * 60 + number;
+        }
+        return Duration(microseconds: (seconds * 1000000).round());
+      }
+
+      final paragraphs = document.descendants.whereType<XmlElement>().where(
+        (e) => e.name.local == 'p',
+      );
+      final lines = <LyricsLine>[];
+      final plain = <LyricsLine>[];
+      for (final paragraph in paragraphs) {
+        final start = time(paragraph.getAttribute('begin'));
+        final text = paragraph.innerText.replaceAll(RegExp(r'\s+'), ' ').trim();
+        if (text.isEmpty) continue;
+        if (start == null) {
+          plain.add(LyricsLine(timestamp: Duration.zero, text: text));
+          continue;
+        }
+        final words = <LyricsWord>[];
+        for (final span in paragraph.descendants.whereType<XmlElement>().where(
+          (e) => e.name.local == 'span',
+        )) {
+          final begin = time(span.getAttribute('begin')),
+              end = time(span.getAttribute('end'));
+          if (begin == null ||
+              end == null ||
+              end < begin ||
+              span.innerText.trim().isEmpty)
+            continue;
+          if (span.descendants.whereType<XmlElement>().any(
+            (child) => child.getAttribute('begin') != null,
+          ))
+            continue;
+          final tail = span.nextSibling;
+          final separator = tail is XmlText && tail.value.trim().isEmpty
+              ? tail.value
+              : '';
+          words.add(
+            LyricsWord(
+              start: begin,
+              end: end,
+              text: span.innerText + separator,
+            ),
+          );
+        }
+        lines.add(
+          LyricsLine(
+            timestamp: start,
+            text: text,
+            words: words.isEmpty ? null : words,
+          ),
+        );
+      }
+      if (lines.isNotEmpty || plain.isNotEmpty) {
+        final timed = lines.isNotEmpty;
+        if (!timed) lines.addAll(plain);
+        lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        return LyricsData(
+          lines: lines,
+          isSynchronized: timed,
+          source: source,
+          rawContent: xml,
+          language: document.rootElement.attributes
+              .where((a) => a.name.local == 'lang')
+              .firstOrNull
+              ?.value,
+        );
+      }
+    } catch (_) {
+      /* Try the legacy XML formats below. */
+    }
+    try {
+      final linePattern = RegExp(
+        r'<line\s+start="(\d+)"\s*>([^<]*)</line>',
+        caseSensitive: false,
+      );
+      final altPattern = RegExp(
+        r'<line\s+start="(\d{1,2}):(\d{2})\.(\d{2})"\s*>([^<]*)</line>',
+        caseSensitive: false,
+      );
+
+      final lines = <LyricsLine>[];
+      var hasTimestamps = false;
+
+      for (final match in linePattern.allMatches(xml)) {
+        hasTimestamps = true;
+        final ms = int.tryParse(match.group(1) ?? '') ?? 0;
+        final text = match.group(2)?.trim() ?? '';
+        if (text.isNotEmpty) {
+          lines.add(
+            LyricsLine(
+              timestamp: Duration(milliseconds: ms),
+              text: text,
+            ),
+          );
+        }
+      }
+
+      if (lines.isEmpty) {
+        for (final match in altPattern.allMatches(xml)) {
+          hasTimestamps = true;
+          final minutes = int.tryParse(match.group(1) ?? '0') ?? 0;
+          final seconds = int.tryParse(match.group(2) ?? '0') ?? 0;
+          final centis = int.tryParse(match.group(3) ?? '0') ?? 0;
+          final ms = (minutes * 60 + seconds) * 1000 + centis * 10;
+          final text = match.group(4)?.trim() ?? '';
+          if (text.isNotEmpty) {
+            lines.add(
+              LyricsLine(
+                timestamp: Duration(milliseconds: ms),
+                text: text,
+              ),
+            );
+          }
+        }
+      }
+
+      if (lines.isNotEmpty) {
+        lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        return LyricsData(
+          lines: lines,
+          isSynchronized: hasTimestamps,
+          source: source,
+          rawContent: xml,
+        );
+      }
+    } catch (_) {
+      // Fall through to plain-text parser
+    }
+    return null;
+  }
+
+  Duration? _parseTimestamp(String timestamp) {
+    final trimmed = timestamp.trim();
+
+    var match = RegExp(r'^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$')
+        .firstMatch(trimmed);
+    if (match != null) {
+      final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+      final seconds = int.tryParse(match.group(3) ?? '') ?? 0;
+      return Duration(
+        hours: hours,
+        minutes: minutes,
+        seconds: seconds,
+        milliseconds: _parseFraction(match.group(4)),
+      );
+    }
+
+    match = RegExp(r'^(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?$').firstMatch(trimmed);
+    if (match == null) return null;
+
+    final minutes = int.tryParse(match.group(1) ?? '');
+    final seconds = int.tryParse(match.group(2) ?? '');
+    if (minutes == null || seconds == null) return null;
+
+    return Duration(
+      minutes: minutes,
+      seconds: seconds,
+      milliseconds: _parseFraction(match.group(3)),
+    );
+  }
+
+  int _parseFraction(String? fractionRaw) {
+    if (fractionRaw == null || fractionRaw.isEmpty) return 0;
+    if (fractionRaw.length == 1) return int.parse(fractionRaw) * 100;
+    if (fractionRaw.length == 2) return int.parse(fractionRaw) * 10;
+    return int.parse(fractionRaw.substring(0, 3));
+  }
+
+  Future<void> _setManualLyricsPath(Song song, String? manualPath) async {
+    final filePath = song.filePath;
+    if (filePath == null || filePath.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final existingRaw = prefs.getString(_manualLyricsOverridesKey);
+    final map = <String, String>{};
+    if (existingRaw != null && existingRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(existingRaw);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            if (entry.key is String && entry.value is String) {
+              map[entry.key as String] = entry.value as String;
+            }
+          }
+        }
+      } catch (_) {
+        // Reset malformed preferences payload.
+      }
+    }
+
+    if (manualPath == null || manualPath.isEmpty) {
+      map.remove(filePath);
+    } else {
+      map[filePath] = manualPath;
+    }
+
+    if (map.isEmpty) {
+      await prefs.remove(_manualLyricsOverridesKey);
+    } else {
+      await prefs.setString(_manualLyricsOverridesKey, jsonEncode(map));
+    }
+    _cache.remove(filePath);
+    // This runs for imported, saved, replaced and cleared manual/sidecar
+    // lyrics. Invalidate search and all LyricsService instance caches.
+    contentRevision.value++;
+  }
+
+  Future<String> _writeManagedLyricsCopy({
+    required Song song,
+    required String extension,
+    required String content,
+  }) async {
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+    final lyricsDirectory = Directory(
+      '${documentsDirectory.path}${Platform.pathSeparator}$_managedLyricsDirectoryName',
+    );
+    await lyricsDirectory.create(recursive: true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final matchAudioFilename =
+        prefs.getBool('lyrics_match_audio_filename') ?? false;
+
+    final String safeStem;
+    if (matchAudioFilename) {
+      final filePath = song.filePath;
+      if (filePath != null && filePath.isNotEmpty) {
+        final localPath = _resolveLocalPath(filePath);
+        if (localPath != null && localPath.isNotEmpty) {
+          safeStem = _basenameWithoutExtension(localPath);
+        } else {
+          safeStem = _safeLyricsStem(song);
+        }
+      } else {
+        safeStem = _safeLyricsStem(song);
+      }
+    } else {
+      safeStem = _safeLyricsStem(song);
+    }
+
+    final file = File(
+      '${lyricsDirectory.path}${Platform.pathSeparator}$safeStem.$extension',
+    );
+    await file.writeAsString(content);
+    return file.path;
+  }
+
+  String _preferredLyricsExtension(String fileName) {
+    final normalized = fileName.toLowerCase();
+    if (normalized.endsWith('.txt')) return 'txt';
+    if (normalized.endsWith('.xml')) return 'xml';
+    return 'lrc';
+  }
+
+  String _safeLyricsStem(Song song) {
+    final parts = [
+      if (song.artist.trim().isNotEmpty) song.artist.trim(),
+      if (song.title.trim().isNotEmpty) song.title.trim(),
+      song.id,
+    ];
+    final stem = parts.join('_');
+    return stem.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
+  }
+}
+
+class _LoadedLyrics {
+  final String content;
+  final String? source;
+
+  const _LoadedLyrics({required this.content, this.source});
+}
+);
+    int? taggedSourceIndex;
     var previous = <int>[]; // indexes the last stamped row made
 
     for (final row in rows) {
@@ -1106,9 +1539,859 @@ class LyricsService {
           }
         }
       }
-      parsedLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      // Bilingual LRC commonly repeats the original timestamp for its
+      // translation. Fold adjacent pairs before sorting so original/subline
+      // ordering survives; leave simultaneous word-timed or 3+ vocal parts
+      // separate. Unstamped translations above remain supported.
+      final bilingualLines = <LyricsLine>[];
+      for (var i = 0; i < parsedLines.length;) {
+        var end = i + 1;
+        while (end < parsedLines.length &&
+            parsedLines[end].timestamp == parsedLines[i].timestamp) {
+          end++;
+        }
+        if (end == i + 2 &&
+            parsedLines[i].translation == null &&
+            parsedLines[i + 1].translation == null &&
+            parsedLines[i + 1].words == null &&
+            parsedLines[i].text.trim() != parsedLines[i + 1].text.trim()) {
+          bilingualLines.add(
+            parsedLines[i].withTranslation(parsedLines[i + 1].text),
+          );
+        } else {
+          bilingualLines.addAll(parsedLines.getRange(i, end));
+        }
+        i = end;
+      }
+      bilingualLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       return LyricsData(
-        lines: parsedLines,
+        lines: bilingualLines,
+        isSynchronized: true,
+        source: source,
+        rawContent: raw,
+      );
+    }
+
+    return LyricsData(
+      lines: plainLines.where((line) => line.text.isNotEmpty).toList(),
+      isSynchronized: false,
+      source: source,
+      rawContent: raw,
+    );
+  }
+
+  LyricsData? _parseXmlLyrics(String xml, {String? source}) {
+    try {
+      final document = XmlDocument.parse(xml);
+      Duration? time(String? value) {
+        if (value == null) return null;
+        if (value.endsWith('ms'))
+          return Duration(
+            microseconds:
+                ((double.tryParse(value.substring(0, value.length - 2)) ?? 0) *
+                        1000)
+                    .round(),
+          );
+        if (value.endsWith('s'))
+          return Duration(
+            microseconds:
+                ((double.tryParse(value.substring(0, value.length - 1)) ?? 0) *
+                        1000000)
+                    .round(),
+          );
+        final parts = value.split(':');
+        if (parts.isEmpty) return null;
+        var seconds = 0.0;
+        for (final part in parts) {
+          final number = double.tryParse(part);
+          if (number == null) return null;
+          seconds = seconds * 60 + number;
+        }
+        return Duration(microseconds: (seconds * 1000000).round());
+      }
+
+      final paragraphs = document.descendants.whereType<XmlElement>().where(
+        (e) => e.name.local == 'p',
+      );
+      final lines = <LyricsLine>[];
+      final plain = <LyricsLine>[];
+      for (final paragraph in paragraphs) {
+        final start = time(paragraph.getAttribute('begin'));
+        final text = paragraph.innerText.replaceAll(RegExp(r'\s+'), ' ').trim();
+        if (text.isEmpty) continue;
+        if (start == null) {
+          plain.add(LyricsLine(timestamp: Duration.zero, text: text));
+          continue;
+        }
+        final words = <LyricsWord>[];
+        for (final span in paragraph.descendants.whereType<XmlElement>().where(
+          (e) => e.name.local == 'span',
+        )) {
+          final begin = time(span.getAttribute('begin')),
+              end = time(span.getAttribute('end'));
+          if (begin == null ||
+              end == null ||
+              end < begin ||
+              span.innerText.trim().isEmpty)
+            continue;
+          if (span.descendants.whereType<XmlElement>().any(
+            (child) => child.getAttribute('begin') != null,
+          ))
+            continue;
+          final tail = span.nextSibling;
+          final separator = tail is XmlText && tail.value.trim().isEmpty
+              ? tail.value
+              : '';
+          words.add(
+            LyricsWord(
+              start: begin,
+              end: end,
+              text: span.innerText + separator,
+            ),
+          );
+        }
+        lines.add(
+          LyricsLine(
+            timestamp: start,
+            text: text,
+            words: words.isEmpty ? null : words,
+          ),
+        );
+      }
+      if (lines.isNotEmpty || plain.isNotEmpty) {
+        final timed = lines.isNotEmpty;
+        if (!timed) lines.addAll(plain);
+        lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        return LyricsData(
+          lines: lines,
+          isSynchronized: timed,
+          source: source,
+          rawContent: xml,
+          language: document.rootElement.attributes
+              .where((a) => a.name.local == 'lang')
+              .firstOrNull
+              ?.value,
+        );
+      }
+    } catch (_) {
+      /* Try the legacy XML formats below. */
+    }
+    try {
+      final linePattern = RegExp(
+        r'<line\s+start="(\d+)"\s*>([^<]*)</line>',
+        caseSensitive: false,
+      );
+      final altPattern = RegExp(
+        r'<line\s+start="(\d{1,2}):(\d{2})\.(\d{2})"\s*>([^<]*)</line>',
+        caseSensitive: false,
+      );
+
+      final lines = <LyricsLine>[];
+      var hasTimestamps = false;
+
+      for (final match in linePattern.allMatches(xml)) {
+        hasTimestamps = true;
+        final ms = int.tryParse(match.group(1) ?? '') ?? 0;
+        final text = match.group(2)?.trim() ?? '';
+        if (text.isNotEmpty) {
+          lines.add(
+            LyricsLine(
+              timestamp: Duration(milliseconds: ms),
+              text: text,
+            ),
+          );
+        }
+      }
+
+      if (lines.isEmpty) {
+        for (final match in altPattern.allMatches(xml)) {
+          hasTimestamps = true;
+          final minutes = int.tryParse(match.group(1) ?? '0') ?? 0;
+          final seconds = int.tryParse(match.group(2) ?? '0') ?? 0;
+          final centis = int.tryParse(match.group(3) ?? '0') ?? 0;
+          final ms = (minutes * 60 + seconds) * 1000 + centis * 10;
+          final text = match.group(4)?.trim() ?? '';
+          if (text.isNotEmpty) {
+            lines.add(
+              LyricsLine(
+                timestamp: Duration(milliseconds: ms),
+                text: text,
+              ),
+            );
+          }
+        }
+      }
+
+      if (lines.isNotEmpty) {
+        lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        return LyricsData(
+          lines: lines,
+          isSynchronized: hasTimestamps,
+          source: source,
+          rawContent: xml,
+        );
+      }
+    } catch (_) {
+      // Fall through to plain-text parser
+    }
+    return null;
+  }
+
+  Duration? _parseTimestamp(String timestamp) {
+    final trimmed = timestamp.trim();
+
+    var match = RegExp(r'^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$')
+        .firstMatch(trimmed);
+    if (match != null) {
+      final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+      final seconds = int.tryParse(match.group(3) ?? '') ?? 0;
+      return Duration(
+        hours: hours,
+        minutes: minutes,
+        seconds: seconds,
+        milliseconds: _parseFraction(match.group(4)),
+      );
+    }
+
+    match = RegExp(r'^(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?$').firstMatch(trimmed);
+    if (match == null) return null;
+
+    final minutes = int.tryParse(match.group(1) ?? '');
+    final seconds = int.tryParse(match.group(2) ?? '');
+    if (minutes == null || seconds == null) return null;
+
+    return Duration(
+      minutes: minutes,
+      seconds: seconds,
+      milliseconds: _parseFraction(match.group(3)),
+    );
+  }
+
+  int _parseFraction(String? fractionRaw) {
+    if (fractionRaw == null || fractionRaw.isEmpty) return 0;
+    if (fractionRaw.length == 1) return int.parse(fractionRaw) * 100;
+    if (fractionRaw.length == 2) return int.parse(fractionRaw) * 10;
+    return int.parse(fractionRaw.substring(0, 3));
+  }
+
+  Future<void> _setManualLyricsPath(Song song, String? manualPath) async {
+    final filePath = song.filePath;
+    if (filePath == null || filePath.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final existingRaw = prefs.getString(_manualLyricsOverridesKey);
+    final map = <String, String>{};
+    if (existingRaw != null && existingRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(existingRaw);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            if (entry.key is String && entry.value is String) {
+              map[entry.key as String] = entry.value as String;
+            }
+          }
+        }
+      } catch (_) {
+        // Reset malformed preferences payload.
+      }
+    }
+
+    if (manualPath == null || manualPath.isEmpty) {
+      map.remove(filePath);
+    } else {
+      map[filePath] = manualPath;
+    }
+
+    if (map.isEmpty) {
+      await prefs.remove(_manualLyricsOverridesKey);
+    } else {
+      await prefs.setString(_manualLyricsOverridesKey, jsonEncode(map));
+    }
+    _cache.remove(filePath);
+    // This runs for imported, saved, replaced and cleared manual/sidecar
+    // lyrics. Invalidate search and all LyricsService instance caches.
+    contentRevision.value++;
+  }
+
+  Future<String> _writeManagedLyricsCopy({
+    required Song song,
+    required String extension,
+    required String content,
+  }) async {
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+    final lyricsDirectory = Directory(
+      '${documentsDirectory.path}${Platform.pathSeparator}$_managedLyricsDirectoryName',
+    );
+    await lyricsDirectory.create(recursive: true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final matchAudioFilename =
+        prefs.getBool('lyrics_match_audio_filename') ?? false;
+
+    final String safeStem;
+    if (matchAudioFilename) {
+      final filePath = song.filePath;
+      if (filePath != null && filePath.isNotEmpty) {
+        final localPath = _resolveLocalPath(filePath);
+        if (localPath != null && localPath.isNotEmpty) {
+          safeStem = _basenameWithoutExtension(localPath);
+        } else {
+          safeStem = _safeLyricsStem(song);
+        }
+      } else {
+        safeStem = _safeLyricsStem(song);
+      }
+    } else {
+      safeStem = _safeLyricsStem(song);
+    }
+
+    final file = File(
+      '${lyricsDirectory.path}${Platform.pathSeparator}$safeStem.$extension',
+    );
+    await file.writeAsString(content);
+    return file.path;
+  }
+
+  String _preferredLyricsExtension(String fileName) {
+    final normalized = fileName.toLowerCase();
+    if (normalized.endsWith('.txt')) return 'txt';
+    if (normalized.endsWith('.xml')) return 'xml';
+    return 'lrc';
+  }
+
+  String _safeLyricsStem(Song song) {
+    final parts = [
+      if (song.artist.trim().isNotEmpty) song.artist.trim(),
+      if (song.title.trim().isNotEmpty) song.title.trim(),
+      song.id,
+    ];
+    final stem = parts.join('_');
+    return stem.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
+  }
+}
+
+class _LoadedLyrics {
+  final String content;
+  final String? source;
+
+  const _LoadedLyrics({required this.content, this.source});
+}
+);
+    int? taggedSourceIndex;
+    var previous = <int>[]; // indexes the last stamped row made
+
+    for (final row in rows) {
+      final line = row.trimRight();
+      if (line.trim().isEmpty) {
+        previous = [];
+        continue;
+      }
+
+      final offsetMatch = offsetPattern.firstMatch(line);
+      if (offsetMatch != null) {
+        offsetMs = int.tryParse(offsetMatch.group(1) ?? '') ?? offsetMs;
+        continue;
+      }
+
+      final marker = taggedTranslation.firstMatch(line.trim());
+      if (marker != null) {
+        taggedSourceIndex = int.tryParse(marker.group(1)!);
+        previous = [];
+        continue;
+      }
+
+      final matches = timestampPattern.allMatches(line).toList();
+      if (matches.isNotEmpty) {
+        hasTimestamps = true;
+        final body = line.replaceAll(timestampPattern, '');
+        final words = _extractWords(body, offsetMs);
+        final lyricText = body.replaceAll(_wordTimestampPattern, '').trim();
+        previous = [];
+        final target = taggedSourceIndex;
+        taggedSourceIndex = null;
+        if (target != null &&
+            target >= 0 &&
+            target < parsedLines.length &&
+            matches.length == 1 &&
+            lyricText.isNotEmpty &&
+            parsedLines[target].translation == null) {
+          final time = _parseTimestamp(matches.single.group(1) ?? '');
+          if (time != null &&
+              parsedLines[target].timestamp.inMilliseconds ==
+                  (time.inMilliseconds + offsetMs).clamp(0, 1 << 62)) {
+            parsedLines[target] =
+                parsedLines[target].withTranslation(lyricText);
+            continue;
+          }
+        }
+        for (final match in matches) {
+          final parsedTime = _parseTimestamp(match.group(1) ?? '');
+          if (parsedTime == null) continue;
+
+          final adjustedMs = parsedTime.inMilliseconds + offsetMs;
+          final clamped = Duration(
+            milliseconds: adjustedMs < 0 ? 0 : adjustedMs,
+          );
+          if (lyricText.isEmpty) continue;
+          previous.add(parsedLines.length);
+          parsedLines.add(
+            LyricsLine(timestamp: clamped, text: lyricText, words: words),
+          );
+        }
+        continue;
+      }
+
+      if (metadataPattern.hasMatch(line)) {
+        previous = [];
+        continue;
+      }
+
+      final text = line.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (previous.isNotEmpty) translations.add((previous, text));
+      previous = [];
+      plainLines.add(LyricsLine(timestamp: Duration.zero, text: line.trim()));
+    }
+
+    if (hasTimestamps) {
+      // A stray note isn't a translation: a translated file has one under at
+      // least half its sung lines.
+      final sung = parsedLines.map((line) => line.timestamp).toSet().length;
+      if (translations.isNotEmpty && translations.length >= sung / 2) {
+        for (final (indexes, text) in translations) {
+          for (final index in indexes) {
+            parsedLines[index] = parsedLines[index].withTranslation(text);
+          }
+        }
+      }
+      // Bilingual LRC commonly repeats the original timestamp for its
+      // translation. Fold adjacent pairs before sorting so original/subline
+      // ordering survives; leave simultaneous word-timed or 3+ vocal parts
+      // separate. Unstamped translations above remain supported.
+      final bilingualLines = <LyricsLine>[];
+      for (var i = 0; i < parsedLines.length;) {
+        var end = i + 1;
+        while (end < parsedLines.length &&
+            parsedLines[end].timestamp == parsedLines[i].timestamp) {
+          end++;
+        }
+        if (end == i + 2 &&
+            parsedLines[i].translation == null &&
+            parsedLines[i + 1].translation == null &&
+            parsedLines[i + 1].words == null &&
+            parsedLines[i].text.trim() != parsedLines[i + 1].text.trim()) {
+          bilingualLines.add(
+            parsedLines[i].withTranslation(parsedLines[i + 1].text),
+          );
+        } else {
+          bilingualLines.addAll(parsedLines.getRange(i, end));
+        }
+        i = end;
+      }
+      bilingualLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return LyricsData(
+        lines: bilingualLines,
+        isSynchronized: true,
+        source: source,
+        rawContent: raw,
+      );
+    }
+
+    return LyricsData(
+      lines: plainLines.where((line) => line.text.isNotEmpty).toList(),
+      isSynchronized: false,
+      source: source,
+      rawContent: raw,
+    );
+  }
+
+  LyricsData? _parseXmlLyrics(String xml, {String? source}) {
+    try {
+      final document = XmlDocument.parse(xml);
+      Duration? time(String? value) {
+        if (value == null) return null;
+        if (value.endsWith('ms'))
+          return Duration(
+            microseconds:
+                ((double.tryParse(value.substring(0, value.length - 2)) ?? 0) *
+                        1000)
+                    .round(),
+          );
+        if (value.endsWith('s'))
+          return Duration(
+            microseconds:
+                ((double.tryParse(value.substring(0, value.length - 1)) ?? 0) *
+                        1000000)
+                    .round(),
+          );
+        final parts = value.split(':');
+        if (parts.isEmpty) return null;
+        var seconds = 0.0;
+        for (final part in parts) {
+          final number = double.tryParse(part);
+          if (number == null) return null;
+          seconds = seconds * 60 + number;
+        }
+        return Duration(microseconds: (seconds * 1000000).round());
+      }
+
+      final paragraphs = document.descendants.whereType<XmlElement>().where(
+        (e) => e.name.local == 'p',
+      );
+      final lines = <LyricsLine>[];
+      final plain = <LyricsLine>[];
+      for (final paragraph in paragraphs) {
+        final start = time(paragraph.getAttribute('begin'));
+        final text = paragraph.innerText.replaceAll(RegExp(r'\s+'), ' ').trim();
+        if (text.isEmpty) continue;
+        if (start == null) {
+          plain.add(LyricsLine(timestamp: Duration.zero, text: text));
+          continue;
+        }
+        final words = <LyricsWord>[];
+        for (final span in paragraph.descendants.whereType<XmlElement>().where(
+          (e) => e.name.local == 'span',
+        )) {
+          final begin = time(span.getAttribute('begin')),
+              end = time(span.getAttribute('end'));
+          if (begin == null ||
+              end == null ||
+              end < begin ||
+              span.innerText.trim().isEmpty)
+            continue;
+          if (span.descendants.whereType<XmlElement>().any(
+            (child) => child.getAttribute('begin') != null,
+          ))
+            continue;
+          final tail = span.nextSibling;
+          final separator = tail is XmlText && tail.value.trim().isEmpty
+              ? tail.value
+              : '';
+          words.add(
+            LyricsWord(
+              start: begin,
+              end: end,
+              text: span.innerText + separator,
+            ),
+          );
+        }
+        lines.add(
+          LyricsLine(
+            timestamp: start,
+            text: text,
+            words: words.isEmpty ? null : words,
+          ),
+        );
+      }
+      if (lines.isNotEmpty || plain.isNotEmpty) {
+        final timed = lines.isNotEmpty;
+        if (!timed) lines.addAll(plain);
+        lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        return LyricsData(
+          lines: lines,
+          isSynchronized: timed,
+          source: source,
+          rawContent: xml,
+          language: document.rootElement.attributes
+              .where((a) => a.name.local == 'lang')
+              .firstOrNull
+              ?.value,
+        );
+      }
+    } catch (_) {
+      /* Try the legacy XML formats below. */
+    }
+    try {
+      final linePattern = RegExp(
+        r'<line\s+start="(\d+)"\s*>([^<]*)</line>',
+        caseSensitive: false,
+      );
+      final altPattern = RegExp(
+        r'<line\s+start="(\d{1,2}):(\d{2})\.(\d{2})"\s*>([^<]*)</line>',
+        caseSensitive: false,
+      );
+
+      final lines = <LyricsLine>[];
+      var hasTimestamps = false;
+
+      for (final match in linePattern.allMatches(xml)) {
+        hasTimestamps = true;
+        final ms = int.tryParse(match.group(1) ?? '') ?? 0;
+        final text = match.group(2)?.trim() ?? '';
+        if (text.isNotEmpty) {
+          lines.add(
+            LyricsLine(
+              timestamp: Duration(milliseconds: ms),
+              text: text,
+            ),
+          );
+        }
+      }
+
+      if (lines.isEmpty) {
+        for (final match in altPattern.allMatches(xml)) {
+          hasTimestamps = true;
+          final minutes = int.tryParse(match.group(1) ?? '0') ?? 0;
+          final seconds = int.tryParse(match.group(2) ?? '0') ?? 0;
+          final centis = int.tryParse(match.group(3) ?? '0') ?? 0;
+          final ms = (minutes * 60 + seconds) * 1000 + centis * 10;
+          final text = match.group(4)?.trim() ?? '';
+          if (text.isNotEmpty) {
+            lines.add(
+              LyricsLine(
+                timestamp: Duration(milliseconds: ms),
+                text: text,
+              ),
+            );
+          }
+        }
+      }
+
+      if (lines.isNotEmpty) {
+        lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        return LyricsData(
+          lines: lines,
+          isSynchronized: hasTimestamps,
+          source: source,
+          rawContent: xml,
+        );
+      }
+    } catch (_) {
+      // Fall through to plain-text parser
+    }
+    return null;
+  }
+
+  Duration? _parseTimestamp(String timestamp) {
+    final trimmed = timestamp.trim();
+
+    var match = RegExp(r'^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$')
+        .firstMatch(trimmed);
+    if (match != null) {
+      final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+      final seconds = int.tryParse(match.group(3) ?? '') ?? 0;
+      return Duration(
+        hours: hours,
+        minutes: minutes,
+        seconds: seconds,
+        milliseconds: _parseFraction(match.group(4)),
+      );
+    }
+
+    match = RegExp(r'^(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?$').firstMatch(trimmed);
+    if (match == null) return null;
+
+    final minutes = int.tryParse(match.group(1) ?? '');
+    final seconds = int.tryParse(match.group(2) ?? '');
+    if (minutes == null || seconds == null) return null;
+
+    return Duration(
+      minutes: minutes,
+      seconds: seconds,
+      milliseconds: _parseFraction(match.group(3)),
+    );
+  }
+
+  int _parseFraction(String? fractionRaw) {
+    if (fractionRaw == null || fractionRaw.isEmpty) return 0;
+    if (fractionRaw.length == 1) return int.parse(fractionRaw) * 100;
+    if (fractionRaw.length == 2) return int.parse(fractionRaw) * 10;
+    return int.parse(fractionRaw.substring(0, 3));
+  }
+
+  Future<void> _setManualLyricsPath(Song song, String? manualPath) async {
+    final filePath = song.filePath;
+    if (filePath == null || filePath.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final existingRaw = prefs.getString(_manualLyricsOverridesKey);
+    final map = <String, String>{};
+    if (existingRaw != null && existingRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(existingRaw);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            if (entry.key is String && entry.value is String) {
+              map[entry.key as String] = entry.value as String;
+            }
+          }
+        }
+      } catch (_) {
+        // Reset malformed preferences payload.
+      }
+    }
+
+    if (manualPath == null || manualPath.isEmpty) {
+      map.remove(filePath);
+    } else {
+      map[filePath] = manualPath;
+    }
+
+    if (map.isEmpty) {
+      await prefs.remove(_manualLyricsOverridesKey);
+    } else {
+      await prefs.setString(_manualLyricsOverridesKey, jsonEncode(map));
+    }
+    _cache.remove(filePath);
+    // This runs for imported, saved, replaced and cleared manual/sidecar
+    // lyrics. Invalidate search and all LyricsService instance caches.
+    contentRevision.value++;
+  }
+
+  Future<String> _writeManagedLyricsCopy({
+    required Song song,
+    required String extension,
+    required String content,
+  }) async {
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+    final lyricsDirectory = Directory(
+      '${documentsDirectory.path}${Platform.pathSeparator}$_managedLyricsDirectoryName',
+    );
+    await lyricsDirectory.create(recursive: true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final matchAudioFilename =
+        prefs.getBool('lyrics_match_audio_filename') ?? false;
+
+    final String safeStem;
+    if (matchAudioFilename) {
+      final filePath = song.filePath;
+      if (filePath != null && filePath.isNotEmpty) {
+        final localPath = _resolveLocalPath(filePath);
+        if (localPath != null && localPath.isNotEmpty) {
+          safeStem = _basenameWithoutExtension(localPath);
+        } else {
+          safeStem = _safeLyricsStem(song);
+        }
+      } else {
+        safeStem = _safeLyricsStem(song);
+      }
+    } else {
+      safeStem = _safeLyricsStem(song);
+    }
+
+    final file = File(
+      '${lyricsDirectory.path}${Platform.pathSeparator}$safeStem.$extension',
+    );
+    await file.writeAsString(content);
+    return file.path;
+  }
+
+  String _preferredLyricsExtension(String fileName) {
+    final normalized = fileName.toLowerCase();
+    if (normalized.endsWith('.txt')) return 'txt';
+    if (normalized.endsWith('.xml')) return 'xml';
+    return 'lrc';
+  }
+
+  String _safeLyricsStem(Song song) {
+    final parts = [
+      if (song.artist.trim().isNotEmpty) song.artist.trim(),
+      if (song.title.trim().isNotEmpty) song.title.trim(),
+      song.id,
+    ];
+    final stem = parts.join('_');
+    return stem.replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
+  }
+}
+
+class _LoadedLyrics {
+  final String content;
+  final String? source;
+
+  const _LoadedLyrics({required this.content, this.source});
+}
+);
+    int? taggedSourceIndex;
+    var previous = <int>[]; // indexes the last stamped row made
+
+    for (final row in rows) {
+      final line = row.trimRight();
+      if (line.trim().isEmpty) {
+        previous = [];
+        continue;
+      }
+
+      final offsetMatch = offsetPattern.firstMatch(line);
+      if (offsetMatch != null) {
+        offsetMs = int.tryParse(offsetMatch.group(1) ?? '') ?? offsetMs;
+        continue;
+      }
+
+      final matches = timestampPattern.allMatches(line).toList();
+      if (matches.isNotEmpty) {
+        hasTimestamps = true;
+        final body = line.replaceAll(timestampPattern, '');
+        final words = _extractWords(body, offsetMs);
+        final lyricText = body.replaceAll(_wordTimestampPattern, '').trim();
+        previous = [];
+        for (final match in matches) {
+          final parsedTime = _parseTimestamp(match.group(1) ?? '');
+          if (parsedTime == null) continue;
+
+          final adjustedMs = parsedTime.inMilliseconds + offsetMs;
+          final clamped = Duration(
+            milliseconds: adjustedMs < 0 ? 0 : adjustedMs,
+          );
+          if (lyricText.isEmpty) continue;
+          previous.add(parsedLines.length);
+          parsedLines.add(
+            LyricsLine(timestamp: clamped, text: lyricText, words: words),
+          );
+        }
+        continue;
+      }
+
+      if (metadataPattern.hasMatch(line)) {
+        previous = [];
+        continue;
+      }
+
+      final text = line.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (previous.isNotEmpty) translations.add((previous, text));
+      previous = [];
+      plainLines.add(LyricsLine(timestamp: Duration.zero, text: line.trim()));
+    }
+
+    if (hasTimestamps) {
+      // A stray note isn't a translation: a translated file has one under at
+      // least half its sung lines.
+      final sung = parsedLines.map((line) => line.timestamp).toSet().length;
+      if (translations.isNotEmpty && translations.length >= sung / 2) {
+        for (final (indexes, text) in translations) {
+          for (final index in indexes) {
+            parsedLines[index] = parsedLines[index].withTranslation(text);
+          }
+        }
+      }
+      // Bilingual LRC commonly repeats the original timestamp for its
+      // translation. Fold adjacent pairs before sorting so original/subline
+      // ordering survives; leave simultaneous word-timed or 3+ vocal parts
+      // separate. Unstamped translations above remain supported.
+      final bilingualLines = <LyricsLine>[];
+      for (var i = 0; i < parsedLines.length;) {
+        var end = i + 1;
+        while (end < parsedLines.length &&
+            parsedLines[end].timestamp == parsedLines[i].timestamp) {
+          end++;
+        }
+        if (end == i + 2 &&
+            parsedLines[i].translation == null &&
+            parsedLines[i + 1].translation == null &&
+            parsedLines[i + 1].words == null &&
+            parsedLines[i].text.trim() != parsedLines[i + 1].text.trim()) {
+          bilingualLines.add(
+            parsedLines[i].withTranslation(parsedLines[i + 1].text),
+          );
+        } else {
+          bilingualLines.addAll(parsedLines.getRange(i, end));
+        }
+        i = end;
+      }
+      bilingualLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return LyricsData(
+        lines: bilingualLines,
         isSynchronized: true,
         source: source,
         rawContent: raw,

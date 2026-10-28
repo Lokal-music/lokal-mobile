@@ -41,20 +41,40 @@ String _timestamp(Duration time) {
 
 String _renderLyrics(LyricsData lyrics, {bool includeDisplayedSubline = false}) {
   final output = <String>[];
-  for (final line in lyrics.lines) {
-    if (lyrics.isSynchronized) {
-      final words = line.words;
-      final text = words != null && words.isNotEmpty
-          ? words.map((word) => '<${_timestamp(word.start)}>${word.text}').join()
-          : line.text;
-      output.add('[${_timestamp(line.timestamp)}]$text');
-    } else {
-      output.add(line.text);
+  // Same-time vocals are not necessarily a bilingual pair. For collisions,
+  // emit a non-singing Lokal association tag before the translated LRC row
+  // so re-import never mistakes that row for a third singer.
+  final timestampCounts = <int, int>{};
+  if (includeDisplayedSubline && lyrics.isSynchronized) {
+    for (final line in lyrics.lines) {
+      final time = line.timestamp.inMilliseconds;
+      timestampCounts[time] = (timestampCounts[time] ?? 0) + 1;
     }
+  }
+  for (var index = 0; index < lyrics.lines.length; index++) {
+    final line = lyrics.lines[index];
+    final words = line.words;
+    // Bilingual files use ordinary line-timed LRC for widest compatibility.
+    // Keep enhanced word timing for original-only exports.
+    final text = lyrics.isSynchronized && !includeDisplayedSubline &&
+            words != null && words.isNotEmpty
+        ? words.map((word) => '<${_timestamp(word.start)}>${word.text}').join()
+        : line.text.isNotEmpty
+            ? line.text
+            : words?.map((word) => word.text).join() ?? '';
+    final stamp = '[${_timestamp(line.timestamp)}]';
+    output.add(lyrics.isSynchronized ? '$stamp$text' : text);
     final translation = line.translation?.trim();
     if (includeDisplayedSubline && translation != null &&
-        translation.isNotEmpty && translation != line.text.trim()) {
-      output.add(translation);
+        translation.isNotEmpty && translation != text.trim()) {
+      // Unstamped translation lines work in Lokal but are not reliably
+      // recognized by other players. Same-timestamp pairs are conventional
+      // bilingual LRC and remain valid timed lyric records.
+      if (lyrics.isSynchronized &&
+          (timestampCounts[line.timestamp.inMilliseconds] ?? 0) > 1) {
+        output.add('[lokaltr:$index]');
+      }
+      output.add(lyrics.isSynchronized ? '$stamp$translation' : translation);
     }
   }
   return "${output.join('\n')}\n";
@@ -70,7 +90,8 @@ bool hasUsableLyrics(LyricsData lyrics) => lyrics.lines.any(
 
 /// Keep valid original LRC/ELRC/XML bytes for normal saves. Only an explicit
 /// translated save renders the selected sublines (which may not exist in raw
-/// source content), preserving original word timing wherever possible.
+/// source content). Bilingual saves use plain line-level LRC for compatibility;
+/// normal saves preserve the source's enhanced word or TTML timing.
 LyricsFileExport prepareLyricsFileExport(
   Song song,
   LyricsData lyrics, {
@@ -111,8 +132,12 @@ LyricsFileExport prepareLyricsFileExport(
   final extension = preserveOriginal && xml
       ? (ttml ? 'ttml' : 'xml')
       : lyrics.isSynchronized
-          ? ((preserveOriginal && enhanced || !preserveOriginal && wordTimed)
-              ? 'elrc' : 'lrc')
+          ? (withSubline
+              ? 'lrc'
+              : ((preserveOriginal && enhanced ||
+                      !preserveOriginal && wordTimed)
+                  ? 'elrc'
+                  : 'lrc'))
           : 'txt';
   final content = preserveOriginal
       ? lyrics.rawContent
