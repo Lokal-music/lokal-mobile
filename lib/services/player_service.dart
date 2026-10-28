@@ -124,6 +124,26 @@ Future<bool> restartDirectUsbSessionSequence({
   return true;
 }
 
+/// Wait for UsbManager to enumerate a DAC again after LIBUSB_NO_DEVICE.
+/// Checking the native frozen session is insufficient: it can still contain
+/// a handle for a device which Android is temporarily not listing.
+@visibleForTesting
+Future<bool> awaitReattachedUsbDevice({
+  required Future<bool> Function() physicallyPresent,
+  required Future<void> Function() pauseBetweenChecks,
+  int maxChecks = 19,
+}) async {
+  for (var check = 0; check < maxChecks; check++) {
+    try {
+      if (await physicallyPresent()) return true;
+    } catch (_) {
+      // The device enumeration may itself fail during detach/re-enumeration.
+    }
+    if (check + 1 < maxChecks) await pauseBetweenChecks();
+  }
+  return false;
+}
+
 /// A restart is healthy only if the requested direct route has been
 /// verified and the USB consumer has actually progressed. Registration or
 /// selecting USB_DAC_EXPERIMENTAL alone is not proof that packets are flowing.
@@ -2374,6 +2394,16 @@ class PlayerService {
           );
         },
         resetTransport: () async {
+          final physicallyPresent = await awaitReattachedUsbDevice(
+            physicallyPresent: () async => (await _uac2Service.listDevices(
+              verifyPhysicalAttachment: true,
+            )).isNotEmpty,
+            pauseBetweenChecks: () =>
+                Future<void>.delayed(const Duration(milliseconds: 250)),
+          );
+          if (!physicallyPresent) {
+            throw StateError('DAC did not reappear in Android USB inventory');
+          }
           return _uac2Service.resetAndroidDirectUsbPath(format: format);
         },
         reselectDirectRoute: () async {
