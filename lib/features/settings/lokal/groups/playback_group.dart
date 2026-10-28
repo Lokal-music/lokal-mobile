@@ -6,8 +6,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
-import 'package:flick/features/settings/lokal/lokal_settings_page.dart';
 import 'package:flick/features/settings/screens/bluetooth_settings_screen.dart';
 import 'package:flick/features/settings/screens/casting_settings_screen.dart';
 import 'package:flick/features/settings/screens/equalizer_screen.dart';
@@ -260,18 +258,6 @@ List<LokalSettingsSection> playbackSettings(
             'Find DLNA, UPnP and Chromecast receivers on your network.',
           ),
           onTap: () => _push(context, const CastingSettingsScreen()),
-        ),
-      ],
-    ),
-    LokalSettingsSection(
-      title: lokalText('Output'),
-      children: [
-        LokalSettingLink(
-          label: LokalSettingsGroup.output.label,
-          description: LokalSettingsGroup.output.description,
-          onTap: () => unawaited(
-            openLokalSettings(context, group: LokalSettingsGroup.output),
-          ),
         ),
       ],
     ),
