@@ -47,7 +47,7 @@ void main() {
   group('track-scoped USB fallback recovery', () {
     test('after an incompatible song, a different track retries direct USB', () {
       expect(
-        shouldRearmUsbAfterIncompatibleTrack(
+        shouldRearmUsbAfterTrackScopedFallback(
           incompatibleTrackKey: 'track24|qobuz|48000|24',
           requestedTrackKey: 'track16|qobuz|44100|16',
         ),
@@ -57,7 +57,7 @@ void main() {
 
     test('online songs can be re-resolved at a new supported quality', () {
       expect(
-        shouldRearmUsbAfterIncompatibleTrack(
+        shouldRearmUsbAfterTrackScopedFallback(
           incompatibleTrackKey: 'same-id|24-bit-path|48000|24',
           requestedTrackKey: 'same-id|16-bit-path|44100|16',
         ),
@@ -65,9 +65,19 @@ void main() {
       );
     });
 
+    test('a signed HTTP-only online source does not permanently disable USB', () {
+      expect(
+        shouldRearmUsbAfterTrackScopedFallback(
+          incompatibleTrackKey: 'http-addon|signed-url|lossless',
+          requestedTrackKey: 'next-local|flac|44100|16',
+        ),
+        isTrue,
+      );
+    });
+
     test('retrying the same incompatible source does not loop', () {
       expect(
-        shouldRearmUsbAfterIncompatibleTrack(
+        shouldRearmUsbAfterTrackScopedFallback(
           incompatibleTrackKey: 'song|online-url|48000|24',
           requestedTrackKey: 'song|online-url|48000|24',
         ),
@@ -77,7 +87,7 @@ void main() {
 
     test('ordinary playback does not trigger route re-evaluation', () {
       expect(
-        shouldRearmUsbAfterIncompatibleTrack(
+        shouldRearmUsbAfterTrackScopedFallback(
           incompatibleTrackKey: null,
           requestedTrackKey: 'track16|qobuz|44100|16',
         ),
