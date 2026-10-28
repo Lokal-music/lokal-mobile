@@ -130,11 +130,11 @@ Future<bool> restartDirectUsbSessionSequence({
 /// recording, which would cause an engine-flapping loop.
 @visibleForTesting
 bool shouldRearmUsbAfterTrackScopedFallback({
-  required String? incompatibleTrackKey,
+  required String? fallbackTrackKey,
   required String requestedTrackKey,
 }) =>
-    incompatibleTrackKey != null &&
-    incompatibleTrackKey != requestedTrackKey;
+    fallbackTrackKey != null &&
+    fallbackTrackKey != requestedTrackKey;
 
 /// Never advertise bit-perfect if the selected USB alternate setting cannot
 /// carry the exact decoded format (including its PCM bit depth).
@@ -5411,7 +5411,7 @@ class PlayerService {
   Future<void> _rearmUsbAfterTrackScopedFallback(Song song) async {
     final key = _usbTrackKey(song);
     if (!shouldRearmUsbAfterTrackScopedFallback(
-      incompatibleTrackKey: _usbTrackScopedFallbackKey,
+      fallbackTrackKey: _usbTrackScopedFallbackKey,
       requestedTrackKey: key,
     )) {
       return;
