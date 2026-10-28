@@ -872,10 +872,13 @@ class LyricsService {
       } else {
         buffer.writeln('${formatTimestamp(line.timestamp)}${line.text}');
       }
-      // Kept the way it's read: unstamped, right under its line.
+      // Duplicate the timestamp so external bilingual-LRC parsers can pair
+      // the translated line with the original rather than treating it as
+      // unsynchronized commentary.
       if (line.translation case final translation?
-          when translation.trim().isNotEmpty) {
-        buffer.writeln(translation.trim());
+          when translation.trim().isNotEmpty &&
+              translation.trim() != line.text.trim()) {
+        buffer.writeln('${formatTimestamp(line.timestamp)}${translation.trim()}');
       }
     }
     return buffer.toString().trimRight();
@@ -1106,9 +1109,32 @@ class LyricsService {
           }
         }
       }
-      parsedLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      // Bilingual LRC commonly repeats the original timestamp for its
+      // translation. Fold adjacent pairs before sorting so original/subline
+      // ordering survives; leave simultaneous word-timed or 3+ vocal parts
+      // separate. Unstamped translations above remain supported.
+      final bilingualLines = <LyricsLine>[];
+      for (var i = 0; i < parsedLines.length;) {
+        var end = i + 1;
+        while (end < parsedLines.length &&
+            parsedLines[end].timestamp == parsedLines[i].timestamp) {
+          end++;
+        }
+        if (end == i + 2 &&
+            parsedLines[i].translation == null &&
+            parsedLines[i + 1].translation == null &&
+            parsedLines[i + 1].words == null) {
+          bilingualLines.add(
+            parsedLines[i].withTranslation(parsedLines[i + 1].text),
+          );
+        } else {
+          bilingualLines.addAll(parsedLines.getRange(i, end));
+        }
+        i = end;
+      }
+      bilingualLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       return LyricsData(
-        lines: parsedLines,
+        lines: bilingualLines,
         isSynchronized: true,
         source: source,
         rawContent: raw,
