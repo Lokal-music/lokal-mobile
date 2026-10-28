@@ -151,7 +151,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
             title: l10n.usbAudioDevices,
             children: devicesAsync.when(
               data: (devices) =>
-                  _deviceRows(devices, selectedDevice, deviceStatus),
+                  _deviceRows(devices, selectedDevice, shownStatus),
               loading: () => [_loadingRow()],
               error: (error, _) => [_errorRow(error), _refreshRow()],
             ),
@@ -238,15 +238,15 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     Uac2DeviceInfo? selectedDevice,
     Uac2DeviceStatus? deviceStatus,
   ) {
-    final isSelected =
-        selectedDevice?.vendorId == device.vendorId &&
-        selectedDevice?.productId == device.productId &&
-        selectedDevice?.serial == device.serial;
+    final isSelected = selectedDevice != null &&
+        sameUsbDacDevice(device, selectedDevice);
+    final matchesStatus = deviceStatus != null &&
+        sameUsbDacDevice(device, deviceStatus.device);
     final isConnected =
-        isSelected &&
-        (deviceStatus?.state == Uac2State.connected ||
-            deviceStatus?.state == Uac2State.prewarming ||
-            deviceStatus?.state == Uac2State.streaming);
+        matchesStatus &&
+        (deviceStatus.state == Uac2State.connected ||
+            deviceStatus.state == Uac2State.prewarming ||
+            deviceStatus.state == Uac2State.streaming);
     return LokalSettingRow(
       label: '${device.manufacturer} ${device.productName}'.trim(),
       description:
@@ -259,7 +259,13 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
           : isSelected
           ? Icon(Icons.check_circle_rounded, color: context.lokal.accent)
           : null,
-      onTap: () => _handleDeviceSelection(device, isSelected, isConnected),
+      onTap: () => _handleDeviceSelection(
+        device,
+        isSelected,
+        // A detected but not explicitly selected DAC is not a playback
+        // session to disconnect. The first tap should select it.
+        isConnected && isSelected,
+      ),
     );
   }
 
