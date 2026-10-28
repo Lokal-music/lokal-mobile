@@ -294,6 +294,51 @@ void main() {
       ['From my beautiful land', 'From my holy land']);
   });
 
+  test('two simultaneous vocalists retain translations on export/reimport', () {
+    const original = LyricsData(
+      lines: [
+        LyricsLine(timestamp: Duration(seconds: 2), text: 'Lead',
+          translation: 'Translated lead'),
+        LyricsLine(timestamp: Duration(seconds: 2), text: 'Backing'),
+        LyricsLine(timestamp: Duration(seconds: 4), text: 'Next'),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final output = prepareLyricsFileExport(
+      _song, original, includeDisplayedSubline: true,
+    );
+    expect(output.extension, 'lrc');
+    expect(output.content, contains('[00:02.00]Lead\n'));
+    expect(output.content, contains('[lokaltr:0]\n[00:02.00]Translated lead'));
+    expect(output.content, contains('[00:02.00]Backing\n'));
+    final reimported = LyricsService().parseLyricsText(output.content);
+    expect(reimported.lines.map((line) => line.text),
+      ['Lead', 'Backing', 'Next']);
+    expect(reimported.lines.map((line) => line.translation),
+      ['Translated lead', null, null]);
+  });
+
+  test('multiple simultaneous vocalists each keep their subline', () {
+    const original = LyricsData(
+      lines: [
+        LyricsLine(timestamp: Duration(seconds: 2), text: 'Lead',
+          translation: 'Translation one'),
+        LyricsLine(timestamp: Duration(seconds: 2), text: 'Harmony',
+          translation: 'Translation two'),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final output = prepareLyricsFileExport(
+      _song, original, includeDisplayedSubline: true,
+    );
+    final reimported = LyricsService().parseLyricsText(output.content);
+    expect(reimported.lines.map((line) => line.text), ['Lead', 'Harmony']);
+    expect(reimported.lines.map((line) => line.translation),
+      ['Translation one', 'Translation two']);
+  });
+
   test('portable bilingual LRC retains partially translated rows', () {
     const lyrics = LyricsData(
       lines: [
