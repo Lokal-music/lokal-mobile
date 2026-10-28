@@ -3553,8 +3553,15 @@ class PlayerService {
         _midStreamUsbFallbackActive = true;
         final song = currentSongNotifier.value;
         final position = _lastPlaybackState?.position ?? Duration.zero;
-        unawaited(() async {
+        // Serialize recovery with user-requested track changes. The native
+        // stream must never be reset while a new track is being prepared.
+        unawaited(_enqueuePlaybackRequest(() async {
           try {
+            if (song == null ||
+                currentSongNotifier.value?.id != song.id ||
+                currentEngineType != AudioEngineType.usbDacExperimental) {
+              return; // The failure belongs to a superseded stream.
+            }
             // Mid-stream USB error = DAC lost while playing. Respect the
             // pause-on-disconnect pref instead of resuming on the fallback.
             final pauseOnDisconnect = await _appPreferencesService
@@ -3591,7 +3598,7 @@ class PlayerService {
           } finally {
             _midStreamUsbFallbackActive = false;
           }
-        }());
+        }));
         return;
       }
       if (isDeadRustEngineError(message)) {
