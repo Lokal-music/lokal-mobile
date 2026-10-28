@@ -19,7 +19,6 @@ import 'package:flick/src/rust/audio/engine.dart' show AudioApiPreference;
 import 'package:flick/widgets/common/engine_restart_notice.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
 import 'package:flick/widgets/uac2/uac2_volume_control.dart';
-import 'package:flick/features/settings/screens/logs_screen.dart';
 import 'package:flick/l10n/l10n.dart';
 
 /// The USB DAC's engine, bit-perfect, format and DSD preferences on their
@@ -159,7 +158,6 @@ class _Uac2PreferencesSectionsState
     final tuning432HzAsync = ref.watch(uac2432HzTuningEnabledProvider);
     final audioEngineAsync = ref.watch(audioEnginePreferenceProvider);
     final androidAudioApiAsync = ref.watch(androidAudioApiProvider);
-    final developerModeAsync = ref.watch(developerModeEnabledProvider);
     final diagnostics = ref.watch(audioOutputDiagnosticsProvider);
     final killOnQuitAsync = ref.watch(killIsochronousUsbOnQuitProvider);
     final autoEngageUsbDacAsync = ref.watch(autoEngageUsbDacProvider);
@@ -475,29 +473,8 @@ class _Uac2PreferencesSectionsState
           ],
         ),
         LokalSettingsSection(
-          title: 'Diagnostics',
+          title: 'Maintenance',
           children: [
-            _async(
-              developerModeAsync,
-              l10n.developerMode,
-              (enabled) => LokalSettingRow.toggle(
-                label: l10n.developerMode,
-                description: l10n.showVerboseAudioDiagnosticsAndEngine,
-                value: enabled,
-                onChanged: (value) async {
-                  await service.setDeveloperModeEnabled(value);
-                  ref.invalidate(developerModeEnabledProvider);
-                },
-              ),
-            ),
-            if (developerModeAsync.asData?.value == true)
-              LokalSettingLink(
-                label: l10n.logs,
-                description: l10n.verboseDartRustAndCrashLogs,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const LogsScreen()),
-                ),
-              ),
             LokalSettingRow(
               label: l10n.resetPreferences,
               description: l10n.clearAllUac2Settings,
