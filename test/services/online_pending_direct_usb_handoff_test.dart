@@ -4,6 +4,26 @@ import 'package:flick/services/player_service.dart';
 
 void main() {
   group('unavailable online track and direct USB handoff', () {
+    test('does not stop USB playback for an unavailable placeholder', () async {
+      var stops = 0;
+      for (var unavailable = 0; unavailable < 3; unavailable++) {
+        await stopSourceBeforePendingLookup(
+          preserveCurrentSource: true,
+          stopSource: () async { stops++; },
+        );
+      }
+      expect(stops, 0, reason: 'auto-skipping must not tear down the USB DAC');
+    });
+
+    test('regular Android playback still stops before pending resolution', () async {
+      var stops = 0;
+      await stopSourceBeforePendingLookup(
+        preserveCurrentSource: false,
+        stopSource: () async { stops++; },
+      );
+      expect(stops, 1);
+    });
+
     test('keeps existing USB source when a pending song needs resolution', () {
       expect(
         shouldKeepDirectUsbAliveDuringPendingLookup(
