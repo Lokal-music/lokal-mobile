@@ -30,6 +30,8 @@ typedef AndroidAudioSourceBuilder = Future<just_audio.AudioSource> Function(
   Song track,
 );
 typedef AndroidPlaylistProvider = List<Song> Function();
+typedef AndroidSelectedPlaylistIndexProvider = int Function();
+typedef AndroidNativePlaylistIndexCallback = void Function(int index);
 typedef AndroidPlayerProvider = Future<just_audio.AudioPlayer> Function();
 typedef AndroidPlayerConfigurator = Future<void> Function(
   just_audio.AudioPlayer player,
@@ -229,6 +231,8 @@ class AndroidAudioEngine implements AudioEngine {
     required AndroidAudioSourcesBuilder sourcesBuilder,
     required AndroidAudioSourceBuilder sourceBuilder,
     required AndroidPlaylistProvider playlistProvider,
+    AndroidSelectedPlaylistIndexProvider? selectedPlaylistIndexProvider,
+    AndroidNativePlaylistIndexCallback? onNativePlaylistIndex,
     required AndroidPlayerConfigurator configurePlayer,
     required AndroidEngineDisposer disposeEngine,
     AndroidStalledPlayerRetirer? retireStalledPlayer,
@@ -249,6 +253,8 @@ class AndroidAudioEngine implements AudioEngine {
        _sourcesBuilder = sourcesBuilder,
        _sourceBuilder = sourceBuilder,
        _playlistProvider = playlistProvider,
+       _selectedPlaylistIndexProvider = selectedPlaylistIndexProvider,
+       _onNativePlaylistIndex = onNativePlaylistIndex,
        _configurePlayer = configurePlayer,
        _disposeEngine = disposeEngine,
        _retireStalledPlayer = retireStalledPlayer,
@@ -271,6 +277,8 @@ class AndroidAudioEngine implements AudioEngine {
   final AndroidAudioSourcesBuilder _sourcesBuilder;
   final AndroidAudioSourceBuilder _sourceBuilder;
   final AndroidPlaylistProvider _playlistProvider;
+  final AndroidSelectedPlaylistIndexProvider? _selectedPlaylistIndexProvider;
+  final AndroidNativePlaylistIndexCallback? _onNativePlaylistIndex;
   final AndroidPlayerConfigurator _configurePlayer;
   final AndroidEngineDisposer _disposeEngine;
   final AndroidStalledPlayerRetirer? _retireStalledPlayer;
@@ -323,10 +331,16 @@ class AndroidAudioEngine implements AudioEngine {
     if (player == null || playing == null || !_loadedSingleTrackOnly ||
         isCrossfadeActive || !isCurrent()) return false;
     final songs = _playlistProvider();
-    final index = songs.indexWhere(
-      (song) => androidAudioSourceIdentity(song) ==
-          androidAudioSourceIdentity(playing),
-    );
+    final selectedIndex = _selectedPlaylistIndexProvider?.call() ?? -1;
+    final index = selectedIndex >= 0 &&
+            selectedIndex < songs.length &&
+            androidAudioSourceIdentity(songs[selectedIndex]) ==
+                androidAudioSourceIdentity(playing)
+        ? selectedIndex
+        : songs.indexWhere(
+            (song) => androidAudioSourceIdentity(song) ==
+                androidAudioSourceIdentity(playing),
+          );
     if (index < 0 || songs.length < 2 || player.sequence.length != 1) {
       return false;
     }
@@ -650,6 +664,13 @@ class AndroidAudioEngine implements AudioEngine {
         _rejectTruncatedActiveHttpTrack(
           player, nextTrack, player.sequence[index].duration,
         )) return;
+    // Report the native slot even if adjacent songs have identical IDs or
+    // metadata. A single-source fast start has native index 0 regardless of
+    // its absolute logical position, so never report that as a queue index.
+    if (!_loadedSingleTrackOnly && index != null && player != null &&
+        player.sequence.length == _playlistProvider().length) {
+      _onNativePlaylistIndex?.call(index);
+    }
     if (nextTrack == _state.currentTrack) return;
     _loadedTrack = nextTrack ?? _loadedTrack;
     _emit(
@@ -822,10 +843,18 @@ class AndroidAudioEngine implements AudioEngine {
     await _cancelCrossfade();
     final player = await _ensurePlayer();
     final playlist = _playlistProvider();
-    var index = playlist.indexWhere((song) => song.id == track.id);
+    // The active queue slot is supplied by PlayerService. Searching by ID
+    // alone wrongly loads the first occurrence of a duplicated song.
+    final selectedIndex = _selectedPlaylistIndexProvider?.call() ?? -1;
+    var index = selectedIndex >= 0 &&
+            selectedIndex < playlist.length &&
+            playlist[selectedIndex].id == track.id
+        ? selectedIndex
+        : playlist.indexWhere((song) => identical(song, track));
     if (index < 0) {
-      index = 0;
+      index = playlist.indexWhere((song) => song.id == track.id);
     }
+    if (index < 0) index = 0;
 
     final nextSignature = playlist
         .map(androidAudioSourceIdentity)
