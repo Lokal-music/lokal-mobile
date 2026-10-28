@@ -580,6 +580,7 @@ class _ClassicFullPlayerScreenState
                   context,
                   song: song,
                   player: _playerService,
+                  keepBrowseActions: true,
                   extras: [
                     LokalSongMenuAction(
                       icon: Icons.lyrics_outlined,
