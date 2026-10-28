@@ -667,8 +667,14 @@ class AndroidAudioEngine implements AudioEngine {
     // Report the native slot even if adjacent songs have identical IDs or
     // metadata. A single-source fast start has native index 0 regardless of
     // its absolute logical position, so never report that as a queue index.
-    if (!_loadedSingleTrackOnly && index != null && player != null &&
-        player.sequence.length == _playlistProvider().length) {
+    if (!_loadedSingleTrackOnly &&
+        index != null &&
+        player != null &&
+        player.sequence.length == _playlistProvider().length &&
+        listEquals(
+          _playlistSignature,
+          _playlistProvider().map(androidAudioSourceIdentity).toList(),
+        )) {
       _onNativePlaylistIndex?.call(index);
     }
     if (nextTrack == _state.currentTrack) return;
