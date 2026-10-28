@@ -11,6 +11,11 @@ String? lokalMinorVersion(String? version) {
   return match == null ? null : '${match[1]}.${match[2]}';
 }
 
+/// Legacy last-seen values may contain the exact patch and build number.
+bool lokalMinorHasChanged(String currentMinor, String? lastSeen) =>
+    lastSeen != null &&
+    lokalMinorVersion(lastSeen.split('+').first) != currentMinor;
+
 /// Offline notes for already-shipped minor releases. The GitHub vX.Y.0
 /// release is the authoritative source and also supports future minors
 /// without needing an app update just to change the What's New content.
