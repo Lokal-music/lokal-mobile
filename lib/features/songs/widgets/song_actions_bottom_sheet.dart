@@ -25,11 +25,12 @@ import 'package:flick/services/music_folder_service.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_surfaces.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// One extra row in a song's menu for an action specific to its caller,
-/// such as removing a queued song or opening the Now Playing pitch control.
+/// such as removing a queued song or restarting a connected USB DAC.
 @immutable
 class LokalSongMenuAction {
   const LokalSongMenuAction({
@@ -47,9 +48,19 @@ class LokalSongMenuAction {
   final bool destructive;
 }
 
-/// Lokal's one song menu, used by every song list, shelf, the queue and Now
-/// Playing. Every action works on [song], the song the menu was opened for,
-/// never on whatever happens to be playing.
+/// The library/queue menu targets its explicitly selected song. The Now
+/// Playing menu follows the live current song while it remains on screen.
+/// Motion-art and video controls have dedicated, track-aware full-player
+/// surfaces. They should not be repeated as unconditional song-menu rows.
+@visibleForTesting
+bool showMovingCoverMenuAction({required bool nowPlaying}) => !nowPlaying;
+
+@visibleForTesting
+bool showWatchVideoMenuAction({
+  required bool nowPlaying,
+  required bool videosEnabled,
+}) => !nowPlaying && videosEnabled;
+
 class SongActionsBottomSheet extends ConsumerWidget {
   const SongActionsBottomSheet({
     super.key,
@@ -162,8 +173,8 @@ class SongActionsBottomSheet extends ConsumerWidget {
         .disabledSongs
         .contains(movingCoverSongKey(song));
     final rows = <Widget>[
-      if (!nowPlaying)
-      _MenuRow(
+      if (showMovingCoverMenuAction(nowPlaying: nowPlaying))
+        _MenuRow(
         icon: motionOff ? Icons.motion_photos_on : Icons.motion_photos_off,
         label: motionOff
             ? 'Enable moving cover for this song'
@@ -268,7 +279,10 @@ class SongActionsBottomSheet extends ConsumerWidget {
         ),
       // The full player already owns the track-verified Video footer chip.
       // The shared menu still offers Watch video from library/search rows.
-      if (!nowPlaying && videos)
+      if (showWatchVideoMenuAction(
+        nowPlaying: nowPlaying,
+        videosEnabled: videos,
+      ))
         _MenuRow(
           icon: Icons.smart_display_rounded,
           label: lokalText('Watch video'),
