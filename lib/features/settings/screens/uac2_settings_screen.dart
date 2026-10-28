@@ -240,10 +240,8 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
   ) {
     final isSelected = selectedDevice != null &&
         sameUsbDacDevice(device, selectedDevice);
-    final matchesStatus = deviceStatus != null &&
-        sameUsbDacDevice(device, deviceStatus.device);
-    final isConnected =
-        matchesStatus &&
+    final isConnected = deviceStatus != null &&
+        sameUsbDacDevice(device, deviceStatus.device) &&
         (deviceStatus.state == Uac2State.connected ||
             deviceStatus.state == Uac2State.prewarming ||
             deviceStatus.state == Uac2State.streaming);
