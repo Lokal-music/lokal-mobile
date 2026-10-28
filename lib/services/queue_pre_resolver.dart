@@ -292,11 +292,53 @@ class QueuePreResolver {
     return index >= 0 && index < playlist.length ? playlist[index].id : null;
   }
 
+  /// A freshly selected placeholder must resolve before the queue's next-four
+  /// downloads start. PlayerService publishes the selected Song *before*
+  /// stopping the old audio engine and calling resolveNow(). Without this
+  /// guard, that notification starts up to four competing add-on downloads
+  /// while the first song has not even begun resolving.
+  bool get _currentNeedsForeground {
+    final host = _host;
+    if (host == null) return false;
+    final index = host.currentIndex;
+    final playlist = host.playlist;
+    return index >= 0 &&
+        index < playlist.length &&
+        playlist[index].isPending;
+  }
+
   /// Looks up the placeholders coming up. Returns the ids asked for, in
   /// order (for the tests).
   List<String> schedule() {
     final host = _host;
     if (host == null) return const [];
+    // The first online playlist/AutoQueue item has no prepared stream yet.
+    // Do not race its upcoming items against the foreground resolver during
+    // engine stop and add-on initialization. Foreground completion will
+    // schedule prefetch again after the queue settles.
+    if (_currentNeedsForeground) {
+      if (host.currentIndex == 0) {
+        // Starting a *new* playlist or AutoQueue at index zero must also
+        // preempt prefetch jobs left from the previous queue. Each Morneye
+        // download owns a QuickJS runtime, so those stale jobs can exhaust
+        // the first song's CPU/network budget before it even begins.
+        final selectedId = _currentId();
+        for (final entry in _running.entries.toList()) {
+          if (entry.key != selectedId && !entry.value.onDemand) {
+            _running.remove(entry.key)?.stop();
+          }
+        }
+        for (final entry in _timers.entries.toList()) {
+          if (entry.key != selectedId) {
+            entry.value.cancel();
+            _timers.remove(entry.key);
+          }
+        }
+      }
+      // During a normal skip, keep already-running prefetch work. Existing
+      // stagger callbacks still check this reservation before launching.
+      return const [];
+    }
     // Never disable the entire next-four preload window while a live FLAC
     // is downloading: a long Qobuz transfer can otherwise leave the whole
     // Search queue unresolved. Give the playing stream a brief head start,
@@ -348,7 +390,8 @@ class QueuePreResolver {
         // A delayed timer may fire after a foreground resolution started.
         // Foreground completion schedules the window again, so don't launch
         // competing provider requests while the selected track prepares.
-        if (_running.values.any((lookup) => lookup.onDemand && !lookup.cancelled)) {
+        if (_running.values.any((lookup) => lookup.onDemand && !lookup.cancelled) ||
+            _currentNeedsForeground) {
           return;
         }
         // Started later: still coming up in the queue as it is now?
