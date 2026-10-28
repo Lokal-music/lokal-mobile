@@ -548,6 +548,48 @@ void main() {
     });
   });
 
+  group('fast provider resolution without skipping verification', () {
+    test('selected metadata requires an exact id, title and artist', () {
+      expect(morneyeSelectedTrackHint(
+        id: '', title: 'Song', artist: 'Artist', durationMs: 200000,
+      ), isNull);
+      expect(morneyeSelectedTrackHint(
+        id: '123', title: '', artist: 'Artist', durationMs: null,
+      ), isNull);
+      expect(morneyeSelectedTrackHint(
+        id: '123', title: 'Song', artist: 'Artist', durationMs: 200000,
+      ), {
+        'id': '123', 'name': 'Song', 'artists': 'Artist',
+        'duration_ms': 200000,
+      });
+    });
+
+    test('only trusted provider-owned Search rows skip duplicate enrichment', () {
+      bool skip({
+        required String addon,
+        required String provider,
+        bool playing = true,
+        bool native = true,
+        bool validates = true,
+      }) => morneyeMaySkipDuplicateEnrichment(
+        addonName: addon, forPlayback: playing,
+        nativeSearchResult: native, hasAvailabilityCheck: validates,
+        track: {
+          'id': 'canonical-track', 'name': 'Song',
+          'provider_id': provider,
+        },
+      );
+      expect(skip(addon: 'tidal-web', provider: 'tidal-web'), isTrue);
+      expect(skip(addon: 'qobuz-web', provider: 'qobuz'), isTrue);
+      expect(skip(addon: 'deezer', provider: 'deezer'), isTrue);
+      expect(skip(addon: 'amazon', provider: 'amazon'), isTrue);
+      expect(skip(addon: 'tidal-web', provider: 'spotify'), isFalse);
+      expect(skip(addon: 'tidal-web', provider: 'tidal', native: false), isFalse);
+      expect(skip(addon: 'tidal-web', provider: 'tidal', playing: false), isFalse);
+      expect(skip(addon: 'tidal-web', provider: 'tidal', validates: false), isFalse);
+    });
+  });
+
   group('package manager', () {
     late FakeEngine engine;
     late MorneyePackages packages;
@@ -811,6 +853,105 @@ void main() {
         );
       },
     );
+
+    test('native first click skips duplicate enrichment but always verifies', () async {
+      var enriched = 0;
+      var checked = 0;
+      engine.scripts['fast-preflight'] = {
+        ...downloader(),
+        'enrichTrack': (args, call) async {
+          enriched++;
+          return {'name': 'Song'};
+        },
+        'checkAvailability': (args, call) async {
+          checked++;
+          expect(args[3], isA<Map>());
+          return {'available': true, 'track_id': 't1'};
+        },
+      };
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('qobuz'), 'fast-preflight'),
+      );
+      // A selected item from this exact provider has a canonical ID.
+      // This test's fixture has no provider_id, so the provider-wide
+      // optimizer intentionally refuses to infer ownership.
+      await packages.search(addon.key, 'Song');
+      final stages = <String>[];
+      final download = await packages.download(
+        addon.key, 't1', forPlayback: true,
+        onResolutionStage: stages.add,
+      );
+      expect(checked, 1);
+      expect(enriched, 1,
+          reason: 'Unmarked third-party metadata must still be enriched');
+      expect(stages, containsAllInOrder([
+        'worker_start', 'initializing', 'metadata', 'availability',
+        'preparing_media',
+      ]));
+      await download.cleanup();
+    });
+
+    test('owned Search result avoids enrichment but still checks availability',
+        () async {
+      var enriched = 0, checked = 0;
+      engine.scripts['owned-fast-path'] = {
+        ...downloader(),
+        'searchTracks': (args, call) async => [{
+          'id': 't1', 'name': 'Song', 'artists': 'Artist',
+          'provider_id': 'tidal', 'duration_ms': 180000,
+        }],
+        'enrichTrack': (args, call) async {
+          enriched++;
+          return {'name': 'Song'};
+        },
+        'checkAvailability': (args, call) async {
+          checked++;
+          final options = args[3] as Map;
+          expect((options['track'] as Map)['provider_id'], 'tidal');
+          return {'available': true, 'track_id': 't1'};
+        },
+      };
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('tidal-web'), 'owned-fast-path'),
+      );
+      await packages.search(addon.key, 'Song');
+      final file = await packages.download(addon.key, 't1', forPlayback: true);
+      expect(enriched, 0);
+      expect(checked, 1,
+          reason: 'skipping duplicate metadata must not skip authorization');
+      await file.cleanup();
+    });
+
+    test('evicted Search track uses exact selected metadata, not extra getTrack',
+        () async {
+      var byId = 0;
+      var available = 0;
+      engine.scripts['hint-preflight'] = {
+        ...downloader(),
+        'getTrack': (args, call) async {
+          byId++;
+          return {'id': 't1', 'name': 'Song', 'artists': 'Artist'};
+        },
+        'checkAvailability': (args, call) async {
+          available++;
+          final options = args[3] as Map;
+          expect(options['track']['name'], 'Song');
+          return {'available': true, 'track_id': 't1'};
+        },
+      };
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('qobuz'), 'hint-preflight'),
+      );
+      final file = await packages.download(
+        addon.key, 't1', forPlayback: true,
+        trackHint: morneyeSelectedTrackHint(
+          id: 't1', title: 'Song', artist: 'Artist', durationMs: 180000,
+        ),
+      );
+      expect(byId, 0);
+      expect(available, 1);
+      await file.cleanup();
+    });
 
     test('downloads into a staging folder with a playable name', () async {
       engine.scripts['v1'] = downloader();

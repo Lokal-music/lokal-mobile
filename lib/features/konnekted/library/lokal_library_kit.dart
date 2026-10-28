@@ -25,6 +25,36 @@ import 'replayable_stream_songs.dart';
 /// Shared pieces of Lokal's Library screens: Apple Music's iOS layout on the
 /// theme's own solid background, glass only for the small round buttons.
 
+/// Prefer an on-device recording; if there are none, use a cached or
+/// reachable desktop recording. A missing desktop must never block Play All
+/// when all remaining audio is already cached from that desktop.
+@visibleForTesting
+Future<Song?> firstAvailableLibraryFallback(
+  List<Song> queue,
+  Future<bool> Function(Song song) desktopAvailable, {
+  bool Function()? stillCurrent,
+}) async {
+  for (final song in queue) {
+    if (stillCurrent?.call() == false) return null;
+    if (!song.isNetworkSource &&
+        !song.isPending &&
+        song.filePath?.isNotEmpty == true) {
+      return song;
+    }
+  }
+  for (final song in queue) {
+    if (stillCurrent?.call() == false) return null;
+    if (song.sourceType == 'lokal') {
+      final available = await desktopAvailable(song);
+      if (stillCurrent?.call() == false) return null;
+      if (available) return song;
+    }
+  }
+  return null;
+}
+
+final _libraryPlayRequests = Expando<int>('library play preflight');
+
 /// Plays [queue] from [start] (or its first song); [shuffle] plays it in a
 /// random order. [startIndex] identifies repeated occurrences in the visible
 /// list, including when two entries refer to the same Song object.
@@ -38,6 +68,9 @@ Future<void> lokalPlay(
   bool shuffle = false,
 }) async {
   if (queue.isEmpty) return;
+  final player = ref.read(playerProvider.notifier);
+  final request = (_libraryPlayRequests[player] ?? 0) + 1;
+  _libraryPlayRequests[player] = request;
   final list = replayableStreamQueue(
     shuffle ? (List<Song>.of(queue)..shuffle()) : queue,
   );
@@ -55,12 +88,51 @@ Future<void> lokalPlay(
           requested,
           indexHint: startIndex,
         );
-  final selectedIndex = index < 0 ? 0 : index;
-  final selected = list[selectedIndex];
+  var selectedIndex = index < 0 ? 0 : index;
+  var selected = list[selectedIndex];
   try {
-    await ref
-        .read(playerProvider.notifier)
-        .play(selected, playlist: list, playlistIndex: selectedIndex);
+    if (selected.sourceType == 'lokal') {
+      final service = ref.read(playerServiceProvider);
+      final revision = service.playbackRequestRevision;
+      bool current() =>
+          context.mounted &&
+          _libraryPlayRequests[player] == request &&
+          service.playbackRequestRevision == revision;
+      // A mounted row may still hold an earlier offline result after the PC
+      // wakes. An explicit user action refreshes one shared server probe.
+      final server = selected.remoteServerId;
+      if (server != null) {
+        ref.invalidate(lokalDesktopStreamingAvailableProvider(server));
+      }
+      final available = await ref.read(
+        lokalSongAvailableProvider(selected).future,
+      );
+      if (!current()) return;
+      if (!available) {
+        final fallback = start == null && startIndex == null
+            ? await firstAvailableLibraryFallback(
+                list,
+                (candidate) =>
+                    ref.read(lokalSongAvailableProvider(candidate).future),
+                stillCurrent: current,
+              )
+            : null;
+        if (!current()) return;
+        if (fallback == null) {
+          LokalToast.show(
+            context,
+            lokalText(
+              'Reconnect to this Lokal desktop to stream its songs, or download them for offline playback.',
+            ),
+          );
+          return;
+        }
+        selectedIndex = list.indexWhere((song) => identical(song, fallback));
+        selected = list[selectedIndex];
+      }
+    }
+    if (!context.mounted || _libraryPlayRequests[player] != request) return;
+    await player.play(selected, playlist: list, playlistIndex: selectedIndex);
   } catch (_) {
     if (!context.mounted) return;
     LokalToast.show(

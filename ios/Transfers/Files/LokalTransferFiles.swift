@@ -165,6 +165,63 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
+  /// Copy from an already-open owned source into a caller-owned exclusive part
+  /// file. Cancelling may unlink staging while this runs; it cannot redirect
+  /// the open descriptor. The caller must still fence its later library commit.
+  func copyForLibrary(_ job: LokalTransferJob, to destination: Int32) throws -> LokalTransferFileReceipt {
+    try job.validate()
+    guard job.phase == .validating || job.phase == .importing,
+          let expectedBytes = job.receivedBytes, let expectedHash = job.receivedSHA256 else {
+      throw LokalTransferError.invalidTransition
+    }
+    let source = try locked { try openDownload(job) }
+    defer { close(source) }
+    var before = stat(), output = stat()
+    guard fstat(source, &before) == 0, fstat(destination, &output) == 0,
+          output.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), output.st_nlink == 1,
+          output.st_size == 0, lseek(destination, 0, SEEK_CUR) == 0 else { throw LokalTransferError.unsafeFile }
+    var buffer = [UInt8](repeating: 0, count: 256 * 1024)
+    var total: Int64 = 0
+    while true {
+      let count = buffer.withUnsafeMutableBytes { read(source, $0.baseAddress, $0.count) }
+      if count < 0 {
+        if errno == EINTR { continue }
+        throw LokalTransferError.posix("read_library_source", errno)
+      }
+      if count == 0 { break }
+      total += Int64(count)
+      guard total <= expectedBytes, total <= Self.maximumBytes else { throw LokalTransferError.checksumMismatch }
+      try buffer.withUnsafeBytes { bytes in
+        var offset = 0
+        while offset < count {
+          let written = write(destination, bytes.baseAddress!.advanced(by: offset), count - offset)
+          if written < 0, errno == EINTR { continue }
+          guard written > 0 else { throw LokalTransferError.posix("write_library_part", errno) }
+          offset += written
+        }
+      }
+    }
+    var after = stat()
+    guard fstat(source, &after) == 0, after.st_nlink == 1,
+          before.st_size == after.st_size else { throw LokalTransferError.unsafeFile }
+    #if canImport(Darwin)
+    guard before.st_mtimespec.tv_sec == after.st_mtimespec.tv_sec, before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec,
+          before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec, before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else {
+      throw LokalTransferError.unsafeFile
+    }
+    #else
+    guard before.st_mtim.tv_sec == after.st_mtim.tv_sec, before.st_mtim.tv_nsec == after.st_mtim.tv_nsec,
+          before.st_ctim.tv_sec == after.st_ctim.tv_sec, before.st_ctim.tv_nsec == after.st_ctim.tv_nsec else {
+      throw LokalTransferError.unsafeFile
+    }
+    #endif
+    guard total == expectedBytes, fsync(destination) == 0,
+          lseek(destination, 0, SEEK_SET) == 0 else { throw LokalTransferError.checksumMismatch }
+    let digest = try Self.digest(destination)
+    guard digest == expectedHash else { throw LokalTransferError.checksumMismatch }
+    return LokalTransferFileReceipt(bytes: total, sha256: digest)
+  }
+
   func discard(_ job: LokalTransferJob) throws {
     try locked {
       let fd: Int32
@@ -178,7 +235,7 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
-  private static func digest(_ fd: Int32) throws -> String {
+  static func digest(_ fd: Int32) throws -> String {
     #if canImport(CryptoKit)
     var hash = SHA256()
     #elseif os(Linux)

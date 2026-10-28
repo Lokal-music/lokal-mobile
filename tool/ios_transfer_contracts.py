@@ -23,6 +23,7 @@ SOURCES = [
     ROOT / 'ios/Transfers/Contracts/LokalTransferProtocol.swift',
     ROOT / 'ios/Transfers/Storage/LokalTransferJournal.swift',
     ROOT / 'ios/Transfers/Files/LokalTransferFiles.swift',
+    ROOT / 'ios/Transfers/Files/LokalTransferLibrary.swift',
     ROOT / 'ios/Transfers/Networking/LokalTransferRequest.swift',
     ROOT / 'ios/Transfers/Networking/LokalTransferCredentials.swift',
     ROOT / 'ios/Transfers/Networking/LokalTransferRuntime.swift',
@@ -96,6 +97,7 @@ def main() -> None:
                     print(f'Transfer Flutter bridge SDK check {status}: {target}', flush=True)
         subprocess.run([*command, *map(str, SOURCES),
                         str(ROOT / 'ios/Transfers/Tests/NetworkContracts.swift'),
+                        str(ROOT / 'ios/Transfers/Tests/LibraryContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/main.swift'),
                         '-o', str(binary)], check=True, timeout=180)
         for round_index in range(args.repeat_native):

@@ -1065,3 +1065,53 @@ transfer protocol cases, through-#302 output/ELRC/Cover Flow adaptations, Androi
 widget contract and native widget snapshot contract. Companion widget suites and
 four Keychain cases are recorded separately in the publication checkpoint.
 This continuation does not enable Android CI or alter native PCM/DSD/USB paths.
+
+
+### Source continuation reviewed through #306
+
+The rolling audit now covers **99 merged product PRs after #172 through #306**.
+The frozen build-78 package stops at #302 and remains independently verified.
+New source adaptations retain iOS queue occurrence identity, request retirement,
+source priority, explicit save validation and eleven-locale presentation.
+
+| PR | Exact merged commit | iPhone adaptation |
+| --- | --- | --- |
+| #303 | `46c72aaecdd9902b677e8f79cdaa41259643de3e` | Prepare only the selected just_audio source for queues over 64 entries, network and live handles. Collapse a previously restored native sequence without losing the active decoder/position. iOS operations retain checked waits and retirement handling. Desktop HTTP availability is independent of the remote-control WebSocket, shared per server and bounded. Bulk Play All/Shuffle can use local/cached fallbacks; explicit taps preserve the requested occurrence. Delayed preflight cannot overtake newer selection/pause or access a disposed page. Android CI changes are excluded. |
+| #305 | `3a2ffb4507495010b4af0dc4e204a9c39f8a7782` | Forward signed gateway retry/verification contracts to the add-on's camelCase API while keeping snake_case compatibility. Terminal ticket rejection does not retry every quality tier. Diagnostic logs exclude URLs, tickets, bodies and arbitrary contract text. |
+| #306 | `d49dc58a72b18ad42ca0900d15b8afce45bc34a4` | Hedge at most two alternate HTTP/native metadata searches within the selected provider; a verified match need not await a stalled primary. Morneye guest fallback stays serial and the hedge timer cancels after completion. Exact provider-owned search metadata can skip duplicate enrichment while availability/authorization remain mandatory; explicit saves retain validation. Phase status is localized in all eleven languages. |
+
+Build 78 passes both complete app suites plus the native transfer-channel probe
+and Keychain migration, all four widget jobs and the five-round focused native
+checks. Independent verification covers 2,298 exported source files, 34 iPhone
+binaries and 26 matching native symbol bundles. These results do not qualify
+this later continuation. The deterministic file-promotion foundation has three
+portable rounds plus a final guarded round; Isar import ownership/receipts and
+actual OS suspension/relaunch remain unfinished.
+
+
+Validation of the through-#306 continuation: **1,058 combined Flutter checks
+pass** (5m39s). The final queue-ownership follow-up passes **63 focused engine,
+crossfade, shuffle and lifecycle checks**, including restored-sequence handoff,
+concurrent collapse serialization, late selection/engine retirement and manual
+pause during fallback source resolution. Readable provider stage text passes
+all eleven locales. Six actual Library widget cases cover duplicate occurrence,
+offline bulk fallback, explicit unavailable taps, newer selection/pause priority
+and page disposal. New test/probe files pass fatal-info analysis; workspace
+analysis has no errors and retains existing warnings/information findings.
+
+Native acceptance adds a pending real AVFoundation-backed probe with 2,654
+logical generated-audio entries, explicit selection at 1,730, one actual native
+source, Previous and paused shuffle. This is not a scanner, distinct-file or
+physical performance claim. Deterministic library-file promotion remains outside
+Runner/product capability until import ownership and Isar receipts are ready.
+
+
+The frozen source `07d04a852c9b0ab2aa887cf450cb30e6c8c39644` passes
+**1,063 combined Flutter checks** (5m21s), including all final native queue
+ownership cases. The explicit desktop-retry follow-up passes **17 focused
+Library/availability/occurrence checks**. User playback refreshes one shared HTTP
+probe so a mounted offline result cannot survive the PC waking. Socket changes
+are refresh hints, never an authorization prerequisite. Recovery logs include
+controlled status/booleans or exception types, without arbitrary gateway/native
+error descriptions. The verified IPA remains build 78 until this continuation's
+new native app suite and large-queue probe pass.
