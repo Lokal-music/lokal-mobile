@@ -75,7 +75,8 @@ bool hasUsableLyrics(LyricsData lyrics) => lyrics.lines.any(
 
 /// Keep valid original LRC/ELRC/XML bytes for normal saves. Only an explicit
 /// translated save renders the selected sublines (which may not exist in raw
-/// source content), preserving original word timing wherever possible.
+/// source content). Bilingual saves use plain line-level LRC for compatibility;
+/// normal saves preserve the source's enhanced word or TTML timing.
 LyricsFileExport prepareLyricsFileExport(
   Song song,
   LyricsData lyrics, {
