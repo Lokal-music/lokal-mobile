@@ -89,9 +89,10 @@ class _Lookup {
 class QueuePreResolver {
   QueuePreResolver({
     this.lookahead = defaultLookahead,
-    this.stagger = const Duration(seconds: 2),
+    this.stagger = const Duration(milliseconds: 700),
     this.ttl = const Duration(minutes: 20),
-    this.lookupIdleTimeout = const Duration(seconds: 90),
+    this.lookupIdleTimeout = const Duration(seconds: 20),
+    this.foregroundTimeout = const Duration(seconds: 8),
     this.queueSettle = const Duration(milliseconds: 600),
     DateTime Function()? now,
     bool Function(Song song)? stillUsable,
@@ -107,6 +108,11 @@ class QueuePreResolver {
 
   /// How long a song looked up stays good (desktop: 20 minutes).
   final Duration ttl;
+  /// Absolute deadline for selected tracks, even if a provider keeps emitting
+  /// "Resolving..." status indefinitely. An unusable source must never hold
+  /// a first click for a minute. Explicit downloads use another path.
+  final Duration foregroundTimeout;
+  /// Absolute deadline for background lookahead; never extended by progress.
   final Duration lookupIdleTimeout;
 
   /// Queue edits come in bursts: look ahead once they settle.
@@ -439,7 +445,10 @@ class QueuePreResolver {
     }
     final running = _running[id];
     if (running != null) {
-      running.onDemand = true;
+      if (!running.onDemand) {
+        running.onDemand = true;
+        _armDeadline(id, running);
+      }
       _statusOwner = running;
       status.value = running.lastStatus ?? 'Preparing ${pending.title}…';
       return _foregroundResult(running);
@@ -472,31 +481,38 @@ class QueuePreResolver {
     status.value = null;
   }
 
+  /// A hard deadline, not an idle timer: Tidal/Qobuz add-ons can continue to
+  /// report the same 5% stage while a ticket or CDN never becomes playable.
+  /// A timeout completes the current request and signals cancellation; late
+  /// streams cannot replace the selected song.
+  void _armDeadline(String id, _Lookup lookup) {
+    lookup.watchdog?.cancel();
+    final limit = lookup.onDemand && foregroundTimeout < lookupIdleTimeout
+        ? foregroundTimeout : lookupIdleTimeout;
+    lookup.watchdog = Timer(limit, () {
+      if (!identical(_running[id], lookup) || lookup.cancelled) return;
+      lookup.timedOut = true;
+      lookup.error = TimeoutException(
+        'This online source did not become ready quickly. Try again or use another source.',
+        limit,
+      );
+      lookup.stop();
+      _running.remove(id);
+      if (identical(_statusOwner, lookup)) {
+        _statusOwner = null;
+        status.value = null;
+      }
+    });
+  }
+
   _Lookup? _start(String id, {required bool onDemand}) {
     final resolve = _savedSongResolvers[id] ?? _registered[id];
     if (resolve == null) return null;
     final lookup = _Lookup(onDemand: onDemand);
     _running[id] = lookup;
     if (onDemand) _statusOwner = lookup;
-    void armWatchdog() {
-      lookup.watchdog?.cancel();
-      lookup.watchdog = Timer(lookupIdleTimeout, () {
-        lookup.timedOut = true;
-        lookup.error = TimeoutException(
-          'Online source stopped responding. Try another source or retry.',
-          lookupIdleTimeout,
-        );
-        lookup.stop();
-        if (identical(_running[id], lookup)) _running.remove(id);
-        if (identical(_statusOwner, lookup)) {
-          _statusOwner = null;
-          status.value = null;
-        }
-      });
-    }
-
-    armWatchdog();
-    unawaited(_run(id, resolve, lookup, armWatchdog));
+    _armDeadline(id, lookup);
+    unawaited(_run(id, resolve, lookup));
     return lookup;
   }
 
@@ -504,7 +520,6 @@ class QueuePreResolver {
     String id,
     PendingResolve resolve,
     _Lookup lookup,
-    VoidCallback activity,
   ) async {
     Song? song;
     try {
@@ -512,10 +527,9 @@ class QueuePreResolver {
         cancel: lookup.cancel.future,
         onStatus: (message) {
           if (lookup.cancelled) return;
-          if (message != lookup.lastStatus) {
-            lookup.lastStatus = message;
-            activity();
-          }
+          // Status updates are informational; they must not indefinitely
+          // extend a resolver's wall-clock budget.
+          lookup.lastStatus = message;
           if (lookup.onDemand &&
               !lookup.cancelled &&
               identical(_statusOwner, lookup)) {
