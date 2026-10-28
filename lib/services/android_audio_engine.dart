@@ -521,7 +521,7 @@ class AndroidAudioEngine implements AudioEngine {
       // reordered logical queue. Restore just the currently audible item.
       devLog(
         '[Playback] Native queue collapse failed, restoring active '
-        'track only: $error',
+        'track only type=${error.runtimeType}',
       );
       try {
         final wasPlaying = player.playing;
@@ -550,7 +550,7 @@ class AndroidAudioEngine implements AudioEngine {
         _sourceFailed = true;
         devLog(
           '[Playback] Native queue collapse recovery failed: '
-          '$fallbackError',
+          'type=${fallbackError.runtimeType}',
         );
         return false;
       }

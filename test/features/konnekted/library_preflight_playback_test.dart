@@ -58,14 +58,26 @@ Future<void> _mount(
   WidgetTester tester,
   _Player player,
   _Service service,
-  Future<bool> Function(Song) available,
-) async {
+  Future<bool> Function(Song) available, {
+  bool sharedDesktop = false,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         playerProvider.overrideWith(() => player),
         playerServiceProvider.overrideWithValue(service),
-        lokalSongAvailableProvider.overrideWith((ref, song) => available(song)),
+        lokalDesktopStreamingAvailableProvider.overrideWith(
+          (ref, server) => available(_desktop),
+        ),
+        lokalSongAvailableProvider.overrideWith(
+          (ref, song) => sharedDesktop
+              ? ref.watch(
+                  lokalDesktopStreamingAvailableProvider(
+                    song.remoteServerId ?? 1,
+                  ).future,
+                )
+              : available(song),
+        ),
       ],
       child: MaterialApp(
         theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
@@ -73,6 +85,7 @@ Future<void> _mount(
           body: Consumer(
             builder: (context, ref, _) {
               const queue = [_desktop, _local, _desktop];
+              ref.watch(lokalSongAvailableProvider(_desktop));
               return Column(
                 children: [
                   TextButton(
@@ -102,6 +115,24 @@ Future<void> _mount(
 }
 
 void main() {
+  testWidgets('explicit retry refreshes a mounted offline desktop result', (
+    tester,
+  ) async {
+    final player = _Player();
+    var online = false, probes = 0;
+    await _mount(tester, player, _Service(), (_) async {
+      probes++;
+      return online;
+    }, sharedDesktop: true);
+    await tester.pumpAndSettle();
+    expect(probes, 1);
+    online = true;
+    await tester.tap(find.text('Repeated'));
+    await tester.pumpAndSettle();
+    expect(probes, 2);
+    expect(player.calls.single.index, 2);
+  });
+
   testWidgets('offline Play All retains full order and the phone-local index', (
     tester,
   ) async {

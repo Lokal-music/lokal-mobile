@@ -1104,3 +1104,14 @@ logical generated-audio entries, explicit selection at 1,730, one actual native
 source, Previous and paused shuffle. This is not a scanner, distinct-file or
 physical performance claim. Deterministic library-file promotion remains outside
 Runner/product capability until import ownership and Isar receipts are ready.
+
+
+The frozen source `07d04a852c9b0ab2aa887cf450cb30e6c8c39644` passes
+**1,063 combined Flutter checks** (5m21s), including all final native queue
+ownership cases. The explicit desktop-retry follow-up passes **17 focused
+Library/availability/occurrence checks**. User playback refreshes one shared HTTP
+probe so a mounted offline result cannot survive the PC waking. Socket changes
+are refresh hints, never an authorization prerequisite. Recovery logs include
+controlled status/booleans or exception types, without arbitrary gateway/native
+error descriptions. The verified IPA remains build 78 until this continuation's
+new native app suite and large-queue probe pass.

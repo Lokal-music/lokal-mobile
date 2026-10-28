@@ -21,8 +21,9 @@ bool desktopStreamingCredentialsMatch({
 }) {
   if (desktopId == null ||
       credentialOrigin == null ||
-      storedUsername != '$desktopId:${desktopUserId ?? 'guest'}')
+      storedUsername != '$desktopId:${desktopUserId ?? 'guest'}') {
     return false;
+  }
   final server = Uri.tryParse(storedBaseUrl),
       credential = Uri.tryParse(credentialOrigin);
   bool rootOrigin(Uri? value) =>
@@ -55,12 +56,17 @@ Future<bool> desktopHttpReachable(
   }
 }
 
-final _lokalDesktopCredentialsAvailableProvider = FutureProvider.autoDispose
+final lokalDesktopStreamingAvailableProvider = FutureProvider.autoDispose
     .family<bool, int>((ref, serverId) async {
       // Both saveConfiguration and forgetConfiguration publish a new controller
       // config. Watching it prevents mounted Library rows retaining obsolete
       // results after pairing changes while keeping one HTTP probe per server.
-      ref.watch(lokalRemoteControllerProvider.select((state) => state.config));
+      // Socket changes are refresh hints; HTTP never requires a live socket.
+      ref.watch(
+        lokalRemoteControllerProvider.select(
+          (state) => (state.config, state.socketConnected),
+        ),
+      );
       final credentialsStore = ref.read(lokalRemoteCredentialsStoreProvider);
       final service = ref.read(lokalRemoteServiceProvider);
       final lease = ref.keepAlive();
@@ -81,8 +87,9 @@ final _lokalDesktopCredentialsAvailableProvider = FutureProvider.autoDispose
               desktopId: credentials.desktopId,
               desktopUserId: credentials.desktopUserId,
               credentialOrigin: credentials.origin.toString(),
-            ))
+            )) {
           return false;
+        }
 
         return await desktopHttpReachable(() async {
           await service.fetchState(credentials);
@@ -104,7 +111,7 @@ final lokalSongAvailableProvider = FutureProvider.autoDispose.family<bool, Song>
     // Subscribe before the async cache lookup so a disposed row does not try to
     // watch a provider after its widget has already left the screen.
     final pairedDesktop = ref.watch(
-      _lokalDesktopCredentialsAvailableProvider(serverId).future,
+      lokalDesktopStreamingAvailableProvider(serverId).future,
     );
     // Cached desktop originals remain playable when the PC is disconnected.
     if (await NetworkCacheService().getPath(serverId, remoteId) != null) {

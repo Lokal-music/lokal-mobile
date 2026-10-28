@@ -98,6 +98,12 @@ Future<void> lokalPlay(
           context.mounted &&
           _libraryPlayRequests[player] == request &&
           service.playbackRequestRevision == revision;
+      // A mounted row may still hold an earlier offline result after the PC
+      // wakes. An explicit user action refreshes one shared server probe.
+      final server = selected.remoteServerId;
+      if (server != null) {
+        ref.invalidate(lokalDesktopStreamingAvailableProvider(server));
+      }
       final available = await ref.read(
         lokalSongAvailableProvider(selected).future,
       );

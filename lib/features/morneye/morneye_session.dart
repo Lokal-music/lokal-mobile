@@ -518,8 +518,8 @@ class MorneyeSignedSession {
           // Never record a ticket, URL, request body or session credentials.
           AppLog.instance.add(
             '[Morneye] ticket request status=$status '
-            'code=${RegExp(r'^[A-Z][A-Z0-9_]{0,63}$').hasMatch(code) ? code : 'unspecified'} '
             'retryable=${addonResponse['retryable'] == true} '
+            'verification=${addonResponse['needsVerification'] == true} '
             'elapsedMs=${clock.elapsedMilliseconds}',
           );
         }
