@@ -312,3 +312,20 @@ and native migration optionally selects that exact account. Four deterministic
 concurrency/retry tests pass. The native probe now records synthetic fixture
 presence before and after migration without exposing values; the next Apple run
 must establish whether this correction resolves the observed failure.
+
+
+### First embedded Apple SDK feedback
+
+Focused native run 2 reached both SDK checks before host contracts. They exposed
+two strict `String(validating:as:)` uses whose Apple availability starts at iOS 18.
+The continuation uses Foundation's strict UTF-8 `String(data:encoding:)` at the
+iOS 16 floor; real malformed identity/pause-text regressions preserve corruption
+and reject it instead of inserting replacement characters.
+
+The macOS host still reported CANTOPEN. Path canonicalization now uses POSIX
+`realpath` and passes its resulting pathname directly to SQLite, avoiding any
+subsequent Foundation URL normalization. Independent test-only SQLite connections
+use the same canonical-parent rule. The next failure report includes a bounded
+contract-stage label and SQLite's extended numeric code. Three updated portable
+rounds pass; the Apple rerun must qualify this correction. No deployment-floor
+increase or relaxed symlink/UTF-8 validation is used.

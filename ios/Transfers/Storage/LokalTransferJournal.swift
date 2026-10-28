@@ -36,8 +36,14 @@ final class LokalTransferJournal: @unchecked Sendable {
     // rejects aliases anywhere in the full pathname, including that trusted
     // parent. Resolve parents only after refusing a final-container symlink,
     // and prove the canonical pathname identifies our already opened directory.
-    let canonical = container.standardizedFileURL.resolvingSymlinksInPath()
-    let resolved = open(canonical.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    // Use the POSIX pathname verbatim. Foundation's URL standardization on
+    // Apple platforms can reintroduce OS aliases after resolving a file URL.
+    guard let canonicalBytes = realpath(container.path, nil) else {
+      throw LokalTransferError.posix("resolve_container", errno)
+    }
+    let canonicalPath = String(cString: canonicalBytes)
+    free(canonicalBytes)
+    let resolved = open(canonicalPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard resolved >= 0 else { throw LokalTransferError.unsafeFile }
     defer { close(resolved) }
     var originalInfo = stat(), resolvedInfo = stat()
@@ -50,7 +56,8 @@ final class LokalTransferJournal: @unchecked Sendable {
     }
     let owned = openat(base, Self.directoryName, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard owned >= 0 else { throw LokalTransferError.posix("open_directory", errno) }
-    let root = canonical.appendingPathComponent(Self.directoryName, isDirectory: true)
+    let rootPath = canonicalPath + "/" + Self.directoryName
+    let root = URL(fileURLWithPath: rootPath, isDirectory: true)
     do {
       for name in [Self.databaseName, Self.databaseName + "-wal", Self.databaseName + "-shm", "jobs.json"] {
         try Self.checkRegular(directory: owned, name: name)
@@ -62,16 +69,17 @@ final class LokalTransferJournal: @unchecked Sendable {
       }
       #if os(iOS) && !targetEnvironment(simulator)
       try FileManager.default.setAttributes(
-        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: root.path)
+        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: rootPath)
       #endif
     } catch { close(owned); throw error }
     var opened: OpaquePointer?
-    let code = sqlite3_open_v2(root.appendingPathComponent(Self.databaseName).path, &opened,
+    let code = sqlite3_open_v2(rootPath + "/" + Self.databaseName, &opened,
       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_NOFOLLOW, nil)
     guard code == SQLITE_OK, let opened else {
+      let detail = opened.map { sqlite3_extended_errcode($0) } ?? code
       if let opened { sqlite3_close_v2(opened) }
       close(owned)
-      throw LokalTransferError.database(code)
+      throw LokalTransferError.database(detail)
     }
     directory = owned
     self.root = root
@@ -235,7 +243,7 @@ final class LokalTransferJournal: @unchecked Sendable {
   private func decoded(_ query: OpaquePointer, blobColumn: Int32 = 2) throws -> (LokalTransferJob, Int) {
     guard let idBytes = sqlite3_column_text(query, 0),
           sqlite3_column_bytes(query, 0) == 36,
-          let id = String(validating: UnsafeBufferPointer(start: idBytes, count: 36), as: UTF8.self),
+          let id = String(data: Data(bytes: idBytes, count: 36), encoding: .utf8),
           sqlite3_column_type(query, 1) == SQLITE_INTEGER,
           sqlite3_column_type(query, blobColumn) == SQLITE_BLOB else { throw LokalTransferError.invalidRecord }
     let count = Int(sqlite3_column_bytes(query, blobColumn))
@@ -344,7 +352,7 @@ final class LokalTransferJournal: @unchecked Sendable {
     let count = Int(sqlite3_column_bytes(query, column))
     guard sqlite3_column_type(query, column) == SQLITE_TEXT, (allowEmpty || count > 0), count <= 4096,
           let pointer = sqlite3_column_text(query, column),
-          let value = String(validating: UnsafeBufferPointer(start: pointer, count: count), as: UTF8.self) else {
+          let value = String(data: Data(bytes: pointer, count: count), encoding: .utf8) else {
       throw LokalTransferError.invalidRecord
     }
     return value
