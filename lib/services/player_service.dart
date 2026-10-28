@@ -761,7 +761,7 @@ class PlayerService {
   AdvanceListOrder _advanceListOrder = AdvanceListOrder.alphabetical;
   AdvanceListOrder get advanceListOrder => _advanceListOrder;
 
-  // Wrap-around queue: tapping a song mid-list queues preceding songs at the end.
+  // Wrap-around navigation: Previous on the first item jumps to the last.\n  // Selection never rotates the source queue or discards earlier songs.
   final ValueNotifier<bool> wrapAroundQueueNotifier = ValueNotifier(true);
   bool get wrapAroundQueue => wrapAroundQueueNotifier.value;
 
