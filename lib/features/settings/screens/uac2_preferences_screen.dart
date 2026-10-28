@@ -779,8 +779,10 @@ class _Uac2PreferencesSectionsState
       // Selecting direct USB is an explicit user action. Ask once for the
       // optional runtime permission, if absent, rather than prompting at
       // every app launch. A denial never blocks USB playback.
-      if (engine == AudioEnginePreference.isochronousUsb &&
-          Platform.isAndroid && context.mounted) {
+      if (current != engine &&
+          engine == AudioEnginePreference.isochronousUsb &&
+          Platform.isAndroid &&
+          context.mounted) {
         await _requestUsbRecordPermission(context);
       }
       if (current != engine && mounted) {
