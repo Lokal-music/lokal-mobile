@@ -1051,7 +1051,9 @@ class LyricsService {
     // An optional association tag is emitted only for simultaneous vocal
     // groups, where an otherwise portable timestamped translation would be
     // indistinguishable from another sung voice.
-    final taggedTranslation = RegExp(r'^\[lokaltr:(\d+)\]
+    final taggedTranslation = RegExp(r'^\[lokaltr:(\d+)\]$');
+    int? taggedSourceIndex;
+    var previous = <int>[]; // indexes the last stamped row made
 
     for (final row in rows) {
       final line = row.trimRight();
