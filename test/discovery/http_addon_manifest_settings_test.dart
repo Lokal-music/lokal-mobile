@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flick/features/discovery/discovery_http.dart';
+import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_settings.dart';
 import 'package:flick/features/discovery/discovery_sources.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -36,6 +37,43 @@ const _manifest = {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('manifest installation probes exactly the pasted private URL', () async {
+    final pasted = Uri.parse(
+      'https://addons.example/private/a/Qobuz-Token/manifest.json',
+    );
+    final requests = <Uri>[];
+    final client = MockClient((request) async {
+      requests.add(request.url);
+      return _json(_manifest);
+    });
+    addTearDown(client.close);
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(client),
+      endpoint: pasted.toString(),
+    );
+    final health = await addon.health(exactManifestUrl: pasted);
+    expect(health.name, 'Qobuz [Heisenbergg]');
+    expect(requests, [pasted]);
+    expect(addon.base.toString(),
+        'https://addons.example/private/a/Qobuz-Token');
+  });
+
+  test('manifest probes cannot send credentials to a foreign origin', () async {
+    final client = MockClient((_) async => fail('No network expected'));
+    addTearDown(client.close);
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(client),
+      endpoint: 'https://addons.example/private/manifest.json',
+      token: 'secret',
+    );
+    expect(
+      () => addon.health(
+        exactManifestUrl: Uri.parse('https://attacker.example/manifest.json'),
+      ),
+      throwsA(isA<DiscoveryException>()),
+    );
+  });
 
   test('parses real-world manifest name and untyped quality select', () async {
     final client = MockClient((request) async {
