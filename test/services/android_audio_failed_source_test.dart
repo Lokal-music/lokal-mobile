@@ -117,14 +117,17 @@ void main() {
     // must not snap the selected song back to the first occurrence.
     final first = Song(
       id: 'repeated', title: 'Repeat', artist: 'Artist',
+      duration: const Duration(minutes: 3),
       filePath: '/repeat.flac', fileType: 'FLAC',
     );
     final second = Song(
       id: 'repeated', title: 'Repeat', artist: 'Artist',
+      duration: const Duration(minutes: 3),
       filePath: '/repeat.flac', fileType: 'FLAC',
     );
     final between = Song(
       id: 'different', title: 'Other', artist: 'Artist',
+      duration: const Duration(minutes: 3),
       filePath: '/other.flac', fileType: 'FLAC',
     );
     final playlist = [first, between, second];
