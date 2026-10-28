@@ -44,10 +44,10 @@ class WhatsNewNotifier extends Notifier<WhatsNewState> {
     }
     // Old installations stored version+build. Treat any patch of the same
     // minor as already seen, and persist just the minor going forward.
-    final seenMinor = lokalMinorVersion(lastSeen?.split('+').first);
+
     return WhatsNewState(
       currentEntry: notes,
-      pendingEntry: notes != null && lastSeen != null && seenMinor != minor
+      pendingEntry: notes != null && lokalMinorHasChanged(minor, lastSeen)
           ? notes
           : null,
     );
