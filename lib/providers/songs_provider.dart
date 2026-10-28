@@ -615,6 +615,10 @@ class SongsNotifier extends AsyncNotifier<SongsState> {
   static const _fileTypeFilterKey = 'songs_file_type_filter';
   SongSortOption _sortOption = SongSortOption.albumArtist;
   SongFileTypeFilter _fileTypeFilter = SongFileTypeFilter.all;
+  bool _sortChanged = false;
+  bool _fileTypeChanged = false;
+  Future<void> _sortWriteTail = Future<void>.value();
+  Future<void> _filterWriteTail = Future<void>.value();
 
   @override
   Future<SongsState> build() async {
@@ -623,8 +627,12 @@ class SongsNotifier extends AsyncNotifier<SongsState> {
     // one full-library query, sort and regroup for each individual DB write.
     ref.watch(libraryChangeRevisionProvider);
 
-    _sortOption = await _loadSortOption();
-    _fileTypeFilter = await _loadFileTypeFilter();
+    final savedSort = await _loadSortOption();
+    final savedFilter = await _loadFileTypeFilter();
+    // A library revision can rebuild this notifier while a user changes
+    // controls. Do not replace the newer choice with an older async load.
+    if (!_sortChanged) _sortOption = savedSort;
+    if (!_fileTypeChanged) _fileTypeFilter = savedFilter;
 
     final songs = await repository.getAllSongs();
     return SongsState(
@@ -635,8 +643,11 @@ class SongsNotifier extends AsyncNotifier<SongsState> {
   }
 
   void setSortOption(SongSortOption option) {
+    _sortChanged = true;
     _sortOption = option;
-    _saveSortOption(option);
+    _sortWriteTail = _sortWriteTail
+        .then((_) => _saveSortOption(option))
+        .catchError((Object _) {});
     final currentState = state.value;
     if (currentState != null) {
       state = AsyncData(currentState.copyWith(sortOption: option));
@@ -644,8 +655,11 @@ class SongsNotifier extends AsyncNotifier<SongsState> {
   }
 
   void setFileTypeFilter(SongFileTypeFilter filter) {
+    _fileTypeChanged = true;
     _fileTypeFilter = filter;
-    _saveFileTypeFilter(filter);
+    _filterWriteTail = _filterWriteTail
+        .then((_) => _saveFileTypeFilter(filter))
+        .catchError((Object _) {});
     final currentState = state.value;
     if (currentState != null) {
       state = AsyncData(currentState.copyWith(fileTypeFilter: filter));

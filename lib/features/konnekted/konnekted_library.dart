@@ -178,7 +178,10 @@ class KonnektedLibrary extends ConsumerWidget {
                 onSeeAll: () => onNavigate(KonnektedDestination.songs),
               ),
             ),
-            LokalSongBrowser(songs: songs),
+            LokalSongBrowser(
+              songs: songs,
+              preferencesKey: 'lokal.library.songs.song_browser_view.v1',
+            ),
           ],
           SliverToBoxAdapter(
             child: SizedBox(height: 150 + MediaQuery.paddingOf(context).bottom),
