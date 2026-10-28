@@ -1822,17 +1822,11 @@ Future<void> stopPriorityAnchor() async {
       }
     }
 
-    // A saved selection is only a lookup hint. When the physical UsbManager
-    // inventory contains no matching device, do not promote that stale
-    // selection to a connected DAC. Frozen/registered native sessions are
-    // handled by the early currentPlaybackDevice return above.
-    if (_hasUsbLookupIdentity(preferredDevice)) {
-      devLog(
-        'Uac2Service: previously selected USB audio device is not attached '
-        '(UsbManager candidates=${devices.length}); awaiting attach event',
-      );
+    if (!_hasUsbLookupIdentity(preferredDevice)) {
+      return null;
     }
-    return null;
+
+    return _sanitizeAndroidDeviceForLookup(preferredDevice);
   }
 
   bool _hasUsbLookupIdentity(Uac2DeviceInfo? device) {
