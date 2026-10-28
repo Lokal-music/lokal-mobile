@@ -883,6 +883,36 @@ void main() {
       await download.cleanup();
     });
 
+    test('owned Search result avoids enrichment but still checks availability',
+        () async {
+      var enriched = 0, checked = 0;
+      engine.scripts['owned-fast-path'] = {
+        ...downloader(),
+        'searchTracks': (args, call) async => [{
+          'id': 't1', 'name': 'Song', 'artists': 'Artist',
+          'provider_id': 'tidal', 'duration_ms': 180000,
+        }],
+        'enrichTrack': (args, call) async {
+          enriched++;
+          return {'name': 'Song'};
+        },
+        'checkAvailability': (args, call) async {
+          checked++;
+          expect(args[3]['track']['provider_id'], 'tidal');
+          return {'available': true, 'track_id': 't1'};
+        },
+      };
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('tidal-web'), 'owned-fast-path'),
+      );
+      await packages.search(addon.key, 'Song');
+      final file = await packages.download(addon.key, 't1', forPlayback: true);
+      expect(enriched, 0);
+      expect(checked, 1,
+          reason: 'skipping duplicate metadata must not skip authorization');
+      await file.cleanup();
+    });
+
     test('evicted Search track uses exact selected metadata, not extra getTrack',
         () async {
       var byId = 0;
