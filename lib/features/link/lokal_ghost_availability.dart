@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/database.dart';
 import '../../models/song.dart';
 import '../../services/network_cache_service.dart';
-import '../../services/lokal_remote_credentials_store.dart';
+import '../../providers/lokal_remote_provider.dart';
 
 /// The paired desktop's HTTP media endpoint does not need a remote-control
 /// websocket. Share credentials across Library rows rather than reading
