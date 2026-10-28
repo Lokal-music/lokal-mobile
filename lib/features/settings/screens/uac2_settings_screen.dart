@@ -95,7 +95,11 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
           if (deviceStatus != null)
             LokalSettingsSection(
               title: l10n.status,
-              children: _statusRows(deviceStatus),
+              children: _statusRows(
+                deviceStatus,
+                usbDetected: devicesAsync.asData?.value.isNotEmpty == true ||
+                    deviceStatus.routeType == Uac2RouteType.externalUsb,
+              ),
             ),
           if (showVolume)
             LokalSettingsSection(
@@ -265,7 +269,10 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     );
   }
 
-  List<Widget> _statusRows(Uac2DeviceStatus status) {
+  List<Widget> _statusRows(
+    Uac2DeviceStatus status, {
+    required bool usbDetected,
+  }) {
     final diagnostics = ref.watch(audioOutputDiagnosticsProvider);
     final t = context.lokal;
     Color good(bool ok) => ok ? t.accent : t.orange;
@@ -275,8 +282,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
         : classifyUsbDacClaim(
             registered: diagnostics.directUsbRegistered,
             claimed: diagnostics.usbInterfaceClaimed,
-            connected: status.isExternalRoute ||
-                status.routeType == Uac2RouteType.externalUsb,
+            connected: usbDetected,
             directUsbPlaybackAttempt:
                 diagnostics.selectedMode == AudioEngineType.usbDacExperimental &&
                 status.state == Uac2State.streaming,
