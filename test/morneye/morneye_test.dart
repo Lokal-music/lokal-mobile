@@ -898,7 +898,8 @@ void main() {
         },
         'checkAvailability': (args, call) async {
           checked++;
-          expect(args[3]['track']['provider_id'], 'tidal');
+          final options = args[3] as Map;
+          expect((options['track'] as Map)['provider_id'], 'tidal');
           return {'available': true, 'track_id': 't1'};
         },
       };
