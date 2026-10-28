@@ -103,10 +103,14 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
         throw const DiscoveryException('This source is already added.');
       }
 
+      final pastedUri = requireHttps(raw);
+      final exactManifest = pastedUri.pathSegments.lastOrNull == 'manifest.json'
+          ? pastedUri
+          : null;
       final health = await DiscoveryAddon(
         DiscoveryHttp(_client),
         endpoint: endpoint,
-      ).health();
+      ).health(exactManifestUrl: exactManifest);
       // Streaming-only addons (allowDownloads: 0) are valid sources.
       // Explicit saves remain blocked by DiscoveryAddon.resolve(forDownload: true).
 
@@ -129,6 +133,7 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
       final addon = DiscoveryAddonConfig(
         id: DiscoveryAddonConfig.createId(),
         endpoint: endpoint,
+        manifestUrl: exactManifest?.toString(),
         // Safe manifest name, never the credential-bearing endpoint.
         label: label,
         settings: {
@@ -146,7 +151,17 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
         _message = 'Source added and enabled.';
       });
     } catch (error) {
-      if (mounted) setState(() => _error = discoveryError(error));
+      if (mounted) {
+        // Installation only probes the manifest, not a search or stream.
+        // Report the failing stage and status without disclosing private
+        // addon URLs (which may contain path-based access tokens).
+        final message = error is DiscoveryException &&
+                error.message.contains('HTTP 404')
+            ? 'The add-on manifest returned HTTP 404. Check that the '
+                'manifest.json link is valid and still accessible.'
+            : discoveryError(error);
+        setState(() => _error = message);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -180,6 +195,7 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
     final updated = DiscoveryAddonConfig(
       id: old.id,
       endpoint: old.endpoint,
+      manifestUrl: old.manifestUrl,
       label: old.label,
       token: old.token,
       settings: old.settings,
@@ -206,6 +222,9 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
         DiscoveryHttp(_client),
         endpoint: old.endpoint,
         token: old.token,
+        exactManifestUrl: old.manifestUrl == null
+            ? null
+            : Uri.parse(old.manifestUrl!),
       ).health();
     } catch (error) {
       if (mounted) setState(() => _error = discoveryError(error));
@@ -296,6 +315,7 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
     final edited = DiscoveryAddonConfig(
       id: old.id,
       endpoint: old.endpoint,
+      manifestUrl: old.manifestUrl,
       label: label,
       token: old.token,
       settings: choices,
