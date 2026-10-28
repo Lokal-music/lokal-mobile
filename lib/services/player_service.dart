@@ -5229,8 +5229,8 @@ class PlayerService {
           final debug = await _uac2Service.getAndroidPlaybackDebugState();
           final rust = _mapValue(debug?['rustAudioState']);
           final usb = _mapValue(rust?['direct_usb']);
-          final registered = usb?['registered'] == true;
-          if (!registered) {
+          final explicitlyUnregistered = usb?['registered'] == false;
+          if (explicitlyUnregistered) {
             _debugLog('[Engine] Cached USB format matches but native DAC is '
                 'not registered; re-preparing instead of reusing stale state');
           } else {
