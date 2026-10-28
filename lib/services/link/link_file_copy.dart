@@ -44,6 +44,7 @@ class LinkFileCopy {
   void cancel() => _preview.cancel();
   void _checking(String stage, {int processed = 0, int total = 0}) {
     _check();
+    _preview.pulse();
     onProgress(
       LinkCopyProgress(
         phase: LinkCopyPhase.checking,
@@ -228,7 +229,10 @@ class LinkFileCopy {
           );
           final fingerprint = await source.originalFingerprint(
             song,
-            check: _check,
+            check: () {
+              _check();
+              _preview.pulse();
+            },
           );
           if (fingerprint == null) {
             missing.add(song);
