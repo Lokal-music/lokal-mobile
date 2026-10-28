@@ -730,7 +730,7 @@ class _Uac2PreferencesSectionsState
     bool recovered = false;
     try {
       recovered = await PlayerService().forceRestartUsbAudioEngine();
-      ref.invalidate(uac2DevicesProvider);
+      if (mounted) ref.invalidate(uac2DevicesProvider);
     } catch (error) {
       // The service keeps the failure reason in the exported diagnostics.
       recovered = false;
@@ -743,7 +743,7 @@ class _Uac2PreferencesSectionsState
     messenger.showSnackBar(
       SnackBar(
         content: Text(recovered
-            ? 'USB audio engine restarted. Playback position restored.'
+            ? 'USB audio engine restarted. Playback restored if available.'
             : 'USB audio restart failed. Check DAC connection and logs.'),
         behavior: SnackBarBehavior.floating,
       ),
