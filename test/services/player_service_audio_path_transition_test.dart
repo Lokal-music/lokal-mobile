@@ -51,6 +51,18 @@ AudioOutputDiagnostics _diagnostics({
 }
 
 void main() {
+  test('bare libusb event-loop failure is classified as recoverable', () {
+    expect(
+      isRecoverableDirectUsbTransportError(
+        'libusb_handle_events failed: LIBUSB_ERROR_IO',
+      ),
+      isTrue,
+    );
+    expect(isRecoverableDirectUsbTransportError('HTTP source timed out'),
+        isFalse);
+  });
+
+
   group('audioPathTransitionFields', () {
     test('captures engine, path, bit-perfect and rates', () {
       final fields = audioPathTransitionFields(_diagnostics());
