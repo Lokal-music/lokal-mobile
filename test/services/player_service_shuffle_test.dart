@@ -13,6 +13,28 @@ void main() {
     fileType: 'MP3',
   );
 
+  group('PlayerService mid-queue selection', () {
+    test('selects the real middle index without truncating the source list', () {
+      final tracks = [song('a'), song('b'), song('c'), song('d')];
+      final index = PlayerService.selectedPlaylistIndex(tracks, tracks[2]);
+
+      expect(index, 2);
+      expect(tracks.map((song) => song.id).toList(), ['a', 'b', 'c', 'd']);
+      expect(tracks.sublist(0, index).map((song) => song.id), ['a', 'b']);
+      expect(tracks.sublist(index + 1).map((song) => song.id), ['d']);
+    });
+
+    test('identifies the tapped occurrence of duplicate song IDs', () {
+      final first = song('a');
+      final second = song('a');
+      final songs = [first, song('b'), second];
+
+      expect(PlayerService.selectedPlaylistIndex(songs, second), 2);
+      expect(PlayerService.selectedPlaylistIndex(songs, first), 0);
+      expect(PlayerService.selectedPlaylistIndex(songs, song('a')), 0);
+    });
+  });
+
   group('PlayerService shuffle ordering', () {
     test('keeps the current song first when shuffle is enabled', () {
       final songs = [song('a'), song('b'), song('c'), song('d')];
