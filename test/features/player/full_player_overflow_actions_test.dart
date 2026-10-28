@@ -40,6 +40,15 @@ void main() {
       expect(showWatchVideoMenuAction(
         nowPlaying: false, videosEnabled: false,
       ), isFalse);
+      // Classic player retains browsing actions while suppressing duplicates.
+      expect(showMovingCoverMenuAction(
+        nowPlaying: false, hideMediaActions: true,
+      ), isFalse);
+      expect(showWatchVideoMenuAction(
+        nowPlaying: false,
+        videosEnabled: true,
+        hideMediaActions: true,
+      ), isFalse);
     });
 
     test('Now Playing menu follows a new track while it is open', () {
