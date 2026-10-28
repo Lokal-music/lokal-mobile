@@ -230,7 +230,9 @@ bool requiresOnDemandAndroidSequence(List<Song> playlist) {
       song.isPending ||
       song.filePath == null ||
       song.filePath!.isEmpty ||
-      song.isNetworkSource);
+      song.isNetworkSource ||
+      song.sourcePackage == 'konnekted.progressive' ||
+      song.sourcePackage == 'konnekted.morneye-live');
 }
 
 @visibleForTesting
