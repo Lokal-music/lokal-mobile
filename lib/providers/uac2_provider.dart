@@ -17,7 +17,10 @@ final uac2AvailableProvider = Provider<bool>((ref) {
 
 final uac2DevicesProvider = FutureProvider<List<Uac2DeviceInfo>>((ref) async {
   final service = ref.watch(uac2ServiceProvider);
-  return service.listDevices();
+  // The settings page needs physical attachment, including before a playback
+  // engine exists. A frozen exclusive-USB session may be stale after replug.
+  // This queries UsbManager inventory only; it does not claim the interface.
+  return service.listDevices(verifyPhysicalAttachment: true);
 });
 
 class Uac2DeviceStatusNotifier extends Notifier<Uac2DeviceStatus?> {
