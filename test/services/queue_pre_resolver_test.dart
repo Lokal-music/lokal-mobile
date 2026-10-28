@@ -268,6 +268,34 @@ void main() {
       expect(lookups.asked, ['first', 'second', 'third']);
     });
 
+    testResolver('new playlist first track cancels stale add-on lookups', (
+      tester,
+    ) async {
+      host.playlist = [
+        _owned('old'),
+        pending('old-next'),
+        pending('old-later'),
+      ];
+      resolver.schedule();
+      expect(lookups.asked, ['old-next']);
+      final first = pending('new-first');
+      host.playlist = [first, pending('new-second')];
+      host.playAt(0);
+      await tester.pump();
+      expect(lookups.cancelled, contains('old-next'));
+      expect(resolver.running, isEmpty);
+      // A slow answer from the previous queue cannot replace the new one.
+      lookups.answer('old-next');
+      await tester.pump();
+      expect(host.swaps, isEmpty);
+      final started = resolver.resolveNow(first);
+      expect(lookups.asked, ['old-next', 'new-first']);
+      lookups.answer('new-first');
+      expect((await started)?.id, 'discovery:new-first');
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(lookups.asked, ['old-next', 'new-first', 'new-second']);
+    });
+
     testResolver('pending selection defers existing stagger without losing work', (
       tester,
     ) async {
