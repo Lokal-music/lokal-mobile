@@ -124,6 +124,31 @@ Future<bool> restartDirectUsbSessionSequence({
   return true;
 }
 
+/// USB format incompatibility is specific to the recording, not a DAC
+/// transport failure. A different recording must get another chance to use
+/// direct USB; replaying the same unsupported recording must not loop.
+@visibleForTesting
+bool shouldRearmUsbAfterIncompatibleTrack({
+  required String? incompatibleTrackKey,
+  required String requestedTrackKey,
+}) =>
+    incompatibleTrackKey != null &&
+    incompatibleTrackKey != requestedTrackKey;
+
+/// Never advertise bit-perfect if the selected USB alternate setting cannot
+/// carry the exact decoded format (including its PCM bit depth).
+@visibleForTesting
+bool exactDirectUsbFormatSupported(
+  Uac2AudioFormat requested,
+  Uac2AudioFormat? supported,
+) =>
+    supported != null &&
+    requested.sampleRate == supported.sampleRate &&
+    requested.bitDepth == supported.bitDepth &&
+    requested.channels == supported.channels &&
+    requested.isDop == supported.isDop &&
+    requested.isNativeDsd == supported.isNativeDsd;
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -615,6 +640,7 @@ class PlayerService {
   bool _motionArtDuringBitPerfect = false;
   bool _midStreamUsbFallbackActive = false;
   Future<bool>? _manualUsbRestartInFlight;
+  String? _usbIncompatibleTrackKey;
   bool _deadRustEngineRecoveryActive = false;
   final List<DateTime> _deadRustEngineRecoveryTimestamps = <DateTime>[];
   late final AudioSessionManager _sessionManager;
@@ -5377,6 +5403,28 @@ class PlayerService {
     return preparedEngine;
   }
 
+  // Keep this key in memory only: filePath may contain signed source URLs.
+  String _usbTrackKey(Song song) =>
+      '${song.id}|${song.filePath}|${song.sampleRate}|${song.bitDepth}|${song.fileType}';
+
+  Future<void> _rearmUsbForNewTrackAfterFormatFallback(Song song) async {
+    final key = _usbTrackKey(song);
+    if (!shouldRearmUsbAfterIncompatibleTrack(
+      incompatibleTrackKey: _usbIncompatibleTrackKey,
+      requestedTrackKey: key,
+    )) {
+      return;
+    }
+    _usbIncompatibleTrackKey = null;
+    AppLog.instance.add('[USB] Re-evaluating direct USB for a new recording '
+        'after a track-specific PCM format fallback');
+    // Respect the connected route and the user's engine preference. Do not
+    // clear suppression caused by an actual USB transport failure.
+    await _sessionManager.syncRouteSelection(
+      reason: 'new recording after unsupported direct USB format',
+    );
+  }
+
   Future<AudioEngineType> _prepareRequestedEngineForSong(
     AudioEngineType desiredEngine, {
     required Song song,
@@ -5841,6 +5889,7 @@ class PlayerService {
         // Route changes are already pushed into the session manager via the
         // device listener initialized in initAudio(). Re-querying the platform
         // here adds latency to the first tap on stable speaker routes.
+        await _rearmUsbForNewTrackAfterFormatFallback(song);
         final desiredEngine = _sessionManager.selectedMode;
         final activeEngine = await _ensureEngineReady(
           desiredEngine,
