@@ -81,6 +81,14 @@ void main() {
       expect(lyrics.lines.every((line) => line.translation == null), isTrue);
     });
 
+    test('identical simultaneous lyric text is not mistaken for translation', () {
+      final lyrics = service.parseLyricsText(
+        '[00:01.00]Repeat\n[00:01.00]Repeat',
+      );
+      expect(lyrics.lines, hasLength(2));
+      expect(lyrics.lines.every((line) => line.translation == null), isTrue);
+    });
+
     test('old Mac line endings work too', () {
       expect(translations('[00:01.00]Uno\rOne\r[00:02.00]Dos\rTwo'), [
         'One',
