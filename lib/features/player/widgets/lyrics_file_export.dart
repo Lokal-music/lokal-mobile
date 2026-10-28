@@ -42,19 +42,24 @@ String _timestamp(Duration time) {
 String _renderLyrics(LyricsData lyrics, {bool includeDisplayedSubline = false}) {
   final output = <String>[];
   for (final line in lyrics.lines) {
-    if (lyrics.isSynchronized) {
-      final words = line.words;
-      final text = words != null && words.isNotEmpty
-          ? words.map((word) => '<${_timestamp(word.start)}>${word.text}').join()
-          : line.text;
-      output.add('[${_timestamp(line.timestamp)}]$text');
-    } else {
-      output.add(line.text);
-    }
+    final words = line.words;
+    // Bilingual files use ordinary line-timed LRC for widest compatibility.
+    // Keep enhanced word timing for original-only exports.
+    final text = lyrics.isSynchronized && !includeDisplayedSubline &&
+            words != null && words.isNotEmpty
+        ? words.map((word) => '<${_timestamp(word.start)}>${word.text}').join()
+        : line.text.isNotEmpty
+            ? line.text
+            : words?.map((word) => word.text).join() ?? '';
+    final stamp = '[${_timestamp(line.timestamp)}]';
+    output.add(lyrics.isSynchronized ? '$stamp$text' : text);
     final translation = line.translation?.trim();
     if (includeDisplayedSubline && translation != null &&
-        translation.isNotEmpty && translation != line.text.trim()) {
-      output.add(translation);
+        translation.isNotEmpty && translation != text.trim()) {
+      // Unstamped translation lines work in Lokal but are not reliably
+      // recognized by other players. Same-timestamp pairs are conventional
+      // bilingual LRC and remain valid timed lyric records.
+      output.add(lyrics.isSynchronized ? '$stamp$translation' : translation);
     }
   }
   return "${output.join('\n')}\n";
@@ -111,8 +116,12 @@ LyricsFileExport prepareLyricsFileExport(
   final extension = preserveOriginal && xml
       ? (ttml ? 'ttml' : 'xml')
       : lyrics.isSynchronized
-          ? ((preserveOriginal && enhanced || !preserveOriginal && wordTimed)
-              ? 'elrc' : 'lrc')
+          ? (withSubline
+              ? 'lrc'
+              : ((preserveOriginal && enhanced ||
+                      !preserveOriginal && wordTimed)
+                  ? 'elrc'
+                  : 'lrc'))
           : 'txt';
   final content = preserveOriginal
       ? lyrics.rawContent
