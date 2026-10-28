@@ -1123,7 +1123,8 @@ class LyricsService {
         if (end == i + 2 &&
             parsedLines[i].translation == null &&
             parsedLines[i + 1].translation == null &&
-            parsedLines[i + 1].words == null) {
+            parsedLines[i + 1].words == null &&
+            parsedLines[i].text.trim() != parsedLines[i + 1].text.trim()) {
           bilingualLines.add(
             parsedLines[i].withTranslation(parsedLines[i + 1].text),
           );
