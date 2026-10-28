@@ -9,6 +9,7 @@ class DiscoveryAddonConfig {
   const DiscoveryAddonConfig({
     required this.id,
     required this.endpoint,
+    this.manifestUrl,
     this.label = '',
     this.token = '',
     this.settings = const {},
@@ -17,6 +18,9 @@ class DiscoveryAddonConfig {
 
   final String id;
   final String endpoint;
+  /// Exact optional manifest URI. Kept in secure storage with the endpoint:
+  /// path encodings can be significant to credential-bearing addon servers.
+  final String? manifestUrl;
   final String label;
   final String token;
   final Map<String, String> settings;
@@ -49,6 +53,23 @@ class DiscoveryAddonConfig {
     } catch (_) {
       throw const DiscoveryException('The addon URL is invalid.');
     }
+    if (manifestUrl != null) {
+      try {
+        if (manifestUrl!.length > 8192) {
+          throw const FormatException();
+        }
+        final exact = requireHttps(manifestUrl!);
+        if (exact.hasQuery ||
+            exact.hasFragment ||
+            exact.pathSegments.lastOrNull != 'manifest.json' ||
+            normalizeAddonEndpoint(exact.toString()).toString() !=
+                normalizedEndpoint) {
+          throw const FormatException();
+        }
+      } catch (_) {
+        throw const DiscoveryException('The add-on manifest URL is invalid.');
+      }
+    }
     if (settings.length > 16 ||
         settings.entries.any((entry) =>
           entry.key.length > 40 ||
@@ -62,6 +83,7 @@ class DiscoveryAddonConfig {
     return DiscoveryAddonConfig(
       id: id,
       endpoint: normalizedEndpoint,
+      manifestUrl: manifestUrl,
       label: label.trim(),
       token: trimmedToken,
       settings: Map.unmodifiable(settings),
@@ -187,6 +209,11 @@ class DiscoverySettingsStore {
     return DiscoveryAddonConfig(
       id: value['id'] as String,
       endpoint: value['endpoint'] as String,
+      manifestUrl: value['manifestUrl'] == null
+          ? null
+          : value['manifestUrl'] is String
+              ? value['manifestUrl'] as String
+              : throw const FormatException(),
       label: value['label'] as String,
       token: value['token'] as String,
       enabled: value['enabled'] as bool,
@@ -218,6 +245,7 @@ class DiscoverySettingsStore {
               {
                 'id': addon.id,
                 'endpoint': addon.endpoint,
+                if (addon.manifestUrl != null) 'manifestUrl': addon.manifestUrl,
                 'label': addon.label,
                 'token': addon.token,
                 if (addon.settings.isNotEmpty) 'settings': addon.settings,
