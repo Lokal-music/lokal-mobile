@@ -283,9 +283,14 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
             registered: diagnostics.directUsbRegistered,
             claimed: diagnostics.usbInterfaceClaimed,
             connected: usbDetected,
+            // A direct USB start can fail before reaching the streaming
+            // state, and its fallback can already select normal Android.
             directUsbPlaybackAttempt:
-                diagnostics.selectedMode == AudioEngineType.usbDacExperimental &&
-                status.state == Uac2State.streaming,
+                status.state == Uac2State.error ||
+                (diagnostics.fallbackReason?.toLowerCase().contains('usb') == true &&
+                    diagnostics.initializedMode == AudioEngineType.usbDacExperimental) ||
+                (diagnostics.selectedMode == AudioEngineType.usbDacExperimental &&
+                    status.state == Uac2State.streaming),
           );
     Widget notice(String text, {bool warning = true, IconData? icon}) =>
         Padding(
