@@ -607,6 +607,12 @@ class SongRepository {
     );
   }
 
+  /// Sort one album's tracks by disc, track number and title without
+  /// splitting tag variants (e.g. capitalization/extra whitespace) into
+  /// separate groups.
+  static List<Song> sortAlbumTracks(List<Song> songs) =>
+      List<Song>.of(songs)..sort(_compareAlbumSongs);
+
   /// Sort songs by album grouping, with tracks sorted by disc/track number.
   /// Albums are sorted alphabetically; within each album, tracks are sorted
   /// by disc number, then track number, then title.
