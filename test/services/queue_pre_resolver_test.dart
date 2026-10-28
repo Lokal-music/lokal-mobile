@@ -138,6 +138,75 @@ void main() {
     expect(host.swaps, isEmpty);
   });
 
+  testWidgets('first-click resolution expires after 8s despite status progress',
+      (tester) async {
+    final resolver = QueuePreResolver();
+    final host = _Host();
+    resolver.attach(host);
+    addTearDown(() { resolver.reset(); resolver.detach(); });
+    final pendingWork = Completer<Song?>();
+    var cancelled = false;
+    void Function(String)? notify;
+    final selected = resolver.pending(
+      key: 'tidal-stalled-ticket', title: 'Tidal track', artist: 'Artist',
+      resolve: ({onStatus, cancel}) {
+        notify = onStatus;
+        unawaited(cancel!.then((_) => cancelled = true));
+        return pendingWork.future;
+      },
+    );
+    host.playlist = [selected];
+    final resolution = expectLater(
+      resolver.resolveNow(selected), throwsA(isA<TimeoutException>()),
+    );
+    for (var i = 0; i < 7; i++) {
+      await tester.pump(const Duration(seconds: 1));
+      notify?.call('Resolving Tidal stream… 5%');
+    }
+    expect(cancelled, isFalse);
+    await tester.pump(const Duration(seconds: 1));
+    await resolution;
+    expect(cancelled, isTrue);
+    expect(resolver.status.value, isNull);
+    pendingWork.complete(_ready('tidal-stalled-ticket'));
+    await tester.pump();
+    expect(host.swaps, isEmpty,
+        reason: 'a late Tidal ticket must not hijack the next selection');
+  });
+
+  testWidgets('foreground promotion resets a stalled prefetch to a short budget',
+      (tester) async {
+    final resolver = QueuePreResolver();
+    final host = _Host();
+    resolver.attach(host);
+    addTearDown(() { resolver.reset(); resolver.detach(); });
+    final work = Completer<Song?>();
+    var requested = 0, cancelled = false;
+    final song = resolver.pending(
+      key: 'promotion', title: 'Promotion', artist: 'Artist',
+      resolve: ({onStatus, cancel}) {
+        requested++;
+        unawaited(cancel!.then((_) => cancelled = true));
+        return work.future;
+      },
+    );
+    host.playlist = [_owned('current'), song];
+    resolver.schedule();
+    await tester.pump(const Duration(seconds: 14));
+    host.playAt(1);
+    final result = expectLater(resolver.resolveNow(song),
+        throwsA(isA<TimeoutException>()));
+    expect(requested, 1, reason: 'reuse the existing connection');
+    await tester.pump(const Duration(seconds: 7));
+    expect(cancelled, isFalse);
+    await tester.pump(const Duration(seconds: 1));
+    await result;
+    expect(cancelled, isTrue);
+    work.complete(_ready('promotion'));
+    await tester.pump();
+    expect(host.swaps, isEmpty);
+  });
+
   group('upcomingSongs', () {
     final songs = [for (var i = 0; i < 6; i++) _owned('s$i')];
 
@@ -316,7 +385,7 @@ void main() {
       expect(lookups.asked, ['first', 'second']);
     });
 
-    testResolver('the first lookup runs at once, the rest 2 s apart', (
+    testResolver('the first lookup runs at once, the next three 700ms apart', (
       tester,
     ) async {
       host.playlist = [
@@ -330,33 +399,33 @@ void main() {
         'pending:k4',
       ]);
       expect(lookups.asked, ['k1']);
-      await tester.pump(const Duration(milliseconds: 1999));
+      await tester.pump(const Duration(milliseconds: 699));
       expect(lookups.asked, ['k1']);
       await tester.pump(const Duration(milliseconds: 1));
       expect(lookups.asked, ['k1', 'k2']);
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 700));
       expect(lookups.asked, ['k1', 'k2', 'k3']);
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 700));
       expect(lookups.asked, ['k1', 'k2', 'k3', 'k4']);
       await tester.pump(const Duration(seconds: 10));
       expect(lookups.asked, hasLength(4), reason: 'only four ahead');
     });
 
-    testResolver('repeated queue updates do not postpone the two-second stagger', (tester) async {
+    testResolver('repeated queue updates do not postpone the 700ms stagger', (tester) async {
       host.playlist = [
         _owned('now'),
         for (var i = 1; i <= 5; i++) pending('k$i'),
       ];
       resolver.schedule();
       expect(lookups.asked, ['k1']);
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 350));
       resolver.schedule(); // e.g. Discovery refreshed the upcoming queue.
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 350));
       expect(lookups.asked, ['k1', 'k2']);
       resolver.schedule();
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 700));
       expect(lookups.asked, ['k1', 'k2', 'k3']);
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 700));
       expect(lookups.asked, ['k1', 'k2', 'k3', 'k4']);
     });
 
