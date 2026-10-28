@@ -141,8 +141,8 @@ class _Uac2PreferencesSectionsState
                 AudioEnginePreference.isochronousUsb)
               LokalSettingRow(
                 label: 'Force restart USB audio engine',
-                description: 'Reinitialize the DAC without unplugging it. '
-                    'Resume the selected track at its previous position.',
+                description: 'Reopen the DAC, retry internally if necessary, '
+                    'and restart the current track from the beginning.',
                 icon: Icons.restart_alt_rounded,
                 enabled: !_forceUsbRestartInProgress,
                 trailing: _forceUsbRestartInProgress
@@ -743,7 +743,7 @@ class _Uac2PreferencesSectionsState
     messenger.showSnackBar(
       SnackBar(
         content: Text(recovered
-            ? 'USB audio engine restarted. Playback restored if available.'
+            ? 'USB engine verified. Track restarted from the beginning.'
             : 'USB audio restart failed. Check DAC connection and logs.'),
         behavior: SnackBarBehavior.floating,
       ),
