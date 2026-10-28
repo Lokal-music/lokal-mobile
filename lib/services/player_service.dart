@@ -921,23 +921,37 @@ class PlayerService {
     durationNotifier.value = pending.duration;
     currentSongNotifier.value = pending;
     _playbackManager.updateTrack(pending);
+    // Start the selected song's resolver *before* stopping the previous audio
+    // engine. That stop can take time on the first media handoff, and waiting
+    // for it used to leave the first provider request queued behind prefetch.
+    // Turn errors into a value immediately so an early failure cannot become
+    // an unhandled asynchronous error while the engine is stopping.
+    final resolver = pendingSongResolver;
+    Future<({Song? song, Object? failure})> resolveSelected() async {
+      try {
+        return (
+          song: resolver == null ? null : await resolver(pending),
+          failure: null,
+        );
+      } catch (error) {
+        return (song: null, failure: error);
+      }
+    }
+    final lookup = resolveSelected();
     try {
       await _playbackManager.stop();
     } catch (e) {
-      _debugLog('[Playback] stop before looking up ${pending.title}: $e');
+      _debugLog('[Playback] stop while preparing ${pending.title}: $e');
     }
-    final resolver = pendingSongResolver;
     if (generation != _pendingPlaybackGeneration ||
         _pendingPlaybackId != pending.id)
       return;
     unawaited(() async {
-      Song? resolved;
-      Object? failure;
-      try {
-        resolved = resolver == null ? null : await resolver(pending);
-      } catch (e) {
-        failure = e;
-        _debugLog('[Playback] lookup failed for ${pending.title}: $e');
+      final result = await lookup;
+      final resolved = result.song;
+      final failure = result.failure;
+      if (failure != null) {
+        _debugLog('[Playback] lookup failed for ${pending.title}: $failure');
       }
       // Something else was asked for meanwhile: it owns playback now.
       if (generation != _pendingPlaybackGeneration ||
