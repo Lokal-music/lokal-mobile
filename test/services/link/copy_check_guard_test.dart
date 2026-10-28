@@ -18,6 +18,21 @@ void main() {
     },
   );
   test(
+    'active file checks may exceed the idle limit without timing out',
+    () async {
+      final guard = CopyCheckGuard(limit: const Duration(milliseconds: 100));
+      final result = guard.run(() async {
+        for (var index = 0; index < 8; index++) {
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+          guard.pulse();
+        }
+        return 42;
+      });
+      expect(await result, 42);
+    },
+  );
+
+  test(
     'timeout stops late work from publishing further preview progress',
     () async {
       final guard = CopyCheckGuard(limit: const Duration(milliseconds: 5));

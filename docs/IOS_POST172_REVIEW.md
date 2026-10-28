@@ -963,3 +963,50 @@ Expired-source reconstruction keeps the original index. A new playback-context
 revision cancels obsolete prefetch even when the selected index is in the middle.
 The separate desktop remote context does not display a previous phone playlist
 as its own history.
+
+
+### Reviewed through #296 — 28 October 2026
+
+The source review now covers **91 merged product PRs after #172**. This is source
+adaptation, not native acceptance of the resulting app.
+
+| Merged source | iPhone adaptation |
+| --- | --- |
+| [292](https://github.com/lokal-music/lokal-mobile/pull/292) / `381a85e6552014bb1cec14210db4fb718d197318` | Persist separate sort, direction, location, quality and search per library/list/playlist/genre context; preserve direction on criterion changes. Save album/artist search, favorite-artist filter and Search scope. Protect newer selections from late asynchronous preference reads and serialize writes. Retain iOS localization and exact queue occurrence selection. |
+| [293](https://github.com/lokal-music/lokal-mobile/pull/293) / `5b861f133595b61a9e80607be38cf2bfd43d3a00` | Excluded: Android microphone permission to avoid its USB capture warning. No iPhone microphone request is added. |
+| [294](https://github.com/lokal-music/lokal-mobile/pull/294) / `d3b8060fc4c7f1a3c62237ddd75adb2feac5f797` | Excluded: Android UsbManager physical inventory/hotplug/status. No direct USB or verified bit-perfect claim is introduced. |
+| [295](https://github.com/lokal-music/lokal-mobile/pull/295) / `bc397d1e3bb885ea56a606aa69e08fe03947f201` | Move Pitch after Speed and before EQ in modern/classic footers, including classic immersive. Now Playing menus follow the current recording; library menus keep their selected recording. Remove duplicate moving-cover/video rows from player overflow. Android direct-USB restart is excluded. Add localized Pitch semantics, scalable touch surfaces and theme-derived classic footer colors. |
+| [296](https://github.com/lokal-music/lokal-mobile/pull/296) / `5fc61fd6fd24d0f0302d716a8a9ce72c6ba74492` | Explicit Sync Now replays persisted desktop playlist operations to recover missing lists and apply deletions after consumed cursors. Preserve unmatched original-file members as metadata references. File preview uses a progress-aware idle timeout, including streamed fingerprinting, with immediate cancellation. Desktop companion and physical paired-PC acceptance remain necessary. |
+
+Build 75 / PR #297 built a package but **failed full native acceptance**: iOS
+18.6 expected two independent singers from an ambiguous plain same-time LRC pair
+that the new bilingual parser treats as original/translation; iOS 26 timed out
+booting the simulator before app acceptance. The full-queue occurrence, native
+reorder and paused-preferences probes passed on 18.6. Widget run 24 passed all
+four focused jobs. Build 74 remains the qualified package.
+
+The corrected native fixture uses explicit enhanced word timing for the two
+simultaneous singers. The native Space assertions are unchanged. A host parser
+regression reads the exact shared fixture and confirms four lines, two distinct
+voices at three seconds and no folded translations. The new fixture still needs
+another actual native run; the build-75 package is not promoted.
+
+Host UI checks exercise all eleven locales at 200% text in dark/light and open
+the actual Pitch sheet, preserving 44 bundled-font captures. Visual inspection
+found and corrected white-on-light classic footer labels. The paired-credential
+continuation stores one atomic origin/pairing/secret record, serializes mutation
+and fences delayed pairing replies after Forget. Shared Swift/Dart fixtures and
+real HTTP transfer contracts are described in [the transfer architecture](IOS_TRANSFERS.md).
+The new native transfer core is not connected to the app/product copy flow yet.
+
+
+Validation for this continuation: **975 combined Flutter regressions pass**
+(5m50s), including both widget contract suites and the new list, Pitch, menu,
+credential ordering and retired-pairing cases. Seven new/changed focused files
+pass fatal-info analysis; whole-workspace analysis reports no errors, with
+existing warning/information findings retained. Enforced dependency-lock
+resolution, scaffold/localization inventory, workflow actionlint and diff checks
+pass. Swift 6 warnings-as-errors contracts pass with the separate real HTTP WAV
+fixture, actual file hashes, 6×8 process writes, both transaction crash boundaries,
+active-original deduplication and runtime reconstruction. Apple SDK / iOS native
+acceptance for this source is pending; the transfer core remains unembedded.

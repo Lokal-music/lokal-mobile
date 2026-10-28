@@ -117,6 +117,7 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
   var _shouldPoll = false;
   var _failures = 0;
   var _generation = 0;
+  var _configurationRevision = 0;
   var _disposed = false;
 
   @override
@@ -162,11 +163,15 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
   }
 
   Future<void> _restore() async {
+    final revision = _configurationRevision;
     try {
       final credentials = await ref
           .read(lokalRemoteCredentialsStoreProvider)
           .read();
-      if (_disposed || credentials == null) return;
+      if (_disposed ||
+          revision != _configurationRevision ||
+          credentials == null)
+        return;
       _credentials = credentials;
       state = state.copyWith(
         config: LokalRemoteConfig.fromCredentials(credentials),
@@ -179,7 +184,7 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
         });
       }
     } catch (_) {
-      if (!_disposed) {
+      if (!_disposed && revision == _configurationRevision) {
         state = state.copyWith(
           status: LokalRemoteConnectionStatus.unconfigured,
           error: 'Saved Lokal remote settings could not be read.',
@@ -198,7 +203,9 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     required String remoteToken,
     required String apiKey,
   }) async {
+    final revision = ++_configurationRevision;
     await _ensureRestored();
+    if (_disposed || revision != _configurationRevision) return;
     disconnect();
     final normalized = LokalRemoteService.normalizeOrigin(origin);
     final credentials = LokalRemoteCredentials(
@@ -207,7 +214,7 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
       apiKey: apiKey.trim(),
     );
     await ref.read(lokalRemoteCredentialsStoreProvider).write(credentials);
-    if (_disposed) return;
+    if (_disposed || revision != _configurationRevision) return;
     _generation++;
     _shouldPoll = false;
     _pollTimer?.cancel();
@@ -219,9 +226,12 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
   }
 
   Future<void> forgetConfiguration() async {
+    final revision = ++_configurationRevision;
+    await _ensureRestored();
+    if (_disposed || revision != _configurationRevision) return;
     disconnect();
     await ref.read(lokalRemoteCredentialsStoreProvider).clear();
-    if (_disposed) return;
+    if (_disposed || revision != _configurationRevision) return;
     _generation++;
     _shouldPoll = false;
     _pollTimer?.cancel();
@@ -366,7 +376,9 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     String? expectedDesktopId,
     bool syncTheme = false,
   }) async {
+    final revision = ++_configurationRevision;
     await _ensureRestored();
+    if (_disposed || revision != _configurationRevision) return;
     final credentials = await ref
         .read(lokalLinkServiceProvider)
         .pair(
@@ -374,10 +386,13 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
           code: code,
           expectedDesktopId: expectedDesktopId,
         );
+    if (_disposed || revision != _configurationRevision) return;
     disconnect();
     await ref.read(lokalRemoteCredentialsStoreProvider).write(credentials);
+    if (_disposed || revision != _configurationRevision) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lokal.link.${credentials.desktopId}.theme', syncTheme);
+    if (_disposed || revision != _configurationRevision) return;
     _credentials = credentials;
     ref.invalidate(linkedDesktopProfileProvider);
     state = LokalRemoteControllerState(

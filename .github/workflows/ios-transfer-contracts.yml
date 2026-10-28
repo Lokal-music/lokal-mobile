@@ -1,0 +1,31 @@
+name: iPhone native transfer contracts
+
+on:
+  pull_request:
+    paths:
+      - 'ios/Transfers/**'
+      - 'tool/ios_transfer_contracts.py'
+      - 'tool/ios_transfer_fixture.py'
+      - 'test/fixtures/ios_transfer_credentials_v2.json'
+      - '.github/workflows/ios-transfer-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-transfer-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  journal:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exercise actual files, processes and iOS 16 journal APIs
+        run: python3 tool/ios_transfer_contracts.py --check-ios-sdks

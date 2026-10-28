@@ -10,6 +10,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  test('Search scope restores after app restart and user changes win', () async {
+    SharedPreferences.setMockInitialValues({
+      'search_selected_scope_v1': SearchScope.online.name,
+    });
+    final first = ProviderContainer();
+    first.read(searchScopeProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(first.read(searchScopeProvider), SearchScope.online);
+    first.read(searchScopeProvider.notifier).select(SearchScope.library);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('search_selected_scope_v1'), 'library');
+    first.dispose();
+
+    final second = ProviderContainer();
+    addTearDown(second.dispose);
+    second.read(searchScopeProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(second.read(searchScopeProvider), SearchScope.library);
+  });
+
   test(
     'a category isolates immediately, and retired All maps to Songs',
     () async {

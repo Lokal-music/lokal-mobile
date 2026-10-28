@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'fixtures/ios_concurrent_lyrics.dart';
+
 import 'package:flick/app/app.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
 import 'package:flick/features/konnekted/konnekted_library.dart';
@@ -304,11 +306,7 @@ void main() {
       ),
     );
     await File('${directory.path}/Generated tone.lrc').writeAsString(
-      '[ar:Lokal test]\n[ti:Generated tone]\n'
-      '[00:00.00]First generated lyric\n'
-      '[00:03.00]Second generated lyric\n'
-      '[00:03.00]Concurrent generated voice\n'
-      '[00:06.00]Final generated lyric\n',
+      iosConcurrentLyrics,
       flush: true,
     );
 

@@ -7,11 +7,15 @@ class CopyCheckGuard {
   final Duration limit;
   final _stopped = Completer<void>();
   StateError? _reason;
+  Timer? _idleTimer;
+  bool _running = false;
   bool get stopped => _reason != null;
 
   void cancel() => _stop('File check cancelled.');
+
   void _stop(String message) {
     if (stopped) return;
+    _idleTimer?.cancel();
     _reason = StateError(message);
     _stopped.complete();
   }
@@ -20,21 +24,34 @@ class CopyCheckGuard {
     if (_reason case final reason?) throw reason;
   }
 
-  Future<T> run<T>(Future<T> Function() work) async {
+  /// The preview may legitimately inspect many files. Only abort when an
+  /// individual operation stops making progress, not after 90 seconds total.
+  /// Call on completed stages, checked records and fingerprint stream chunks.
+  void pulse() {
     check();
-    final timer = Timer(
+    if (!_running) return;
+    _idleTimer?.cancel();
+    _idleTimer = Timer(
       limit,
       () => _stop(
-        'Checking files took too long. Nothing was copied. Reconnect and try again.',
+        'Checking files stopped making progress. Nothing was copied. Reconnect and try again.',
       ),
     );
+  }
+
+  Future<T> run<T>(Future<T> Function() work) async {
+    check();
+    if (_running) throw StateError('A file check is already running.');
+    _running = true;
+    pulse();
     try {
       return await Future.any([
         work(),
         _stopped.future.then<T>((_) => throw _reason!),
       ]);
     } finally {
-      timer.cancel();
+      _running = false;
+      _idleTimer?.cancel();
     }
   }
 }

@@ -66,9 +66,9 @@ import '../widgets/lyrics_subline_buttons.dart';
 import 'package:flick/features/player/widgets/shuffle_mode_sheet.dart';
 import 'package:flick/features/player/widgets/sleep_timer_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/pitch_bottom_sheet.dart';
+import 'package:flick/features/player/widgets/full_player_song_menu.dart';
 import 'package:flick/features/konnekted/library/lokal_navigation.dart';
 import 'package:flick/features/player/widgets/song_metadata_sheet.dart';
-import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/speed_bottom_sheet.dart';
 import 'package:flick/features/settings/screens/casting_settings_screen.dart';
 import 'package:flick/features/settings/screens/equalizer_screen.dart';
@@ -968,24 +968,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     MaterialPageRoute<void>(builder: (_) => const CastingSettingsScreen()),
   );
 
-  /// The Now Playing menu retains only actions that aren't already surfaced
-  /// as player controls or as taps on the track title, artist, and quality pill.
-  void _openMore(Song song) {
-    SongActionsBottomSheet.show(
-      context,
-      song,
-      nowPlaying: true,
-      extras: [
-        LokalSongMenuAction(
-          icon: Icons.graphic_eq_rounded,
-          label: 'Pitch',
-          onTap: () {
-            if (mounted) PitchBottomSheet.show(context, _player);
-          },
-        ),
-      ],
-    );
-  }
+  /// Keep track-specific menu actions aligned with the live recording.
+  Future<void> _openMore(Song song) => showFullPlayerSongMenu(
+    context,
+    song: song,
+    player: _player,
+  );
 
   // ───────────────────────────── build ─────────────────────────────
 
@@ -1371,7 +1359,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
           Align(alignment: Alignment.centerRight,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               _roundIcon(LucideIcons.cast, _openCasting, active: isCasting),
-              _roundIcon(Icons.more_vert, () => _openMore(song)),
+              _roundIcon(Icons.more_vert, () => unawaited(_openMore(song))),
             ])),
         ],
       ),
@@ -2318,10 +2306,17 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       VoidCallback onTap, {
       bool active = false,
       double? width,
+      String? semanticLabel,
     }) {
       return Padding(
         padding: const EdgeInsets.only(right: 2),
-        child: SizedBox(
+        child: Semantics(
+          button: true,
+          label: semanticLabel ?? label,
+          selected: active,
+          onTap: onTap,
+          excludeSemantics: true,
+          child: SizedBox(
           width: width,
           child: _pill(
           selected: active,
@@ -2350,13 +2345,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               )),
             ],
           ),
-        )),
+        ))),
       );
     }
 
     return LayoutBuilder(
       builder: (context, constraints) => SizedBox(
-      height: 44,
+      height: 44 + (MediaQuery.textScalerOf(context).scale(12) - 12).clamp(0, 24) * 1.4,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
@@ -2465,6 +2460,19 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   : '${speed.toStringAsFixed(2)}x',
               () => SpeedBottomSheet.show(context, _player),
               active: (speed - 1.0).abs() >= 0.01,
+              width: (constraints.maxWidth - 8) / 4,
+            ),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: _player.pitchSemitonesNotifier,
+            builder: (_, pitch, __) => chip(
+              Icons.graphic_eq_rounded,
+              pitch.abs() < 0.01
+                  ? l10n.pitch
+                  : '${pitch > 0 ? '+' : ''}${pitch.toStringAsFixed(0)} st',
+              () => PitchBottomSheet.show(context, _player),
+              active: pitch.abs() >= 0.01,
+              semanticLabel: '${l10n.pitch}: ${l10n.pitchSemitones(pitch.round())}',
               width: (constraints.maxWidth - 8) / 4,
             ),
           ),

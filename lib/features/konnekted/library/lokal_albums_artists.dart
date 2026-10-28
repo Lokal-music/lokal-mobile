@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:async';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flick/features/library_jobs/artist_metadata.dart';
 import 'package:flick/features/discovery/recommendation_match.dart';
 import 'package:flick/features/spotify/spotify_api.dart';
@@ -65,6 +67,7 @@ class _SearchablePage<T> extends StatefulWidget {
     required this.emptyIcon,
     required this.emptyMessage,
     required this.job,
+    required this.preferencesKey,
     this.controls,
   });
 
@@ -76,6 +79,7 @@ class _SearchablePage<T> extends StatefulWidget {
   final IconData emptyIcon;
   final String emptyMessage;
   final LibraryJob job;
+  final String preferencesKey;
   final Widget? controls;
 
   @override
@@ -85,6 +89,57 @@ class _SearchablePage<T> extends StatefulWidget {
 class _SearchablePageState<T> extends State<_SearchablePage<T>> {
   final _search = TextEditingController();
   String _query = '';
+  bool _queryModified = false;
+  Future<void> _saveTail = Future<void>.value();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restoreQuery());
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchablePage<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.preferencesKey == widget.preferencesKey) return;
+    _queryModified = false;
+    _query = '';
+    _search.clear();
+    unawaited(_restoreQuery());
+  }
+
+  Future<void> _restoreQuery() async {
+    final key = widget.preferencesKey;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final query = prefs.getString(key);
+      if (!mounted ||
+          widget.preferencesKey != key ||
+          _queryModified ||
+          query == null)
+        return;
+      final validated = query.length > 200 ? query.substring(0, 200) : query;
+      setState(() {
+        _query = validated;
+        _search.text = validated;
+      });
+    } catch (_) {
+      // A storage error must not prevent Albums/Artists browsing.
+    }
+  }
+
+  void _onQueryChanged(String value) {
+    _queryModified = true;
+    setState(() => _query = value);
+    final saved = value.length > 200 ? value.substring(0, 200) : value;
+    final key = widget.preferencesKey;
+    _saveTail = _saveTail
+        .then((_) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(key, saved);
+        })
+        .catchError((Object _) {});
+  }
 
   @override
   void dispose() {
@@ -128,7 +183,7 @@ class _SearchablePageState<T> extends State<_SearchablePage<T>> {
                 child: LokalSearchField(
                   controller: _search,
                   hint: widget.hint,
-                  onChanged: (v) => setState(() => _query = v),
+                  onChanged: _onQueryChanged,
                 ),
               ),
             ),
@@ -172,6 +227,7 @@ class LokalAlbumsPage extends ConsumerWidget {
       _SearchablePage<AlbumGroup>(
         title: lokalText('Albums'),
         job: LibraryJob.releases,
+        preferencesKey: 'lokal.library.albums.search.v1',
         items: ref.watch(lokalAlbumsProvider),
         nameOf: (a) => '${a.albumName}\n${a.albumArtist}',
         hint: 'Search albums',
@@ -231,6 +287,9 @@ class LokalArtistsPage extends ConsumerStatefulWidget {
 class _LokalArtistsPageState extends ConsumerState<LokalArtistsPage> {
   final _follows = ArtistFollowStore.instance;
   ArtistFavoritesFilter _filter = ArtistFavoritesFilter.all;
+  bool _filterModified = false;
+  Future<void> _filterSaveTail = Future<void>.value();
+  static const _artistFilterKey = 'lokal.library.artists.favorite_filter.v1';
   bool _importing = false;
   String? _status, _error;
 
@@ -238,6 +297,7 @@ class _LokalArtistsPageState extends ConsumerState<LokalArtistsPage> {
   void initState() {
     super.initState();
     _follows.addListener(_onFavoritesChanged);
+    unawaited(_restoreArtistFilter());
     unawaited(
       _follows.load().catchError((Object _) {
         if (mounted)
@@ -250,6 +310,31 @@ class _LokalArtistsPageState extends ConsumerState<LokalArtistsPage> {
 
   void _onFavoritesChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _restoreArtistFilter() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_artistFilterKey);
+      final filter = ArtistFavoritesFilter.values
+          .where((f) => f.name == saved)
+          .firstOrNull;
+      if (!mounted || _filterModified || filter == null) return;
+      setState(() => _filter = filter);
+    } catch (_) {
+      // Browsing remains available if preference storage is unavailable.
+    }
+  }
+
+  void _selectArtistFilter(ArtistFavoritesFilter filter) {
+    _filterModified = true;
+    setState(() => _filter = filter);
+    _filterSaveTail = _filterSaveTail
+        .then((_) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_artistFilterKey, filter.name);
+        })
+        .catchError((Object _) {});
   }
 
   @override
@@ -285,8 +370,8 @@ class _LokalArtistsPageState extends ConsumerState<LokalArtistsPage> {
       );
       final imported = await _follows.importNames(names);
       if (!mounted) return;
+      _selectArtistFilter(ArtistFavoritesFilter.favorites);
       setState(() {
-        _filter = ArtistFavoritesFilter.favorites;
         _status = imported.received == 0
             ? lokalText('No followed artists found on Spotify.')
             : lokalText(
@@ -331,7 +416,7 @@ class _LokalArtistsPageState extends ConsumerState<LokalArtistsPage> {
                       ),
                     }),
                     selected: _filter == option,
-                    onSelected: (_) => setState(() => _filter = option),
+                    onSelected: (_) => _selectArtistFilter(option),
                   ),
                 ),
             ],
@@ -378,6 +463,7 @@ class _LokalArtistsPageState extends ConsumerState<LokalArtistsPage> {
     return _SearchablePage<LokalArtist>(
       title: lokalText('Artists'),
       job: LibraryJob.artists,
+      preferencesKey: 'lokal.library.artists.search.v1',
       items: source.whenData(
         (artists) => selectArtistFavorites(artists, _follows, _filter),
       ),
