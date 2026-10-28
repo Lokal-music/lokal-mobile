@@ -810,6 +810,23 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   found.id,
                   quality: quality,
                   forPlayback: !forDownload && !found.atmosDownload,
+                  trackHint: morneyeSelectedTrackHint(
+                    id: found.id,
+                    title: found.title,
+                    artist: found.artist,
+                    durationMs: found.duration?.inMilliseconds,
+                  ),
+                  onResolutionStage: (stage) {
+                    if (finished) return;
+                    final detail = switch (stage) {
+                      'initializing' => 'Starting',
+                      'metadata' => 'Checking metadata on',
+                      'availability' => 'Verifying recording on',
+                      'preparing_media' => 'Resolving audio from',
+                      _ => 'Preparing',
+                    };
+                    onStatus?.call('${detail} ${addon.displayName}…');
+                  },
                   // Even an explicit Qobuz Save (live == null) needs the
                   // host's measured byte progress. The guest's initial 5%
                   // only means its download ticket is being resolved.
@@ -1509,14 +1526,18 @@ Song onlinePendingSong(
   return pending;
 }
 
-/// Try the most relevant query first. If it has no matching recording,
-/// search the alternate artist/title forms concurrently rather than serially
-/// paying for multiple provider timeouts. Source priority is unaffected.
+/// Query the current provider first, then hedge alternate artist/title forms
+/// when its primary HTTP/native search is slow. A verified match can be used
+/// without waiting for an unrelated slow search to return. Provider priority,
+/// recording/artist matching and explicit source selection are unchanged.
+/// Morneye add-ons execute guest calls serially, so do not queue competing
+/// search calls behind their in-flight native runtime.
 Future<DiscoveryTrack?> findDiscoverySourceMatch({
   required OnlineSource source,
   required RecommendationCandidate candidate,
   required List<String> queries,
   void Function()? checkCancelled,
+  Duration hedgeDelay = const Duration(milliseconds: 600),
 }) async {
   Future<DiscoveryTrack?> search(String query) async {
     checkCancelled?.call();
@@ -1546,19 +1567,64 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
   }
 
   if (queries.isEmpty) return null;
-  final first = await search(queries.first);
-  if (first != null) return first;
-  if (queries.length == 1) return null;
-
-  // The caller supplies at most three queries: only two parallel fallbacks.
-  final fallbacks = await Future.wait(
-    queries.skip(1).take(2).map(search),
-  );
-  checkCancelled?.call();
-  for (final matched in fallbacks) {
-    if (matched != null) return matched;
+  if (queries.length == 1 || source.id.startsWith('a-')) {
+    // Keep serial Morneye calls on one worker and prioritize the original
+    // query, without a new timeout or a flood of concurrent guest requests.
+    final first = await search(queries.first);
+    if (first != null || queries.length == 1) return first;
+    final fallbacks = await Future.wait(queries.skip(1).take(2).map(search));
+    checkCancelled?.call();
+    for (final matched in fallbacks) {
+      if (matched != null) return matched;
+    }
+    return null;
   }
-  return null;
+
+  final completion = Completer<DiscoveryTrack?>();
+  var inFlight = 0;
+  var alternatesStarted = false;
+  late void Function() startAlternates;
+
+  void completeMatch(DiscoveryTrack? matched) {
+    inFlight--;
+    if (completion.isCompleted) return;
+    if (matched != null) {
+      completion.complete(matched);
+    } else if (!alternatesStarted) {
+      // A fast authoritative miss should immediately start alternatives.
+      startAlternates();
+    } else if (inFlight == 0) {
+      completion.complete(null);
+    }
+  }
+
+  void launch(String query) {
+    inFlight++;
+    unawaited(search(query).then(
+      completeMatch,
+      onError: (Object error, StackTrace stack) {
+        inFlight--;
+        if (!completion.isCompleted) {
+          completion.completeError(error, stack);
+        }
+      },
+    ));
+  }
+
+  startAlternates = () {
+    if (alternatesStarted || completion.isCompleted) return;
+    alternatesStarted = true;
+    for (final query in queries.skip(1).take(2)) {
+      launch(query);
+    }
+    if (inFlight == 0 && !completion.isCompleted) completion.complete(null);
+  };
+  launch(queries.first);
+  // Hedging is not a deadline: the primary keeps working and may still win.
+  // Launch at most two alternate *metadata* searches, never extra audio
+  // downloads or fallback to another selected playback provider.
+  unawaited(Future<void>.delayed(hedgeDelay).then((_) => startAlternates()));
+  return completion.future;
 }
 
 /// Finds [track] somewhere to play it and downloads it, as desktop does for

@@ -163,6 +163,68 @@ void main() {
     expect((await searching)?.id, '3');
   });
 
+  test('slow HTTP primary search does not block a matching alternate', () async {
+    final first = Completer<List<OnlineResult>>();
+    final second = Completer<List<OnlineResult>>();
+    final calls = <String>[];
+    final source = OnlineSource(
+      id: 'w-add-on', name: 'HTTP provider',
+      results: (query) {
+        calls.add(query);
+        if (query == 'first') return first.future;
+        if (query == 'second') return second.future;
+        if (query == 'third') {
+          return Future.value([const OnlineResult(DiscoveryTrack(
+            id: 'verified', title: 'Song', artist: 'Artist',
+            source: DiscoverySource.addon,
+          ))]);
+        }
+        throw StateError('Unexpected query');
+      },
+      play: (_) async => throw UnimplementedError(),
+    );
+    final matched = findDiscoverySourceMatch(
+      source: source,
+      candidate: const RecommendationCandidate(title: 'Song', artist: 'Artist'),
+      queries: ['first', 'second', 'third'],
+      hedgeDelay: Duration.zero,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    expect(calls, ['first', 'second', 'third']);
+    expect((await matched)?.id, 'verified',
+        reason: 'No need to await the hanging primary metadata request');
+    first.complete(const []);
+    second.complete(const []);
+  });
+
+  test('Morneye guest stays serial even with hedging enabled', () async {
+    final first = Completer<List<OnlineResult>>();
+    final calls = <String>[];
+    final source = OnlineSource(
+      id: 'a-tidal', name: 'Tidal Morneye',
+      results: (query) {
+        calls.add(query);
+        if (query == 'first') return first.future;
+        return Future.value([const OnlineResult(DiscoveryTrack(
+          id: 'verified', title: 'Song', artist: 'Artist',
+          source: DiscoverySource.morneye,
+        ))]);
+      },
+      play: (_) async => throw UnimplementedError(),
+    );
+    final matched = findDiscoverySourceMatch(
+      source: source,
+      candidate: const RecommendationCandidate(title: 'Song', artist: 'Artist'),
+      queries: ['first', 'second'],
+      hedgeDelay: Duration.zero,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    expect(calls, ['first']);
+    first.complete(const []);
+    expect((await matched)?.id, 'verified');
+    expect(calls, ['first', 'second']);
+  });
+
   test('Discovery cancellation is never swallowed by a failed search', () async {
     var cancelled = false;
     final source = OnlineSource(
