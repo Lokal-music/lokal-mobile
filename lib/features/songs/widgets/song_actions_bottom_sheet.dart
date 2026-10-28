@@ -61,6 +61,13 @@ bool showWatchVideoMenuAction({
   required bool videosEnabled,
 }) => !nowPlaying && videosEnabled;
 
+@visibleForTesting
+Song? songForOpenMenu({
+  required bool nowPlaying,
+  required Song openedSong,
+  required Song? currentSong,
+}) => nowPlaying ? currentSong : openedSong;
+
 class SongActionsBottomSheet extends ConsumerWidget {
   const SongActionsBottomSheet({
     super.key,
@@ -127,9 +134,16 @@ class SongActionsBottomSheet extends ConsumerWidget {
         // the song for which it was first opened.
         return ValueListenableBuilder<Song?>(
           valueListenable: PlayerService().currentSongNotifier,
-          builder: (_, currentSong, __) => currentSong == null
-              ? const SizedBox.shrink()
-              : forSong(currentSong),
+          builder: (_, currentSong, __) {
+            final liveSong = songForOpenMenu(
+              nowPlaying: nowPlaying,
+              openedSong: song,
+              currentSong: currentSong,
+            );
+            return liveSong == null
+                ? const SizedBox.shrink()
+                : forSong(liveSong);
+          },
         );
       },
     );
