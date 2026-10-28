@@ -217,6 +217,22 @@ bool hasUnresolvedAudioSources(List<Song> playlist) =>
     playlist.any((song) => song.isPending ||
         song.filePath == null || song.filePath!.isEmpty);
 
+/// The logical Library/Recently Added queue may contain thousands of entries
+/// (including desktop songs that require network credentials). Preparing all
+/// of them as a native Media3 sequence can block taps for minutes, repeatedly
+/// open offline desktop streams and trigger an Android input ANR. Keep the
+/// complete logical queue but prepare only the selected audio source; regular
+/// completion/previous/next then advances through that original queue.
+@visibleForTesting
+bool requiresOnDemandAndroidSequence(List<Song> playlist) {
+  if (playlist.length > 64) return true;
+  return playlist.any((song) =>
+      song.isPending ||
+      song.filePath == null ||
+      song.filePath!.isEmpty ||
+      song.isNetworkSource);
+}
+
 @visibleForTesting
 bool shouldExitSingleTrackMode({
   required bool loadedSingleTrackOnly,
@@ -331,6 +347,10 @@ class AndroidAudioEngine implements AudioEngine {
     if (player == null || playing == null || !_loadedSingleTrackOnly ||
         isCrossfadeActive || !isCurrent()) return false;
     final songs = _playlistProvider();
+    // Never asynchronously restore an entire imported Library or a network
+    // queue after fast start. This ran source resolution for 2,600+ songs and
+    // could destroy a healthy player when just one desktop was disconnected.
+    if (requiresOnDemandAndroidSequence(songs)) return false;
     final selectedIndex = _selectedPlaylistIndexProvider?.call() ?? -1;
     final index = selectedIndex >= 0 &&
             selectedIndex < songs.length &&
@@ -941,7 +961,7 @@ class AndroidAudioEngine implements AudioEngine {
       return;
     }
 
-    final unresolvedQueue = hasUnresolvedAudioSources(playlist);
+    final unresolvedQueue = requiresOnDemandAndroidSequence(playlist);
     // Repeat All is a logical queue setting, not permission to send pending
     // Discovery slots as empty URIs to Android. Keep one playable source
     // loaded and use PlayerService's manual completion until resolved.
