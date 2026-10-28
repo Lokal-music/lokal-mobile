@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../../core/utils/app_log.dart';
+
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
@@ -49,6 +51,48 @@ const morneyeFeatures = {
 };
 
 String _sha256(List<int> value) => sha256.convert(value).toString();
+
+/// Search metadata can replace an extra by-ID fetch when the exact
+/// selected provider and track identity are known. The addon still performs
+/// checkAvailability before downloading: this is never a playback ticket.
+Map<String, Object?>? morneyeSelectedTrackHint({
+  required String id,
+  required String title,
+  required String artist,
+  required int? durationMs,
+}) {
+  if (id.trim().isEmpty || title.trim().isEmpty ||
+      artist.trim().isEmpty) return null;
+  return {
+    'id': id,
+    'name': title,
+    'artists': artist,
+    if (durationMs != null && durationMs > 0) 'duration_ms': durationMs,
+  };
+}
+
+/// An addon-owned native Search row already has its canonical provider ID.
+/// For direct playback, checkAvailability still validates the recording and
+/// returns fresh authorization/metadata. This skips only a *second metadata
+/// enrichment request*, never availability checks, and never for a different
+/// provider's cross-catalogue match or explicit download/save.
+bool morneyeMaySkipDuplicateEnrichment({
+  required String addonName,
+  required Map track,
+  required bool forPlayback,
+  required bool nativeSearchResult,
+  required bool hasAvailabilityCheck,
+}) {
+  if (!forPlayback || !nativeSearchResult || !hasAvailabilityCheck) {
+    return false;
+  }
+  final provider = '${track['provider_id'] ?? ''}'.trim().toLowerCase();
+  final addon = addonName.trim().toLowerCase();
+  final id = '${track['id'] ?? ''}'.trim();
+  final title = '${track['name'] ?? ''}'.trim();
+  return provider.isNotEmpty && id.isNotEmpty && title.isNotEmpty &&
+      (provider == addon || provider == addon.replaceFirst(RegExp(r'-web$'), ''));
+}
 
 /// The installed package's stable key (also its storage namespace).
 String morneyeKeyOf(String name) =>
@@ -1642,6 +1686,10 @@ class MorneyePackages {
     String id, {
     String? quality,
     bool forPlayback = false,
+    /// Exact user-selected catalogue metadata; never replaces authorization.
+    Map<String, Object?>? trackHint,
+    /// Host-side phase callback, distinct from guest-reported download percent.
+    void Function(String stage)? onResolutionStage,
     void Function({double? percent, String? message})? onProgress,
     void Function(MorneyeTransfer)? onTransfer,
     Future<void>? cancel,
@@ -1671,9 +1719,31 @@ class MorneyePackages {
       heapMb: 256,
     );
     unawaited(cancel?.then((_) => runtime.close()));
+    final preparation = Stopwatch()..start();
+    void phase(String stage) {
+      onResolutionStage?.call(stage);
+      // Private IDs, signed URLs, tokens and track names are never logged.
+      AppLog.instance.add('[Morneye] resolve stage=$stage '
+          'elapsedMs=${preparation.elapsedMilliseconds}');
+    }
     try {
+      phase('initializing');
       await runtime.invoke('initialize', [settings(addon)]);
+      phase('metadata');
       Map track = _tracks['$key:$id'] ?? const {};
+      if (track.isEmpty &&
+          runtime.methods.contains('checkAvailability') &&
+          trackHint != null &&
+          '${trackHint['id'] ?? ''}' == id &&
+          morneyeSelectedTrackHint(
+            id: id, title: '${trackHint['name'] ?? ''}',
+            artist: '${trackHint['artists'] ?? ''}',
+            durationMs: (trackHint['duration_ms'] as num?)?.toInt(),
+          ) != null) {
+        // A verified selection avoids getTrack when the saved search cache
+        // was evicted. checkAvailability is still mandatory.
+        track = Map.of(trackHint);
+      }
       if (track.isEmpty && runtime.methods.contains('getTrack')) {
         final found = await runtime.invoke('getTrack', [id]);
         if (found is Map) track = found;
@@ -1705,6 +1775,13 @@ class MorneyePackages {
       final deezerNativeTrack = forPlayback &&
           nativeSearchResult && providerIdentityIsDeezer(addon.name, track);
       final skipEnrichment =
+          morneyeMaySkipDuplicateEnrichment(
+            addonName: addon.name,
+            track: track,
+            forPlayback: forPlayback,
+            nativeSearchResult: nativeSearchResult,
+            hasAvailabilityCheck: runtime.methods.contains('checkAvailability'),
+          ) ||
           // Only the remembered native Deezer Search row avoids enrichTrack;
           // cross-provider matches, saving and noncanonical IDs still verify.
           deezerNativeTrack ||
@@ -1759,6 +1836,7 @@ class MorneyePackages {
         options[directField] =
             '${track[directField] ?? (provider == 'amazon' || provider == 'soundcloud' ? track['id'] : id)}';
       }
+      phase('availability');
       final available = runtime.methods.contains('checkAvailability')
           ? await runtime.invoke('checkAvailability', [
               track['isrc'] ?? '',
@@ -1802,6 +1880,7 @@ class MorneyePackages {
         'source': provider == 'tidal' ? 'tidal' : 'other',
         'quality': 'DOLBY_ATMOS',
       });
+      phase('downloading');
       final result = await runtime.invoke('download', [
         '${available['track_id'] ?? available['trackId'] ?? id}',
         chosen,
