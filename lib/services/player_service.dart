@@ -2463,6 +2463,15 @@ class PlayerService {
       // Do not leave a half-initialized USB engine selected or pretend
       // bit-perfect is active. Restore Android-managed playback if possible.
       try {
+        await _sessionManager.switchMode(
+          AudioEngineType.normalAndroid,
+          reason: 'manual restart final failure - retire Rust engine',
+        );
+        if (_rustAudioService.isInitialized) {
+          await _disposeUsbEngine();
+        }
+        // Do not release the native handle while a failed Rust pump may
+        // still be submitting URBs against it.
         await _uac2Service.releaseAndroidDirectUsbRuntime();
         await _sessionManager.recordFallback(
           requestedMode: AudioEngineType.usbDacExperimental,
