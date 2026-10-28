@@ -15,14 +15,14 @@ void main() {
           steps.add('select exclusive USB route');
           return true;
         },
-        restorePlayback: () async { steps.add('restore track and seek'); },
+        restorePlayback: () async { steps.add('restart track at 0:00'); },
       );
       expect(succeeded, isTrue);
       expect(steps, [
         'stop old Rust engine',
         'release and re-claim USB',
         'select exclusive USB route',
-        'restore track and seek',
+        'restart track at 0:00',
       ]);
     });
 
@@ -76,23 +76,22 @@ void main() {
       );
     });
 
-    test('paused playback stays paused after the restart', () async {
+    test('explicit restart plays the current track from 0:00', () async {
       var playCount = 0;
-      var seekPositionMs = 0;
-      final wasPlaying = false;
-      const originalPositionMs = 72000;
+      var startPositionMs = -1;
+      const positionAfterRestartMs = 0;
       final succeeded = await restartDirectUsbSessionSequence(
         stopEngine: () async {},
         resetTransport: () async => true,
         reselectDirectRoute: () async => true,
         restorePlayback: () async {
-          seekPositionMs = originalPositionMs;
-          if (wasPlaying) playCount++;
+          startPositionMs = positionAfterRestartMs;
+          playCount++;
         },
       );
       expect(succeeded, isTrue);
-      expect(seekPositionMs, 72000);
-      expect(playCount, 0);
+      expect(startPositionMs, 0);
+      expect(playCount, 1);
     });
   });
 }
