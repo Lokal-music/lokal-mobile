@@ -100,6 +100,37 @@ void main() {
     expect(find.text('Skip non-music files'), findsOneWidget);
   });
 
+  testWidgets('Advanced output opens directly from Settings root', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(412, 915)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_app(const LokalSettingsPage()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Advanced output'), findsOneWidget);
+    await tester.tap(find.text('Advanced output'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LokalSettingsGroupPage), findsOneWidget);
+    expect(find.text('USB DAC'), findsWidgets);
+    expect(find.text('Bluetooth'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Playback no longer nests Advanced output', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        const LokalSettingsGroupPage(group: LokalSettingsGroup.playback),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Advanced output'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Playback rows drive the player and rebuild with it', (
     tester,
   ) async {
