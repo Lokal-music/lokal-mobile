@@ -283,7 +283,7 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 (greeting ?? lokalHomeMessages(const [], now: at)).headline,
               ),
               style: TextStyle(
-                fontSize: 34,
+                fontSize: context.responsiveText(34),
                 fontWeight: FontWeight.w600,
                 letterSpacing: -.7,
                 color: context.lokal.text,
@@ -298,7 +298,7 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 (greeting ?? lokalHomeMessages(const [], now: at)).subheader,
               ),
               key: ValueKey(greeting),
-              style: TextStyle(fontSize: 15, color: context.lokal.muted),
+              style: TextStyle(fontSize: context.responsiveText(15), color: context.lokal.muted),
             ),
           ),
         ],
