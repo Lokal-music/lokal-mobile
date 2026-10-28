@@ -218,7 +218,7 @@ List<AlbumGroup> konnektedCoversWithLocalAlbums(
             albumArtist: song.albumArtist?.trim().isNotEmpty == true
                 ? song.albumArtist!.trim()
                 : song.artist,
-            songs: SongRepository.sortSongsByAlbum(albumTracks),
+            songs: SongRepository.sortAlbumTracks(albumTracks),
             coverSong: song,
           );
         })(),
