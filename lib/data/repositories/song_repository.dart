@@ -18,11 +18,17 @@ class AlbumGroup {
   final String albumArtist;
   final List<Song> songs;
 
+  /// On Home's Made for You carousel, the face is a recommended song while
+  /// the back lists the full matching local album. Ordinary album groups do
+  /// not specify a featured song.
+  final Song? coverSong;
+
   const AlbumGroup({
     required this.key,
     required this.albumName,
     required this.albumArtist,
     required this.songs,
+    this.coverSong,
   });
 }
 
