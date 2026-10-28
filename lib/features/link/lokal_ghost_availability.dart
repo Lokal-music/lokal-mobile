@@ -49,9 +49,14 @@ final lokalSongAvailableProvider = FutureProvider.autoDispose.family<bool, Song>
   if (song.sourceType != 'lokal') return true;
   final serverId = song.remoteServerId, remoteId = song.remoteId;
   if (serverId == null || remoteId == null) return false;
+  // Subscribe before the async cache lookup so a disposed row does not try to
+  // watch a provider after its widget has already left the screen.
+  final pairedDesktop = ref.watch(
+    _lokalDesktopCredentialsAvailableProvider(serverId).future,
+  );
   // Cached desktop originals remain playable when the PC is disconnected.
   if (await NetworkCacheService().getPath(serverId, remoteId) != null) {
     return true;
   }
-  return ref.watch(_lokalDesktopCredentialsAvailableProvider(serverId).future);
+  return pairedDesktop;
 });
