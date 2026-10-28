@@ -750,7 +750,16 @@ class Uac2Service {
           channels.toInt() != requested.channels ||
           subslot.toInt() * 8 < resolution.toInt() ||
           interval.toInt() <= 0) continue;
-      for (final rate in rates.whereType<num>()) {
+
+      // UAC2 GET_RANGE can stall even when the audio streaming endpoint is
+      // usable. An empty rate list means "unprobed", NOT "no supported
+      // sample rates". Permit the *requested* clock rate as a candidate and
+      // leave the final decision to native SET_CUR / GET_CUR verification.
+      // Never guess a different rate, or report bit-perfect until verified.
+      final candidateRates = rates.isEmpty
+          ? <num>[requested.sampleRate]
+          : rates.whereType<num>();
+      for (final rate in candidateRates) {
         final hz = rate.toInt();
         if (hz <= 0 || disallowedSampleRates.contains(hz)) continue;
         final bytesPerFrame = subslot.toInt() * channels.toInt();
@@ -829,6 +838,15 @@ class Uac2Service {
       );
       return false;
     }
+    if (alts.any((alt) =>
+        (alt['sample_rates'] ?? alt['sampleRates']) is List &&
+        ((alt['sample_rates'] ?? alt['sampleRates']) as List).isEmpty)) {
+      devLog(
+        '[USB] One or more PCM alternate settings have unknown clock ranges; '
+        'attempting native clock negotiation for ${selectedFormat.sampleRate}Hz '
+        'without claiming verified bit-perfect output',
+      );
+    }
     final usingFallbackFormat =
         selectedFormat.sampleRate != format.sampleRate ||
         selectedFormat.bitDepth != format.bitDepth ||
@@ -852,7 +870,10 @@ class Uac2Service {
         '${format.channels}ch',
       );
     }
-    if (capabilities != null) {
+    // Per-alt native descriptors are more specific than the flattened
+    // capability lists. In particular, GET_RANGE failures omit rates from
+    // the flattened list even though the endpoint can negotiate via SET_CUR.
+    if (capabilities != null && alts.isEmpty) {
       final sampleRateSupported =
           capabilities.supportedSampleRates.isEmpty ||
           capabilities.supportedSampleRates.contains(selectedFormat.sampleRate);
