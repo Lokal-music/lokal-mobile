@@ -2280,12 +2280,15 @@ class PlayerService {
 
     await initAudio();
     final song = currentSongNotifier.value ?? _songAtCurrentIndex();
-    final playableSong = song != null &&
-        !song.isPending &&
-        (song.filePath?.isNotEmpty ?? false);
+    final playableSong =
+        song != null && !song.isPending && (song.filePath?.isNotEmpty ?? false)
+            ? song
+            : null;
     final position = positionNotifier.value;
     final wasPlaying = isPlayingNotifier.value;
-    final format = (playableSong ? _deriveUac2FormatFromSong(song) : null) ??
+    final format = (playableSong != null
+            ? _deriveUac2FormatFromSong(playableSong)
+            : null) ??
         _uac2Service.currentDeviceStatus?.currentFormat ??
         _uac2Service.lastKnownFormat;
 
@@ -2318,11 +2321,11 @@ class PlayerService {
           return _sessionManager.retryExperimentalUsbForCurrentDevice();
         },
         restorePlayback: () async {
-          if (!playableSong) return;
-          await _prepareImmediatePlaybackAsset(song);
+          if (playableSong == null) return;
+          await _prepareImmediatePlaybackAsset(playableSong);
           final engine = await _ensureEngineReady(
             AudioEngineType.usbDacExperimental,
-            song: song,
+            song: playableSong,
             reason: 'manual direct USB engine restart',
           );
           if (engine != AudioEngineType.usbDacExperimental) {
@@ -2331,7 +2334,7 @@ class PlayerService {
           }
           await _runWithSuppressedSequenceStateUpdates(() async {
             await _playbackManager.playTrack(
-              song,
+              playableSong,
               initialPosition: position,
               autoPlay: wasPlaying,
             );
@@ -2347,7 +2350,7 @@ class PlayerService {
       _sessionManager.clearFallbackReason();
       await _refreshAudioOutputDiagnostics(
         reason: 'manual USB engine restart',
-        activeSong: playableSong ? song : null,
+        activeSong: playableSong,
       );
       AppLog.instance.add('[USB] Manual engine restart complete '
           '(resumed=$wasPlaying, directRoute=true)');
@@ -2369,11 +2372,11 @@ class PlayerService {
           initializeNewEngine: true,
           reason: 'manual USB restart unsuccessful',
         );
-        if (playableSong) {
-          await _prepareImmediatePlaybackAsset(song);
+        if (playableSong != null) {
+          await _prepareImmediatePlaybackAsset(playableSong);
           await _runWithSuppressedSequenceStateUpdates(() async {
             await _playbackManager.playTrack(
-              song,
+              playableSong,
               initialPosition: position,
               autoPlay: wasPlaying,
             );
