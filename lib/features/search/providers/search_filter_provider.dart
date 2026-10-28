@@ -16,14 +16,39 @@ bool supportsOnlineCategory(SearchCategory? category) =>
     category != null && visibleSearchCategories.contains(category);
 
 class SearchScopeNotifier extends Notifier<SearchScope> {
+  static const _key = 'search_selected_scope_v1';
+  bool _changed = false;
+  Future<void> _saving = Future<void>.value();
+
   @override
-  SearchScope build() => SearchScope.library;
+  SearchScope build() {
+    Future.microtask(_load);
+    return SearchScope.library;
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!ref.mounted || _changed) return;
+      final saved = prefs.getString(_key);
+      final scope = SearchScope.values.where((s) => s.name == saved).firstOrNull;
+      if (scope != null) state = scope;
+    } catch (_) {
+      // Keep Search usable when saved preferences are unavailable.
+    }
+  }
+
   void select(SearchScope scope) {
+    _changed = true;
     if (scope == SearchScope.online &&
         !supportsOnlineCategory(ref.read(searchFilterProvider).singleOrNull)) {
       ref.read(searchFilterProvider.notifier).select(SearchCategory.songs);
     }
     state = scope;
+    _saving = _saving.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, scope.name);
+    }).catchError((Object _) {});
   }
 }
 
