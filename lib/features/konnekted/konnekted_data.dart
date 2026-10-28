@@ -184,7 +184,11 @@ List<AlbumGroup> konnektedCoversWithLocalAlbums(
 ) {
   String key(String? value) => (value ?? '').trim().toLowerCase();
   final albums = <String, List<Song>>{};
+  final seenLocalIds = <String>{};
   for (final song in localSongs) {
+    // An overlapping library source or transient sync can surface the same
+    // recording twice. Each local track belongs on the album back only once.
+    if (!seenLocalIds.add(song.id)) continue;
     final albumKey = key(song.album);
     if (albumKey.isEmpty) continue;
     (albums[albumKey] ??= <Song>[]).add(song);
