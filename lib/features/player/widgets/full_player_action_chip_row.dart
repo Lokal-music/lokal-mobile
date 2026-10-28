@@ -8,6 +8,7 @@ import 'package:flick/core/theme/app_colors.dart';
 import 'package:flick/core/utils/responsive.dart';
 import 'package:flick/features/player/widgets/sleep_timer_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/speed_bottom_sheet.dart';
+import 'package:flick/features/player/widgets/pitch_bottom_sheet.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/l10n/l10n.dart';
 
@@ -24,6 +25,7 @@ class FullPlayerActionChipRow extends StatelessWidget {
     required this.onOpenQueue,
     required this.onToggleLyrics,
     required this.onOpenEqualizer,
+    this.compactTransformsOnly = false,
   });
 
   final PlayerService playerService;
@@ -31,6 +33,9 @@ class FullPlayerActionChipRow extends StatelessWidget {
   final VoidCallback onOpenQueue;
   final VoidCallback onToggleLyrics;
   final VoidCallback onOpenEqualizer;
+  /// In immersive layout, only show Speed, Pitch, and EQ in the footer.
+  /// Artwork-card layout keeps its existing broader action strip.
+  final bool compactTransformsOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +47,7 @@ class FullPlayerActionChipRow extends StatelessWidget {
           horizontal: context.responsive(16, 20, 24),
         ),
         children: [
+          if (!compactTransformsOnly) ...[
           const Center(child: LokalOutputPill()),
           _ActionChip(
             icon: LucideIcons.listMusic,
@@ -59,10 +65,22 @@ class FullPlayerActionChipRow extends StatelessWidget {
             label: l10n.sleepTimer,
             onTap: () => SleepTimerBottomSheet.show(context, playerService),
           ),
+          ],
           _ActionChip(
             icon: LucideIcons.gauge,
             label: l10n.speedUp,
             onTap: () => SpeedBottomSheet.show(context, playerService),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: playerService.pitchSemitonesNotifier,
+            builder: (_, pitch, __) => _ActionChip(
+              icon: Icons.graphic_eq_rounded,
+              label: pitch.abs() < 0.01
+                  ? l10n.pitch
+                  : '${pitch > 0 ? '+' : ''}${pitch.toStringAsFixed(0)} st',
+              active: pitch.abs() >= 0.01,
+              onTap: () => PitchBottomSheet.show(context, playerService),
+            ),
           ),
           _ActionChip(
             icon: LucideIcons.slidersHorizontal,

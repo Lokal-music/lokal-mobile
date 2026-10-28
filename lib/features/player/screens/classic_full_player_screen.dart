@@ -21,7 +21,7 @@ import 'package:flick/features/player/widgets/player_controls.dart';
 import 'package:flick/features/player/widgets/player_layout_sheet.dart';
 import 'package:flick/features/player/widgets/player_navigation.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
-import 'package:flick/features/player/widgets/pitch_bottom_sheet.dart';
+import 'package:flick/features/player/widgets/full_player_usb_restart_menu.dart';
 import 'package:flick/features/player/widgets/speed_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/sleep_timer_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/song_stage.dart';
@@ -576,9 +576,11 @@ class _ClassicFullPlayerScreenState
                 icon: Icons.more_vert,
                 albumColor: albumColor,
                 albumColorMode: albumColorMode,
-                onTap: () => SongActionsBottomSheet.show(
+                onTap: () => unawaited(showFullPlayerSongMenu(
                   context,
-                  song,
+                  song: song,
+                  player: _playerService,
+                  keepBrowseActions: true,
                   extras: [
                     LokalSongMenuAction(
                       icon: Icons.lyrics_outlined,
@@ -603,19 +605,13 @@ class _ClassicFullPlayerScreenState
                           SpeedBottomSheet.show(context, _playerService),
                     ),
                     LokalSongMenuAction(
-                      icon: Icons.tune_rounded,
-                      label: 'Pitch',
-                      onTap: () =>
-                          PitchBottomSheet.show(context, _playerService),
-                    ),
-                    LokalSongMenuAction(
                       icon: Icons.bedtime_outlined,
                       label: 'Sleep timer',
                       onTap: () =>
                           SleepTimerBottomSheet.show(context, _playerService),
                     ),
                   ],
-                ),
+                )),
               ),
             ],
           ),
@@ -1373,10 +1369,15 @@ class _ClassicFullPlayerScreenState
                   favoritesService: _favoritesService,
                 ),
               ),
-              if (_playerScreenMode == PlayerScreenMode.artworkCard) ...[
+              // Keep Pitch reachable in every classic full-player layout;
+              // immersive uses only the three sound-transform chips to avoid
+              // duplicating its other on-artwork controls.
+              ...[
                 SizedBox(height: context.responsive(6.0, 8.0, 10.0)),
                 FullPlayerActionChipRow(
                   playerService: _playerService,
+                  compactTransformsOnly:
+                      _playerScreenMode == PlayerScreenMode.immersive,
                   lyricsActive: _isLyricsMode,
                   onOpenQueue: () => _navigation.openQueue(context),
                   onToggleLyrics: () => _setLyricsMode(!_isLyricsMode),
