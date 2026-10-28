@@ -226,14 +226,16 @@ class Uac2DeviceStatus {
 /// release first sets ownership inactive, so subsequent failed probes can clear
 /// the status normally.
 @visibleForTesting
-bool shouldKeepDirectUsbStatusAfterRouteProbeFailure({
+Uac2DeviceStatus? directUsbStatusToPreserveOnFailedRouteProbe({
   required Uac2DeviceStatus? currentStatus,
   required bool directUsbPlaybackActive,
 }) =>
     directUsbPlaybackActive &&
-    currentStatus != null &&
-    (currentStatus.routeType == Uac2RouteType.externalUsb ||
-        currentStatus.isExternalRoute);
+            currentStatus != null &&
+            (currentStatus.routeType == Uac2RouteType.externalUsb ||
+                currentStatus.isExternalRoute)
+        ? currentStatus
+        : null;
 
 class Uac2Service {
   Uac2Service._();
@@ -1611,10 +1613,10 @@ Future<void> stopPriorityAnchor() async {
     final effectiveHasSong = hasActiveSong ?? _lastKnownHasSong;
 
     if (routeStatus == null) {
-      if (shouldKeepDirectUsbStatusAfterRouteProbeFailure(
+      if (directUsbStatusToPreserveOnFailedRouteProbe(
         currentStatus: _currentDeviceStatus,
         directUsbPlaybackActive: _lastDirectUsbPlaybackActive == true,
-      )) {
+      ) != null) {
         // A background status query can fail while Rust still owns the DAC.
         // Replacing the known USB route with an unknown error allows the next
         // syncPlaybackStatus to re-activate USB over the active isochronous
