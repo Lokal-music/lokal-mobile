@@ -5397,10 +5397,13 @@ class PlayerService {
     return operation;
   }
 
-  List<Song> _wrapAroundPlaylist(List<Song> songs, Song current) {
-    final start = songs.indexWhere((s) => s.id == current.id);
-    if (start <= 0) return songs;
-    return [...songs.sublist(start), ...songs.sublist(0, start)];
+  /// A tap into the middle of a playlist must keep the entries preceding it.
+  /// Prefer the exact occurrence for playlists containing the same song twice.
+  @visibleForTesting
+  static int selectedPlaylistIndex(List<Song> songs, Song selected) {
+    final exactIndex = songs.indexWhere((entry) => identical(entry, selected));
+    if (exactIndex >= 0) return exactIndex;
+    return songs.indexWhere((entry) => entry.id == selected.id);
   }
 
   Future<void> _playInternal(Song song, {List<Song>? playlist}) async {
@@ -5455,11 +5458,13 @@ class PlayerService {
       _crossfadeUiHandoffFromPath = null;
 
       if (playlist != null) {
-        final sourcePlaylist = wrapAroundQueueNotifier.value
-            ? _wrapAroundPlaylist(playlist, song)
-            : playlist;
-        _replacePlaybackContext(sourcePlaylist);
-        _setCurrentIndex(_playlist.indexWhere((entry) => entry.id == song.id));
+        // Keep the caller's complete, original playback order. Rotating the
+        // list to start at the tapped item silently moves earlier tracks to
+        // Up Next and makes the selected item appear at index zero in every
+        // playlist, radio and Cover Flow entry point. Wrap-around navigation
+        // remains a separate preference at the actual start of the queue.
+        _replacePlaybackContext(playlist);
+        _setCurrentIndex(selectedPlaylistIndex(_playlist, song));
         if (isShuffleNotifier.value) {
           final shuffled = buildShufflePlaybackOrder(
             songs: _playlist,
@@ -7158,6 +7163,18 @@ class PlayerService {
     _notifyQueueChanged();
     _notifyUpNextChanged();
     _debounceQueueChanged();
+  }
+
+  /// Jump to an absolute playlist slot, including one before Now Playing.
+  /// Unlike play(song, playlist: ...), this leaves the queue untouched and
+  /// addresses a specific occurrence even when a song appears twice.
+  Future<void> playFromPlaylistIndex(int index) {
+    _cancelPendingPlayback();
+    return _enqueuePlaybackRequest(() async {
+      if (index < 0 || index >= _playlist.length) return;
+      _setCurrentIndex(index);
+      await _playSongAtCurrentIndex();
+    });
   }
 
   Future<void> playFromUpNextIndex(int index) {
