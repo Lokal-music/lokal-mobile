@@ -69,6 +69,18 @@ const Duration previousButtonRestartThreshold = Duration(seconds: 10);
 bool shouldRestartCurrentTrackOnPrevious(Duration position) =>
     position >= previousButtonRestartThreshold;
 
+/// A failed libusb submit can be a transient host-controller error during
+/// a PCM format transition. It is not equivalent to a physically unplugged
+/// DAC. Attempt a bounded stop/drain/re-register before Android fallback.
+@visibleForTesting
+bool isRecoverableDirectUsbTransportError(String message) {
+  final normalized = message.toLowerCase();
+  return normalized.contains('libusb_submit_transfer failed with code -1') ||
+      normalized.contains('libusb_submit_transfer failed with code -6') ||
+      normalized.contains('isochronous transfer failed') ||
+      normalized.contains('libusb_handle_events failed');
+}
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -3549,14 +3561,13 @@ class PlayerService {
                 .getPauseOnUsbDacDisconnect();
             var autoResumeAfterFallback = !pauseOnDisconnect;
             if (pauseOnDisconnect) {
-              // "USB DAC disconnected" is often a lie (e.g. Samsung One UI
-              // suspends userspace USB transfers when the app is backgrounded
-              // while the DAC stays attached). Release the frozen direct-USB
-              // session first so listDevices() does a real UsbManager query,
-              // then only honour pause-on-disconnect for a genuine unplug.
-              await _uac2Service.releaseAndroidDirectUsbRuntime();
+              // A libusb I/O failure is not proof of a physical unplug.
+              // Query UsbManager without releasing the runtime prematurely:
+              // recovery needs the old session to stop in a controlled order.
               final stillAttached =
-                  (await _uac2Service.listDevices()).isNotEmpty;
+                  (await _uac2Service.listDevices(
+                    verifyPhysicalAttachment: true,
+                  )).isNotEmpty;
               if (stillAttached) {
                 _debugLog(
                   '[Engine] Direct USB failed but DAC still attached; '
@@ -6076,6 +6087,86 @@ class PlayerService {
         normalized.contains('permission denied');
   }
 
+  /// A failed transfer can leave a native endpoint, format, and Rust engine
+  /// out of sync. Merely replaying the same track reuses that broken session.
+  /// Recover at most twice: stop the source, release/drain the old USB session,
+  /// re-register the *current track's* PCM format and reopen the engine.
+  Future<bool> _recoverDirectUsbTransport({
+    required Song song,
+    required Duration initialPosition,
+    required bool autoPlay,
+  }) async {
+    Uac2AudioFormat? format = _deriveUac2FormatFromSong(song);
+    if (format == null && !song.isDsd) {
+      final path = await _resolveRustPath(song);
+      if (path != null) {
+        try {
+          final probe = await rust_audio.audioProbeFormat(path: path);
+          if (probe.bitsPerSample case final bits?
+              when const {16, 24, 32}.contains(bits)) {
+            format = Uac2AudioFormat(
+              sampleRate: probe.sampleRate,
+              bitDepth: bits,
+              channels: probe.channels,
+            );
+          }
+        } catch (e) {
+          _debugLog('[USB] Recovery PCM format probe failed: $e');
+        }
+      }
+    }
+    if (format == null) {
+      AppLog.instance.add('[USB] Cannot recover direct USB: PCM/DSD '
+          'format of selected track is not verified');
+      return false;
+    }
+
+    for (final delay in const [
+      Duration(milliseconds: 350),
+      Duration(milliseconds: 1000),
+    ]) {
+      if (currentSongNotifier.value?.id != song.id ||
+          currentEngineType != AudioEngineType.usbDacExperimental) {
+        return false; // User already selected a different track or route.
+      }
+      await Future<void>.delayed(delay);
+      try {
+        await _rustAudioService.stop();
+        final reset = await _uac2Service.resetAndroidDirectUsbPath(
+          format: format,
+        );
+        if (!reset) {
+          AppLog.instance.add('[USB] Recovery deferred: native interface '
+              'still stopping or activation declined');
+          continue;
+        }
+        await _refreshRustCapabilityInfo();
+        await _rustAudioService.prepareEngine(
+          preferredSampleRate: format.sampleRate,
+        );
+        await _applyRustPlaybackProcessingPolicy(
+          AudioEngineType.usbDacExperimental,
+        );
+        await _prepareImmediatePlaybackAsset(song);
+        await _runWithSuppressedSequenceStateUpdates(() async {
+          await _playbackManager.playTrack(
+            song,
+            initialPosition: initialPosition,
+            autoPlay: autoPlay,
+          );
+        });
+        _sessionManager.clearFallbackReason();
+        AppLog.instance.add('[USB] Recovered direct USB after transport '
+            'failure: ${format.sampleRate}Hz/${format.bitDepth}-bit/'
+            '${format.channels}ch');
+        return true;
+      } catch (e) {
+        AppLog.instance.add('[USB] Session reset retry failed: $e');
+      }
+    }
+    return false;
+  }
+
   static const List<Duration> _directUsbRetryDelays = [
     Duration(milliseconds: 150),
     Duration(milliseconds: 400),
@@ -6128,10 +6219,31 @@ class PlayerService {
       '[Engine] Direct USB startup refused: $message. Falling back to NORMAL_ANDROID',
     );
     final permissionFailure = _isDirectUsbPermissionFailure(message);
+    final transportFailure =
+        isRecoverableDirectUsbTransportError(message);
     final transientBusFailure =
-        _isExclusiveUsbUnavailableFailure(message) && !permissionFailure;
+        (_isExclusiveUsbUnavailableFailure(message) || transportFailure) &&
+        !permissionFailure;
 
-    if (transientBusFailure && song != null) {
+    // A failed isochronous submit cannot be fixed by just replaying the
+    // same source: re-register and reopen the native endpoint first.
+    if (transportFailure && song != null) {
+      final recovered = await _recoverDirectUsbTransport(
+        song: song,
+        initialPosition: initialPosition,
+        autoPlay: autoResumeAfterFallback,
+      );
+      if (recovered) {
+        _ensurePositionSaveTimer();
+        await _refreshAudioOutputDiagnostics(
+          reason: 'direct USB transport reset recovered',
+          activeSong: song,
+        );
+        return true;
+      }
+    }
+
+    if (transientBusFailure && !transportFailure && song != null) {
       final recovered = await _retryDirectUsbStart(
         song: song,
         initialPosition: initialPosition,
@@ -6151,7 +6263,9 @@ class PlayerService {
     await _uac2Service.markAndroidDirectUsbFallback(message);
     await _uac2Service.releaseAndroidDirectUsbRuntime();
     await _rustAudioService.setHighResMode(false);
-    if (transientBusFailure) {
+    // A single USB I/O/URB failure must not blacklist a still attached DAC
+    // for every following track. Keep manual retry available on that route.
+    if (transientBusFailure && !transportFailure) {
       await _sessionManager.suppressExperimentalUsbForCurrentDevice(
         reason: message,
       );
