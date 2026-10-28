@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/utils/app_log.dart';
 import 'morneye_network.dart';
 import 'morneye_session.dart';
 import 'morneye_storage.dart';
@@ -472,6 +473,11 @@ class MorneyeHost {
         );
         final status = response.status;
         if (status < 200 || status >= 300) throw _HttpStatusError(status);
+        if (attempt == 1 && !segment) {
+          // The direct transfer received its first response headers.
+          // Never log the CDN URL, authorization headers or media bytes.
+          AppLog.instance.add('[Morneye] direct media transfer opened');
+        }
         final range = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$')
             .firstMatch(response.headers['content-range'] ?? '');
         if (offset > 0 &&
@@ -615,6 +621,10 @@ class MorneyeHost {
     if (segmentsList.isEmpty || segmentsList.length > 20000) {
       throw ArgumentError('Invalid download segments');
     }
+    AppLog.instance.add(
+      '[Morneye] segmented media transfer opened '
+      'count=${segmentsList.length}',
+    );
     final output = file(destination);
     final dir = file('$output.segments');
     await Directory(dir).create(recursive: true);
