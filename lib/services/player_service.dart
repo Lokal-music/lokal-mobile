@@ -620,6 +620,21 @@ List<Song> selectAutoplayRecommendations({
   return List.unmodifiable(available.take(count));
 }
 
+/// Only transient endpoint/transport failures benefit from repeated native
+/// reopen attempts. A recording whose PCM tuple has already been rejected
+/// cannot become supported by claiming the same interface three more times.
+@visibleForTesting
+bool shouldRetryDirectUsbManualRestart({
+  required Object error,
+  String? fallbackReason,
+}) {
+  final reason = '${error.toString()} ${fallbackReason ?? ''}'.toLowerCase();
+  return !RegExp(
+    r'no isochronous out endpoint|track format .*unsupported|'
+    r'no compatible direct usb output format',
+  ).hasMatch(reason);
+}
+
 /// Singleton service to manage global audio playback state.
 ///
 /// Uses just_audio for playback with gapless playback support.
