@@ -303,7 +303,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
           // Desktop queue indices belong to its own playback context.
           // Never display the previous mobile playlist as desktop history.
           playlist: const [],
-          currentIndex: remote.currentIndex,
+          currentIndex: -1,
         );
       } else if (previous?.controlsDesktop == true) {
         syncState();
@@ -570,7 +570,11 @@ class PlayerNotifier extends Notifier<PlayerState> {
   Future<void> moveQueueItemToNext(int index) async {
     final desktop = _desktop;
     if (desktop != null) {
-      await desktop.reorderQueue(index, state.currentIndex + 1);
+      // The desktop index belongs to the remote queue, not to the cleared
+      // mobile playlist snapshot.
+      final remoteIndex =
+          ref.read(lokalRemoteControllerProvider).snapshot?.currentIndex ?? -1;
+      await desktop.reorderQueue(index, remoteIndex + 1);
       return;
     }
     await _service.moveQueueItemToNext(index);
