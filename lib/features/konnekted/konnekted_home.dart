@@ -388,32 +388,32 @@ class _HomeModeSelectorState extends State<_HomeModeSelector> {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      key: _viewportKey,
-      controller: _scrollController,
-      scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minWidth: constraints.maxWidth),
-        child: Align(
-          alignment: Alignment.center,
-          child: LokalGlass.capsule(
-            thickness: LokalGlassThickness.thin,
-            shadow: false,
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final tab in KonnektedHomeTab.values)
-                  KeyedSubtree(
-                    key: _tabKeys[tab],
-                    child: _ShelfChip(
-                      label: lokalText(tab.label),
-                      selected: tab == widget.selectedTab,
-                      onTap: () => widget.onTabChanged?.call(tab),
-                    ),
+    builder: (context, constraints) => SizedBox(
+      width: constraints.maxWidth,
+      child: LokalGlass.capsule(
+        thickness: LokalGlassThickness.thin,
+        shadow: false,
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        // Keep the glass capsule fixed to the available width. Only the tabs
+        // inside it scroll; scrolling the capsule itself clipped its right
+        // border beside the Discord button on narrow screens.
+        child: SingleChildScrollView(
+          key: _viewportKey,
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final tab in KonnektedHomeTab.values)
+                KeyedSubtree(
+                  key: _tabKeys[tab],
+                  child: _ShelfChip(
+                    label: lokalText(tab.label),
+                    selected: tab == widget.selectedTab,
+                    onTap: () => widget.onTabChanged?.call(tab),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
