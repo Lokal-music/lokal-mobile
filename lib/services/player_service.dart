@@ -5513,16 +5513,20 @@ class PlayerService {
             }
           }
           if (trackFormat == null) {
-            await _uac2Service.markAndroidDirectUsbFallback(
-              'track sample rate is unavailable before USB engine startup',
-            );
+            // Unmeasurable source metadata is a limitation of this recording,
+            // not evidence that the USB DAC stopped working. Never invent a
+            // 16-bit default; retry direct USB for the next resolved song.
+            AppLog.instance.add('[USB] Track-only Android fallback: source '
+                'format could not be verified; retry on next recording');
+            await _stopUsbStreamBeforeEngineRouteChange();
             await _uac2Service.releaseAndroidDirectUsbRuntime();
             await _rustAudioService.setHighResMode(false);
+            _usbTrackScopedFallbackKey = _usbTrackKey(song);
             await _sessionManager.recordFallback(
               requestedMode: normalizedEngine,
               fallbackMode: AudioEngineType.normalAndroid,
-              reason:
-                  'track sample rate is unavailable before USB engine startup',
+              reason: 'track PCM format is unknown '
+                  '(track-specific; retry on next recording)',
             );
             return AudioEngineType.normalAndroid;
           }
