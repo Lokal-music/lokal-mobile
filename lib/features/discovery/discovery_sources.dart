@@ -484,6 +484,7 @@ class DiscoveryAddon {
     this.http, {
     required String endpoint,
     String token = '',
+    this.exactManifestUrl,
     this.configId,
     this.displayName = 'Music addon',
     this.settings = const {},
@@ -499,6 +500,7 @@ class DiscoveryAddon {
   final DiscoveryHttp http;
   final Uri base;
   final String _token;
+  final Uri? exactManifestUrl;
   final String? configId;
   final String displayName;
   final Map<String, String> settings;
@@ -523,6 +525,7 @@ class DiscoveryAddon {
     Future<void>? cancel,
     Uri? exactManifestUrl,
   }) async {
+    exactManifestUrl ??= this.exactManifestUrl;
     // An installation with an explicit manifest.json URL should verify
     // precisely that URI. The normalized base is retained for subsequent
     // /search and /stream calls, but must not rewrite the initial probe.
