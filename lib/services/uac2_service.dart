@@ -221,6 +221,20 @@ class Uac2DeviceStatus {
   }
 }
 
+/// A failed Android route query is not a USB detach. Keep the last known USB
+/// route as long as native playback ownership remains active. Explicit USB
+/// release first sets ownership inactive, so subsequent failed probes can clear
+/// the status normally.
+@visibleForTesting
+bool shouldKeepDirectUsbStatusAfterRouteProbeFailure({
+  required Uac2DeviceStatus? currentStatus,
+  required bool directUsbPlaybackActive,
+}) =>
+    directUsbPlaybackActive &&
+    currentStatus != null &&
+    (currentStatus.routeType == Uac2RouteType.externalUsb ||
+        currentStatus.isExternalRoute);
+
 class Uac2Service {
   Uac2Service._();
 
@@ -1597,6 +1611,18 @@ Future<void> stopPriorityAnchor() async {
     final effectiveHasSong = hasActiveSong ?? _lastKnownHasSong;
 
     if (routeStatus == null) {
+      if (shouldKeepDirectUsbStatusAfterRouteProbeFailure(
+        currentStatus: _currentDeviceStatus,
+        directUsbPlaybackActive: _lastDirectUsbPlaybackActive == true,
+      )) {
+        // A background status query can fail while Rust still owns the DAC.
+        // Replacing the known USB route with an unknown error allows the next
+        // syncPlaybackStatus to re-activate USB over the active isochronous
+        // stream. Explicit release turns off ownership before this point.
+        devLog('Uac2Service: preserving active direct USB status after '
+            'Android route probe failed');
+        return;
+      }
       if (!effectiveHasSong && !effectiveIsPlaying) {
         _updateStatus(null);
         return;
