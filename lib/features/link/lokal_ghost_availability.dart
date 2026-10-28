@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,21 +24,46 @@ bool desktopStreamingCredentialsMatch({
     storedUsername == desktopId + ':' + (desktopUserId ?? 'guest') &&
     storedBaseUrl == credentialOrigin;
 
+/// A bounded authenticated HTTP probe of the paired desktop. The remote
+/// control *WebSocket* is optional: the GET state endpoint is available
+/// independently and proves the PC is online before advertising an uncached
+/// audio stream. This probe runs once per linked server, not once per row.
+@visibleForTesting
+Future<bool> desktopHttpReachable(
+  Future<void> Function() probe, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  try {
+    await probe().timeout(timeout);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 final _lokalDesktopCredentialsAvailableProvider =
     FutureProvider.autoDispose.family<bool, int>((ref, serverId) async {
+  // Both saveConfiguration and forgetConfiguration publish a new controller
+  // config. Watching it prevents mounted Library rows retaining obsolete
+  // results after pairing changes while keeping one HTTP probe per server.
+  ref.watch(lokalRemoteControllerProvider.select((state) => state.config));
   try {
     final credentials = await ref
         .read(lokalRemoteCredentialsStoreProvider)
         .read();
     final server = await Database.networkServers.get(serverId);
-    if (server == null) return false;
-    return desktopStreamingCredentialsMatch(
-      storedUsername: server.username ?? '',
-      storedBaseUrl: server.baseUrl ?? '',
-      desktopId: credentials?.desktopId,
-      desktopUserId: credentials?.desktopUserId,
-      credentialOrigin: credentials?.origin.toString(),
-    );
+    if (server == null || credentials == null ||
+        !desktopStreamingCredentialsMatch(
+          storedUsername: server.username ?? '',
+          storedBaseUrl: server.baseUrl ?? '',
+          desktopId: credentials.desktopId,
+          desktopUserId: credentials.desktopUserId,
+          credentialOrigin: credentials.origin.toString(),
+        )) return false;
+
+    return desktopHttpReachable(() async {
+      await ref.read(lokalRemoteServiceProvider).fetchState(credentials);
+    });
   } catch (_) {
     return false;
   }
