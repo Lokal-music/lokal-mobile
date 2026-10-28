@@ -190,38 +190,37 @@ List<AlbumGroup> konnektedCoversWithLocalAlbums(
     (albums[albumKey] ??= <Song>[]).add(song);
   }
 
+  AlbumGroup coverFor(Song song) {
+    final albumName = song.album?.trim() ?? '';
+    final candidates = albums[key(albumName)] ?? const <Song>[];
+    final albumArtist = key(song.albumArtist);
+    final matches = candidates.where((candidate) {
+      // Albums with the same title but different known album artists
+      // must not be merged. Keep compilation rows lacking that tag.
+      final otherArtist = key(candidate.albumArtist);
+      return albumArtist.isEmpty ||
+          otherArtist.isEmpty ||
+          otherArtist == albumArtist;
+    }).toList();
+    final albumTracks = matches.isEmpty ? <Song>[song] : matches;
+    if (!albumTracks.any((candidate) => candidate.id == song.id)) {
+      albumTracks.add(song);
+    }
+    return AlbumGroup(
+      key: 'song:${song.id}',
+      albumName: albumName.isEmpty ? song.title : albumName,
+      albumArtist: song.albumArtist?.trim().isNotEmpty == true
+          ? song.albumArtist!.trim()
+          : song.artist,
+      songs: SongRepository.sortAlbumTracks(albumTracks),
+      coverSong: song,
+    );
+  }
+
   final seen = <String>{};
   return [
     for (final pick in picks)
-      if (seen.add(pick.song.id))
-        (() {
-          final song = pick.song;
-          final albumName = song.album?.trim() ?? '';
-          final candidates = albums[key(albumName)] ?? const <Song>[];
-          final albumArtist = key(song.albumArtist);
-          final matches = candidates.where((candidate) {
-            // Distinct releases with identical titles must not be mixed when
-            // both carry usable album-artist metadata. Keep compilation
-            // tracks with missing album-artist tags eligible.
-            final otherArtist = key(candidate.albumArtist);
-            return albumArtist.isEmpty ||
-                otherArtist.isEmpty ||
-                otherArtist == albumArtist;
-          }).toList();
-          final albumTracks = matches.isEmpty ? <Song>[song] : matches;
-          if (!albumTracks.any((candidate) => candidate.id == song.id)) {
-            albumTracks.add(song);
-          }
-          return AlbumGroup(
-            key: 'song:${song.id}',
-            albumName: albumName.isEmpty ? song.title : albumName,
-            albumArtist: song.albumArtist?.trim().isNotEmpty == true
-                ? song.albumArtist!.trim()
-                : song.artist,
-            songs: SongRepository.sortAlbumTracks(albumTracks),
-            coverSong: song,
-          );
-        })(),
+      if (seen.add(pick.song.id)) coverFor(pick.song),
   ];
 }
 
