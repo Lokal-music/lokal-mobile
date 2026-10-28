@@ -80,6 +80,16 @@ class _Player implements ja.AudioPlayer {
   }
 
   @override
+  Future<void> removeAudioSourceRange(int start, int end) async {
+    sources.removeRange(start, end);
+    if (activeIndex != null && activeIndex! >= end) {
+      activeIndex = activeIndex! - (end - start);
+    } else if (activeIndex != null && activeIndex! >= start) {
+      activeIndex = start.clamp(0, sources.length - 1);
+    }
+  }
+
+  @override
   Future<void> seek(Duration? position, {int? index}) async {
     seeks++;
     lastSeekIndex = index;
@@ -111,6 +121,162 @@ class _Player implements ja.AudioPlayer {
 }
 
 void main() {
+  testWidgets('entering on-demand mode trims a restored native queue '
+      'without changing the audible song', (tester) async {
+    final a = const Song(
+      id: 'a', title: 'A', artist: 'Artist',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/a.flac',
+    );
+    final b = const Song(
+      id: 'b', title: 'B', artist: 'Artist',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/b.flac',
+    );
+    final c = const Song(
+      id: 'c', title: 'C', artist: 'Artist',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/c.flac',
+    );
+    final logical = [a, b, c];
+    final player = _Player();
+    var nativeIndexUpdates = 0;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async => ja.ConcatenatingAudioSource(
+        children: [
+          for (final song in logical) ja.AudioSource.uri(Uri.file(song.filePath!)),
+        ],
+      ),
+      sourceBuilder: (song) async =>
+          ja.AudioSource.uri(Uri.file(song.filePath!)),
+      playlistProvider: () => logical,
+      selectedPlaylistIndexProvider: () => 1,
+      onNativePlaylistIndex: (_) => nativeIndexUpdates++,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => true,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await engine.load(b);
+    player.sources = [
+      for (final song in logical) ja.AudioSource.uri(Uri.file(song.filePath!)),
+    ];
+    player.activeIndex = 1;
+    player.currentPosition = const Duration(seconds: 35);
+    player.currentPlaying = true;
+    // The player was expanded via restoreFastStartPlaylist, so PlayerService
+    // has no corresponding ConcatenatingAudioSource to trim.
+    expect(await engine.enterOnDemandQueueMode(), isTrue);
+    expect(player.sources, hasLength(1));
+    expect(player.activeIndex, 0);
+    expect(player.currentPosition, const Duration(seconds: 35));
+    expect(player.currentPlaying, isTrue);
+    expect(engine.isSingleTrackOnly, isTrue);
+    final before = nativeIndexUpdates;
+    logical..clear()..addAll([c, b, a]); // logical shuffle
+    player.indices.add(0);
+    await tester.pump();
+    expect(nativeIndexUpdates, before,
+        reason: 'single-source native index is not a logical queue index');
+  });
+
+  test('resolved online handles force on-demand mode even in a tiny queue', () {
+    const progressive = Song(
+      id: 'http', title: 'HTTP', artist: 'Artist',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: 'lokal-progressive://playback-123',
+      sourcePackage: 'konnekted.progressive',
+    );
+    const morneye = Song(
+      id: 'morneye', title: 'Live', artist: 'Artist',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: 'morneye-live://handle',
+      sourcePackage: 'konnekted.morneye-live',
+    );
+    expect(requiresOnDemandAndroidSequence([progressive]), isTrue);
+    expect(requiresOnDemandAndroidSequence([morneye]), isTrue);
+  });
+
+  test('large Library queues prepare only the tapped track', () async {
+    final library = List<Song>.generate(
+      2654,
+      (i) => Song(
+        id: 'song-$i', title: 'Recording $i', artist: 'Artist',
+        duration: const Duration(minutes: 3), fileType: 'FLAC',
+        filePath: '/music/song-$i.flac',
+      ),
+    );
+    expect(hasUnresolvedAudioSources(library), isFalse);
+    expect(requiresOnDemandAndroidSequence(library), isTrue);
+    final player = _Player();
+    var nativeSequenceBuilds = 0;
+    var singleSourceBuilds = 0;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async {
+        nativeSequenceBuilds++;
+        throw StateError('The complete Library must not be materialized');
+      },
+      sourceBuilder: (song) async {
+        singleSourceBuilds++;
+        return ja.AudioSource.uri(Uri.file(song.filePath!));
+      },
+      playlistProvider: () => library,
+      selectedPlaylistIndexProvider: () => 1730,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await engine.load(library[1730]);
+    expect(nativeSequenceBuilds, 0);
+    expect(singleSourceBuilds, 1);
+    expect(engine.isSingleTrackOnly, isTrue);
+    expect(
+      await engine.restoreFastStartPlaylist(isCurrent: () => true),
+      isFalse,
+    );
+    expect(singleSourceBuilds, 1,
+        reason: 'No background restore across thousands of library songs');
+  });
+
+  test('remote songs stay on demand, small local queues retain native sequence', () {
+    const local = Song(
+      id: 'local', title: 'Local', artist: 'A',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/music/local.flac',
+    );
+    const desktop = Song(
+      id: 'desktop', title: 'PC only', artist: 'A',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: 'lokal://1/abc', sourceType: 'lokal',
+      remoteId: 'abc', remoteServerId: 1,
+    );
+    expect(requiresOnDemandAndroidSequence([local, desktop]), isTrue);
+    expect(requiresOnDemandAndroidSequence([local, local]), isFalse);
+  });
+
   testWidgets('native Android playback uses the selected duplicate occurrence',
       (tester) async {
     // Different entries can have the same ID and source path; identity alone

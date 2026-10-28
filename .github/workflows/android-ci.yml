@@ -39,6 +39,8 @@ jobs:
           test/widgets/lokal test/widgets/overflow_marquee_title_test.dart
           test/features/player/usb_dac_quick_status_sheet_test.dart
           test/features/player/full_player_overflow_actions_test.dart
+          test/features/link/lokal_ghost_availability_test.dart
+          test/features/konnekted/library_fallback_selection_test.dart
       - name: Check dependency locks remained unchanged
         run: git diff --exit-code -- pubspec.lock rust/Cargo.lock
 

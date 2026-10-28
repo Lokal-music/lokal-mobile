@@ -23,6 +23,28 @@ import 'replayable_stream_songs.dart';
 /// Shared pieces of Lokal's Library screens: Apple Music's iOS layout on the
 /// theme's own solid background, glass only for the small round buttons.
 
+/// Prefer an on-device recording; if there are none, use a cached or
+/// reachable desktop recording. A missing desktop must never block Play All
+/// when all remaining audio is already cached from that desktop.
+@visibleForTesting
+Future<Song?> firstAvailableLibraryFallback(
+  List<Song> queue,
+  Future<bool> Function(Song song) desktopAvailable,
+) async {
+  for (final song in queue) {
+    if (!song.isNetworkSource && !song.isPending &&
+        song.filePath?.isNotEmpty == true) {
+      return song;
+    }
+  }
+  for (final song in queue) {
+    if (song.sourceType == 'lokal' && await desktopAvailable(song)) {
+      return song;
+    }
+  }
+  return null;
+}
+
 /// Plays [queue] from [start] (or its first song); [shuffle] plays it in a
 /// random order. A failure shows a short message instead of throwing.
 Future<void> lokalPlay(
@@ -39,11 +61,38 @@ Future<void> lokalPlay(
   // Playback must use the same reconstructed entry as the queue, not a
   // stale favorite object from before the provider refreshed.
   final selectedId = shuffle ? list.first.id : (start ?? queue.first).id;
-  final selected = list.firstWhere(
+  var selected = list.firstWhere(
     (song) => song.id == selectedId,
     orElse: () => list.first,
   );
   try {
+    if (selected.sourceType == 'lokal' &&
+        !await ref.read(lokalSongAvailableProvider(selected).future)) {
+      // Play All and Shuffle should still work when the first entry is a
+      // desktop-only song and the PC is disconnected. Keep the original
+      // queue order, starting on the first device-local recording instead.
+      // An explicit tap must not silently select a different recording.
+      Song? fallback;
+      if (start == null) {
+        fallback = await firstAvailableLibraryFallback(
+          list,
+          (candidate) =>
+              ref.read(lokalSongAvailableProvider(candidate).future),
+        );
+      }
+      if (fallback != null) {
+        // The fallback has already passed the same offline/cache check.
+        selected = fallback;
+      } else {
+        if (context.mounted) {
+          LokalToast.show(
+            context,
+            lokalText('Reconnect to this Lokal desktop to stream its songs, or download them for offline playback.'),
+          );
+        }
+        return;
+      }
+    }
     await ref
         .read(playerProvider.notifier)
         .play(selected, playlist: list);
