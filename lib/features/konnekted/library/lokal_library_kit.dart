@@ -39,11 +39,37 @@ Future<void> lokalPlay(
   // Playback must use the same reconstructed entry as the queue, not a
   // stale favorite object from before the provider refreshed.
   final selectedId = shuffle ? list.first.id : (start ?? queue.first).id;
-  final selected = list.firstWhere(
+  var selected = list.firstWhere(
     (song) => song.id == selectedId,
     orElse: () => list.first,
   );
   try {
+    if (selected.sourceType == 'lokal' &&
+        !await ref.read(lokalSongAvailableProvider(selected).future)) {
+      // Play All and Shuffle should still work when the first entry is a
+      // desktop-only song and the PC is disconnected. Keep the original
+      // queue order, starting on the first device-local recording instead.
+      // An explicit tap must not silently select a different recording.
+      if (start == null) {
+        for (final candidate in list) {
+          if (!candidate.isNetworkSource &&
+              !candidate.isPending &&
+              candidate.filePath?.isNotEmpty == true) {
+            selected = candidate;
+            break;
+          }
+        }
+      }
+      if (selected.sourceType == 'lokal') {
+        if (context.mounted) {
+          LokalToast.show(
+            context,
+            lokalText('Reconnect to this Lokal desktop to stream its songs, or download them for offline playback.'),
+          );
+        }
+        return;
+      }
+    }
     await ref
         .read(playerProvider.notifier)
         .play(selected, playlist: list);
