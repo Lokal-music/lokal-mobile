@@ -317,10 +317,8 @@ class QueuePreResolver {
     // engine stop and add-on initialization. Foreground completion will
     // schedule prefetch again after the queue settles.
     if (_currentNeedsForeground) {
-      for (final timer in _timers.values) {
-        timer.cancel();
-      }
-      _timers.clear();
+      // Existing stagger slots can stay scheduled. Their callback checks
+      // this same reservation and will defer until foreground completes.
       return const [];
     }
     // Never disable the entire next-four preload window while a live FLAC
