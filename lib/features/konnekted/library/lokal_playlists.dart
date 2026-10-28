@@ -649,6 +649,7 @@ class LokalPlaylistPage extends ConsumerWidget {
             songs: songs,
             initialSort: LokalSongSort.original,
             originalLabel: 'Playlist order',
+            preferencesKey: 'lokal.playlist.$playlistId.song_browser_view.v1',
             searchHint: 'Search in playlist',
             onRemove: playlist.isNetworkSource
                 ? null

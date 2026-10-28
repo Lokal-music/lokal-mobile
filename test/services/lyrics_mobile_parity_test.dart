@@ -4,8 +4,21 @@ import 'package:flick/services/bini_lyrics_matcher.dart';
 import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/lyrics_playback_prefetch.dart';
 import 'package:flick/services/lyrics_translation_service.dart';
+import '../../integration_test/fixtures/ios_concurrent_lyrics.dart';
 
 void main() {
+  test('actual native fixture retains both singers through bilingual parsing', () {
+    final lyrics = LyricsService().parseLyricsText(iosConcurrentLyrics);
+    expect(lyrics.lines, hasLength(4));
+    expect(lyrics.lines[1].timestamp, const Duration(seconds: 3));
+    expect(lyrics.lines[2].timestamp, const Duration(seconds: 3));
+    expect(lyrics.lines[1].text, 'Second generated lyric');
+    expect(lyrics.lines[2].text, 'Concurrent generated voice');
+    expect(lyrics.lines[1].words, isNotEmpty);
+    expect(lyrics.lines[2].words, isNotEmpty);
+    expect(lyrics.lines.every((line) => line.translation == null), isTrue);
+  });
+
   test('local synchronized lyrics remain visible while an online upgrade loads', () {
     const local = LyricsData(
       lines: [LyricsLine(timestamp: Duration.zero, text: 'Local lyrics')],

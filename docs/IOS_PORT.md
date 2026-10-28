@@ -5,8 +5,8 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **86 reviewed merged
-mobile PRs after #172 through #290**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **91 reviewed merged
+mobile PRs after #172 through #296**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
@@ -49,13 +49,16 @@ acceptance is pending. Combined host regression results are recorded in the
 
 | [Build 74](https://github.com/lokal-music/lokal-mobile/actions/runs/40672723535) / PR #291 | Both complete native suites pass for through-#272 plus adaptive Rust polling and coherent paused persistence. Paused native preferences and six-second idle windows pass on both runtimes. WebKit delivers five/four new replay frames. IPA/source/notices/34 binaries/26 symbol bundles independently reverified; tree `dccad48229b68e0fb5503e34769330869ae40d36`. Later through-#290 changes are excluded. |
 
+| [Build 75](https://github.com/lokal-music/lokal-mobile/actions/runs/40688179314) / PR #297 | Package builds, but full acceptance fails: iOS 18.6 concurrent-lyrics fixture ambiguity and iOS 26 pre-app simulator boot timeout. Actual queue occurrence/reorder and paused preferences pass on 18.6. The next source corrects the fixture without relaxing Space assertions; no package promotion. |
+
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
 [Windows installation and acceptance](IOS_SIDELOADING.md), the
 [widget implementation gates](IOS_WIDGETKIT.md), and
 [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md).
-The next implementation batch follows [the transfer architecture](IOS_TRANSFERS.md):
-durable job ownership, native background networking and the paired-desktop adapter.
+The [transfer architecture](IOS_TRANSFERS.md) now has a locally tested native
+SQLite/URLSession core. AppDelegate/Flutter integration, deterministic library
+import and the paired-desktop product adapter remain to be implemented and accepted.
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly

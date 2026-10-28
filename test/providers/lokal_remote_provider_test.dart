@@ -4,6 +4,26 @@ import 'package:flick/services/lokal_remote_credentials_store.dart';
 import 'package:flick/services/lokal_remote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'dart:async';
+
+import 'package:flick/services/link/lokal_link_service.dart';
+
+class _DelayedPairing extends LokalLinkService {
+  final started = Completer<void>();
+  final response = Completer<LokalRemoteCredentials>();
+  @override
+  Future<LokalRemoteCredentials> pair({
+    required Uri origin,
+    required String code,
+    String? expectedDesktopId,
+    String deviceName = 'Lokal phone',
+  }) {
+    started.complete();
+    return response.future;
+  }
+}
 
 class _Store implements LokalRemoteCredentialsStore {
   LokalRemoteCredentials? value;
@@ -73,6 +93,44 @@ ProviderContainer _container(_Store store, _Service service) =>
     );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+  test(
+    'forgetting a desktop retires a pairing reply still in flight',
+    () async {
+      final store = _Store();
+      final link = _DelayedPairing();
+      final container = ProviderContainer(
+        overrides: [
+          lokalRemoteCredentialsStoreProvider.overrideWithValue(store),
+          lokalRemoteServiceProvider.overrideWithValue(_Service([])),
+          lokalLinkServiceProvider.overrideWithValue(link),
+        ],
+      );
+      addTearDown(link.close);
+      addTearDown(container.dispose);
+      final controller = container.read(lokalRemoteControllerProvider.notifier);
+      final pairing = controller.pairDesktop(
+        origin: 'http://desktop',
+        code: '123456',
+      );
+      await link.started.future;
+      await controller.forgetConfiguration();
+      link.response.complete(
+        LokalRemoteCredentials(
+          origin: Uri.parse('http://desktop'),
+          remoteToken: 'synthetic-retired-token',
+          desktopId: 'retired-desktop',
+        ),
+      );
+      await pairing;
+      expect(store.value, isNull);
+      expect(
+        container.read(lokalRemoteControllerProvider).status,
+        LokalRemoteConnectionStatus.unconfigured,
+      );
+    },
+  );
   test(
     'reconnect keeps the last good state through a transient failure',
     () async {

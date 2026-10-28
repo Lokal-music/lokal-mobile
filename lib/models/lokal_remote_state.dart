@@ -40,6 +40,7 @@ class LokalRemoteCredentials {
     this.apiKey = '',
     this.desktopId,
     this.desktopUserId,
+    this.pairingID,
   });
 
   final Uri origin;
@@ -47,6 +48,10 @@ class LokalRemoteCredentials {
   final String apiKey;
   final String? desktopId;
   final String? desktopUserId;
+
+  /// Public identity of this pairing, renewed when the desktop is re-paired.
+  /// Background jobs never persist bearer tokens or token hashes.
+  final String? pairingID;
 
   bool get hasRemoteToken => remoteToken.isNotEmpty;
   bool get hasApiKey => apiKey.isNotEmpty;
