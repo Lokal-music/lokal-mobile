@@ -2,9 +2,14 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:installLocation="auto">
-    <!-- No voice input/recording feature exists. Explicitly strip microphone
-         permissions introduced by merged library manifests (including SDKs). -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+    <!-- Some USB DACs/headsets expose an audio-capture interface. Android
+         checks the *granted* RECORD_AUDIO runtime permission before deciding
+         whether to display an additional USB-capture warning. Lokal does not
+         record audio; the user can grant this optional permission in USB DAC
+         settings. USB-device access is authorized separately by UsbManager. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- No microphone foreground service is used. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" tools:node="remove" />
     <!-- Internet permission for Last.fm scrobbling and online features -->
     <uses-permission android:name="android.permission.INTERNET" />
