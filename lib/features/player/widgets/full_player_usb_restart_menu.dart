@@ -85,10 +85,15 @@ Future<void> _restartUsbEngineFromFullPlayer(
     ));
   }
 
-  if (await Uac2PreferencesService().getAudioEnginePreference() !=
-      AudioEnginePreference.isochronousUsb) {
-    notice('Select Isochronous USB as the playback engine in USB DAC '
-        'settings before restarting.', short: true);
+  try {
+    if (await Uac2PreferencesService().getAudioEnginePreference() !=
+        AudioEnginePreference.isochronousUsb) {
+      notice('Select Isochronous USB as the playback engine in USB DAC '
+          'settings before restarting.', short: true);
+      return;
+    }
+  } catch (_) {
+    notice('Could not read USB audio engine preference.', short: true);
     return;
   }
   if (!context.mounted) return;
