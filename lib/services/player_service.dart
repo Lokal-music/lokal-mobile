@@ -95,6 +95,18 @@ bool shouldKeepDirectUsbAliveDuringPendingLookup({
     hasAttachedEngine &&
     hasLoadedSource;
 
+/// Defers engine stop for an unverified online candidate on direct USB.
+/// The successor will use the existing normal playTrack path once resolved.
+@visibleForTesting
+Future<void> stopSourceBeforePendingLookup({
+  required bool preserveCurrentSource,
+  required Future<void> Function() stopSource,
+}) async {
+  if (!preserveCurrentSource) {
+    await stopSource();
+  }
+}
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -981,12 +993,13 @@ class PlayerService {
       }
     }
     final lookup = resolveSelected();
-    if (!preserveDirectUsb) {
-      try {
-        await _playbackManager.stop();
-      } catch (e) {
-        _debugLog('[Playback] stop while preparing ${pending.title}: $e');
-      }
+    try {
+      await stopSourceBeforePendingLookup(
+        preserveCurrentSource: preserveDirectUsb,
+        stopSource: _playbackManager.stop,
+      );
+    } catch (e) {
+      _debugLog('[Playback] stop while preparing ${pending.title}: $e');
     }
     if (generation != _pendingPlaybackGeneration ||
         _pendingPlaybackId != pending.id)
