@@ -1369,10 +1369,15 @@ class _ClassicFullPlayerScreenState
                   favoritesService: _favoritesService,
                 ),
               ),
-              if (_playerScreenMode == PlayerScreenMode.artworkCard) ...[
+              // Keep Pitch reachable in every classic full-player layout;
+              // immersive uses only the three sound-transform chips to avoid
+              // duplicating its other on-artwork controls.
+              ...[
                 SizedBox(height: context.responsive(6.0, 8.0, 10.0)),
                 FullPlayerActionChipRow(
                   playerService: _playerService,
+                  compactTransformsOnly:
+                      _playerScreenMode == PlayerScreenMode.immersive,
                   lyricsActive: _isLyricsMode,
                   onOpenQueue: () => _navigation.openQueue(context),
                   onToggleLyrics: () => _setLyricsMode(!_isLyricsMode),
