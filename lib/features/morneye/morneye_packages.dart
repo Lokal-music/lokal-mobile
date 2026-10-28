@@ -1708,6 +1708,14 @@ class MorneyePackages {
         ((addon.manifest['postProcessing'] as Map)['hooks'] as List? ??
                 const [])
             .any((h) => h is Map && h['defaultEnabled'] == true);
+    final preparation = Stopwatch()..start();
+    void phase(String stage) {
+      onResolutionStage?.call(stage);
+      // Private IDs, signed URLs, tokens and track names are never logged.
+      AppLog.instance.add('[Morneye] resolve stage=$stage '
+          'elapsedMs=${preparation.elapsedMilliseconds}');
+    }
+    phase('worker_start');
     final runtime = await _createRuntime(
       addon,
       _code(key),
@@ -1719,13 +1727,6 @@ class MorneyePackages {
       heapMb: 256,
     );
     unawaited(cancel?.then((_) => runtime.close()));
-    final preparation = Stopwatch()..start();
-    void phase(String stage) {
-      onResolutionStage?.call(stage);
-      // Private IDs, signed URLs, tokens and track names are never logged.
-      AppLog.instance.add('[Morneye] resolve stage=$stage '
-          'elapsedMs=${preparation.elapsedMilliseconds}');
-    }
     try {
       phase('initializing');
       await runtime.invoke('initialize', [settings(addon)]);
@@ -1880,7 +1881,7 @@ class MorneyePackages {
         'source': provider == 'tidal' ? 'tidal' : 'other',
         'quality': 'DOLBY_ATMOS',
       });
-      phase('downloading');
+      phase('preparing_media');
       final result = await runtime.invoke('download', [
         '${available['track_id'] ?? available['trackId'] ?? id}',
         chosen,
