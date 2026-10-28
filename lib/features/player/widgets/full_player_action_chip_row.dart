@@ -25,6 +25,7 @@ class FullPlayerActionChipRow extends StatelessWidget {
     required this.onOpenQueue,
     required this.onToggleLyrics,
     required this.onOpenEqualizer,
+    this.compactTransformsOnly = false,
   });
 
   final PlayerService playerService;
@@ -32,6 +33,9 @@ class FullPlayerActionChipRow extends StatelessWidget {
   final VoidCallback onOpenQueue;
   final VoidCallback onToggleLyrics;
   final VoidCallback onOpenEqualizer;
+  /// In immersive layout, only show Speed, Pitch, and EQ in the footer.
+  /// Artwork-card layout keeps its existing broader action strip.
+  final bool compactTransformsOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +47,7 @@ class FullPlayerActionChipRow extends StatelessWidget {
           horizontal: context.responsive(16, 20, 24),
         ),
         children: [
+          if (!compactTransformsOnly) ...[
           const Center(child: LokalOutputPill()),
           _ActionChip(
             icon: LucideIcons.listMusic,
@@ -60,6 +65,7 @@ class FullPlayerActionChipRow extends StatelessWidget {
             label: l10n.sleepTimer,
             onTap: () => SleepTimerBottomSheet.show(context, playerService),
           ),
+          ],
           _ActionChip(
             icon: LucideIcons.gauge,
             label: l10n.speedUp,
