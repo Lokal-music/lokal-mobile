@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A83000000000000000000001 /* LokalTransferHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83000000000000000000002 /* LokalTransferHost.swift */; };
+		A82000000000000000000001 /* LokalTransferRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82000000000000000000002 /* LokalTransferRuntime.swift */; };
+		A81000000000000000000001 /* LokalTransferRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81000000000000000000002 /* LokalTransferRequest.swift */; };
+		A80000000000000000000001 /* LokalTransferCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000002 /* LokalTransferCredentials.swift */; };
+		A79000000000000000000001 /* LokalTransferFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A79000000000000000000002 /* LokalTransferFiles.swift */; };
+		A78000000000000000000001 /* LokalTransferJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78000000000000000000002 /* LokalTransferJournal.swift */; };
+		A77000000000000000000001 /* LokalTransferProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A77000000000000000000002 /* LokalTransferProtocol.swift */; };
+		A76000000000000000000001 /* LokalTransferJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A76000000000000000000002 /* LokalTransferJob.swift */; };
+		A75000000000000000000001 /* LokalTransferBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75000000000000000000002 /* LokalTransferBridge.swift */; };
 		A74000000000000000000001 /* LokalWidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74000000000000000000002 /* LokalWidgetBridge.swift */; };
 		A73000000000000000000001 /* LokalWidgetPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73000000000000000000002 /* LokalWidgetPublisher.swift */; };
 		A72000000000000000000001 /* LokalWidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72000000000000000000002 /* LokalWidgetStore.swift */; };
@@ -52,6 +61,15 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A83000000000000000000002 /* LokalTransferHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Networking/LokalTransferHost.swift"; sourceTree = "<group>"; };
+		A82000000000000000000002 /* LokalTransferRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Networking/LokalTransferRuntime.swift"; sourceTree = "<group>"; };
+		A81000000000000000000002 /* LokalTransferRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Networking/LokalTransferRequest.swift"; sourceTree = "<group>"; };
+		A80000000000000000000002 /* LokalTransferCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Networking/LokalTransferCredentials.swift"; sourceTree = "<group>"; };
+		A79000000000000000000002 /* LokalTransferFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Files/LokalTransferFiles.swift"; sourceTree = "<group>"; };
+		A78000000000000000000002 /* LokalTransferJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Storage/LokalTransferJournal.swift"; sourceTree = "<group>"; };
+		A77000000000000000000002 /* LokalTransferProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Contracts/LokalTransferProtocol.swift"; sourceTree = "<group>"; };
+		A76000000000000000000002 /* LokalTransferJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Contracts/LokalTransferJob.swift"; sourceTree = "<group>"; };
+		A75000000000000000000002 /* LokalTransferBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LokalTransferBridge.swift"; sourceTree = "<group>"; };
 		A74000000000000000000002 /* LokalWidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LokalWidgetBridge.swift"; sourceTree = "<group>"; };
 		A73000000000000000000002 /* LokalWidgetPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Widgets/Publication/LokalWidgetPublisher.swift"; sourceTree = "<group>"; };
 		A72000000000000000000002 /* LokalWidgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Widgets/Storage/LokalWidgetStore.swift"; sourceTree = "<group>"; };
@@ -144,6 +162,15 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				A10000000000000000000002 /* LokalPlatform.swift */,
 				A74000000000000000000002 /* LokalWidgetBridge.swift */,
+				A83000000000000000000002 /* LokalTransferHost.swift */,
+				A82000000000000000000002 /* LokalTransferRuntime.swift */,
+				A81000000000000000000002 /* LokalTransferRequest.swift */,
+				A80000000000000000000002 /* LokalTransferCredentials.swift */,
+				A79000000000000000000002 /* LokalTransferFiles.swift */,
+				A78000000000000000000002 /* LokalTransferJournal.swift */,
+				A77000000000000000000002 /* LokalTransferProtocol.swift */,
+				A76000000000000000000002 /* LokalTransferJob.swift */,
+				A75000000000000000000002 /* LokalTransferBridge.swift */,
 				A73000000000000000000002 /* LokalWidgetPublisher.swift */,
 				A72000000000000000000002 /* LokalWidgetStore.swift */,
 				A71000000000000000000002 /* LokalWidgetSnapshot.swift */,
@@ -314,6 +341,15 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				A10000000000000000000001 /* LokalPlatform.swift in Sources */,
 				A74000000000000000000001 /* LokalWidgetBridge.swift in Sources */,
+				A83000000000000000000001 /* LokalTransferHost.swift in Sources */,
+				A82000000000000000000001 /* LokalTransferRuntime.swift in Sources */,
+				A81000000000000000000001 /* LokalTransferRequest.swift in Sources */,
+				A80000000000000000000001 /* LokalTransferCredentials.swift in Sources */,
+				A79000000000000000000001 /* LokalTransferFiles.swift in Sources */,
+				A78000000000000000000001 /* LokalTransferJournal.swift in Sources */,
+				A77000000000000000000001 /* LokalTransferProtocol.swift in Sources */,
+				A76000000000000000000001 /* LokalTransferJob.swift in Sources */,
+				A75000000000000000000001 /* LokalTransferBridge.swift in Sources */,
 				A73000000000000000000001 /* LokalWidgetPublisher.swift in Sources */,
 				A72000000000000000000001 /* LokalWidgetStore.swift in Sources */,
 				A71000000000000000000001 /* LokalWidgetSnapshot.swift in Sources */,

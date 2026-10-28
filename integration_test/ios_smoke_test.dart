@@ -53,6 +53,7 @@ import 'ios_radio_reset_probe.dart';
 import 'ios_webkit_reset_probe.dart';
 import 'ios_session_reset_probe.dart';
 import 'ios_widget_transport_probe.dart';
+import 'ios_transfer_transport_probe.dart';
 import 'ios_queue_reorder_probe.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
 
@@ -245,7 +246,22 @@ void main() {
         'lokal.ios-smoke.${DateTime.now().microsecondsSinceEpoch}';
     addTearDown(() => playbackStorage.delete(key: credentialKey));
     await legacyStorage.write(key: credentialKey, value: 'generated-fixture');
-    expect(await playbackStorage.read(key: credentialKey), 'generated-fixture');
+    final legacyFixture = await legacyStorage.read(
+      key: credentialKey,
+      iOptions: const IOSOptions(accessibility: null),
+    );
+    binding.reportData = {
+      ...?binding.reportData,
+      'keychain_fixture_before_migration_present': legacyFixture != null,
+    };
+    expect(legacyFixture, 'generated-fixture',
+        reason: 'The legacy write must exist before migration.');
+    final migratedFixture = await playbackStorage.read(key: credentialKey);
+    binding.reportData = {
+      ...?binding.reportData,
+      'keychain_fixture_after_migration_present': migratedFixture != null,
+    };
+    expect(migratedFixture, 'generated-fixture');
     expect(await playbackStorage.containsKey(key: credentialKey), true);
     await playbackStorage.write(key: credentialKey, value: 'updated-fixture');
     expect((await playbackStorage.readAll())[credentialKey], 'updated-fixture');
@@ -260,6 +276,7 @@ void main() {
       'post172_profile_editor_above_dock': 'passed',
     };
     await probeIosWidgetTransport(binding);
+    await probeIosTransferTransport(tester, binding);
 
     final directory = await (await getTemporaryDirectory()).createTemp(
       'ios-native-smoke-',

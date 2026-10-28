@@ -812,7 +812,17 @@ class LyricsService {
           .substring(segStart, segEnd)
           .replaceAll(_wordTimestampPattern, '');
       if (segment.isEmpty && i > 0) continue;
-      words.add(LyricsWord(start: times[i], end: times[i], text: segment));
+      var explicitEnd = times[i];
+      if (i + 1 < times.length && times[i + 1] > times[i]) {
+        final afterNext = i + 2 < times.length ? starts[i + 2] : body.length;
+        // Consecutive markers with no sung text between them encode a word
+        // end followed by a vocal gap. Keep ordinary start-only ELRC's existing
+        // playback completion policy, while retaining explicitly saved gaps.
+        if (body.substring(ends[i + 1], afterNext).trim().isEmpty) {
+          explicitEnd = times[i + 1];
+        }
+      }
+      words.add(LyricsWord(start: times[i], end: explicitEnd, text: segment));
     }
     return words.isEmpty ? null : words;
   }
@@ -867,6 +877,7 @@ class LyricsService {
       final time = line.timestamp.inMilliseconds;
       timestampCounts[time] = (timestampCounts[time] ?? 0) + 1;
     }
+    var untaggedTranslations = 0;
     for (var index = 0; index < lines.length; index++) {
       final line = lines[index];
       final words = line.words;
@@ -882,7 +893,9 @@ class LyricsService {
       if (line.translation case final translation?
           when translation.trim().isNotEmpty && translation.trim() != line.text.trim()) {
         if ((timestampCounts[line.timestamp.inMilliseconds] ?? 0) > 1) {
-          buffer.writeln('[lokaltr:$index]');
+          buffer.writeln('[lokaltr:${index + untaggedTranslations}]');
+        } else {
+          untaggedTranslations++;
         }
         buffer.writeln('${formatTimestamp(line.timestamp)}${translation.trim()}');
       }
@@ -1054,9 +1067,9 @@ class LyricsService {
     // line is that line's translation; the rest are notes and credits.
     final plainLines = <LyricsLine>[];
     final translations = <(List<int>, String)>[];
-    // An optional association tag is emitted only for simultaneous vocal
-    // groups, where an otherwise portable timestamped translation would be
-    // indistinguishable from another sung voice.
+    // An optional association tag identifies known translated rows in
+    // simultaneous vocals and enhanced bilingual exports. Untagged enhanced
+    // rows retain their independent vocal identities.
     final taggedTranslation = RegExp(r'^\[lokaltr:(\d+)\]$');
     int? taggedSourceIndex;
     var previous = <int>[]; // indexes the last stamped row made

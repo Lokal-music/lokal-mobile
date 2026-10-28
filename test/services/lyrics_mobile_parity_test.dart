@@ -4,38 +4,97 @@ import 'package:flick/services/bini_lyrics_matcher.dart';
 import 'package:flick/services/lyrics_service.dart';
 import 'package:flick/services/lyrics_playback_prefetch.dart';
 import 'package:flick/services/lyrics_translation_service.dart';
+
 import '../../integration_test/fixtures/ios_concurrent_lyrics.dart';
 
-void main() {
-  test('actual native fixture retains both singers through bilingual parsing', () {
-    final lyrics = LyricsService().parseLyricsText(iosConcurrentLyrics);
-    expect(lyrics.lines, hasLength(4));
-    expect(lyrics.lines[1].timestamp, const Duration(seconds: 3));
-    expect(lyrics.lines[2].timestamp, const Duration(seconds: 3));
-    expect(lyrics.lines[1].text, 'Second generated lyric');
-    expect(lyrics.lines[2].text, 'Concurrent generated voice');
-    expect(lyrics.lines[1].words, isNotEmpty);
-    expect(lyrics.lines[2].words, isNotEmpty);
-    expect(lyrics.lines.every((line) => line.translation == null), isTrue);
-  });
+import 'package:flick/features/player/widgets/lyrics_file_export.dart';
 
-  test('local synchronized lyrics remain visible while an online upgrade loads', () {
-    const local = LyricsData(
-      lines: [LyricsLine(timestamp: Duration.zero, text: 'Local lyrics')],
-      isSynchronized: true,
-      rawContent: '[00:00.00]Local lyrics',
-      source: 'song.lrc',
-    );
-    const plain = LyricsData(
-      lines: [LyricsLine(timestamp: Duration.zero, text: 'Unverified web text')],
-      isSynchronized: false,
-      rawContent: 'Unverified web text',
-    );
-    expect(lyricQualityRank(local), 2);
-    expect(lyricQualityRank(plain), 1);
-    expect(lyricQualityRank(null), 0);
-    expect(lyricQualityRank(plain) > lyricQualityRank(local), isFalse);
-  });
+void main() {
+  test(
+    'enhanced translated native fixture reimports with both singers intact',
+    () {
+      final original = LyricsService().parseLyricsText(iosConcurrentLyrics);
+      final translated = LyricsData(
+        isSynchronized: true,
+        rawContent: original.rawContent,
+        lines: [
+          for (var i = 0; i < original.lines.length; i++)
+            original.lines[i].withTranslation('Translation $i'),
+        ],
+      );
+      final song = Song(
+        id: 'native-fixture',
+        title: 'Generated tone',
+        artist: 'Fixture',
+        duration: const Duration(seconds: 10),
+        fileType: 'wav',
+      );
+      final exported = prepareLyricsFileExport(
+        song,
+        translated,
+        includeDisplayedSubline: true,
+      );
+      final restored = LyricsService().parseLyricsText(exported.content);
+      expect(exported.extension, 'elrc');
+      expect(restored.lines, hasLength(4));
+      expect(
+        restored.lines.map((line) => line.text),
+        original.lines.map((line) => line.text),
+      );
+      expect(restored.lines.map((line) => line.translation), [
+        for (var i = 0; i < 4; i++) 'Translation $i',
+      ]);
+      expect(restored.lines[1].timestamp, const Duration(seconds: 3));
+      expect(restored.lines[2].timestamp, const Duration(seconds: 3));
+      final libraryCopy = LyricsService().parseLyricsText(
+        LyricsService().buildLrcContent(lines: translated.lines),
+      );
+      expect(
+        libraryCopy.lines.map((line) => line.text),
+        original.lines.map((line) => line.text),
+      );
+      expect(libraryCopy.lines.map((line) => line.translation), [
+        for (var i = 0; i < 4; i++) 'Translation $i',
+      ]);
+    },
+  );
+  test(
+    'actual native fixture retains both singers through bilingual parsing',
+    () {
+      final lyrics = LyricsService().parseLyricsText(iosConcurrentLyrics);
+      expect(lyrics.lines, hasLength(4));
+      expect(lyrics.lines[1].timestamp, const Duration(seconds: 3));
+      expect(lyrics.lines[2].timestamp, const Duration(seconds: 3));
+      expect(lyrics.lines[1].text, 'Second generated lyric');
+      expect(lyrics.lines[2].text, 'Concurrent generated voice');
+      expect(lyrics.lines[1].words, isNotEmpty);
+      expect(lyrics.lines[2].words, isNotEmpty);
+      expect(lyrics.lines.every((line) => line.translation == null), isTrue);
+    },
+  );
+
+  test(
+    'local synchronized lyrics remain visible while an online upgrade loads',
+    () {
+      const local = LyricsData(
+        lines: [LyricsLine(timestamp: Duration.zero, text: 'Local lyrics')],
+        isSynchronized: true,
+        rawContent: '[00:00.00]Local lyrics',
+        source: 'song.lrc',
+      );
+      const plain = LyricsData(
+        lines: [
+          LyricsLine(timestamp: Duration.zero, text: 'Unverified web text'),
+        ],
+        isSynchronized: false,
+        rawContent: 'Unverified web text',
+      );
+      expect(lyricQualityRank(local), 2);
+      expect(lyricQualityRank(plain), 1);
+      expect(lyricQualityRank(null), 0);
+      expect(lyricQualityRank(plain) > lyricQualityRank(local), isFalse);
+    },
+  );
 
   test(
     'localized Bini names can match the recording by duration and timing',

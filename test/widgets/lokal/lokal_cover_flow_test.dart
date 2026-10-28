@@ -11,12 +11,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Song _track(String id, String album, {int addedDay = 1}) => Song(
+Song _track(
+  String id,
+  String album, {
+  int addedDay = 1,
+  int? trackNumber,
+  int? discNumber,
+  String artist = 'Artist',
+  String albumArtist = 'Artist',
+}) => Song(
   id: id,
   title: 'Track $id',
-  artist: 'Artist',
+  artist: artist,
   album: album,
-  albumArtist: 'Artist',
+  albumArtist: albumArtist,
+  trackNumber: trackNumber,
+  discNumber: discNumber,
   duration: const Duration(minutes: 3),
   fileType: 'FLAC',
   filePath: '/music/$album/$id.flac',
@@ -468,7 +478,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  test('Cover Flow holds Made for you, one song per cover, no repeats', () {
+  test('Cover Flow keeps one recommended song per cover, no repeats', () {
     final songs = [_track('a', 'A'), _track('b', 'B'), _track('a', 'A')];
     const mix = LokalMix(
       id: 'm',
@@ -478,6 +488,7 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        konnektedLibraryProvider.overrideWithValue(AsyncData(songs)),
         konnektedMadeForYouProvider.overrideWithValue(
           AsyncData([
             for (final song in songs) LokalMadeForYouPick(song: song, mix: mix),
@@ -487,7 +498,68 @@ void main() {
     );
     addTearDown(container.dispose);
     final covers = container.read(konnektedCoverAlbumsProvider).value!;
-    expect(covers.map((a) => a.songs.single.id), ['a', 'b']);
-    expect(covers.first.albumName, 'Track a');
+    expect(covers.map((a) => a.coverSong!.id), ['a', 'b']);
+    expect(covers.map((a) => a.albumName), ['A', 'B']);
+    expect(covers.first.songs.map((s) => s.id), ['a']);
+  });
+
+  test('Cover Flow back finds complete local album, in disc and track order', () {
+    final selected = _track('picked', ' Evening Album ', trackNumber: 3);
+    final local = [
+      selected,
+      _track('track-2', 'Evening Album', trackNumber: 2),
+      _track('track-1', 'evening album', trackNumber: 1),
+      _track('track-4', 'Evening Album', trackNumber: 1, discNumber: 2),
+      _track('wrong', 'Another Album', trackNumber: 1),
+      _track('other-artist', 'Evening Album', albumArtist: 'Different Artist'),
+    ];
+    const mix = LokalMix(
+      id: 'm',
+      name: 'Daily Mix',
+      type: LokalMixType.daily,
+      tracks: [],
+    );
+    final covers = konnektedCoversWithLocalAlbums([
+      LokalMadeForYouPick(song: selected, mix: mix),
+      LokalMadeForYouPick(song: selected, mix: mix),
+    ], local);
+    expect(covers, hasLength(1), reason: 'one cover per recommended song');
+    final card = covers.single;
+    expect(card.key, 'song:picked');
+    expect(card.coverSong, same(selected));
+    expect(card.albumName, 'Evening Album');
+    expect(card.songs.map((s) => s.id),
+        ['track-1', 'track-2', 'picked', 'track-4']);
+  });
+
+  test('unknown album never expands into unrelated untagged tracks', () {
+    const mix = LokalMix(
+      id: 'm',
+      name: 'Daily Mix',
+      type: LokalMixType.daily,
+      tracks: [],
+    );
+    final unknown = Song(
+      id: 'untagged',
+      title: 'No Album',
+      artist: 'Artist',
+      duration: const Duration(minutes: 1),
+      fileType: 'FLAC',
+    );
+    final card = konnektedCoversWithLocalAlbums(
+      [LokalMadeForYouPick(song: unknown, mix: mix)],
+      [
+        unknown,
+        const Song(
+          id: 'other',
+          title: 'Other',
+          artist: 'Artist',
+          duration: Duration(minutes: 1),
+          fileType: 'FLAC',
+        ),
+      ],
+    ).single;
+    expect(card.albumName, 'No Album');
+    expect(card.songs.map((s) => s.id), ['untagged']);
   });
 }

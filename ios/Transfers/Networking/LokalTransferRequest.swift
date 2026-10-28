@@ -7,31 +7,40 @@ struct LokalTransferAuthorization: Sendable, CustomStringConvertible, CustomDebu
   let desktopID: String
   let origin: String
   let pairingID: String?
+  let desktopUserID: String?
   private let token: String
+  private let apiKey: String
   var description: String { "LokalTransferAuthorization(redacted)" }
   var debugDescription: String { description }
 
-  init(desktopID: String, origin: String, token: String, pairingID: String? = nil) throws {
-    guard !token.isEmpty, token.utf8.count <= 4096,
-          !token.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+  init(desktopID: String, origin: String, token: String, pairingID: String? = nil, apiKey: String = "",
+       desktopUserID: String? = nil) throws {
+    guard !token.isEmpty, [token, apiKey].allSatisfy({ value in
+      value.utf8.count <= 4096 && !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+    }) else {
       throw LokalTransferError.invalidRecord
     }
     self.desktopID = desktopID
     self.origin = origin
     self.pairingID = pairingID
+    self.desktopUserID = desktopUserID
     self.token = token
-    try LokalTransferScope(desktopID: desktopID, origin: origin, pairingID: pairingID).validate()
+    self.apiKey = apiKey
+    try LokalTransferIdentity(desktopID: desktopID, sourceID: "authorization", localSongID: nil,
+      origin: origin, pairingID: pairingID, desktopUserID: desktopUserID).validate()
   }
 
   func downloadRequest(for job: LokalTransferJob) throws -> URLRequest {
     try job.validate()
     guard job.direction == .download, job.identity.desktopID == desktopID, job.identity.pairingID == pairingID,
+          job.identity.desktopUserID == desktopUserID,
           try LokalTransferRequest.originKey(origin) == LokalTransferRequest.originKey(job.identity.origin) else {
       throw LokalTransferError.invalidRecord
     }
     var request = URLRequest(url: try LokalTransferRequest.downloadURL(job),
       cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
     request.setValue(token, forHTTPHeaderField: "x-remote-token")
+    if !apiKey.isEmpty { request.setValue(apiKey, forHTTPHeaderField: "x-api-key") }
     return request
   }
 }

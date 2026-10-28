@@ -113,13 +113,23 @@ final class LokalPlatform: NSObject, UIDocumentPickerDelegate {
         // Change only accessibility, atomically, without retrieving/replacing
         // credential bytes. Other services and synchronized items stay unchanged;
         // no shared access group is requested.
+        let credentialKey: String?
+        if let arguments = call.arguments {
+          guard let args = arguments as? [String: Any], args.count == 1,
+                let key = args["key"] as? String, !key.isEmpty, key.utf8.count <= 1024 else {
+            result(FlutterError(code: "INVALID_CREDENTIAL_KEY", message: "Invalid credential key.", details: nil))
+            return
+          }
+          credentialKey = key
+        } else { credentialKey = nil }
         DispatchQueue.global(qos: .utility).async {
-          let query: [String: Any] = [
+          var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "flutter_secure_storage_service",
             kSecAttrSynchronizable as String: false,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
           ]
+          if let credentialKey { query[kSecAttrAccount as String] = credentialKey }
           let attributes: [String: Any] = [
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
           ]

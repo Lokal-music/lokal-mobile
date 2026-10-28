@@ -1,5 +1,9 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Audio output": "Sortie audio",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume et crossfeed",
+  "Advanced output": "Sortie avancée",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, fondu enchaîné, file, égaliseur et paroles",
   "Previous in queue": "Précédents dans la file",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Le manifeste du module a renvoyé HTTP 404. Vérifiez que le lien manifest.json est valide et toujours accessible.",
   "The add-on manifest URL is invalid.": "L’URL du manifeste du module est invalide.",
@@ -626,6 +630,10 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Audio output": "Audioausgabe",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, Lautstärke und Crossfeed",
+  "Advanced output": "Erweiterte Ausgabe",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, Überblenden, Warteschlange, Equalizer und Liedtexte",
   "Previous in queue": "Vorherige in der Warteschlange",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Das Add-on-Manifest meldet HTTP 404. Prüfe, ob der Link manifest.json gültig und weiterhin erreichbar ist.",
   "The add-on manifest URL is invalid.": "Die URL des Add-on-Manifests ist ungültig.",
@@ -1245,6 +1253,10 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Audio output": "Salida de audio",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volumen y mezcla de canales",
+  "Advanced output": "Salida avanzada",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, fundido cruzado, cola, ecualizador y letras",
   "Previous in queue": "Anteriores en la cola",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "El manifiesto del complemento devolvió HTTP 404. Comprueba que el enlace manifest.json sea válido y siga disponible.",
   "The add-on manifest URL is invalid.": "La URL del manifiesto del complemento no es válida.",
@@ -1872,6 +1884,10 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Audio output": "Uscita audio",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume e crossfeed",
+  "Advanced output": "Uscita avanzata",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, dissolvenza incrociata, coda, equalizzatore e testi",
   "Previous in queue": "Precedenti in coda",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Il manifesto del componente aggiuntivo ha restituito HTTP 404. Verifica che il collegamento manifest.json sia valido e ancora accessibile.",
   "The add-on manifest URL is invalid.": "L’URL del manifesto del componente aggiuntivo non è valido.",
@@ -2501,6 +2517,10 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Audio output": "Saída de áudio",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume e crossfeed",
+  "Advanced output": "Saída avançada",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, transição, fila, equalizador e letras",
   "Previous in queue": "Anteriores na fila",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "O manifesto do complemento retornou HTTP 404. Verifique se o link manifest.json é válido e ainda está acessível.",
   "The add-on manifest URL is invalid.": "A URL do manifesto do complemento é inválida.",
@@ -3125,6 +3145,10 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Audio output": "Audio-uitvoer",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume en crossfeed",
+  "Advanced output": "Geavanceerde uitvoer",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, crossfade, wachtrij, equalizer en songteksten",
   "Previous in queue": "Eerdere nummers in de wachtrij",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Het add-onmanifest gaf HTTP 404 terug. Controleer of de link manifest.json geldig en nog bereikbaar is.",
   "The add-on manifest URL is invalid.": "De URL van het add-onmanifest is ongeldig.",
@@ -3761,6 +3785,10 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Audio output": "Wyjście audio",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, głośność i crossfeed",
+  "Advanced output": "Zaawansowane wyjście",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, przenikanie, kolejka, korektor i teksty",
   "Previous in queue": "Poprzednie w kolejce",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Manifest dodatku zwrócił HTTP 404. Sprawdź, czy adres manifest.json jest poprawny i nadal dostępny.",
   "The add-on manifest URL is invalid.": "Adres URL manifestu dodatku jest nieprawidłowy.",
@@ -4387,6 +4415,10 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Audio output": "Ljudutgång",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volym och crossfeed",
+  "Advanced output": "Avancerad utgång",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, övertoning, kö, equalizer och låttexter",
   "Previous in queue": "Tidigare i kön",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Tilläggets manifest svarade med HTTP 404. Kontrollera att länken manifest.json är giltig och fortfarande tillgänglig.",
   "The add-on manifest URL is invalid.": "URL:en till tilläggets manifest är ogiltig.",
@@ -5019,6 +5051,10 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Audio output": "音频输出",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay、蓝牙、音量和交叉馈送",
+  "Advanced output": "高级输出",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain、交叉淡化、队列、均衡器和歌词",
   "Previous in queue": "队列中的前序曲目",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "扩展清单返回了 HTTP 404。请检查 manifest.json 链接是否有效且仍可访问。",
   "The add-on manifest URL is invalid.": "扩展清单的网址无效。",
@@ -5650,6 +5686,10 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Audio output": "Ses çıkışı",
+  "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, ses düzeyi ve çapraz besleme",
+  "Advanced output": "Gelişmiş çıkış",
+  "ReplayGain, crossfade, queue, equalizer and lyrics": "ReplayGain, çapraz geçiş, sıra, ekolayzer ve şarkı sözleri",
   "Previous in queue": "Kuyruktaki önceki parçalar",
   "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Eklenti bildirimi HTTP 404 döndürdü. manifest.json bağlantısının geçerli ve hâlâ erişilebilir olduğunu kontrol edin.",
   "The add-on manifest URL is invalid.": "Eklenti bildiriminin URL’si geçersiz.",

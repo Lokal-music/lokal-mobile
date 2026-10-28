@@ -349,6 +349,7 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
     if (widget.albums.isEmpty) return const SizedBox.shrink();
     final t = context.lokal;
     final album = widget.albums[_index];
+    final coverSong = album.coverSong;
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = math.min(250.0, constraints.maxWidth * .60);
@@ -360,7 +361,10 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
             Semantics(
               label: lokalText(
                 "Cover Flow. {arg0} by {arg1}",
-                args: {'arg0': album.albumName, 'arg1': album.albumArtist},
+                args: {
+                  'arg0': coverSong?.title ?? album.albumName,
+                  'arg1': coverSong?.artist ?? album.albumArtist,
+                },
               ),
               value: '${_index + 1} of ${widget.albums.length}',
               increasedValue: _index < _last
@@ -401,7 +405,7 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
                 key: ValueKey(album.key),
                 children: [
                   Text(
-                    album.albumName,
+                    coverSong?.title ?? album.albumName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -414,7 +418,7 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    album.albumArtist,
+                    coverSong?.artist ?? album.albumArtist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,

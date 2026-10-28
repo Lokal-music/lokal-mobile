@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Lokal's settings groups, in desktop's order, plus pages that open from
-/// inside one of them.
+import 'dart:io';
+
+/// Lokal's main settings groups, followed by shortcut-only subpages.
 ///
 /// Desktop's Integrations and Add-ons are one flow here: [integrations] is
 /// Online sources, and [addons] opens it at its add-ons.
@@ -13,8 +14,13 @@ enum LokalSettingsGroup {
   ),
   playback(
     'Playback',
-    'ReplayGain, crossfade, queue, equalizer, lyrics and output',
+    'ReplayGain, crossfade, queue, equalizer and lyrics',
     Icons.play_circle_outline_rounded,
+  ),
+  output(
+    'Advanced output',
+    'USB DAC, bit-perfect, engine, Bluetooth and volume',
+    Icons.usb_rounded,
   ),
   library(
     'Library',
@@ -37,14 +43,6 @@ enum LokalSettingsGroup {
     Icons.info_outline_rounded,
   ),
 
-  /// Advanced output, a page inside Playback.
-  output(
-    'Advanced output',
-    'USB DAC, bit-perfect, engine, Bluetooth and volume',
-    Icons.usb_rounded,
-    parent: LokalSettingsGroup.playback,
-  ),
-
   /// Home's appearance shortcut exposes only theme and accent.
   themeAccent(
     'Theme & accent',
@@ -62,20 +60,28 @@ enum LokalSettingsGroup {
   );
 
   const LokalSettingsGroup(
-    this.label,
-    this.description,
-    this.icon, {
+    this._label,
+    this._description,
+    this._icon, {
     this.parent,
   });
 
-  final String label;
-  final String description;
-  final IconData icon;
+  final String _label;
+  final String _description;
+  final IconData _icon;
+
+  String get label =>
+      this == output && Platform.isIOS ? 'Audio output' : _label;
+  String get description => this == output && Platform.isIOS
+      ? 'AirPlay, Bluetooth, volume and crossfeed'
+      : _description;
+  IconData get icon =>
+      this == output && Platform.isIOS ? Icons.headphones_rounded : _icon;
 
   /// The group this page opens from; `null` for the listed groups.
   final LokalSettingsGroup? parent;
 
-  /// The groups the Settings page lists, in desktop's order.
+  /// The groups shown on the Settings root, with Advanced output after Playback.
   static List<LokalSettingsGroup> get listed => [
     for (final group in values)
       if (group.parent == null && group != about) group,

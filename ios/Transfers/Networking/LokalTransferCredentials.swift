@@ -15,13 +15,16 @@ enum LokalTransferCredentials {
           Set(document.keys).isSubset(of: ["version", "origin", "pairingID", "remoteToken", "apiKey", "desktopId", "desktopUserId"]),
           let origin = document["origin"] as? String,
           let pairingID = document["pairingID"] as? String,
-          let token = document["remoteToken"] as? String else {
+          let token = document["remoteToken"] as? String,
+          let apiKey = document["apiKey"] as? String,
+          document["desktopUserId"] == nil || document["desktopUserId"] is NSNull || document["desktopUserId"] is String else {
       throw LokalTransferCredentialError.invalidRecord
     }
     // Manually configured remote-control endpoints need not be paired for
     // original-file transfer. They do not create background authorization.
     guard let desktop = document["desktopId"] as? String, !desktop.isEmpty, !token.isEmpty else { return nil }
-    return try LokalTransferAuthorization(desktopID: desktop, origin: origin, token: token, pairingID: pairingID)
+    return try LokalTransferAuthorization(desktopID: desktop, origin: origin, token: token,
+      pairingID: pairingID, apiKey: apiKey, desktopUserID: document["desktopUserId"] as? String)
   }
 
   #if canImport(Security)

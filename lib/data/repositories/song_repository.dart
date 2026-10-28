@@ -18,11 +18,17 @@ class AlbumGroup {
   final String albumArtist;
   final List<Song> songs;
 
+  /// On Home's Made for You carousel, the face is a recommended song while
+  /// the back lists the full matching local album. Ordinary album groups do
+  /// not specify a featured song.
+  final Song? coverSong;
+
   const AlbumGroup({
     required this.key,
     required this.albumName,
     required this.albumArtist,
     required this.songs,
+    this.coverSong,
   });
 }
 
@@ -609,6 +615,12 @@ class SongRepository {
       remoteServerId: entity.remoteServerId,
     );
   }
+
+  /// Sort one album's tracks by disc, track number and title without
+  /// splitting tag variants (e.g. capitalization/extra whitespace) into
+  /// separate groups.
+  static List<Song> sortAlbumTracks(List<Song> songs) =>
+      List<Song>.of(songs)..sort(_compareAlbumSongs);
 
   /// Sort songs by album grouping, with tracks sorted by disc/track number.
   /// Albums are sorted alphabetically; within each album, tracks are sorted
