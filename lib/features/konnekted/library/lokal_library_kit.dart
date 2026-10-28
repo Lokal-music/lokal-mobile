@@ -51,12 +51,24 @@ Future<void> lokalPlay(
       // queue order, starting on the first device-local recording instead.
       // An explicit tap must not silently select a different recording.
       if (start == null) {
+        // Prefer phone-local recordings without making network requests.
         for (final candidate in list) {
           if (!candidate.isNetworkSource &&
               !candidate.isPending &&
               candidate.filePath?.isNotEmpty == true) {
             selected = candidate;
             break;
+          }
+        }
+        // A Library can consist entirely of desktop originals already cached
+        // for offline playback. They remain valid network-source Song rows.
+        if (selected.sourceType == 'lokal') {
+          for (final candidate in list) {
+            if (candidate.sourceType == 'lokal' &&
+                await ref.read(lokalSongAvailableProvider(candidate).future)) {
+              selected = candidate;
+              break;
+            }
           }
         }
       }
