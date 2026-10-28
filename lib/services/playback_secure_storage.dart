@@ -20,19 +20,16 @@ class PlaybackSecureStorage extends FlutterSecureStorage {
       );
 
   static const _channel = MethodChannel('lokal/ios');
-  static Future<void>? _preparing;
+  static final _preparation = PlaybackCredentialPreparation(
+    (key) => _channel.invokeMethod<void>(
+      'preparePlaybackCredentials',
+      key == null ? null : {'key': key},
+    ),
+  );
 
-  static Future<void> _prepare() async {
+  static Future<void> _prepare({String? key}) async {
     if (!Platform.isIOS) return;
-    final existing = _preparing;
-    if (existing != null) return existing;
-    final pending = _channel.invokeMethod<void>('preparePlaybackCredentials');
-    _preparing = pending;
-    try {
-      await pending;
-    } finally {
-      if (identical(_preparing, pending)) _preparing = null;
-    }
+    await _preparation.prepare(key: key);
   }
 
   @override
@@ -45,7 +42,7 @@ class PlaybackSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    if (iOptions == null) await _prepare();
+    if (iOptions == null) await _prepare(key: key);
     return super.read(
       key: key,
       iOptions: iOptions,
@@ -68,7 +65,7 @@ class PlaybackSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    if (iOptions == null && value != null) await _prepare();
+    if (iOptions == null && value != null) await _prepare(key: key);
     return super.write(
       key: key,
       value: value,
@@ -91,7 +88,7 @@ class PlaybackSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    if (iOptions == null) await _prepare();
+    if (iOptions == null) await _prepare(key: key);
     return super.containsKey(
       key: key,
       iOptions: iOptions,
@@ -121,5 +118,26 @@ class PlaybackSecureStorage extends FlutterSecureStorage {
       mOptions: mOptions,
       wOptions: wOptions,
     );
+  }
+}
+
+/// Preparation may coalesce only for the same account. A migration already
+/// running for another account can precede a just-completed legacy write.
+/// Global enumeration has its own lease; it cannot satisfy a later keyed read.
+class PlaybackCredentialPreparation {
+  PlaybackCredentialPreparation(this._migrate);
+  final Future<void> Function(String? key) _migrate;
+  final _pending = <String?, Future<void>>{};
+
+  Future<void> prepare({String? key}) async {
+    final existing = _pending[key];
+    if (existing != null) return existing;
+    final pending = _migrate(key);
+    _pending[key] = pending;
+    try {
+      await pending;
+    } finally {
+      if (identical(_pending[key], pending)) _pending.remove(key);
+    }
   }
 }

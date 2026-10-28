@@ -27,9 +27,17 @@ func makeJob(direction: LokalTransferDirection = .download) throws -> LokalTrans
 }
 
 
+func rawDatabasePath(_ url: URL) throws -> String {
+  guard let parent = realpath(url.deletingLastPathComponent().path, nil) else {
+    throw TestFailure.failed("resolve independent database parent")
+  }
+  defer { free(parent) }
+  return String(cString: parent) + "/" + url.lastPathComponent
+}
+
 func rawDatabase<T>(_ url: URL, _ work: (OpaquePointer) throws -> T) throws -> T {
   var database: OpaquePointer?
-  let code = sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_NOFOLLOW, nil)
+  let code = sqlite3_open_v2(try rawDatabasePath(url), &database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_NOFOLLOW, nil)
   guard code == SQLITE_OK, let database else { throw TestFailure.failed("open independent SQLite connection") }
   defer { sqlite3_close_v2(database) }
   return try work(database)
@@ -67,7 +75,21 @@ func rawDocument(_ url: URL, id: String, replacement: Data? = nil) throws -> Dat
   }
 }
 
+var contractStage = "startup"
 do {
+  if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--probe-write-lock" {
+    let path = URL(fileURLWithPath: CommandLine.arguments[2])
+      .appendingPathComponent(LokalTransferJournal.directoryName)
+      .appendingPathComponent(LokalTransferJournal.databaseName)
+    var database: OpaquePointer?
+    guard sqlite3_open_v2(try rawDatabasePath(path), &database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_NOFOLLOW, nil) == SQLITE_OK,
+          let database else { exit(94) }
+    sqlite3_busy_timeout(database, 150)
+    let result = sqlite3_exec(database, "BEGIN IMMEDIATE", nil, nil, nil)
+    if result == SQLITE_OK { _ = sqlite3_exec(database, "ROLLBACK", nil, nil, nil) }
+    sqlite3_close_v2(database)
+    exit(result == SQLITE_BUSY || result == SQLITE_LOCKED ? 0 : 93)
+  }
   if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--crash" {
     let boundary = CommandLine.arguments[3]
     let store = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
@@ -81,25 +103,108 @@ do {
     exit(0)
   }
   let manager = FileManager.default
-  let root = manager.temporaryDirectory.appendingPathComponent("lokal-transfer-test-" + UUID().uuidString)
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-transfer-test-" + UUID().uuidString)
   try manager.createDirectory(at: root, withIntermediateDirectories: false)
   defer { try? manager.removeItem(at: root) }
+  contractStage = "initial journal"
   let store = try LokalTransferJournal(container: root)
   try require(store.snapshot().jobs.isEmpty, "fresh journal")
+  contractStage = "process lock ownership"
+  let lockRoot = root.appendingPathComponent("write-lock-probe")
+  try manager.createDirectory(at: lockRoot, withIntermediateDirectories: false)
+  let initialLockStore = try LokalTransferJournal(container: lockRoot)
+  try initialLockStore.create([makeJob()])
+  let probeResult = lockRoot.appendingPathComponent("probe-result")
+  let executable = URL(fileURLWithPath: CommandLine.arguments[0])
+  let lockedStore = try LokalTransferJournal(container: lockRoot, testingCommitBoundary: { boundary in
+    guard boundary == "beforeCommit" else { return }
+    do {
+      // An independent connection must be able to inspect the old snapshot
+      // without the file-safety checks dropping our live writer lock.
+      let inspector = try LokalTransferJournal(container: lockRoot)
+      _ = try inspector.snapshot()
+      let child = Process()
+      child.executableURL = executable
+      child.arguments = ["--probe-write-lock", lockRoot.path]
+      try child.run(); child.waitUntilExit()
+      try Data(String(child.terminationStatus).utf8).write(to: probeResult)
+    } catch { try? Data("-1".utf8).write(to: probeResult) }
+  })
+  try lockedStore.create([makeJob()])
+  try require(String(contentsOf: probeResult, encoding: .utf8) == "0",
+    "independent inspection preserves the active SQLite writer lock against a different process")
+  contractStage = "parent alias identity"
+  let systemAlias = root.appendingPathComponent("system-parent-alias")
+  let actualContainer = root.appendingPathComponent("alias-container")
+  try manager.createDirectory(at: actualContainer, withIntermediateDirectories: false)
+  try manager.createSymbolicLink(at: systemAlias, withDestinationURL: root)
+  let aliasedContainer = systemAlias.appendingPathComponent("alias-container")
+  let aliasJournal = try LokalTransferJournal(container: aliasedContainer)
+  try aliasJournal.create([makeJob()])
+  try require(LokalTransferJournal(container: actualContainer).snapshot().jobs.count == 1,
+    "OS parent aliases resolve to the same owned journal without following a final container symlink")
+  let finalAlias = root.appendingPathComponent("final-container-alias")
+  try manager.createSymbolicLink(at: finalAlias, withDestinationURL: actualContainer)
+  try rejects("a final app container symlink remains forbidden") {
+    _ = try LokalTransferJournal(container: finalAlias)
+  }
+  contractStage = "typed protocol and credentials"
   let original = try makeJob()
+  let intentData = try Data(contentsOf: URL(fileURLWithPath: "test/fixtures/ios_transfer_intents_v1.json"))
+  let intents = try LokalTransferProtocol.intents(intentData)
+  try require(intents.count == 1 && intents[0].phase == .queued && intents[0].revision == 1,
+    "shared user intent cannot assign native task state")
+  try require(intents[0].identity.localSongID == "42" && intents[0].metadata.title == "曲 — Café",
+    "protocol preserves frozen library identity and Unicode metadata")
+  let intentRows = try JSONSerialization.jsonObject(with: intentData) as! [[String: Any]]
+  for (key, value) in [("phase", "complete" as Any), ("revision", 900 as Any),
+      ("headers", ["authorization": "synthetic-forbidden-token"] as Any),
+      ("destinationPath", "/outside/music.flac" as Any)] {
+    var row = intentRows[0]; row[key] = value
+    try rejects("intent cannot supply task, credential or filesystem state") {
+      _ = try LokalTransferProtocol.intents(JSONSerialization.data(withJSONObject: [row]))
+    }
+  }
+  var nested = intentRows[0]
+  var nestedIdentity = nested["identity"] as! [String: Any]
+  nestedIdentity["token"] = "synthetic-forbidden-token"
+  nested["identity"] = nestedIdentity
+  try rejects("nested arbitrary credentials are rejected") {
+    _ = try LokalTransferProtocol.intents(JSONSerialization.data(withJSONObject: [nested]))
+  }
+  try rejects("repeated frozen intent is not duplicated inside one batch") {
+    _ = try LokalTransferProtocol.intents(JSONSerialization.data(withJSONObject: intentRows + intentRows))
+  }
+  for document in ["{\"offset\":false,\"limit\":20}", "{\"offset\":0,\"limit\":101}",
+      "{\"offset\":0,\"limit\":1,\"headers\":{}}"] {
+    try rejects("bounded typed page request") { _ = try LokalTransferProtocol.page(Data(document.utf8)) }
+  }
+  try require(LokalTransferProtocol.page(Data("{\"offset\":0,\"limit\":100}".utf8)).limit == 100,
+    "bounded page request accepted")
   let credentialBytes = try Data(contentsOf: URL(fileURLWithPath: "test/fixtures/ios_transfer_credentials_v2.json"))
   guard let atomicAuthorization = try LokalTransferCredentials.decode(credentialBytes) else {
     throw TestFailure.failed("Shared credential contract did not authorize")
   }
   let grantJob = try LokalTransferJob(direction: .download,
     identity: LokalTransferIdentity(desktopID: "contract-desktop", sourceID: "original", localSongID: nil,
-      origin: "http://192.0.2.20:5443", pairingID: "14093104-64d4-44f7-8c8b-8b4b14399067"),
+      origin: "http://192.0.2.20:5443", pairingID: "14093104-64d4-44f7-8c8b-8b4b14399067",
+      desktopUserID: "contract-user", localServerID: 3),
     metadata: original.metadata, nowMs: 1000)
   try require(atomicAuthorization.downloadRequest(for: grantJob).value(forHTTPHeaderField: "x-remote-token") ==
     "synthetic-transfer-contract-token", "shared atomic Keychain wire contract")
+  try require(atomicAuthorization.downloadRequest(for: grantJob).value(forHTTPHeaderField: "x-api-key") ==
+    "synthetic-transfer-contract-key", "paired original endpoint retains the optional API key")
+  try require(!atomicAuthorization.debugDescription.contains("synthetic-transfer-contract-key"), "API key remains redacted")
   try rejects("same desktop after re-pairing cannot inherit earlier queued authority") {
     _ = try LokalTransferAuthorization(desktopID: "contract-desktop", origin: "http://192.0.2.20:5443",
-      token: "synthetic-new-pairing-token", pairingID: UUID().uuidString.lowercased()).downloadRequest(for: grantJob)
+      token: "synthetic-new-pairing-token", pairingID: UUID().uuidString.lowercased(),
+      desktopUserID: "contract-user").downloadRequest(for: grantJob)
+  }
+  try rejects("same origin and pairing cannot authorize another desktop account") {
+    _ = try LokalTransferAuthorization(desktopID: "contract-desktop", origin: "http://192.0.2.20:5443",
+      token: "synthetic-account-token", pairingID: grantJob.identity.pairingID,
+      desktopUserID: "another-account").downloadRequest(for: grantJob)
   }
   try rejects("legacy split credentials cannot start background networking") {
     _ = try LokalTransferCredentials.decode(Data("{\"version\":1,\"remoteToken\":\"synthetic-old-token\"}".utf8))
@@ -243,6 +348,7 @@ do {
 
   // Real retained bytes and hashing, not a checksum stub. The OS temporary
   // file is no longer needed once retained; verification/import stay separate.
+  contractStage = "retained real bytes"
   let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
   let binaryJob = try LokalTransferJob(direction: .download, identity: original.identity,
     metadata: original.metadata, nowMs: 1000, expectedBytes: 3, expectedSHA256: digest)
@@ -295,6 +401,7 @@ do {
   try manager.moveItem(at: retiredDirectory, to: ownedDirectory)
 
 
+  contractStage = "strict SQLite records"
   let committed = try store.snapshot()
   try rawExecute(disk, "PRAGMA user_version=2")
   try rejects("future database read") { _ = try store.snapshot() }
@@ -313,6 +420,18 @@ do {
   try require(rawDocument(disk, id: original.id) != originalDocument, "unknown record retained")
   _ = try rawDocument(disk, id: original.id, replacement: originalDocument)
 
+  // Foundation's UTF-8 initializer is available at the iOS 16 deployment floor
+  // and must remain strict: replacement characters would hide corrupt storage.
+  let invalidUTF8 = "80" + String(repeating: "61", count: 35)
+  try rawExecute(disk, "UPDATE jobs SET id=CAST(x'\(invalidUTF8)' AS TEXT) WHERE id='\(original.id)'")
+  try rejects("malformed UTF-8 database identity is not repaired silently") { _ = try store.snapshot() }
+  try rawExecute(disk, "UPDATE jobs SET id='\(original.id)' WHERE id=CAST(x'\(invalidUTF8)' AS TEXT)")
+  try rawExecute(disk, "INSERT INTO pauses VALUES (CAST(x'80' AS TEXT),'http://192.0.2.20:5443','','unauthorized')")
+  try rejects("malformed UTF-8 pause text is not repaired silently") { _ = try store.snapshot() }
+  try rawExecute(disk, "DELETE FROM pauses WHERE desktop_id=CAST(x'80' AS TEXT)")
+  try require(store.snapshot().jobs == committed.jobs, "strict UTF-8 validation preserves every original job")
+
+  contractStage = "unsafe storage preservation"
   let unsafeRoot = root.appendingPathComponent("unsafe")
   let unsafeDirectory = unsafeRoot.appendingPathComponent(LokalTransferJournal.directoryName)
   try manager.createDirectory(at: unsafeDirectory, withIntermediateDirectories: true)
@@ -334,6 +453,7 @@ do {
   try rejects("unmigrated JSON prototype") { _ = try LokalTransferJournal(container: unsafeRoot) }
   try require(Data(contentsOf: legacy) == legacyBytes, "legacy data never silently reset")
 
+  contractStage = "concurrent process writers"
   let before = try store.snapshot()
   let children = try (0..<6).map { _ -> Process in
     let process = Process()
@@ -365,6 +485,7 @@ do {
   // Start from a truncated WAL so its growth measures this one real transaction,
   // rather than previously allocated checkpoint space. A manifest rewrite of
   // this queue would be hundreds of KB; one affected job stays bounded.
+  contractStage = "single job WAL budget"
   let largeQueue = try (0..<1000).map { _ in try makeJob() }
   try store.create(largeQueue)
   let largeBefore = try store.snapshot()
@@ -381,10 +502,11 @@ do {
   print("Native transfer journal single-update WAL bytes with 1,000 queued tracks: \(walBytes)")
   if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--network-fixture",
      let length = Int64(CommandLine.arguments[3]) {
+    contractStage = "external HTTP and host owner"
     try runNetworkContracts(origin: CommandLine.arguments[2], length: length, checksum: CommandLine.arguments[4])
   }
   print("Native transfer journal: lifecycle, revision, declared integrity, corrupt/future preservation, symlink, 6×8 process writes and both transaction crash boundaries passed. No installed-app, iOS suspension or power-loss acceptance claim.")
 } catch {
-  FileHandle.standardError.write(Data("Native transfer journal failed: \(error)\n".utf8))
+  FileHandle.standardError.write(Data("Native transfer journal failed at \(contractStage): \(error)\n".utf8))
   exit(1)
 }

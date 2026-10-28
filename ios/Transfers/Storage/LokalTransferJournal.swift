@@ -20,7 +20,7 @@ final class LokalTransferJournal: @unchecked Sendable {
   static let databaseName = "jobs.sqlite3"
   static let maximumBytes = 16 * 1024 * 1024
   static let maximumJobs = 10_000
-  private static let maximumJobBytes = 32 * 1024
+  private static let maximumJobBytes = LokalTransferJob.maximumJSONBytes
   private let directory: Int32
   private let root: URL
   private let database: OpaquePointer
@@ -32,12 +32,32 @@ final class LokalTransferJournal: @unchecked Sendable {
     let base = open(container.standardizedFileURL.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard base >= 0 else { throw LokalTransferError.posix("open_container", errno) }
     defer { close(base) }
+    // Apple exposes /var as an OS alias for /private/var. SQLite NOFOLLOW
+    // rejects aliases anywhere in the full pathname, including that trusted
+    // parent. Resolve parents only after refusing a final-container symlink,
+    // and prove the canonical pathname identifies our already opened directory.
+    // Use the POSIX pathname verbatim. Foundation's URL standardization on
+    // Apple platforms can reintroduce OS aliases after resolving a file URL.
+    guard let canonicalBytes = realpath(container.path, nil) else {
+      throw LokalTransferError.posix("resolve_container", errno)
+    }
+    let canonicalPath = String(cString: canonicalBytes)
+    free(canonicalBytes)
+    let resolved = open(canonicalPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    guard resolved >= 0 else { throw LokalTransferError.unsafeFile }
+    defer { close(resolved) }
+    var originalInfo = stat(), resolvedInfo = stat()
+    guard fstat(base, &originalInfo) == 0, fstat(resolved, &resolvedInfo) == 0,
+          originalInfo.st_dev == resolvedInfo.st_dev, originalInfo.st_ino == resolvedInfo.st_ino else {
+      throw LokalTransferError.unsafeFile
+    }
     if mkdirat(base, Self.directoryName, 0o700) != 0 && errno != EEXIST {
       throw LokalTransferError.posix("create_directory", errno)
     }
     let owned = openat(base, Self.directoryName, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard owned >= 0 else { throw LokalTransferError.posix("open_directory", errno) }
-    let root = container.appendingPathComponent(Self.directoryName, isDirectory: true)
+    let rootPath = canonicalPath + "/" + Self.directoryName
+    let root = URL(fileURLWithPath: rootPath, isDirectory: true)
     do {
       for name in [Self.databaseName, Self.databaseName + "-wal", Self.databaseName + "-shm", "jobs.json"] {
         try Self.checkRegular(directory: owned, name: name)
@@ -49,16 +69,17 @@ final class LokalTransferJournal: @unchecked Sendable {
       }
       #if os(iOS) && !targetEnvironment(simulator)
       try FileManager.default.setAttributes(
-        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: root.path)
+        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: rootPath)
       #endif
     } catch { close(owned); throw error }
     var opened: OpaquePointer?
-    let code = sqlite3_open_v2(root.appendingPathComponent(Self.databaseName).path, &opened,
+    let code = sqlite3_open_v2(rootPath + "/" + Self.databaseName, &opened,
       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_NOFOLLOW, nil)
     guard code == SQLITE_OK, let opened else {
+      let detail = opened.map { sqlite3_extended_errcode($0) } ?? code
       if let opened { sqlite3_close_v2(opened) }
       close(owned)
-      throw LokalTransferError.database(code)
+      throw LokalTransferError.database(detail)
     }
     directory = owned
     self.root = root
@@ -93,8 +114,9 @@ final class LokalTransferJournal: @unchecked Sendable {
       }
       try execute("PRAGMA synchronous=FULL")
       try execute("PRAGMA wal_autocheckpoint=256")
-      try FileManager.default.setAttributes([.posixPermissions: 0o600],
-        ofItemAtPath: root.appendingPathComponent(Self.databaseName).path)
+      guard fchmodat(directory, Self.databaseName, 0o600, 0) == 0 else {
+        throw LokalTransferError.posix("protect_database", errno)
+      }
     } catch {
       sqlite3_close_v2(database)
       close(directory)
@@ -153,14 +175,16 @@ final class LokalTransferJournal: @unchecked Sendable {
   }
 
   private static func checkRegular(directory: Int32, name: String) throws {
-    let fd = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
-    if fd < 0 {
+    // SQLite's POSIX locks are process-scoped. Opening then closing another
+    // descriptor for its database/SHM inode can release those locks while a
+    // live connection still owns a transaction. Inspect metadata without an
+    // extra descriptor; SQLite retains sole ownership of its file handles.
+    var info = stat()
+    if fstatat(directory, name, &info, AT_SYMLINK_NOFOLLOW) != 0 {
       if errno == ENOENT { return }
       throw LokalTransferError.posix("inspect_database_file", errno)
     }
-    defer { close(fd) }
-    var info = stat()
-    guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), info.st_nlink == 1 else {
+    guard info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), info.st_nlink == 1 else {
       throw LokalTransferError.unsafeFile
     }
   }
@@ -219,25 +243,14 @@ final class LokalTransferJournal: @unchecked Sendable {
   private func decoded(_ query: OpaquePointer, blobColumn: Int32 = 2) throws -> (LokalTransferJob, Int) {
     guard let idBytes = sqlite3_column_text(query, 0),
           sqlite3_column_bytes(query, 0) == 36,
-          let id = String(validating: UnsafeBufferPointer(start: idBytes, count: 36), as: UTF8.self),
+          let id = String(data: Data(bytes: idBytes, count: 36), encoding: .utf8),
           sqlite3_column_type(query, 1) == SQLITE_INTEGER,
           sqlite3_column_type(query, blobColumn) == SQLITE_BLOB else { throw LokalTransferError.invalidRecord }
     let count = Int(sqlite3_column_bytes(query, blobColumn))
     guard count > 0, count <= Self.maximumJobBytes,
           let bytes = sqlite3_column_blob(query, blobColumn) else { throw LokalTransferError.invalidRecord }
     let data = Data(bytes: bytes, count: count)
-    guard let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-          Set(row.keys).isSubset(of: ["id", "revision", "direction", "identity", "metadata", "createdMs", "updatedMs",
-            "phase", "taskID", "expectedBytes", "expectedSHA256", "receivedBytes", "receivedSHA256", "resultOriginalID",
-            "responseBytes", "responseSHA256", "lastFailure"]),
-          let identity = row["identity"] as? [String: Any],
-          Set(identity.keys).isSubset(of: ["desktopID", "sourceID", "localSongID", "origin", "pairingID"]),
-          let metadata = row["metadata"] as? [String: Any],
-          Set(metadata.keys).isSubset(of: ["title", "artist", "album", "fileExtension"]) else {
-      throw LokalTransferError.invalidRecord
-    }
-    let job = try JSONDecoder().decode(LokalTransferJob.self, from: data)
-    try job.validate()
+    let job = try LokalTransferJob.decodeDocument(data)
     guard job.id == id, job.revision == sqlite3_column_int64(query, 1) else { throw LokalTransferError.invalidRecord }
     return (job, count)
   }
@@ -339,7 +352,7 @@ final class LokalTransferJournal: @unchecked Sendable {
     let count = Int(sqlite3_column_bytes(query, column))
     guard sqlite3_column_type(query, column) == SQLITE_TEXT, (allowEmpty || count > 0), count <= 4096,
           let pointer = sqlite3_column_text(query, column),
-          let value = String(validating: UnsafeBufferPointer(start: pointer, count: count), as: UTF8.self) else {
+          let value = String(data: Data(bytes: pointer, count: count), encoding: .utf8) else {
       throw LokalTransferError.invalidRecord
     }
     return value

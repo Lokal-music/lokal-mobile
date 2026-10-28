@@ -158,6 +158,20 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     queue.async { reply(.success(self.summaryValue())) }
   }
 
+  /// Public pairing identity only. Bearer values never cross the Flutter bridge.
+  func currentPairing(_ reply: @escaping LokalTransferCompletion<LokalTransferPairing?>) {
+    queue.async {
+      do {
+        guard !self.shuttingDown else { throw LokalTransferError.invalidTransition }
+        let authorization = try self.credentials()
+        reply(.success(authorization.map {
+          LokalTransferPairing(scope: LokalTransferScope(desktopID: $0.desktopID,
+            origin: $0.origin, pairingID: $0.pairingID), desktopUserID: $0.desktopUserID)
+        }))
+      } catch { reply(.failure(error)) }
+    }
+  }
+
   func page(offset: Int, limit: Int, reply: @escaping LokalTransferCompletion<[LokalTransferJob]>) {
     queue.async {
       guard offset >= 0, limit > 0, limit <= 100 else { reply(.failure(LokalTransferError.invalidRecord)); return }
@@ -198,12 +212,14 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     queue.async {
       do {
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
+        guard let authorization = try self.credentials() else { throw LokalTransferError.invalidRecord }
         var new: [LokalTransferJob] = []
         guard !requested.isEmpty, requested.count <= LokalTransferJournal.maximumJobs,
               Set(requested.map(\.id)).count == requested.count else { throw LokalTransferError.invalidRecord }
         var reserved = try Set(self.jobs.values.filter { !$0.phase.isTerminal }.map(self.original))
         for job in requested {
           try job.validate()
+          _ = try authorization.downloadRequest(for: job)
           guard job.direction == .download, job.phase == .queued, job.revision == 1,
                 job.expectedBytes == nil || job.expectedBytes! <= LokalTransferFiles.maximumBytes else {
             throw LokalTransferError.invalidRecord

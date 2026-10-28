@@ -14,6 +14,29 @@ const _song = Song(
 );
 
 void main() {
+  test('normal save keeps line-only source bytes despite enriched model word timings', () {
+    const raw = '[00:01.00]Hello';
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: 'Hello',
+          words: [
+            LyricsWord(
+              start: Duration(seconds: 1),
+              end: Duration(seconds: 2),
+              text: 'Hello',
+            ),
+          ],
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: raw,
+    );
+    final exported = prepareLyricsFileExport(_song, lyrics);
+    expect(exported.extension, 'lrc');
+    expect(exported.content, raw);
+  });
   test(
     'rendered lyrics retain available millisecond line and word offsets',
     () {
@@ -169,9 +192,14 @@ void main() {
       lyrics,
       includeDisplayedSubline: true,
     );
-    expect(file.extension, 'lrc');
+    expect(file.extension, 'elrc');
     expect(file.mimeType, 'text/plain');
-    expect(file.content, '[00:01.25]さくら\n[00:01.25]Sakura\n');
+    expect(
+      file.content,
+      startsWith(
+        '[00:01.25]<00:01.25>さくら<00:02.00>\n[lokaltr:0]\n[00:01.25]<00:01.25>',
+      ),
+    );
     final restored = LyricsService().parseLyricsText(file.content);
     expect(restored.lines, hasLength(1));
     expect(restored.lines.single.translation, 'Sakura');
@@ -339,10 +367,12 @@ void main() {
       lyrics,
       includeDisplayedSubline: true,
     );
-    expect(withTranslation.extension, 'lrc');
+    expect(withTranslation.extension, 'elrc');
     expect(
       withTranslation.content,
-      '[00:01.05]Hello world\n[00:01.05]Bonjour monde\n',
+      startsWith(
+        '[00:01.05]<00:01.05>Hello <00:01.40>world<00:02.20>\n[lokaltr:0]\n[00:01.05]<00:01.05>',
+      ),
     );
     final restored = LyricsService().parseLyricsText(withTranslation.content);
     expect(restored.lines.single.text, 'Hello world');
@@ -551,5 +581,176 @@ void main() {
       throwsArgumentError,
     );
     expect(opened, isFalse);
+  });
+  test(
+    'enhanced bilingual save interleaves original and translated timing',
+    () {
+      const lyrics = LyricsData(
+        lines: [
+          LyricsLine(
+            timestamp: Duration(milliseconds: 10380),
+            text: 'How can you',
+            words: [
+              LyricsWord(
+                start: Duration(milliseconds: 10380),
+                end: Duration(milliseconds: 11740),
+                text: 'How ',
+              ),
+              LyricsWord(
+                start: Duration(milliseconds: 11740),
+                end: Duration(milliseconds: 12160),
+                text: 'can ',
+              ),
+              LyricsWord(
+                start: Duration(milliseconds: 12160),
+                end: Duration(milliseconds: 12600),
+                text: 'you',
+              ),
+            ],
+            translation: 'Cómo puedes ver',
+          ),
+          LyricsLine(
+            timestamp: Duration(milliseconds: 16470),
+            text: 'Open doors',
+            words: [
+              LyricsWord(
+                start: Duration(milliseconds: 16470),
+                end: Duration(milliseconds: 17500),
+                text: 'Open ',
+              ),
+              LyricsWord(
+                start: Duration(milliseconds: 17500),
+                end: Duration(milliseconds: 18300),
+                text: 'doors',
+              ),
+            ],
+            translation: 'Puertas abiertas',
+          ),
+        ],
+        isSynchronized: true,
+        rawContent: '',
+      );
+      final saved = prepareLyricsFileExport(
+        _song,
+        lyrics,
+        includeDisplayedSubline: true,
+      );
+      expect(saved.extension, 'elrc');
+      expect(saved.fileName, endsWith('.elrc'));
+      final rows = saved.content
+          .trim()
+          .split('\n')
+          .where((row) => !row.startsWith('[lokaltr:'))
+          .toList();
+      expect(rows, hasLength(4));
+      expect(
+        rows[0],
+        '[00:10.38]<00:10.38>How <00:11.74>can <00:12.16>you<00:12.60>',
+      );
+      expect(rows[1], startsWith('[00:10.38]<00:10.38>'));
+      expect(rows[2], startsWith('[00:16.47]<00:16.47>'));
+      expect(rows[3], startsWith('[00:16.47]<00:16.47>'));
+      // Every original line is followed immediately by its selected subline.
+      expect(
+        rows[1].replaceAll(RegExp(r'<[0-9:.]+>'), ''),
+        '[00:10.38]Cómo puedes ver',
+      );
+      expect(
+        rows[3].replaceAll(RegExp(r'<[0-9:.]+>'), ''),
+        '[00:16.47]Puertas abiertas',
+      );
+      expect(RegExp(r'<[0-9:.]+>').allMatches(rows[1]).length, greaterThan(1));
+      expect(RegExp(r'<[0-9:.]+>').allMatches(rows[3]).length, greaterThan(1));
+      expect(saved.content, contains('[lokaltr:0]'));
+      final restored = LyricsService().parseLyricsText(saved.content);
+      expect(restored.lines, hasLength(2));
+      expect(restored.lines.map((line) => line.translation), [
+        'Cómo puedes ver',
+        'Puertas abiertas',
+      ]);
+    },
+  );
+
+  test('source vocal gaps remain gaps in projected translation timing', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: 'one two',
+          words: [
+            LyricsWord(
+              start: Duration(seconds: 1),
+              end: Duration(milliseconds: 1500),
+              text: 'one ',
+            ),
+            LyricsWord(
+              start: Duration(seconds: 3),
+              end: Duration(milliseconds: 3500),
+              text: 'two',
+            ),
+          ],
+          translation: 'un dos',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final saved = prepareLyricsFileExport(
+      _song,
+      lyrics,
+      includeDisplayedSubline: true,
+    );
+    expect(saved.extension, 'elrc');
+    final second = saved.content
+        .trim()
+        .split('\n')
+        .where((row) => !row.startsWith('[lokaltr:'))
+        .toList()[1];
+    expect(second, contains('<00:01.00>'));
+    expect(second, matches(RegExp(r'<00:03\.\d{2,3}>')));
+    expect(second.replaceAll(RegExp(r'<[0-9:.]+>'), ''), '[00:01.00]un dos');
+    final translated = LyricsService()
+        .parseLyricsText(second)
+        .lines
+        .single
+        .words!;
+    expect(
+      translated
+          .where((word) => word.start < const Duration(seconds: 3))
+          .every((word) => word.end <= const Duration(milliseconds: 1500)),
+      isTrue,
+    );
+    final roundTrip = LyricsService().parseLyricsText(saved.content);
+    expect(
+      roundTrip.lines.single.words!.first.end,
+      const Duration(milliseconds: 1500),
+    );
+    expect(
+      roundTrip.lines.single.words!.last.start,
+      const Duration(seconds: 3),
+    );
+    expect(roundTrip.lines.single.translation, 'un dos');
+  });
+
+  test('line-only synchronized lyrics never fabricate word timestamps', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 4),
+          text: 'Salut',
+          translation: 'Hello',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final saved = prepareLyricsFileExport(
+      _song,
+      lyrics,
+      includeDisplayedSubline: true,
+    );
+    expect(saved.extension, 'lrc');
+    expect(saved.content, '[00:04.00]Salut\n[00:04.00]Hello\n');
+    expect(saved.content, isNot(contains('<00:')));
   });
 }

@@ -332,6 +332,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            konnektedLibraryProvider.overrideWithValue(AsyncData(recent)),
             konnektedMadeForYouProvider.overrideWithValue(
               AsyncData([
                 for (final song in recent)
@@ -362,6 +363,85 @@ void main() {
       await tester.pumpAndSettle();
       expect(played?.id, 'r3');
       expect(queue?.map((s) => s.id), ['r1', 'r2', 'r3']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'long-press on recommended cover shows local album tracks and queues album',
+    (tester) async {
+      const mix = LokalMix(
+        id: 'm',
+        name: 'Daily Mix',
+        type: LokalMixType.daily,
+        tracks: [],
+      );
+      final selected = Song(
+        id: 'featured',
+        title: 'Featured Song',
+        artist: 'Album Artist',
+        album: 'Local Album',
+        albumArtist: 'Album Artist',
+        trackNumber: 2,
+        duration: const Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/music/featured.flac',
+      );
+      final first = Song(
+        id: 'first',
+        title: 'First Song',
+        artist: 'Album Artist',
+        album: 'Local Album',
+        albumArtist: 'Album Artist',
+        trackNumber: 1,
+        duration: const Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/music/first.flac',
+      );
+      final third = Song(
+        id: 'third',
+        title: 'Third Song',
+        artist: 'Album Artist',
+        album: 'Local Album',
+        albumArtist: 'Album Artist',
+        trackNumber: 3,
+        duration: const Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/music/third.flac',
+      );
+      final played = <(Song, List<Song>)>[];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            konnektedLibraryProvider.overrideWithValue(
+              AsyncData([selected, third, first]),
+            ),
+            konnektedMadeForYouProvider.overrideWithValue(
+              AsyncData([LokalMadeForYouPick(song: selected, mix: mix)]),
+            ),
+          ],
+          child: _app(
+            KonnektedCoverFlowSection(
+              onPlay: (song, queue) => played.add((song, queue)),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Featured Song'), findsOneWidget);
+      final stage = find.bySemanticsLabel(RegExp('^Cover Flow'));
+      await tester.longPressAt(tester.getCenter(stage) - const Offset(0, 40));
+      await tester.pumpAndSettle();
+      expect(find.text('Local Album'), findsOneWidget);
+      expect(find.text('First Song'), findsOneWidget);
+      expect(find.text('Third Song'), findsOneWidget);
+      await tester.tap(find.text('Third Song'));
+      expect(played.last.$1.id, 'third');
+      expect(played.last.$2.map((song) => song.id), [
+        'first',
+        'featured',
+        'third',
+      ]);
       expect(tester.takeException(), isNull);
     },
   );

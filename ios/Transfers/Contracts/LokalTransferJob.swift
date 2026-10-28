@@ -40,6 +40,11 @@ struct LokalTransferPause: Codable, Equatable, Sendable {
   let reason: LokalTransferFailure
 }
 
+struct LokalTransferPairing: Codable, Sendable {
+  let scope: LokalTransferScope
+  let desktopUserID: String?
+}
+
 enum LokalTransferPhase: String, Codable, Sendable {
   case queued, waiting, transferring, received, downloaded, staged, validating, importing
   case complete, interrupted, cancelled, failed
@@ -56,26 +61,31 @@ struct LokalTransferIdentity: Codable, Equatable, Sendable {
   /// Public random grant identity, never a token or token hash. Re-pairing
   /// cannot authorize queued intent from an earlier pairing to the same PC.
   let pairingID: String?
+  let desktopUserID: String?
+  let localServerID: Int?
 
-  init(desktopID: String, sourceID: String, localSongID: String?, origin: String, pairingID: String? = nil) {
+  init(desktopID: String, sourceID: String, localSongID: String?, origin: String,
+       pairingID: String? = nil, desktopUserID: String? = nil, localServerID: Int? = nil) {
     self.desktopID = desktopID; self.sourceID = sourceID; self.localSongID = localSongID
     self.origin = origin; self.pairingID = pairingID
+    self.desktopUserID = desktopUserID; self.localServerID = localServerID
   }
 
   func validate() throws {
+    guard localServerID == nil || localServerID! > 0 else { throw LokalTransferError.invalidRecord }
     if let pairingID {
       guard UUID(uuidString: pairingID)?.uuidString.lowercased() == pairingID else {
         throw LokalTransferError.invalidRecord
       }
     }
-    for value in [desktopID, sourceID] + (localSongID.map { [$0] } ?? []) {
+    for value in [desktopID, sourceID] + (localSongID.map { [$0] } ?? []) + (desktopUserID.map { [$0] } ?? []) {
       guard !value.isEmpty, value.utf8.count <= 512,
             !value.contains("://"), !value.contains("?"), !value.contains("#"),
             !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
         throw LokalTransferError.invalidRecord
       }
     }
-    guard let url = URLComponents(string: origin),
+    guard origin.utf8.count <= 4096, let url = URLComponents(string: origin),
           url.scheme == "https" || url.scheme == "http",
           let host = url.host, !host.isEmpty,
           url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
@@ -92,11 +102,35 @@ struct LokalTransferMetadata: Codable, Equatable, Sendable {
   let artist: String
   let album: String?
   let fileExtension: String
+  let albumArtist: String?
+  let genre: String?
+  let durationMs: Int?
+  let sampleRate: Int?
+  let bitDepth: Int?
+  let bitrate: Int?
+  let trackNumber: Int?
+  let discNumber: Int?
+  let year: Int?
+
+  init(title: String, artist: String, album: String?, fileExtension: String,
+       albumArtist: String? = nil, genre: String? = nil, durationMs: Int? = nil,
+       sampleRate: Int? = nil, bitDepth: Int? = nil, bitrate: Int? = nil,
+       trackNumber: Int? = nil, discNumber: Int? = nil, year: Int? = nil) {
+    self.title = title; self.artist = artist; self.album = album; self.fileExtension = fileExtension
+    self.albumArtist = albumArtist; self.genre = genre; self.durationMs = durationMs
+    self.sampleRate = sampleRate; self.bitDepth = bitDepth; self.bitrate = bitrate
+    self.trackNumber = trackNumber; self.discNumber = discNumber; self.year = year
+  }
 
   func validate() throws {
-    guard [title, artist, album ?? ""].allSatisfy({ $0.utf8.count <= 4096 }),
+    guard [title, artist, album ?? "", albumArtist ?? "", genre ?? ""].allSatisfy({ $0.utf8.count <= 4096 }),
           fileExtension.range(of: "^[a-z0-9]{1,8}$", options: .regularExpression) != nil else {
       throw LokalTransferError.invalidRecord
+    }
+    for (value, maximum) in [(durationMs, 31_622_400_000), (sampleRate, 1_000_000_000),
+        (bitDepth, 1024), (bitrate, 1_000_000_000_000), (trackNumber, 1_000_000),
+        (discNumber, 1_000_000), (year, 9999)] {
+      guard value == nil || (0...maximum).contains(value!) else { throw LokalTransferError.invalidRecord }
     }
   }
 }
@@ -104,6 +138,7 @@ struct LokalTransferMetadata: Codable, Equatable, Sendable {
 /// A network callback must carry both the job ID and the revision it started.
 /// Retry/cancel retire that binding before another OS task can be accepted.
 struct LokalTransferJob: Codable, Equatable, Sendable {
+  static let maximumJSONBytes = 32 * 1024
   let id: String
   private(set) var revision: Int
   let direction: LokalTransferDirection
@@ -121,6 +156,26 @@ struct LokalTransferJob: Codable, Equatable, Sendable {
   private(set) var responseBytes: Int64?
   private(set) var responseSHA256: String?
   private(set) var lastFailure: LokalTransferFailure?
+
+  /// Shared strict document boundary for storage and the private app protocol.
+  /// Unknown credential/header/path payloads are never silently accepted.
+  static func decodeDocument(_ data: Data) throws -> LokalTransferJob {
+    guard !data.isEmpty, data.count <= maximumJSONBytes,
+          let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          Set(row.keys).isSubset(of: ["id", "revision", "direction", "identity", "metadata", "createdMs", "updatedMs",
+            "phase", "taskID", "expectedBytes", "expectedSHA256", "receivedBytes", "receivedSHA256", "resultOriginalID",
+            "responseBytes", "responseSHA256", "lastFailure"]),
+          let identity = row["identity"] as? [String: Any],
+          Set(identity.keys).isSubset(of: ["desktopID", "sourceID", "localSongID", "origin", "pairingID", "desktopUserID", "localServerID"]),
+          let metadata = row["metadata"] as? [String: Any],
+          Set(metadata.keys).isSubset(of: ["title", "artist", "album", "fileExtension", "albumArtist", "genre",
+            "durationMs", "sampleRate", "bitDepth", "bitrate", "trackNumber", "discNumber", "year"]) else {
+      throw LokalTransferError.invalidRecord
+    }
+    let job = try JSONDecoder().decode(LokalTransferJob.self, from: data)
+    try job.validate()
+    return job
+  }
 
   init(id: String = UUID().uuidString.lowercased(), direction: LokalTransferDirection,
        identity: LokalTransferIdentity, metadata: LokalTransferMetadata, nowMs: Int64,
@@ -168,7 +223,9 @@ struct LokalTransferJob: Codable, Equatable, Sendable {
     guard responseBytes == nil || responseBytes! > 0 else { throw LokalTransferError.invalidRecord }
     if let bytes = receivedBytes, let hash = receivedSHA256 {
       guard expectedBytes == nil || bytes == expectedBytes,
-            expectedSHA256 == nil || hash == expectedSHA256 else { throw LokalTransferError.invalidRecord }
+            expectedSHA256 == nil || hash == expectedSHA256,
+            responseBytes == nil || bytes == responseBytes,
+            responseSHA256 == nil || hash == responseSHA256 else { throw LokalTransferError.invalidRecord }
     }
     if direction == .download && [.staged, .validating, .importing, .complete].contains(phase) {
       guard let bytes = receivedBytes, let hash = receivedSHA256,

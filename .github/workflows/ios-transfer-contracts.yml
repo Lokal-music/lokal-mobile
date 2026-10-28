@@ -4,9 +4,13 @@ on:
   pull_request:
     paths:
       - 'ios/Transfers/**'
+      - 'ios/Runner/LokalTransferBridge.swift'
+      - 'ios/Runner/AppDelegate.swift'
+      - 'ios/Runner.xcodeproj/project.pbxproj'
       - 'tool/ios_transfer_contracts.py'
       - 'tool/ios_transfer_fixture.py'
       - 'test/fixtures/ios_transfer_credentials_v2.json'
+      - 'test/fixtures/ios_transfer_intents_v1.json'
       - '.github/workflows/ios-transfer-contracts.yml'
   workflow_dispatch:
 
@@ -20,12 +24,19 @@ concurrency:
 jobs:
   journal:
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - name: Prepare the real Flutter Apple framework
+        run: flutter precache --ios
       - name: Exercise actual files, processes and iOS 16 journal APIs
-        run: python3 tool/ios_transfer_contracts.py --check-ios-sdks
+        run: python3 tool/ios_transfer_contracts.py --check-ios-sdks --check-flutter-bridge --repeat-native 5

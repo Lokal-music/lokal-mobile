@@ -1,17 +1,19 @@
 # iPhone transfer architecture
 
-Status: native transport core implemented, app adapter pending, 28 October 2026.
+Status: native transport, app owner and typed Flutter bridge implemented in
+continuation source; product library adapter pending, 28 October 2026.
 Swift 6 portable tests exercise the SQLite journal, actual owned files and a real
-URLSession download delegate against a separate HTTP server. The iOS background
-configuration is source only until Apple SDK/runtime acceptance. AppDelegate /
-Flutter integration, deterministic library import, uploads and persisted progress
-UI are not enabled in the product yet. The currently qualified IPA is build 74;
+URLSession download delegate against a separate HTTP server. AppDelegate now
+routes native background delivery before Flutter initializes, and Runner links
+the native owner and bridge. The Apple SDK/runtime gates for this wiring are
+pending. Deterministic library import, uploads and persisted progress UI are not
+enabled in the product yet. The currently qualified IPA is build 74;
 this transfer core is not in that package.
 
 ```mermaid
 flowchart LR
   Plan[Explicit copy plan] -. adapter pending .-> Bridge[Flutter bridge]
-  Bridge -. pending .-> Runtime[Native serial owner]
+  Bridge --> Runtime[Native serial owner]
   Runtime --> Journal[(SQLite job journal)]
   Runtime --> Session[OS URLSession]
   Session --> Desktop[Paired desktop original]
@@ -22,8 +24,11 @@ flowchart LR
   Runtime -. progress UI pending .-> UI[Persisted queue surface]
 ```
 
-Solid connections have portable implementation/tests. Dashed connections are
-remaining app work; the OS background execution path still needs iOS acceptance.
+Solid connections are implemented in source. Core storage/network connections
+have portable acceptance; the Flutter bridge has typed codec/ownership tests and
+an actual registered-channel integration probe awaiting Apple execution. Dashed
+connections are remaining product work. OS background execution still needs
+separate iOS suspension/relaunch acceptance.
 
 ## Existing paths and the suspension gap
 
@@ -125,9 +130,10 @@ import commits. Reconnection rechecks both catalogues to skip completed original
 1. Completed locally: typed journal, SQLite transactions, owned-path policy,
    native delegate, task reconciliation, revision/cancel and pairing guards,
    actual file verification and a separate real HTTP fixture.
-2. Next: Apple SDK type checking and native protocol acceptance; connect the
-   AppDelegate background-event handler and paginated Flutter bridge. The native
-   owner must exist independently of the Flutter engine. Unpair must retire
+2. Implemented in continuation source, awaiting Apple acceptance: AppDelegate
+   background-event routing, independent native owner and paginated typed Flutter
+   bridge. Early CI checks type-check both actual iOS SDKs and Flutter framework
+   before building the full application. Unpair must retire
    native jobs/tasks before clearing the atomic Keychain record.
 3. Integrate paired-desktop transport and durable progress UI through the
    existing identity-preserving import/upload paths.
@@ -209,9 +215,12 @@ receipt. Cancel cannot roll back an already committed library write; current
 model cancellation is rejected while importing. Lease retirement, recovery and
 completion acknowledgement must be implemented before exposing these operations.
 
-AppDelegate must route background completion independently of Flutter. The
-bridge needs one-shot main-thread replies, client ownership, bounded pages and
-foreground-only observation. The paired-desktop coordinator must migrate legacy
+AppDelegate routes background completion independently of Flutter in continuation
+source. The bridge implements one-shot main-thread replies, client ownership,
+bounded pages and foreground-only observation. Its public capability explicitly
+reports `libraryImport=false` and `upload=false`; the Dart product adapter must
+require acknowledged library import before enabling native copying. The
+paired-desktop coordinator must migrate legacy
 credentials only after verified reconnect, enqueue the user's frozen plan,
 resume after suspension and present persisted states. Unpair/reconfiguration
 must retire associated native tasks and revisions, including after a journal
@@ -224,3 +233,99 @@ Linux can pass test-only SQLite header/library directories via the documented
 CLI flags; no host SDK paths are committed. The hosted workflow adds
 `--check-ios-sdks`. The shared synthetic credential fixture is decoded by both
 Swift and Dart; real credentials are never test inputs.
+
+
+### Apple-hosted continuation
+
+Focused native run 1 compiled the macOS Swift core but failed with SQLite
+CANTOPEN before reaching the SDK checks. A new portable regression reproduces
+the same failure with an aliased parent directory. Apple's `/var` →
+`/private/var` alias is incompatible with SQLite NOFOLLOW over an unresolved
+full path. The continuation refuses a final-container symlink first, resolves
+the trusted parent path, then checks its device/inode against the already opened
+directory before opening the database with NOFOLLOW. The regression now passes;
+a final-container symlink and database symlinks remain refused. This correction
+needs another Apple-hosted run. SDK checks now execute independently before host
+runtime tests so a host path failure cannot conceal their results.
+
+
+### Native owner and SQLite lock continuation
+
+`LokalTransferHost` now opens/reuses one runtime on a utility queue independently
+of Flutter clients, retries recoverable storage initialization and retains OS
+completion callbacks until successful initialization/reconciliation. AppDelegate
+routing and the Flutter channel were subsequently wired into Runner in the
+continuation below; real SDK/runtime acceptance remains pending. New jobs must match the current native pairing before they
+are persisted. The paired request also retains the optional API-key header from
+the atomic Keychain record, matching the existing desktop protocol.
+
+A repeated concurrency run exposed a prototype locking defect: opening/closing
+extra database or SHM descriptors for a file-safety check can release SQLite's
+process-scoped POSIX locks. The checks now use descriptor-relative no-follow
+metadata inspection without opening SQLite's files; permission changes use the
+filesystem syscall directly. A separate-process probe attempts to acquire the
+writer lock while a parent transaction is paused and another in-process reader
+inspects the journal. It fails against the old implementation and passes after
+the correction. SQLite keeps sole ownership of its database/WAL/SHM descriptors.
+
+**Twelve consecutive complete portable rounds pass** with the corrected checks:
+576 concurrent child job creations, both transaction crash boundaries on every
+round, actual HTTP WAV/hash/cancel/auth/reconstruction checks and twelve engine
+clients sharing one recovered owner. Each 1,000-record single-update check
+writes 8,272 WAL bytes. The focused Apple workflow now runs five complete rounds
+and both SDK checks. This continuation is local source until its next hosted
+validation; it does not qualify installed-app background behavior or power loss.
+
+
+### Typed app transport continuation
+
+Runner now links nine native transfer files and owns one host independently of
+Flutter engines. AppDelegate forwards the stable background-session identifier
+to that host and retries initialization when protected data becomes available.
+A main-actor method channel handles only bounded JSON bytes, fixed sanitized
+errors and one-shot replies. Utility queues own the journal, network and hashing.
+The bridge detaches observation while inactive; old engine/client disposal cannot
+stop a replacement observer. Detaching the UI never cancels durable jobs.
+
+The shared Swift/Dart intent fixture exercises Unicode metadata, whole-file
+integrity, pairing grant, desktop account and existing local song/server identity.
+The private enqueue API accepts only frozen intents; clients cannot submit phase,
+revision, task identity, authorization headers or filesystem paths. The native
+journal assigns state. Large Dart plans freeze before the first await and encode
+outside the UI/audio isolate. Pages contain at most 100 records. Malformed JSON
+and storage errors never echo credentials or recording metadata in error text.
+
+Eight Dart protocol/transport cases and three complete updated native portable
+rounds pass locally. A new real-channel integration probe checks actual native
+capability, rejected state/header injection without journal mutation, bounded
+pagination and observer replacement through Flutter's real binary messenger.
+This probe is awaiting Apple execution and does not assert background daemon,
+suspension or library-import qualification. Capability keeps import/upload false.
+The existing product copy flow remains authoritative until deterministic import,
+unpair/clear ordering and receipt recovery are implemented and accepted.
+
+Build 76's full iOS 26 suite passed, but its iOS 18.6 run stopped at the legacy
+Keychain check before playback. The old global Dart preparation future can let a
+new account join an older unrelated migration that predates its legacy write.
+Preparation now coalesces only per account, with global enumeration separate,
+and native migration optionally selects that exact account. Four deterministic
+concurrency/retry tests pass. The native probe now records synthetic fixture
+presence before and after migration without exposing values; the next Apple run
+must establish whether this correction resolves the observed failure.
+
+
+### First embedded Apple SDK feedback
+
+Focused native run 2 reached both SDK checks before host contracts. They exposed
+two strict `String(validating:as:)` uses whose Apple availability starts at iOS 18.
+The continuation uses Foundation's strict UTF-8 `String(data:encoding:)` at the
+iOS 16 floor; real malformed identity/pause-text regressions preserve corruption
+and reject it instead of inserting replacement characters.
+
+The macOS host still reported CANTOPEN. Path canonicalization now uses POSIX
+`realpath` and passes its resulting pathname directly to SQLite, avoiding any
+subsequent Foundation URL normalization. Independent test-only SQLite connections
+use the same canonical-parent rule. The next failure report includes a bounded
+contract-stage label and SQLite's extended numeric code. Three updated portable
+rounds pass; the Apple rerun must qualify this correction. No deployment-floor
+increase or relaxed symlink/UTF-8 validation is used.

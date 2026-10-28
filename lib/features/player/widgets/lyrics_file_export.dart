@@ -6,6 +6,8 @@ import 'package:flick/models/song.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/services/lyrics_service.dart';
 
+import 'lyrics_subline_timing.dart';
+
 /// Portable lyrics export, independent from the library storage path.
 class LyricsFileExport {
   const LyricsFileExport({
@@ -52,14 +54,54 @@ String _timestamp(Duration time) {
   return '$minutes:$seconds.$fraction';
 }
 
+String _renderProjectedWords(String translation, List<LyricsWord> projected) {
+  final chars = translation.trim().runes.map(String.fromCharCode).toList();
+  final output = StringBuffer();
+  var cursor = 0;
+  for (var index = 0; index < projected.length; index++) {
+    final word = projected[index];
+    while (cursor < chars.length && chars[cursor].trim().isEmpty) {
+      output.write(chars[cursor++]);
+    }
+    output.write('<${_timestamp(word.start)}>');
+    var remaining = word.text.runes.length;
+    while (cursor < chars.length && remaining > 0) {
+      final char = chars[cursor++];
+      output.write(char);
+      if (char.trim().isNotEmpty) remaining--;
+    }
+    if (word.end > word.start &&
+        (index == projected.length - 1 ||
+            word.end < projected[index + 1].start)) {
+      output.write('<${_timestamp(word.end)}>');
+    }
+  }
+  if (cursor < chars.length) output.write(chars.skip(cursor).join());
+  return output.toString();
+}
+
+String _renderOriginalWords(
+  List<LyricsWord> words, {
+  required bool retainEnds,
+}) {
+  final output = StringBuffer();
+  for (var index = 0; index < words.length; index++) {
+    final word = words[index];
+    output.write('<${_timestamp(word.start)}>${word.text}');
+    if (retainEnds &&
+        word.end > word.start &&
+        (index == words.length - 1 || word.end < words[index + 1].start)) {
+      output.write('<${_timestamp(word.end)}>');
+    }
+  }
+  return output.toString();
+}
+
 String _renderLyrics(
   LyricsData lyrics, {
   bool includeDisplayedSubline = false,
 }) {
   final output = <String>[];
-  // Same-time vocals are not necessarily a bilingual pair. For collisions,
-  // emit a non-singing Lokal association tag before the translated LRC row
-  // so re-import never mistakes that row for a third singer.
   final timestampCounts = <int, int>{};
   if (includeDisplayedSubline && lyrics.isSynchronized) {
     for (final line in lyrics.lines) {
@@ -67,36 +109,49 @@ String _renderLyrics(
       timestampCounts[time] = (timestampCounts[time] ?? 0) + 1;
     }
   }
+  final playback = includeDisplayedSubline && lyrics.isSynchronized
+      ? LyricsService().playbackLines(lyrics)
+      : null;
+  var untaggedTranslations = 0;
   for (var index = 0; index < lyrics.lines.length; index++) {
     final line = lyrics.lines[index];
     final words = line.words;
-    // Bilingual files use ordinary line-timed LRC for widest compatibility.
-    // Keep enhanced word timing for original-only exports.
-    final text =
-        lyrics.isSynchronized &&
-            !includeDisplayedSubline &&
-            words != null &&
-            words.isNotEmpty
-        ? words.map((word) => '<${_timestamp(word.start)}>${word.text}').join()
-        : line.text.isNotEmpty
+    final wordTimed = words?.isNotEmpty == true;
+    final originalText = line.text.trim().isNotEmpty
         ? line.text
         : words?.map((word) => word.text).join() ?? '';
+    final text = lyrics.isSynchronized && wordTimed
+        ? _renderOriginalWords(words!, retainEnds: includeDisplayedSubline)
+        : originalText;
     final stamp = '[${_timestamp(line.timestamp)}]';
     output.add(lyrics.isSynchronized ? '$stamp$text' : text);
     final translation = line.translation?.trim();
-    if (includeDisplayedSubline &&
-        translation != null &&
-        translation.isNotEmpty &&
-        translation != text.trim()) {
-      // Unstamped translation lines work in Lokal but are not reliably
-      // recognized by other players. Same-timestamp pairs are conventional
-      // bilingual LRC and remain valid timed lyric records.
-      if (lyrics.isSynchronized &&
-          (timestampCounts[line.timestamp.inMilliseconds] ?? 0) > 1) {
-        output.add('[lokaltr:$index]');
-      }
-      output.add(lyrics.isSynchronized ? '$stamp$translation' : translation);
+    if (!includeDisplayedSubline ||
+        translation == null ||
+        translation.isEmpty ||
+        translation == originalText.trim())
+      continue;
+    final source = playback?[index];
+    final projected = source != null && wordTimed
+        ? projectLyricsSubline(source, translation).words
+        : null;
+    final translatedText = projected?.isNotEmpty == true
+        ? _renderProjectedWords(translation, projected!)
+        : translation;
+    // ELRC has no unambiguous vocal/subline association. The parser preserves
+    // simultaneous enhanced singers, so our known translated word-timed row
+    // needs an ignored metadata tag even when only one original sings here.
+    // Other ELRC players still receive ordinary paired timed text records.
+    if (lyrics.isSynchronized &&
+        (wordTimed ||
+            (timestampCounts[line.timestamp.inMilliseconds] ?? 0) > 1)) {
+      // The parser folds plain bilingual pairs only after reading every row.
+      // Earlier untagged translations still occupy its physical record index.
+      output.add('[lokaltr:${index + untaggedTranslations}]');
+    } else if (lyrics.isSynchronized) {
+      untaggedTranslations++;
     }
+    output.add(lyrics.isSynchronized ? '$stamp$translatedText' : translation);
   }
   return "${output.join('\n')}\n";
 }
@@ -158,7 +213,7 @@ LyricsFileExport prepareLyricsFileExport(
       ? (ttml ? 'ttml' : 'xml')
       : lyrics.isSynchronized
       ? (withSubline
-            ? 'lrc'
+            ? (wordTimed ? 'elrc' : 'lrc')
             : ((preserveOriginal && enhanced || !preserveOriginal && wordTimed)
                   ? 'elrc'
                   : 'lrc'))

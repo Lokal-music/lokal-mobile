@@ -1010,3 +1010,58 @@ pass. Swift 6 warnings-as-errors contracts pass with the separate real HTTP WAV
 fixture, actual file hashes, 6×8 process writes, both transaction crash boundaries,
 active-original deduplication and runtime reconstruction. Apple SDK / iOS native
 acceptance for this source is pending; the transfer core remains unembedded.
+
+
+### Source continuation reviewed through #302
+
+The review now covers **96 merged product PRs after #172**. This continuation
+is separate from PR #304 / build 76, whose immutable source stops at #296.
+
+| Merged source | iPhone adaptation |
+| --- | --- |
+| [298](https://github.com/lokal-music/lokal-mobile/pull/298) / `d573d34f4d0aa885c536d222ccb155bffd71b2a2` | Promote output settings to the root after Playback and remove the nested duplicate. On iPhone the row is Audio output, uses a headphones icon and describes AirPlay/Bluetooth/volume/crossfeed. New presentation phrases cover all eleven languages; Android USB/bit-perfect wording is not shown as an iPhone capability. |
+| [299](https://github.com/lokal-music/lokal-mobile/pull/299) / `3f8ad60e2f148c06b96afee37306100e1a872ad0` | Selected word-timed translations/romanization export as paired ELRC, projected over the original vocal windows. Keep millisecond precision, whitespace, original-only source bytes and UTF-8 filename bounds. Enhanced translated rows use the existing ignored association tag so import preserves independent singers. Association indices account for earlier untagged plain translations; explicit end markers preserve gaps on reimport. |
+| [300](https://github.com/lokal-music/lokal-mobile/pull/300) / `08efc749bad45af585774182ab43bf31a690be81` | Excluded: Android direct-USB status popup and Android CI changes. Android workflow activation is not imported. |
+| [301](https://github.com/lokal-music/lokal-mobile/pull/301) / `011fdd071e7b0794936e6d1f0019e63a45363e88` | Long-press recommendation Cover Flow to see/play its matching local album in disc/track order. A face tap retains the recommended song and recommendation-only shelf queue. Separate featured-cover metadata preserves visible title/artwork and deduplicates local rows. Existing transparent surfaces, localization and gesture/semantics behavior remain. |
+| [302](https://github.com/lokal-music/lokal-mobile/pull/302) / `cb8c269bbefe22e9e8b283603d3f7fdbe6f1ff89` | Excluded: Android direct-USB clock-range probing/format fallback. Rust/FFI and direct USB are unchanged. |
+
+ELRC export cannot unambiguously distinguish a translated enhanced row from an
+independent singer using timestamps alone. This continuation retains round-trip
+assertions removed in upstream #299 and adds the actual mixed plain/enhanced
+native fixture. A translated save must retain its four original lines and both
+simultaneous voices. Ordinary line-only bilingual files remain paired LRC;
+unknown metadata tags are ignored by ordinary ELRC consumers. Translated timing
+is projected, rather than represented as source-authored timing.
+
+Targeted checks: 112 player/lyrics/Space/settings/Cover Flow regressions pass;
+subsequent expanded lyrics, explicit-gap and native-fixture round-trip selection
+passes 53 checks. The combined updated source and Apple runtime acceptance still
+need their next coherent validation batch. PR #303 remains open and under review
+for potential shared playback/desktop availability corrections; it is not counted
+as merged parity or imported wholesale over the iOS request/occurrence fences.
+
+
+### App transfer bridge and build 76 continuation
+
+Build 76 (PR #304 source through #296) compiles/packages the release iPhone app
+and passes the complete iOS 26 suite. Its iOS 18.6 run stops at the legacy
+Keychain migration assertion before playback. Build 74 remains the qualified
+package. These results do not qualify through-#302 source or the subsequently
+embedded native transfer bridge.
+
+Continuation source wires the app-owned background session through AppDelegate,
+with a bounded typed Swift/Dart channel and foreground-only observation.
+Capability keeps library import and upload disabled until their product adapters
+are implemented. Native checks now precede the expensive full application build
+and include the actual Flutter framework plus both iOS 16 SDK targets.
+The SQLite parent-alias and process-lock corrections have portable regression
+coverage; twelve stress rounds passed before bridge wiring, followed by three
+updated complete rounds. Keychain preparation now scopes coalescing and native
+migration by account, with four deterministic concurrency/retry tests. Actual
+native resolution of the build-76 Keychain failure is still pending.
+
+The main updated host selection passes 968 tests in 5m53s, including the new
+transfer protocol cases, through-#302 output/ELRC/Cover Flow adaptations, Android
+widget contract and native widget snapshot contract. Companion widget suites and
+four Keychain cases are recorded separately in the publication checkpoint.
+This continuation does not enable Android CI or alter native PCM/DSD/USB paths.

@@ -47,9 +47,79 @@ private func awaitJob(_ runtime: LokalTransferRuntime, id: String,
   throw TestFailure.failed("Native request did not reach expected phase")
 }
 
-func runNetworkContracts(origin: String, length: Int64, checksum: String) throws {
+private final class HostFixture: @unchecked Sendable {
+  private let lock = NSLock()
+  let root: URL
+  private var blocked = true
+  private var attempts = 0
+  private var owners = Set<ObjectIdentifier>()
+  private var failed = false
+  init(_ root: URL) { self.root = root }
+  func resolve() throws -> URL {
+    lock.lock(); defer { lock.unlock() }
+    attempts += 1
+    if blocked { throw LokalTransferError.unsafeFile }
+    return root
+  }
+  func allow() { lock.lock(); blocked = false; lock.unlock() }
+  func record(_ owner: ObjectIdentifier?) {
+    lock.lock(); defer { lock.unlock() }
+    if let owner { owners.insert(owner) } else { failed = true }
+  }
+  func valid() -> Bool {
+    lock.lock(); defer { lock.unlock() }
+    return !failed && owners.count == 1 && attempts == 2
+  }
+}
+
+private func runHostContracts() throws {
   let manager = FileManager.default
-  let root = manager.temporaryDirectory.appendingPathComponent("lokal-native-network-" + UUID().uuidString)
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-native-host-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: false)
+  defer { try? manager.removeItem(at: root) }
+  let fixture = HostFixture(root)
+  let host = LokalTransferHost(container: { try fixture.resolve() }, credentials: { nil })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    host.shutdown { done.signal() }
+    _ = done.wait(timeout: .now() + 10)
+  }
+  try rejects("unavailable storage cannot manufacture an empty working owner") {
+    let _: LokalTransferSummary = try native { reply in
+      host.withRuntime({ $0.summary(reply) }, unavailable: { reply(.failure($0)) })
+    }
+  }
+  fixture.allow()
+  let callers = DispatchGroup()
+  for _ in 0..<12 {
+    callers.enter()
+    host.withRuntime({ runtime in
+      fixture.record(ObjectIdentifier(runtime)); callers.leave()
+    }, unavailable: { _ in fixture.record(nil); callers.leave() })
+  }
+  try require(callers.wait(timeout: .now() + 10) == .success && fixture.valid(),
+    "concurrent engine clients share one native owner after recoverable storage unavailability")
+  let summary: LokalTransferSummary = try native { reply in
+    host.withRuntime({ $0.summary(reply) }, unavailable: { reply(.failure($0)) })
+  }
+  try require(summary.total == 0 && !summary.persistenceFailed, "host recovered the real empty journal")
+  let stopped = DispatchSemaphore(value: 0)
+  host.shutdown { stopped.signal() }
+  try require(stopped.wait(timeout: .now() + 10) == .success, "host teardown waits for native owner")
+  try rejects("stopped host cannot be revived by a late engine client") {
+    let _: LokalTransferSummary = try native { reply in
+      host.withRuntime({ $0.summary(reply) }, unavailable: { reply(.failure($0)) })
+    }
+  }
+  print("Native app-owner contracts passed: unavailable storage recovery, 12 concurrent clients, one session owner and retired teardown. Portable evidence only.")
+}
+
+func runNetworkContracts(origin: String, length: Int64, checksum: String) throws {
+  try runHostContracts()
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-native-network-" + UUID().uuidString)
   try manager.createDirectory(at: root, withIntermediateDirectories: false)
   defer { try? manager.removeItem(at: root) }
   let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin, token: "transfer-fixture-token")
@@ -68,6 +138,9 @@ func runNetworkContracts(origin: String, length: Int64, checksum: String) throws
   func enqueue(_ jobs: [LokalTransferJob]) throws {
     let _: LokalTransferSummary = try native { runtime.enqueue(jobs, reply: $0) }
   }
+  let pairing: LokalTransferPairing? = try native { runtime.currentPairing($0) }
+  try require(pairing?.scope.desktopID == "fixture-pc" && pairing?.scope.origin == origin,
+    "public native pairing descriptor preserves the authorized scope")
 
   let complete = try job("complete")
   try enqueue([complete])
