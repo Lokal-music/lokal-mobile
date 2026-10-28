@@ -6,6 +6,7 @@ import 'package:flick/features/settings/screens/uac2_settings_screen.dart'
 import 'package:flick/models/audio_engine_type.dart';
 import 'package:flick/models/audio_output_diagnostics.dart';
 import 'package:flick/services/uac2_service.dart';
+import 'package:flick/src/rust/api/uac2_api.dart';
 
 const _dac = Uac2DeviceInfo(
   vendorId: 0x1234,
