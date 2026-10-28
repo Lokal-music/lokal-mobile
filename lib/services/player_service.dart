@@ -5299,7 +5299,8 @@ class PlayerService {
             trackFormat;
         final needsDirectUsbPrewarm =
             alreadyInUsbMode &&
-            !_sameUac2Format(currentUsbFormat, preparedUsbFormat);
+            (lostNativeRegistration ||
+                !_sameUac2Format(currentUsbFormat, preparedUsbFormat));
         if (needsDirectUsbPrewarm && _rustAudioService.isInitialized) {
           _debugLog(
             '[Engine] Prewarming active USB engine for '
@@ -6041,6 +6042,8 @@ class PlayerService {
   }
 
   bool _isDirectUsbStartupRefusal(String message) {
+    // Native event-loop faults lack the "Android USB direct" prefix.
+    if (isRecoverableDirectUsbTransportError(message)) return true;
     final normalized = message.toLowerCase();
     return message.contains('Requested ') ||
         message.contains('No isochronous OUT endpoint can carry') ||
@@ -6131,15 +6134,17 @@ class PlayerService {
       return false;
     }
 
+    final selection = _selectionGeneration;
     for (final delay in const [
       Duration(milliseconds: 350),
       Duration(milliseconds: 1000),
     ]) {
-      if (currentSongNotifier.value?.id != song.id ||
+      await Future<void>.delayed(delay);
+      if (selection != _selectionGeneration ||
+          currentSongNotifier.value?.id != song.id ||
           currentEngineType != AudioEngineType.usbDacExperimental) {
         return false; // User already selected a different track or route.
       }
-      await Future<void>.delayed(delay);
       try {
         await _rustAudioService.stop();
         final reset = await _uac2Service.resetAndroidDirectUsbPath(
