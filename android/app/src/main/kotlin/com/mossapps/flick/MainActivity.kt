@@ -4140,8 +4140,10 @@ class MainActivity: FlutterActivity() {
         // Never promote a saved/past selection, or an arbitrary accessory in
         // a multi-device hub, to a DAC.
         val usbManager = getSystemService(Context.USB_SERVICE) as? UsbManager
-        if (usbManager?.deviceList?.size == 1 &&
-            usbManager.deviceList.containsKey(device.deviceName) &&
+        val attached = usbManager?.deviceList
+        if (attached != null &&
+            attached.size == 1 &&
+            attached.containsKey(device.deviceName) &&
             hasUsbAudioOutputViaDeviceInfo()) {
             return true
         }
