@@ -2393,7 +2393,7 @@ class PlayerService {
             await _playbackManager.playTrack(
               playableSong,
               initialPosition: position,
-              autoPlay: playableSong != null,
+              autoPlay: true,
             );
           });
           if (playableSong != null) {
@@ -2451,7 +2451,7 @@ class PlayerService {
             await _playbackManager.playTrack(
               playableSong,
               initialPosition: position,
-              autoPlay: playableSong != null,
+              autoPlay: true,
             );
           });
         }
@@ -2509,7 +2509,7 @@ class PlayerService {
       previousFrames = consumerFrames;
       // Require an observation window, not a single momentary successful
       // status sample immediately followed by LIBUSB_NO_DEVICE.
-      if (sample >= 5 && healthySamples >= 3) {
+      if (sample >= 7 && healthySamples >= 3) {
         return true;
       }
     }
@@ -3905,6 +3905,14 @@ class PlayerService {
     };
     _rustAudioService.onError = (message) {
       _debugLog('[PlayerService] Rust backend error: $message');
+      if (_manualUsbRestartInFlight != null &&
+          _isDirectUsbStartupRefusal(message)) {
+        // Manual restart validates native consumption and retries the entire
+        // session. Do not enqueue a competing asynchronous USB fallback.
+        AppLog.instance.add('[USB] Transport error during manual restart '
+            'will be handled by the active recovery attempt');
+        return;
+      }
       if (Platform.isAndroid &&
           !_midStreamUsbFallbackActive &&
           currentEngineType == AudioEngineType.usbDacExperimental &&
