@@ -2448,7 +2448,13 @@ class PlayerService {
         } catch (attemptError) {
           AppLog.instance.add('[USB] Manual restart attempt $attempt/3 '
               'failed: $attemptError');
-          if (attempt == 3) rethrow;
+          // A format rejection is deterministic for this recording. Repeated
+          // close/claim/open cycles cannot change its advertised bit depth
+          // or sample rate, and thrash the DAC and Android audio session.
+          if (attempt == 3 || !shouldRetryDirectUsbManualRestart(
+            error: attemptError,
+            fallbackReason: _sessionManager.fallbackReason,
+          )) rethrow;
           // Drain callbacks from the failed endpoint before trying a new
           // native registration, not just another play() on the same handle.
           await Future<void>.delayed(
