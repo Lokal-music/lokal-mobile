@@ -171,15 +171,35 @@ class _LokalSongBrowserState extends ConsumerState<LokalSongBrowser> {
     if (widget.preferencesKey != null) unawaited(_restoreView());
   }
 
+  @override
+  void didUpdateWidget(covariant LokalSongBrowser oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.preferencesKey == widget.preferencesKey) return;
+    // Navigator can reuse a browser element while switching list contexts.
+    // Never leak a previous playlist's active filters into the new one.
+    _viewModified = false;
+    _sort = widget.initialSort;
+    _descending = _defaultDescending(widget.initialSort);
+    _location = LokalSongLocation.all;
+    _audioFilter = 'all';
+    _query = '';
+    _search.clear();
+    _visibleCache = null;
+    if (widget.preferencesKey != null) unawaited(_restoreView());
+  }
+
   Future<void> _restoreView() async {
+    final key = widget.preferencesKey;
+    if (key == null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       final saved = LokalSongBrowserViewSettings.decode(
-        prefs.getString(widget.preferencesKey!),
+        prefs.getString(key),
         fallbackSort: widget.initialSort,
         allowOriginal: widget.originalLabel != null,
       );
-      if (!mounted || _viewModified || saved == null) return;
+      if (!mounted || widget.preferencesKey != key ||
+          _viewModified || saved == null) return;
       setState(() {
         _sort = saved.sort;
         _descending = saved.descending;
