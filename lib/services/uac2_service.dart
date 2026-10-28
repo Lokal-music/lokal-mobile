@@ -11,8 +11,37 @@ import 'package:flick/src/rust/api/uac2_api.dart' as rust_uac2;
 import 'package:flick/services/uac2_preferences_service.dart';
 import 'package:flick/services/uac2_exception.dart';
 import 'package:flick/core/utils/dev_log.dart';
+import 'package:flick/core/utils/app_log.dart';
 
 const Object _unset = Object();
+
+/// Serializes native USB playback-focus changes. A stale async status update
+/// must never release focus after a newer playing/buffering update acquired it.
+/// Unlike a debounce, a write already in progress completes before the next.
+@visibleForTesting
+class LatestUsbPlaybackActivityWriter {
+  LatestUsbPlaybackActivityWriter(this._write);
+
+  final Future<void> Function(bool active) _write;
+  Future<void> _tail = Future<void>.value();
+  bool? _requested;
+  bool? _applied;
+
+  bool? get applied => _applied;
+
+  Future<void> set(bool active) {
+    _requested = active;
+    final operation = _tail.then((_) async {
+      if (_requested != active || _applied == active) return;
+      await _write(active);
+      _applied = active;
+    });
+    // A failed method-channel request must not poison subsequent focus writes.
+    _tail = operation.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return operation;
+  }
+}
+
 
 enum Uac2State { idle, connecting, connected, prewarming, streaming, error }
 
@@ -192,6 +221,22 @@ class Uac2DeviceStatus {
   }
 }
 
+/// A failed Android route query is not a USB detach. Keep the last known USB
+/// route as long as native playback ownership remains active. Explicit USB
+/// release first sets ownership inactive, so subsequent failed probes can clear
+/// the status normally.
+@visibleForTesting
+Uac2DeviceStatus? directUsbStatusToPreserveOnFailedRouteProbe({
+  required Uac2DeviceStatus? currentStatus,
+  required bool directUsbPlaybackActive,
+}) =>
+    directUsbPlaybackActive &&
+            currentStatus != null &&
+            (currentStatus.routeType == Uac2RouteType.externalUsb ||
+                currentStatus.isExternalRoute)
+        ? currentStatus
+        : null;
+
 class Uac2Service {
   Uac2Service._();
 
@@ -239,7 +284,19 @@ class Uac2Service {
   Uac2AudioFormat? _lastKnownFormat;
   bool _lastKnownIsPlaying = false;
   bool _lastKnownHasSong = false;
-  bool? _lastDirectUsbPlaybackActive;
+  late final LatestUsbPlaybackActivityWriter _directUsbActivityWriter =
+      LatestUsbPlaybackActivityWriter((active) async {
+        final accepted = await _channel.invokeMethod<bool>(
+          'setDirectUsbPlaybackActive',
+          {'active': active},
+        );
+        if (accepted == false) {
+          throw StateError('Android rejected direct USB playback-active=$active');
+        }
+        AppLog.instance.add('[USB] Direct playback ownership '
+            '${active ? 'acquired' : 'released'}');
+      });
+  bool? get _lastDirectUsbPlaybackActive => _directUsbActivityWriter.applied;
   int _playbackStatusSyncGeneration = 0;
   // Unlike playback-triggered syncs, attach/route/preferences refreshes were
   // unguarded. A slow old getRouteStatus could publish a 96 kHz snapshot after
@@ -1556,6 +1613,18 @@ Future<void> stopPriorityAnchor() async {
     final effectiveHasSong = hasActiveSong ?? _lastKnownHasSong;
 
     if (routeStatus == null) {
+      if (directUsbStatusToPreserveOnFailedRouteProbe(
+        currentStatus: _currentDeviceStatus,
+        directUsbPlaybackActive: _lastDirectUsbPlaybackActive == true,
+      ) != null) {
+        // A background status query can fail while Rust still owns the DAC.
+        // Replacing the known USB route with an unknown error allows the next
+        // syncPlaybackStatus to re-activate USB over the active isochronous
+        // stream. Explicit release turns off ownership before this point.
+        devLog('Uac2Service: preserving active direct USB status after '
+            'Android route probe failed');
+        return;
+      }
       if (!effectiveHasSong && !effectiveIsPlaying) {
         _updateStatus(null);
         return;
@@ -2031,6 +2100,11 @@ Future<void> stopPriorityAnchor() async {
   }
 
   bool _shouldActivateAndroidDirectUsb(Uac2DeviceInfo preferredDevice) {
+    // Status refreshes must not re-claim an interface already in use by Rust.
+    if (_lastDirectUsbPlaybackActive == true &&
+        _hasFrozenAndroidDirectUsbSession()) {
+      return false;
+    }
     final currentStatus = _currentDeviceStatus;
     if (currentStatus == null) {
       return true;
@@ -2053,7 +2127,8 @@ Future<void> stopPriorityAnchor() async {
   }) {
     final currentStatus = _currentDeviceStatus;
     if (currentStatus == null ||
-        currentStatus.state == Uac2State.error ||
+        (currentStatus.state == Uac2State.error &&
+            _lastDirectUsbPlaybackActive != true) ||
         !_hasFrozenAndroidDirectUsbSession()) {
       return null;
     }
@@ -2109,7 +2184,7 @@ Future<void> stopPriorityAnchor() async {
     }
 
     final currentStatus = _currentDeviceStatus;
-    if (currentStatus == null || currentStatus.state == Uac2State.error) {
+    if (currentStatus == null) {
       return false;
     }
 
@@ -2121,6 +2196,7 @@ Future<void> stopPriorityAnchor() async {
       return false;
     }
 
+    // A transient route-status error is not proof the Rust USB stream stopped.
     return _lastDirectUsbPlaybackActive == true ||
         currentStatus.state == Uac2State.streaming;
   }
@@ -2130,15 +2206,8 @@ Future<void> stopPriorityAnchor() async {
   }
 
   Future<void> _setAndroidDirectUsbPlaybackActive(bool active) async {
-    if (_lastDirectUsbPlaybackActive == active) {
-      return;
-    }
-
     try {
-      await _channel.invokeMethod<bool>('setDirectUsbPlaybackActive', {
-        'active': active,
-      });
-      _lastDirectUsbPlaybackActive = active;
+      await _directUsbActivityWriter.set(active);
     } catch (e) {
       devLog('Uac2Service.setDirectUsbPlaybackActive failed: $e');
     }

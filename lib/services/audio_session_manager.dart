@@ -19,6 +19,44 @@ typedef AudioSessionSwitchHandler =
     });
 typedef AudioSessionPlaybackActiveReader = bool Function();
 
+/// Android may report cosmetic/temporary route changes while a Rust direct
+/// USB stream exclusively owns the device. Only the explicit device failure
+/// and user-preference paths should replace that live engine.
+@visibleForTesting
+bool shouldDeferDirectUsbRouteProbe({
+  required String reason,
+  required AudioEngineType selectedMode,
+  required AudioEngineType? initializedMode,
+  required bool playbackActive,
+  required bool directUsbSessionActive,
+}) =>
+    reason == 'audio route change' &&
+    selectedMode == AudioEngineType.usbDacExperimental &&
+    initializedMode == AudioEngineType.usbDacExperimental &&
+    playbackActive &&
+    directUsbSessionActive;
+
+/// A device notification may begin probing before the direct USB session is
+/// claimed. Discard only that outdated, incidental result if USB ownership
+/// became active while the platform queries were pending.
+@visibleForTesting
+bool shouldDiscardStaleDirectUsbRouteProbe({
+  required String reason,
+  required bool directUsbSessionWasActive,
+  required AudioEngineType selectedMode,
+  required AudioEngineType? initializedMode,
+  required bool playbackActive,
+  required bool directUsbSessionActive,
+}) =>
+    !directUsbSessionWasActive &&
+    shouldDeferDirectUsbRouteProbe(
+      reason: reason,
+      selectedMode: selectedMode,
+      initializedMode: initializedMode,
+      playbackActive: playbackActive,
+      directUsbSessionActive: directUsbSessionActive,
+    );
+
 class AudioSessionManager {
   AudioSessionManager({
     AndroidAudioDeviceService? deviceService,
@@ -264,7 +302,34 @@ class AudioSessionManager {
   }
 
   Future<void> _syncRouteSelectionInternal({required String reason}) async {
+    if (shouldDeferDirectUsbRouteProbe(
+      reason: reason,
+      selectedMode: selectedMode,
+      initializedMode: initializedMode,
+      playbackActive: _isPlaybackActive(),
+      directUsbSessionActive:
+          _uac2Service.shouldFreezeAndroidDirectUsbSessionQueries,
+    )) {
+      _debugLog('[Session] Ignoring transient Android route notification '
+          'while direct USB holds the playback session');
+      return;
+    }
+    final directUsbSessionWasActive =
+        _uac2Service.shouldFreezeAndroidDirectUsbSessionQueries;
     final desired = await _resolvePreferredMode(refresh: true);
+    if (shouldDiscardStaleDirectUsbRouteProbe(
+      reason: reason,
+      directUsbSessionWasActive: directUsbSessionWasActive,
+      selectedMode: selectedMode,
+      initializedMode: initializedMode,
+      playbackActive: _isPlaybackActive(),
+      directUsbSessionActive:
+          _uac2Service.shouldFreezeAndroidDirectUsbSessionQueries,
+    )) {
+      _debugLog('[Session] Discarding outdated Android route probe: '
+          'direct USB became active during resolution');
+      return;
+    }
     final previous = selectedMode;
     if (previous == desired) {
       return;

@@ -76,6 +76,7 @@ class _Choice {
 class _Uac2PreferencesSectionsState
     extends ConsumerState<Uac2PreferencesSections> {
   bool _pendingEngineRestart = false;
+  bool _forceUsbRestartInProgress = false;
   bool _awaiting432HzConfirm = false;
 
   @override
@@ -136,6 +137,25 @@ class _Uac2PreferencesSectionsState
                 ),
               ),
             _modeStatusRow(diagnostics),
+            if (audioEngineAsync.asData?.value ==
+                AudioEnginePreference.isochronousUsb)
+              LokalSettingRow(
+                label: 'Force restart USB audio engine',
+                description: 'Reinitialize the DAC without unplugging it. '
+                    'Resume the selected track at its previous position.',
+                icon: Icons.restart_alt_rounded,
+                enabled: !_forceUsbRestartInProgress,
+                trailing: _forceUsbRestartInProgress
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+                onTap: _forceUsbRestartInProgress
+                    ? null
+                    : () => _forceRestartUsbAudioEngine(context),
+              ),
           ],
         ),
         LokalSettingsSection(
@@ -701,6 +721,32 @@ class _Uac2PreferencesSectionsState
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _forceRestartUsbAudioEngine(BuildContext context) async {
+    if (_forceUsbRestartInProgress) return;
+    setState(() => _forceUsbRestartInProgress = true);
+    bool recovered = false;
+    try {
+      recovered = await PlayerService().forceRestartUsbAudioEngine();
+      if (mounted) ref.invalidate(uac2DevicesProvider);
+    } catch (error) {
+      // The service keeps the failure reason in the exported diagnostics.
+      recovered = false;
+    } finally {
+      if (mounted) setState(() => _forceUsbRestartInProgress = false);
+    }
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(recovered
+            ? 'USB audio engine restarted. Playback restored if available.'
+            : 'USB audio restart failed. Check DAC connection and logs.'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
