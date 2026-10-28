@@ -72,15 +72,18 @@ Future<void> lokalPlay(
       // desktop-only song and the PC is disconnected. Keep the original
       // queue order, starting on the first device-local recording instead.
       // An explicit tap must not silently select a different recording.
+      Song? fallback;
       if (start == null) {
-        final fallback = await firstAvailableLibraryFallback(
+        fallback = await firstAvailableLibraryFallback(
           list,
           (candidate) =>
               ref.read(lokalSongAvailableProvider(candidate).future),
         );
-        if (fallback != null) selected = fallback;
       }
-      if (selected.sourceType == 'lokal') {
+      if (fallback != null) {
+        // The fallback has already passed the same offline/cache check.
+        selected = fallback;
+      } else {
         if (context.mounted) {
           LokalToast.show(
             context,
