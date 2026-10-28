@@ -99,15 +99,28 @@ class SongActionsBottomSheet extends ConsumerWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         side: BorderSide(color: t.border),
       ),
-      builder: (_) => SongActionsBottomSheet(
-        song: song,
-        rootContext: context,
-        onSelect: onSelect,
-        onRemoveFromPlaylist: onRemoveFromPlaylist,
-        extras: extras,
-        queueActions: queueActions,
-        nowPlaying: nowPlaying,
-      ),
+      builder: (_) {
+        Widget forSong(Song current) => SongActionsBottomSheet(
+          key: ValueKey(current.id),
+          song: current,
+          rootContext: context,
+          onSelect: onSelect,
+          onRemoveFromPlaylist: onRemoveFromPlaylist,
+          extras: extras,
+          queueActions: queueActions,
+          nowPlaying: nowPlaying,
+        );
+        if (!nowPlaying) return forSong(song);
+        // The sheet can remain open while playback auto-advances. Do not
+        // leave source-specific actions, metadata, or Like state stuck on
+        // the song for which it was first opened.
+        return ValueListenableBuilder<Song?>(
+          valueListenable: PlayerService().currentSongNotifier,
+          builder: (_, currentSong, __) => currentSong == null
+              ? const SizedBox.shrink()
+              : forSong(currentSong),
+        );
+      },
     );
   }
 
@@ -149,6 +162,7 @@ class SongActionsBottomSheet extends ConsumerWidget {
         .disabledSongs
         .contains(movingCoverSongKey(song));
     final rows = <Widget>[
+      if (!nowPlaying)
       _MenuRow(
         icon: motionOff ? Icons.motion_photos_on : Icons.motion_photos_off,
         label: motionOff
@@ -252,7 +266,9 @@ class SongActionsBottomSheet extends ConsumerWidget {
           label: lokalText('Go to artist'),
           onTap: close(() => openLokalArtist(rootContext, song: song)),
         ),
-      if (videos)
+      // The full player already owns the track-verified Video footer chip.
+      // The shared menu still offers Watch video from library/search rows.
+      if (!nowPlaying && videos)
         _MenuRow(
           icon: Icons.smart_display_rounded,
           label: lokalText('Watch video'),
