@@ -172,9 +172,11 @@ LyricsFileExport prepareLyricsFileExport(
   final extension = preserveOriginal && xml
       ? (ttml ? 'ttml' : 'xml')
       : lyrics.isSynchronized
-          ? ((preserveOriginal && enhanced || wordTimed)
-              ? 'elrc'
-              : 'lrc')
+          ? (withSubline
+              ? (wordTimed ? 'elrc' : 'lrc')
+              : ((preserveOriginal && enhanced || wordTimed)
+                  ? 'elrc'
+                  : 'lrc'))
           : 'txt';
   final content = preserveOriginal
       ? lyrics.rawContent
