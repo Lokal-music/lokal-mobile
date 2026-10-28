@@ -174,25 +174,70 @@ final konnektedMadeForYouProvider =
       (ref) => _homeData(ref.watch(konnektedMixesProvider), lokalMadeForYou),
     );
 
-/// Wraps one song as a Cover Flow entry: each cover is a song, not an
-/// album, so a single tap plays it.
-AlbumGroup konnektedSongCover(Song song) => AlbumGroup(
-  key: 'song:${song.id}',
-  albumName: song.title,
-  albumArtist: song.artist,
-  songs: [song],
-);
+/// Keep a recommendation as the visible carousel cover, while opening its
+/// local album (in disc/track order) on long-press. The local library is already
+/// loaded for Made for You, so no database query runs per cover or gesture.
+@visibleForTesting
+List<AlbumGroup> konnektedCoversWithLocalAlbums(
+  List<LokalMadeForYouPick> picks,
+  List<Song> localSongs,
+) {
+  String key(String? value) => (value ?? '').trim().toLowerCase();
+  final albums = <String, List<Song>>{};
+  final seenLocalIds = <String>{};
+  for (final song in localSongs) {
+    // An overlapping library source or transient sync can surface the same
+    // recording twice. Each local track belongs on the album back only once.
+    if (!seenLocalIds.add(song.id)) continue;
+    final albumKey = key(song.album);
+    if (albumKey.isEmpty) continue;
+    (albums[albumKey] ??= <Song>[]).add(song);
+  }
 
-/// Home's Cover Flow: Made for you, one cover per song. Tapping one plays it
-/// with the whole shelf as the queue.
+  AlbumGroup coverFor(Song song) {
+    final albumName = song.album?.trim() ?? '';
+    final candidates = albums[key(albumName)] ?? const <Song>[];
+    final albumArtist = key(song.albumArtist);
+    final matches = candidates.where((candidate) {
+      // Albums with the same title but different known album artists
+      // must not be merged. Keep compilation rows lacking that tag.
+      final otherArtist = key(candidate.albumArtist);
+      return albumArtist.isEmpty ||
+          otherArtist.isEmpty ||
+          otherArtist == albumArtist;
+    }).toList();
+    final albumTracks = matches.isEmpty ? <Song>[song] : matches;
+    if (!albumTracks.any((candidate) => candidate.id == song.id)) {
+      albumTracks.add(song);
+    }
+    return AlbumGroup(
+      key: 'song:${song.id}',
+      albumName: albumName.isEmpty ? song.title : albumName,
+      albumArtist: song.albumArtist?.trim().isNotEmpty == true
+          ? song.albumArtist!.trim()
+          : song.artist,
+      songs: SongRepository.sortAlbumTracks(albumTracks),
+      coverSong: song,
+    );
+  }
+
+  final seen = <String>{};
+  return [
+    for (final pick in picks)
+      if (seen.add(pick.song.id)) coverFor(pick.song),
+  ];
+}
+
+/// Home's Cover Flow remains one cover per recommended song. Its back shows
+/// all matching *local* album tracks; tapping a face still plays the selected
+/// recommendation with the same Made for You shelf as the queue.
 final konnektedCoverAlbumsProvider = Provider<AsyncValue<List<AlbumGroup>>>(
-  (ref) => _homeData(ref.watch(konnektedMadeForYouProvider), (picks) {
-    final seen = <String>{};
-    return [
-      for (final pick in picks)
-        if (seen.add(pick.song.id)) konnektedSongCover(pick.song),
-    ];
-  }),
+  (ref) {
+    final picks = ref.watch(konnektedMadeForYouProvider);
+    final local = ref.watch(konnektedLibraryProvider).value ?? const <Song>[];
+    return _homeData(picks, (entries) =>
+        konnektedCoversWithLocalAlbums(entries, local));
+  },
 );
 
 List<Song> _newestFirst(Iterable<Song> songs) =>
