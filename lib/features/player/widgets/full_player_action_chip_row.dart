@@ -8,6 +8,7 @@ import 'package:flick/core/theme/app_colors.dart';
 import 'package:flick/core/utils/responsive.dart';
 import 'package:flick/features/player/widgets/sleep_timer_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/speed_bottom_sheet.dart';
+import 'package:flick/features/player/widgets/pitch_bottom_sheet.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/l10n/l10n.dart';
 
@@ -63,6 +64,17 @@ class FullPlayerActionChipRow extends StatelessWidget {
             icon: LucideIcons.gauge,
             label: l10n.speedUp,
             onTap: () => SpeedBottomSheet.show(context, playerService),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: playerService.pitchSemitonesNotifier,
+            builder: (_, pitch, __) => _ActionChip(
+              icon: Icons.graphic_eq_rounded,
+              label: pitch.abs() < 0.01
+                  ? l10n.pitch
+                  : '${pitch > 0 ? '+' : ''}${pitch.toStringAsFixed(0)} st',
+              active: pitch.abs() >= 0.01,
+              onTap: () => PitchBottomSheet.show(context, playerService),
+            ),
           ),
           _ActionChip(
             icon: LucideIcons.slidersHorizontal,
