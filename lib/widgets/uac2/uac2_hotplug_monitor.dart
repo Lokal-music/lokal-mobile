@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flick/core/theme/adaptive_color_provider.dart';
@@ -8,6 +9,14 @@ import 'package:flick/core/constants/app_constants.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/services/uac2_service.dart';
+
+/// A new DAC can replace another on the same port without changing the
+/// number of devices. Compare identities rather than list length.
+@visibleForTesting
+bool usbInventoryChanged(Set<String>? previous, Set<String> current) =>
+    previous == null ||
+    previous.length != current.length ||
+    !previous.containsAll(current);
 
 /// Keep the visible physical USB inventory in sync while the DAC settings
 /// page is open. A cached FutureProvider read is NOT a poll: it will never
@@ -87,8 +96,7 @@ class _Uac2HotplugMonitorState extends ConsumerState<Uac2HotplugMonitor> {
       };
       final previous = _lastDeviceIds;
       _lastDeviceIds = ids;
-      if (previous == null || previous.length != ids.length ||
-          !previous.containsAll(ids)) {
+      if (usbInventoryChanged(previous, ids)) {
         ref.invalidate(uac2DevicesProvider);
         for (final device in devices) {
           ref.invalidate(uac2DeviceCapabilitiesProvider(device));
