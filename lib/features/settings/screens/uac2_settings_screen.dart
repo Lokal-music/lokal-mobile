@@ -151,7 +151,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
             title: l10n.usbAudioDevices,
             children: devicesAsync.when(
               data: (devices) =>
-                  _deviceRows(devices, selectedDevice, shownStatus),
+                  _deviceRows(devices, selectedDevice, shownStatus, hasLiveStatus),
               loading: () => [_loadingRow()],
               error: (error, _) => [_errorRow(error), _refreshRow()],
             ),
@@ -215,6 +215,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     List<Uac2DeviceInfo> devices,
     Uac2DeviceInfo? selectedDevice,
     Uac2DeviceStatus? deviceStatus,
+    bool hasLiveStatus,
   ) {
     if (devices.isEmpty) {
       return [
@@ -228,7 +229,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     }
     return [
       for (final device in devices)
-        _deviceRow(device, selectedDevice, deviceStatus),
+        _deviceRow(device, selectedDevice, deviceStatus, hasLiveStatus),
       _refreshRow(),
     ];
   }
@@ -237,6 +238,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     Uac2DeviceInfo device,
     Uac2DeviceInfo? selectedDevice,
     Uac2DeviceStatus? deviceStatus,
+    bool hasLiveStatus,
   ) {
     final isSelected = selectedDevice != null &&
         sameUsbDacDevice(device, selectedDevice);
@@ -260,9 +262,10 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
       onTap: () => _handleDeviceSelection(
         device,
         isSelected,
-        // A detected but not explicitly selected DAC is not a playback
-        // session to disconnect. The first tap should select it.
-        isConnected && isSelected,
+        // Only disconnect a genuine live session. A selected device with
+        // merely detected/synthetic status must remain reselectable if its
+        // first selection did not initialize the DAC.
+        isConnected && isSelected && hasLiveStatus,
       ),
     );
   }
