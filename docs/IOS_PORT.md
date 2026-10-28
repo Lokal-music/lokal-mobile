@@ -5,29 +5,29 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **96 reviewed merged
-mobile PRs after #172 through #302**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **99 reviewed merged
+mobile PRs after #172 through #306**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
 and platform adaptations.
 
-**This source is not a finalized release.** Build 74 is the current independently
-verified engineering package, passing both complete native suites on iOS 18.6
-and 26.0 for the through-#272 source plus adaptive Rust polling and coherent
-paused persistence. Both real engines reload paused cursor snapshots from native
-preferences; Rust has no recurring paused progress observations or position-save
-timer, and explicit Resume rearms saving. WebKit passes settled replay, clock,
-new-frame and repeated playing/paused reset gates. Its bounded cold-document
-readiness wait is separate from the unchanged native quiet/replay requirements.
+**This source is not a finalized release.** Build 78 is the current independently
+verified engineering package through #302 plus the embedded native transfer
+protocol and per-account Keychain preparation. Both complete iOS 18.6 and 26
+suites pass. The actual native channel rejects injected state/headers without
+mutation and survives observer replacement; legacy Keychain migration passes.
+The package's 34 iPhone binaries, 26 matching native symbol bundles, Dart AOT
+symbols, notices and 2,298 exported source files are independently rechecked.
+Source tree: `3bd499d1c86c5de010a05ff7d1f7cd681338c47c`.
 
-The inspected IPA, 34 native binaries, 26 matching symbol bundles, Dart AOT
-symbols, notices and 2,262 exported source files are preserved together. Build 67
-remains an older verified checkpoint. The newer through-#290 parity continuation
-adds explicit bilingual saves, full queue history, source validation/foreground
-priority, Library add actions and power/memory handling; its own native
-acceptance is pending. Combined host regression results are recorded in the
-[source audit](IOS_POST172_REVIEW.md#reviewed-through-290--28-october-2026).
+Native background networking is wired independently of Flutter, but library
+import/upload capability remains disabled. Existing product copy paths remain
+active. OS transfer suspension/relaunch, deterministic Isar import/receipt
+recovery, physical Windows signing/iPhone installation, live providers/receivers
+and installed WidgetKit still need their own acceptance. Later source reviewed
+through #306 and deterministic file promotion are outside the build-78 package.
+Builds 74 and 67 remain preserved older checkpoints.
 
 | Checkpoint | Accepted scope and limit |
 | --- | --- |
@@ -53,6 +53,8 @@ acceptance is pending. Combined host regression results are recorded in the
 
 | [Build 76](https://github.com/lokal-music/lokal-mobile/actions/runs/40740172170) / PR #304 | Through-#296 package compiles and the full iOS 26 suite passes. iOS 18.6 stops at the legacy Keychain migration check before playback. No package promotion. The native transfer core was unembedded in this build; later bridge wiring, SQLite corrections and through-#302 source are excluded. |
 
+| [Build 78](https://github.com/lokal-music/lokal-mobile/actions/runs/40755702150) / PR #307 | Both complete native app suites pass on iOS 18.6 and 26 through #302 plus the embedded transfer protocol and per-account Keychain preparation. The actual Swift/Flutter channel and Keychain migration pass. Independently reverified IPA/source/notices/34 binaries/26 native symbol bundles; tree `3bd499d1c86c5de010a05ff7d1f7cd681338c47c`. Import/upload capability is false; later through-#306 changes are excluded. |
+
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
 [Windows installation and acceptance](IOS_SIDELOADING.md), the
@@ -60,8 +62,7 @@ matching-symbol inspection. Installation still requires local signing. See
 [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md).
 The [transfer architecture](IOS_TRANSFERS.md) now has a locally tested native
 SQLite/URLSession core. Continuation source now wires AppDelegate and a typed,
-foreground-observed Flutter bridge into Runner, with Apple SDK/runtime acceptance
-pending. Deterministic library import and the paired-desktop product adapter
+foreground-observed Flutter bridge into Runner, with both real iOS 16 SDK checks and both full runtime suites passing for build 78. Deterministic library import and the paired-desktop product adapter
 remain to be implemented and accepted.
 
 The earlier iOS 18.5 startup abort matches

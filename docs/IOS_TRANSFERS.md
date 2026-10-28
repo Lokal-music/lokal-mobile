@@ -1,14 +1,13 @@
 # iPhone transfer architecture
 
-Status: native transport, app owner and typed Flutter bridge implemented in
-continuation source; product library adapter pending, 28 October 2026.
-Swift 6 portable tests exercise the SQLite journal, actual owned files and a real
-URLSession download delegate against a separate HTTP server. AppDelegate now
-routes native background delivery before Flutter initializes, and Runner links
-the native owner and bridge. The Apple SDK/runtime gates for this wiring are
-pending. Deterministic library import, uploads and persisted progress UI are not
-enabled in the product yet. The currently qualified IPA is build 74;
-this transfer core is not in that package.
+Status: native transport, app owner and typed Flutter bridge accepted in build
+78; product library adapter pending, 28 October 2026. Both real iOS 16 SDK checks
+and both complete iOS 18.6/26 app suites pass, including native channel ownership
+and Keychain migration. Standalone native host contracts also pass five rounds.
+This qualifies the integrated protocol, not OS suspension/daemon delivery.
+Deterministic file promotion is a later local filesystem foundation; Isar import,
+uploads and persisted product progress are unfinished. Product capability keeps
+native import/upload disabled and existing Dart copying remains active.
 
 ```mermaid
 flowchart LR
@@ -19,7 +18,8 @@ flowchart LR
   Session --> Desktop[Paired desktop original]
   Session --> Owned[Owned retained file]
   Owned --> Hash[Full-file verification]
-  Hash -. import adapter pending .-> Import[Deterministic library commit]
+  Hash -. later local foundation .-> Promotion[Deterministic owned file promotion]
+  Promotion -. import owner pending .-> Import[Existing library writer]
   Import -. receipt pending .-> Library[(Existing Isar song identity)]
   Runtime -. progress UI pending .-> UI[Persisted queue surface]
 ```
@@ -130,9 +130,9 @@ import commits. Reconnection rechecks both catalogues to skip completed original
 1. Completed locally: typed journal, SQLite transactions, owned-path policy,
    native delegate, task reconciliation, revision/cancel and pairing guards,
    actual file verification and a separate real HTTP fixture.
-2. Implemented in continuation source, awaiting Apple acceptance: AppDelegate
-   background-event routing, independent native owner and paginated typed Flutter
-   bridge. Early CI checks type-check both actual iOS SDKs and Flutter framework
+2. Accepted in build 78: AppDelegate background-event routing, independent
+   native owner and the actual paginated typed Flutter bridge. OS suspension/
+   relaunch delivery remains separate acceptance. Early CI checks type-check both actual iOS SDKs and Flutter framework
    before building the full application. Unpair must retire
    native jobs/tasks before clearing the atomic Keychain record.
 3. Integrate paired-desktop transport and durable progress UI through the
@@ -329,3 +329,29 @@ use the same canonical-parent rule. The next failure report includes a bounded
 contract-stage label and SQLite's extended numeric code. Three updated portable
 rounds pass; the Apple rerun must qualify this correction. No deployment-floor
 increase or relaxed symlink/UTF-8 validation is used.
+
+
+### Deterministic library-file promotion foundation
+
+The next local continuation adds `LokalTransferLibrary`, a filesystem boundary
+that is not yet exposed to Flutter or linked into Runner. The app supplies its
+own Music root; callers cannot submit a destination path. A frozen job/revision
+has one bounded, readable filename under Desktop Copies. An exclusive part is
+copied from an open no-follow staging descriptor, fsynced and hashed against the
+verified receipt, then published without replacing an existing destination.
+Existing destinations are rehashed before reuse. A changed file is preserved
+and reported as a conflict. A process interrupted between publication and part
+retirement recovers only its exact same-inode pair; unrelated symlinks/hardlinks
+are refused. Independent process writers use a stable owned flock file, separate
+from SQLite's descriptors. Root replacement cannot redirect publication.
+
+Three complete portable rounds pass with actual file bytes, six independent
+promotion processes, and child exits immediately before publication, after
+publication and after completed promotion. Every recovered case has one complete
+copy and no stranded part. A repeated receipt also recovers after staging has
+been removed. Corrupt same-length output, changed source, symlink/hardlink output,
+symlink part and replaced-root cases preserve user files and reject the operation.
+These are process/filesystem checks, not power-loss, playable-media or Isar
+acceptance. The next boundary still needs native import ownership, media probing,
+an identity-preserving database transaction and acknowledged row receipt. Product
+capability remains disabled until those boundaries and clear/unpair ordering pass.

@@ -39,8 +39,29 @@ class _Player implements ja.AudioPlayer {
   final durations = StreamController<Duration?>.broadcast(sync: true);
   final processing = StreamController<ja.ProcessingState>.broadcast(sync: true);
   int? lastInitialIndex;
+  Duration? lastInitialPosition;
+  Completer<void>? heldTrim;
   int? lastSeekIndex;
   bool failLoad = false;
+  bool failTrim = false;
+  int trimCalls = 0;
+  Completer<void>? heldAddition;
+  @override
+  Future<void> addAudioSources(List<ja.AudioSource> additions) async {
+    await heldAddition?.future;
+    sources.addAll(additions.cast<ja.IndexedAudioSource>());
+  }
+
+  @override
+  Future<void> insertAudioSources(
+    int index,
+    List<ja.AudioSource> additions,
+  ) async {
+    sources.insertAll(index, additions.cast<ja.IndexedAudioSource>());
+    if (activeIndex != null && activeIndex! >= index)
+      activeIndex = activeIndex! + additions.length;
+  }
+
   Completer<void>? hungSeek;
   Completer<Duration?>? hungLoad;
   @override
@@ -84,11 +105,25 @@ class _Player implements ja.AudioPlayer {
   }) async {
     loads++;
     lastInitialIndex = initialIndex;
+    lastInitialPosition = initialPosition;
     if (failLoad) throw ja.PlayerException(0, 'Source error', 0);
     if (hungLoad != null) return await hungLoad!.future;
     sources = [ja.AudioSource.uri(Uri.parse('file:///song.flac'))];
     currentPosition = Duration.zero;
     return duration;
+  }
+
+  @override
+  Future<void> removeAudioSourceRange(int start, int end) async {
+    trimCalls++;
+    if (failTrim) throw StateError('native trim failed');
+    await heldTrim?.future;
+    sources.removeRange(start, end);
+    if (activeIndex != null && activeIndex! >= end) {
+      activeIndex = activeIndex! - (end - start);
+    } else if (activeIndex != null && activeIndex! >= start) {
+      activeIndex = start.clamp(0, sources.length - 1);
+    }
   }
 
   @override
@@ -169,6 +204,468 @@ Future<void> pumpForState(WidgetTester tester, bool Function() ready) async {
 }
 
 void main() {
+  testWidgets('entering on-demand mode trims a restored native queue '
+      'without changing the audible song', (tester) async {
+    final a = const Song(
+      id: 'a',
+      title: 'A',
+      artist: 'Artist',
+      duration: Duration(minutes: 3),
+      fileType: 'FLAC',
+      filePath: '/a.flac',
+    );
+    final b = const Song(
+      id: 'b',
+      title: 'B',
+      artist: 'Artist',
+      duration: Duration(minutes: 3),
+      fileType: 'FLAC',
+      filePath: '/b.flac',
+    );
+    final c = const Song(
+      id: 'c',
+      title: 'C',
+      artist: 'Artist',
+      duration: Duration(minutes: 3),
+      fileType: 'FLAC',
+      filePath: '/c.flac',
+    );
+    final logical = [a, b, c];
+    final player = _Player();
+    var nativeIndexUpdates = 0;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async => ja.ConcatenatingAudioSource(
+        children: [
+          for (final song in logical)
+            ja.AudioSource.uri(Uri.file(song.filePath!)),
+        ],
+      ),
+      sourceBuilder: (song) async =>
+          ja.AudioSource.uri(Uri.file(song.filePath!)),
+      playlistProvider: () => logical,
+      selectedPlaylistIndexProvider: () => 1,
+      onNativePlaylistIndex: (_) => nativeIndexUpdates++,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => true,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await tester.runAsync(() => engine.load(b));
+    player.sources = [
+      for (final song in logical) ja.AudioSource.uri(Uri.file(song.filePath!)),
+    ];
+    player.activeIndex = 1;
+    player.currentPosition = const Duration(seconds: 35);
+    player.currentPlaying = true;
+    // The player was expanded via restoreFastStartPlaylist, so PlayerService
+    // has no corresponding ConcatenatingAudioSource to trim.
+    expect(
+      await tester.runAsync(() => engine.enterOnDemandQueueMode()),
+      isTrue,
+    );
+    expect(player.sources, hasLength(1));
+    expect(player.activeIndex, 0);
+    expect(player.currentPosition, const Duration(seconds: 35));
+    expect(player.currentPlaying, isTrue);
+    expect(engine.isSingleTrackOnly, isTrue);
+    final before = nativeIndexUpdates;
+    logical
+      ..clear()
+      ..addAll([c, b, a]); // logical shuffle
+    player.indices.add(0);
+    await tester.pump();
+    expect(
+      nativeIndexUpdates,
+      before,
+      reason: 'single-source native index is not a logical queue index',
+    );
+  });
+
+  test(
+    'collapse waits for native restoration and retires the old context',
+    () async {
+      const first = Song(
+        id: 'first',
+        title: 'First',
+        artist: 'Artist',
+        duration: Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/first.flac',
+      );
+      final second = first.copyWith(id: 'second', filePath: '/second.flac');
+      final third = first.copyWith(id: 'third', filePath: '/third.flac');
+      final logical = [
+        first,
+        second,
+        for (var i = 0; i < 23; i++) third.copyWith(id: 'third-$i'),
+      ];
+      final player = _Player();
+      var current = true, updates = 0;
+      final engine = AndroidAudioEngine(
+        playerProvider: () async => player,
+        sourcesBuilder: () async => throw StateError('single source only'),
+        sourceBuilder: (song) async =>
+            ja.AudioSource.uri(Uri.file(song.filePath!)),
+        playlistProvider: () => logical,
+        selectedPlaylistIndexProvider: () => 1,
+        onNativePlaylistIndex: (_) => updates++,
+        configurePlayer: (_) async {},
+        disposeEngine: () async {},
+        shouldSuppressTrackSync: () => false,
+        shouldIgnoreTrack: (_) => false,
+        shouldFastStartCurrentTrackOnly: () => true,
+      );
+      try {
+        await engine.load(second);
+        player.heldAddition = Completer<void>();
+        final restore = engine.restoreFastStartPlaylist(
+          isCurrent: () => current,
+        );
+        await Future<void>.delayed(Duration.zero);
+        final baselineUpdates = updates;
+        current = false;
+        logical.add(
+          first.copyWith(
+            id: 'remote',
+            sourceType: 'lokal',
+            filePath: 'lokal://1/remote',
+          ),
+        );
+        final collapse = engine.enterOnDemandQueueMode();
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          player.trimCalls,
+          0,
+          reason: 'The previous native insertion must finish first',
+        );
+        player.heldAddition!.complete();
+        expect(await restore, isFalse);
+        expect(await collapse, isTrue);
+        expect(player.sequence, hasLength(1));
+        expect(engine.isSingleTrackOnly, isTrue);
+        expect(
+          updates,
+          baselineUpdates,
+          reason: 'Stale restored slots cannot publish a new logical index',
+        );
+      } finally {
+        await engine.dispose();
+        await player.closeFixture();
+      }
+    },
+  );
+
+  test(
+    'retired collapse cannot reload an old song after native trim failure',
+    () async {
+      const song = Song(
+        id: 'active',
+        title: 'Active',
+        artist: 'Artist',
+        duration: Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/active.flac',
+      );
+      final player = _Player();
+      final source = Completer<ja.AudioSource>();
+      var builds = 0;
+      var preparing = true;
+      final engine = AndroidAudioEngine(
+        guardRetirement: true,
+        playerProvider: () async => player,
+        sourcesBuilder: () async =>
+            ja.AudioSource.uri(Uri.file(song.filePath!)),
+        sourceBuilder: (_) async {
+          builds++;
+          if (preparing) return ja.AudioSource.uri(Uri.file(song.filePath!));
+          return source.future;
+        },
+        playlistProvider: () => [song],
+        configurePlayer: (_) async {},
+        disposeEngine: () async {},
+        shouldSuppressTrackSync: () => false,
+        shouldIgnoreTrack: (_) => false,
+        shouldFastStartCurrentTrackOnly: () => false,
+      );
+      try {
+        await engine.load(song);
+        preparing = false;
+        final baselineBuilds = builds;
+        player.sources = [
+          for (var i = 0; i < 3; i++)
+            ja.AudioSource.uri(Uri.file('/slot-$i.flac')),
+        ];
+        player.activeIndex = 1;
+        player.failTrim = true;
+        final collapsing = engine.enterOnDemandQueueMode();
+        final retired = expectLater(
+          collapsing,
+          throwsA(isA<LocalAudioRequestRetired>()),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(builds, baselineBuilds + 1);
+        await engine.dispose();
+        source.complete(ja.AudioSource.uri(Uri.file('/stale.flac')));
+        await retired;
+        expect(
+          player.loads,
+          1,
+          reason: 'A completed old resolver must not call native setAudioSource again',
+        );
+      } finally {
+        await engine.dispose();
+        await player.closeFixture();
+      }
+    },
+  );
+
+  test(
+    'concurrent collapse requests serialize against the same native source',
+    () async {
+      const song = Song(
+        id: 'active',
+        title: 'Active',
+        artist: 'Artist',
+        duration: Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/active.flac',
+      );
+      final player = _Player();
+      final engine = AndroidAudioEngine(
+        playerProvider: () async => player,
+        sourcesBuilder: () async =>
+            ja.AudioSource.uri(Uri.file(song.filePath!)),
+        sourceBuilder: (_) async =>
+            ja.AudioSource.uri(Uri.file(song.filePath!)),
+        playlistProvider: () => [song],
+        configurePlayer: (_) async {},
+        disposeEngine: () async {},
+        shouldSuppressTrackSync: () => false,
+        shouldIgnoreTrack: (_) => false,
+        shouldFastStartCurrentTrackOnly: () => false,
+      );
+      try {
+        await engine.load(song);
+        player.sources = [
+          for (var i = 0; i < 3; i++)
+            ja.AudioSource.uri(Uri.file('/slot-$i.flac')),
+        ];
+        player.activeIndex = 1;
+        player.heldTrim = Completer<void>();
+        final first = engine.enterOnDemandQueueMode();
+        final second = engine.enterOnDemandQueueMode();
+        await Future<void>.delayed(Duration.zero);
+        expect(player.trimCalls, 1);
+        player.heldTrim!.complete();
+        expect(await Future.wait([first, second]), [true, true]);
+        expect(player.trimCalls, 2);
+        expect(player.sources, hasLength(1));
+        expect(
+          player.loads,
+          1,
+          reason: 'Healthy concurrent edits retain the decoder',
+        );
+      } finally {
+        await engine.dispose();
+        await player.closeFixture();
+      }
+    },
+  );
+
+  for (final newerSelection in [false, true]) {
+    test(
+      newerSelection
+          ? 'new selection cancels a delayed native collapse recovery'
+          : 'manual pause survives delayed native collapse recovery',
+      () async {
+        const song = Song(
+          id: 'active',
+          title: 'Active',
+          artist: 'Artist',
+          duration: Duration(minutes: 3),
+          fileType: 'FLAC',
+          filePath: '/active.flac',
+        );
+        final player = _Player();
+        final source = Completer<ja.AudioSource>();
+        var preparing = true, current = true, canResume = true;
+        final engine = AndroidAudioEngine(
+          playerProvider: () async => player,
+          sourcesBuilder: () async =>
+              ja.AudioSource.uri(Uri.file(song.filePath!)),
+          sourceBuilder: (_) async => preparing
+              ? ja.AudioSource.uri(Uri.file(song.filePath!))
+              : source.future,
+          playlistProvider: () => [song],
+          configurePlayer: (_) async {},
+          disposeEngine: () async {},
+          shouldSuppressTrackSync: () => false,
+          shouldIgnoreTrack: (_) => false,
+          shouldFastStartCurrentTrackOnly: () => false,
+        );
+        try {
+          await engine.load(song);
+          preparing = false;
+          player.sources = [
+            for (var i = 0; i < 3; i++)
+              ja.AudioSource.uri(Uri.file('/slot-$i.flac')),
+          ];
+          player.activeIndex = 1;
+          player.failTrim = true;
+          player.currentPlaying = true;
+          final collapse = engine.enterOnDemandQueueMode(
+            isCurrent: () => current,
+            mayResume: () => canResume,
+          );
+          await Future<void>.delayed(Duration.zero);
+          canResume = false;
+          if (newerSelection) {
+            current = false;
+          } else {
+            await engine.pause();
+          }
+          player.currentPosition = const Duration(seconds: 7);
+          source.complete(ja.AudioSource.uri(Uri.file('/recovered.flac')));
+          expect(await collapse, !newerSelection);
+          expect(player.playCalls, 0);
+          if (newerSelection) {
+            expect(
+              player.loads,
+              1,
+              reason: 'Stale recovery cannot replace a newer selection',
+            );
+          } else {
+            expect(player.currentPlaying, false);
+            expect(player.lastInitialPosition, const Duration(seconds: 7));
+          }
+        } finally {
+          await engine.dispose();
+          await player.closeFixture();
+        }
+      },
+    );
+  }
+
+  test('resolved online handles force on-demand mode even in a tiny queue', () {
+    const progressive = Song(
+      id: 'http',
+      title: 'HTTP',
+      artist: 'Artist',
+      duration: Duration(minutes: 3),
+      fileType: 'FLAC',
+      filePath: 'lokal-progressive://playback-123',
+      sourcePackage: 'konnekted.progressive',
+    );
+    const morneye = Song(
+      id: 'morneye',
+      title: 'Live',
+      artist: 'Artist',
+      duration: Duration(minutes: 3),
+      fileType: 'FLAC',
+      filePath: 'morneye-live://handle',
+      sourcePackage: 'konnekted.morneye-live',
+    );
+    expect(requiresOnDemandAndroidSequence([progressive]), isTrue);
+    expect(requiresOnDemandAndroidSequence([morneye]), isTrue);
+  });
+
+  test('large Library queues prepare only the tapped track', () async {
+    final library = List<Song>.generate(
+      2654,
+      (i) => Song(
+        id: 'song-$i',
+        title: 'Recording $i',
+        artist: 'Artist',
+        duration: const Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/music/song-$i.flac',
+      ),
+    );
+    expect(hasUnresolvedAudioSources(library), isFalse);
+    expect(requiresOnDemandAndroidSequence(library), isTrue);
+    final player = _Player();
+    var nativeSequenceBuilds = 0;
+    var singleSourceBuilds = 0;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async {
+        nativeSequenceBuilds++;
+        throw StateError('The complete Library must not be materialized');
+      },
+      sourceBuilder: (song) async {
+        singleSourceBuilds++;
+        return ja.AudioSource.uri(Uri.file(song.filePath!));
+      },
+      playlistProvider: () => library,
+      selectedPlaylistIndexProvider: () => 1730,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await engine.load(library[1730]);
+    expect(nativeSequenceBuilds, 0);
+    expect(singleSourceBuilds, 1);
+    expect(engine.isSingleTrackOnly, isTrue);
+    expect(
+      await engine.restoreFastStartPlaylist(isCurrent: () => true),
+      isFalse,
+    );
+    expect(
+      singleSourceBuilds,
+      1,
+      reason: 'No background restore across thousands of library songs',
+    );
+  });
+
+  test(
+    'remote songs stay on demand, small local queues retain native sequence',
+    () {
+      const local = Song(
+        id: 'local',
+        title: 'Local',
+        artist: 'A',
+        duration: Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/music/local.flac',
+      );
+      const desktop = Song(
+        id: 'desktop',
+        title: 'PC only',
+        artist: 'A',
+        duration: Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: 'lokal://1/abc',
+        sourceType: 'lokal',
+        remoteId: 'abc',
+        remoteServerId: 1,
+      );
+      expect(requiresOnDemandAndroidSequence([local, desktop]), isTrue);
+      expect(requiresOnDemandAndroidSequence([local, local]), isFalse);
+    },
+  );
+
   const resetSong = Song(
     id: 'retained',
     title: 'Retained',
@@ -1057,89 +1554,113 @@ void main() {
     expect(retired, [same(firstNative)]);
     expect(replacement.loads, 1);
   });
-  testWidgets('native Android playback uses the selected duplicate occurrence',
-      (tester) async {
-    // Different entries can have the same ID and source path; identity alone
-    // must not snap the selected song back to the first occurrence.
-    final first = Song(
-      id: 'repeated', title: 'Repeat', artist: 'Artist',
-      duration: const Duration(minutes: 3),
-      filePath: '/repeat.flac', fileType: 'FLAC',
-    );
-    final second = Song(
-      id: 'repeated', title: 'Repeat', artist: 'Artist',
-      duration: const Duration(minutes: 3),
-      filePath: '/repeat.flac', fileType: 'FLAC',
-    );
-    final between = Song(
-      id: 'different', title: 'Other', artist: 'Artist',
-      duration: const Duration(minutes: 3),
-      filePath: '/other.flac', fileType: 'FLAC',
-    );
-    final playlist = [first, between, second];
-    final player = _Player();
-    final nativeIndices = <int>[];
-    final engine = AndroidAudioEngine(
-      playerProvider: () async => player,
-      sourcesBuilder: () async => ja.ConcatenatingAudioSource(
-        children: [
-          for (final song in playlist)
+  testWidgets(
+    'native Android playback uses the selected duplicate occurrence',
+    (tester) async {
+      // Different entries can have the same ID and source path; identity alone
+      // must not snap the selected song back to the first occurrence.
+      final first = Song(
+        id: 'repeated',
+        title: 'Repeat',
+        artist: 'Artist',
+        duration: const Duration(minutes: 3),
+        filePath: '/repeat.flac',
+        fileType: 'FLAC',
+      );
+      final second = Song(
+        id: 'repeated',
+        title: 'Repeat',
+        artist: 'Artist',
+        duration: const Duration(minutes: 3),
+        filePath: '/repeat.flac',
+        fileType: 'FLAC',
+      );
+      final between = Song(
+        id: 'different',
+        title: 'Other',
+        artist: 'Artist',
+        duration: const Duration(minutes: 3),
+        filePath: '/other.flac',
+        fileType: 'FLAC',
+      );
+      final playlist = [first, between, second];
+      final player = _Player();
+      final nativeIndices = <int>[];
+      final engine = AndroidAudioEngine(
+        playerProvider: () async => player,
+        sourcesBuilder: () async => ja.ConcatenatingAudioSource(
+          children: [
+            for (final song in playlist)
+              ja.AudioSource.uri(Uri.file(song.filePath!)),
+          ],
+        ),
+        sourceBuilder: (song) async =>
             ja.AudioSource.uri(Uri.file(song.filePath!)),
-        ],
-      ),
-      sourceBuilder: (song) async =>
+        playlistProvider: () => playlist,
+        selectedPlaylistIndexProvider: () => 2,
+        onNativePlaylistIndex: nativeIndices.add,
+        configurePlayer: (_) async {},
+        disposeEngine: () async {},
+        shouldSuppressTrackSync: () => false,
+        shouldIgnoreTrack: (_) => false,
+        shouldFastStartCurrentTrackOnly: () => false,
+      );
+      addTearDown(() async {
+        await engine.dispose();
+        await player.errors.close();
+        await player.positions.close();
+        await player.indices.close();
+        await player.durations.close();
+        await player.processing.close();
+      });
+
+      await engine.load(second);
+      expect(
+        player.lastInitialIndex,
+        2,
+        reason: 'native source preparation must select second occurrence',
+      );
+      expect(
+        player.lastSeekIndex,
+        2,
+        reason: 'the initial seek must use the exact queue index',
+      );
+
+      // Index changes must also reach PlayerService even when two adjacent
+      // sequence entries represent identical logical tracks.
+      player.sources = [
+        for (final song in playlist)
           ja.AudioSource.uri(Uri.file(song.filePath!)),
-      playlistProvider: () => playlist,
-      selectedPlaylistIndexProvider: () => 2,
-      onNativePlaylistIndex: nativeIndices.add,
-      configurePlayer: (_) async {},
-      disposeEngine: () async {},
-      shouldSuppressTrackSync: () => false,
-      shouldIgnoreTrack: (_) => false,
-      shouldFastStartCurrentTrackOnly: () => false,
-    );
-    addTearDown(() async {
-      await engine.dispose();
-      await player.errors.close();
-      await player.positions.close();
-      await player.indices.close();
-      await player.durations.close();
-      await player.processing.close();
-    });
+      ];
+      player.activeIndex = 1;
+      player.indices.add(1);
+      await tester.pump();
+      expect(nativeIndices, contains(1));
+      player.activeIndex = 2;
+      player.indices.add(2);
+      await tester.pump();
+      expect(nativeIndices.last, 2);
+    },
+  );
 
-    await engine.load(second);
-    expect(player.lastInitialIndex, 2,
-        reason: 'native source preparation must select second occurrence');
-    expect(player.lastSeekIndex, 2,
-        reason: 'the initial seek must use the exact queue index');
-
-    // Index changes must also reach PlayerService even when two adjacent
-    // sequence entries represent identical logical tracks.
-    player.sources = [
-      for (final song in playlist)
-        ja.AudioSource.uri(Uri.file(song.filePath!)),
-    ];
-    player.activeIndex = 1;
-    player.indices.add(1);
-    await tester.pump();
-    expect(nativeIndices, contains(1));
-    player.activeIndex = 2;
-    player.indices.add(2);
-    await tester.pump();
-    expect(nativeIndices.last, 2);
-  });
-
-  testWidgets('native playlist auto-advance rejects a 30-second HTTP item',
-      (tester) async {
+  testWidgets('native playlist auto-advance rejects a 30-second HTTP item', (
+    tester,
+  ) async {
     final player = _Player();
     final first = const Song(
-      id: 'first', title: 'Local', artist: 'Artist',
-      duration: Duration(minutes: 3), fileType: 'FLAC',
+      id: 'first',
+      title: 'Local',
+      artist: 'Artist',
+      duration: Duration(minutes: 3),
+      fileType: 'FLAC',
       filePath: '/first.flac',
     );
     final preview = const Song(
-      id: 'second', title: 'Qobuz full track', artist: 'Artist',
-      duration: Duration(minutes: 4), fileType: 'FLAC',
+      id: 'second',
+      title: 'Qobuz full track',
+      artist: 'Artist',
+      duration: Duration(minutes: 4),
+      fileType: 'FLAC',
       sourcePackage: 'konnekted.progressive',
       filePath: 'lokal-progressive://123',
     );
@@ -1147,12 +1668,13 @@ void main() {
     var completed = 0;
     final engine = AndroidAudioEngine(
       playerProvider: () async => player,
-      sourcesBuilder: () async => ja.ConcatenatingAudioSource(children: [
-        ja.AudioSource.uri(Uri.file('/first.flac')),
-        ja.AudioSource.uri(Uri.parse('https://cdn.example/preview.flac')),
-      ]),
-      sourceBuilder: (_) async =>
+      sourcesBuilder: () async => ja.ConcatenatingAudioSource(
+        children: [
           ja.AudioSource.uri(Uri.file('/first.flac')),
+          ja.AudioSource.uri(Uri.parse('https://cdn.example/preview.flac')),
+        ],
+      ),
+      sourceBuilder: (_) async => ja.AudioSource.uri(Uri.file('/first.flac')),
       playlistProvider: () => [first, preview],
       configurePlayer: (_) async {},
       disposeEngine: () async {},
@@ -1172,8 +1694,9 @@ void main() {
     await engine.load(first);
     final firstSource = ja.AudioSource.uri(Uri.file('/first.flac'));
     firstSource.duration = const Duration(minutes: 3);
-    final previewSource =
-        ja.AudioSource.uri(Uri.parse('https://cdn.example/preview.flac'));
+    final previewSource = ja.AudioSource.uri(
+      Uri.parse('https://cdn.example/preview.flac'),
+    );
     previewSource.duration = const Duration(seconds: 30);
     player.sources = [firstSource, previewSource];
     player.activeIndex = 1;
@@ -1187,19 +1710,25 @@ void main() {
     expect(player.currentPlaying, isFalse);
   });
 
-  testWidgets('a 30-second crossfade candidate is rejected before handoff',
-      (tester) async {
+  testWidgets('a 30-second crossfade candidate is rejected before handoff', (
+    tester,
+  ) async {
     final outgoing = _Player();
-    final incoming = _Player()
-      ..currentDuration = const Duration(seconds: 30);
+    final incoming = _Player()..currentDuration = const Duration(seconds: 30);
     final first = const Song(
-      id: 'first', title: 'Local', artist: 'Artist',
-      duration: Duration(minutes: 3), fileType: 'FLAC',
+      id: 'first',
+      title: 'Local',
+      artist: 'Artist',
+      duration: Duration(minutes: 3),
+      fileType: 'FLAC',
       filePath: '/first.flac',
     );
     final next = const Song(
-      id: 'second', title: 'Qobuz full track', artist: 'Artist',
-      duration: Duration(minutes: 4), fileType: 'FLAC',
+      id: 'second',
+      title: 'Qobuz full track',
+      artist: 'Artist',
+      duration: Duration(minutes: 4),
+      fileType: 'FLAC',
       sourcePackage: 'konnekted.progressive',
       filePath: 'lokal-progressive://456',
     );
@@ -1207,8 +1736,7 @@ void main() {
     final engine = AndroidAudioEngine(
       playerProvider: () async => outgoing,
       secondaryPlayerProvider: () async => incoming,
-      sourcesBuilder: () async =>
-          ja.AudioSource.uri(Uri.file('/first.flac')),
+      sourcesBuilder: () async => ja.AudioSource.uri(Uri.file('/first.flac')),
       sourceBuilder: (_) async =>
           ja.AudioSource.uri(Uri.parse('https://cdn.example/preview.flac')),
       playlistProvider: () => [first, next],
@@ -1218,7 +1746,9 @@ void main() {
       shouldIgnoreTrack: (_) => false,
       shouldFastStartCurrentTrackOnly: () => false,
       crossfadeConfigProvider: () => const AndroidCrossfadeConfig(
-        enabled: true, durationSecs: 3, curve: AndroidCrossfadeCurve.linear,
+        enabled: true,
+        durationSecs: 3,
+        curve: AndroidCrossfadeCurve.linear,
       ),
       onNextSong: () => next,
       onTrackAdvanced: advanced.add,
@@ -1245,6 +1775,4 @@ void main() {
     expect(advanced, isEmpty);
     expect(outgoing.currentPlaying, isTrue);
   });
-
-
 }

@@ -240,6 +240,25 @@ bool hasUnresolvedAudioSources(List<Song> playlist) => playlist.any(
   (song) => song.isPending || song.filePath == null || song.filePath!.isEmpty,
 );
 
+/// The logical Library/Recently Added queue may contain thousands of entries
+/// (including desktop songs that require network credentials). Preparing all
+/// of them as a native just_audio sequence (Media3 / AVFoundation) can block taps for minutes, repeatedly
+/// open offline desktop streams and trigger an Android input ANR. Keep the
+/// complete logical queue but prepare only the selected audio source; regular
+/// completion/previous/next then advances through that original queue.
+bool requiresOnDemandAndroidSequence(List<Song> playlist) {
+  if (playlist.length > 64) return true;
+  return playlist.any(
+    (song) =>
+        song.isPending ||
+        song.filePath == null ||
+        song.filePath!.isEmpty ||
+        song.isNetworkSource ||
+        song.sourcePackage == 'konnekted.progressive' ||
+        song.sourcePackage == 'konnekted.morneye-live',
+  );
+}
+
 @visibleForTesting
 bool shouldExitSingleTrackMode({
   required bool loadedSingleTrackOnly,
@@ -402,6 +421,143 @@ class AndroidAudioEngine implements AudioEngine {
   /// would endlessly repeat one song.
   bool get isSingleTrackOnly => _loadedSingleTrackOnly;
   bool get isCrossfadeActive => _crossfadeConfigProvider().enabled;
+  Future<void> _queueCollapseTail = Future<void>.value();
+
+  /// Collapse a previously restored/full native playlist when a network,
+  /// pending or 65th entry makes the logical queue on-demand. Retain the
+  /// decoder, current source and position: the native sequence must not carry
+  /// stale slots after shuffle or play unexpected entries automatically.
+  ///
+  /// [concatenated] is the sequence originally handed to setAudioSource.
+  /// Fast-start restoration instead adds sources directly to AudioPlayer, so
+  /// that path must remove them through the player API.
+  Future<bool> enterOnDemandQueueMode({
+    just_audio.ConcatenatingAudioSource? concatenated,
+    bool Function()? isCurrent,
+    bool Function()? mayResume,
+  }) {
+    final previous = _queueCollapseTail;
+    final operation = _run(() async {
+      await _wait(previous);
+      if (isCurrent?.call() == false) return false;
+      return _collapseNativeQueue(concatenated: concatenated,
+          isCurrent: isCurrent, mayResume: mayResume);
+    });
+    // Serialize edits without hiding the original error from its own caller.
+    _queueCollapseTail = operation.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return operation;
+  }
+
+  Future<bool> _collapseNativeQueue({
+    just_audio.ConcatenatingAudioSource? concatenated,
+    bool Function()? isCurrent,
+    bool Function()? mayResume,
+  }) async {
+    final restoring = _sequenceRestoreCompletion;
+    if (restoring != null) await _wait(restoring.future);
+    final player = _player;
+    final active = _loadedTrack;
+    if (player == null || active == null) return false;
+    bool current() => !_retired && identical(_player, player) &&
+        identical(_loadedTrack, active) && isCurrent?.call() != false;
+    if (!current()) return false;
+    if (player.sequence.isEmpty) return false;
+    if (player.sequence.length == 1) {
+      _loadedSingleTrackOnly = true;
+      _playlistSignature = const <String>[];
+      return true;
+    }
+
+    final nativeIndex = player.currentIndex;
+    if (nativeIndex == null ||
+        nativeIndex < 0 ||
+        nativeIndex >= player.sequence.length)
+      return false;
+
+    _restoringFastStartPlaylist = true;
+    try {
+      if (concatenated != null &&
+          identical(player.audioSource, concatenated) &&
+          concatenated.children.length == player.sequence.length) {
+        if (nativeIndex + 1 < concatenated.children.length) {
+          await _wait(
+            concatenated.removeRange(
+              nativeIndex + 1,
+              concatenated.children.length,
+            ),
+          );
+          if (!current()) return false;
+        }
+        if (nativeIndex > 0) {
+          await _wait(concatenated.removeRange(0, nativeIndex));
+          if (!current()) return false;
+        }
+      } else {
+        if (nativeIndex + 1 < player.sequence.length) {
+          await _wait(
+            player.removeAudioSourceRange(
+              nativeIndex + 1,
+              player.sequence.length,
+            ),
+          );
+          if (!current()) return false;
+        }
+        if (nativeIndex > 0) {
+          await _wait(player.removeAudioSourceRange(0, nativeIndex));
+          if (!current()) return false;
+        }
+      }
+      _loadedSingleTrackOnly = true;
+      _playlistSignature = const <String>[];
+      devLog(
+        '[Playback] Collapsed native playlist to active track for '
+        'on-demand queue',
+      );
+      return true;
+    } catch (error) {
+      if (IosLocalAudioRequests.isRetired(error)) rethrow;
+      if (!current()) return false;
+      // A partially trimmed Media3 sequence must not be reused against a
+      // reordered logical queue. Restore just the currently audible item.
+      devLog(
+        '[Playback] Native queue collapse failed, restoring active '
+        'track only: $error',
+      );
+      try {
+        final wasPlaying = player.playing;
+        final source = await _wait(_sourceBuilder(active));
+        if (!current()) return false;
+        if (wasPlaying && mayResume?.call() == false) {
+          await _wait(player.pause());
+          if (!current()) return false;
+        }
+        final position = player.position;
+        await _wait(
+          player
+              .setAudioSource(source, initialPosition: position)
+              .timeout(const Duration(seconds: 30)),
+        );
+        if (!current()) return false;
+        if (wasPlaying && mayResume?.call() != false) {
+          unawaited(player.play().catchError((Object _) {}));
+        }
+        _loadedSingleTrackOnly = true;
+        _playlistSignature = const <String>[];
+        return true;
+      } catch (fallbackError) {
+        if (IosLocalAudioRequests.isRetired(fallbackError)) rethrow;
+        if (!current()) return false;
+        _sourceFailed = true;
+        devLog(
+          '[Playback] Native queue collapse recovery failed: '
+          '$fallbackError',
+        );
+        return false;
+      }
+    } finally {
+      _restoringFastStartPlaylist = false;
+    }
+  }
 
   /// Expand a fast-started *single source* into the full playlist in place.
   /// Unlike setAudioSource(), insertAudioSources preserves the live decoder,
@@ -419,14 +575,17 @@ class AndroidAudioEngine implements AudioEngine {
         !isCurrent())
       return false;
     final songs = _playlistProvider();
+    if (requiresOnDemandAndroidSequence(songs)) return false;
     final selectedIndex = _selectedPlaylistIndexProvider?.call() ?? -1;
-    final index = selectedIndex >= 0 &&
+    final index =
+        selectedIndex >= 0 &&
             selectedIndex < songs.length &&
             androidAudioSourceIdentity(songs[selectedIndex]) ==
                 androidAudioSourceIdentity(playing)
         ? selectedIndex
         : songs.indexWhere(
-            (song) => androidAudioSourceIdentity(song) ==
+            (song) =>
+                androidAudioSourceIdentity(song) ==
                 androidAudioSourceIdentity(playing),
           );
     if (index < 0 || songs.length < 2 || player.sequence.length != 1) {
@@ -461,10 +620,17 @@ class AndroidAudioEngine implements AudioEngine {
         return false;
 
       _restoringFastStartPlaylist = true;
+      _sequenceRestoreCompletion = Completer<void>();
       // Followed by preceding tracks: the existing track stays the active
       // source, with its logical index shifted to match the full playlist.
       if (after.isNotEmpty) await _wait(player.addAudioSources(after));
+      if (!isCurrent()) return false;
       if (before.isNotEmpty) await _wait(player.insertAudioSources(0, before));
+      if (!isCurrent() ||
+          !listEquals(songs.map(androidAudioSourceIdentity).toList(),
+              _playlistProvider().map(androidAudioSourceIdentity).toList())) {
+        return false;
+      }
       _loadedSingleTrackOnly = false;
       _playlistSignature = songs
           .map(androidAudioSourceIdentity)
@@ -481,10 +647,14 @@ class AndroidAudioEngine implements AudioEngine {
     } finally {
       if (_restoringFastStartPlaylist) {
         _restoringFastStartPlaylist = false;
+        _sequenceRestoreCompletion?.complete();
+        _sequenceRestoreCompletion = null;
         // A failed partial insert cannot be treated as a valid playlist.
         // Retain manual-completion mode and force a fresh sequence on the
         // next track instead of accidentally repeating/skipping wrong songs.
-        if (restored && identical(_player, player)) {
+        if (restored && identical(_player, player) && isCurrent() &&
+            listEquals(songs.map(androidAudioSourceIdentity).toList(),
+                _playlistProvider().map(androidAudioSourceIdentity).toList())) {
           _syncPlaylistStateFromPlayer();
           _syncTrackFromIndex(player.currentIndex);
         } else if (identical(_player, player)) {
@@ -496,6 +666,7 @@ class AndroidAudioEngine implements AudioEngine {
   });
 
   bool _restoringFastStartPlaylist = false;
+  Completer<void>? _sequenceRestoreCompletion;
 
   final StreamController<PlaybackState> _controller =
       StreamController<PlaybackState>.broadcast();
@@ -566,7 +737,8 @@ class AndroidAudioEngine implements AudioEngine {
   /// Local files and genuinely short songs are intentionally excluded.
   static bool isTruncatedHttpAddonAudio(Song? song, Duration? decodedDuration) {
     if (song?.sourcePackage != 'konnekted.progressive' ||
-        decodedDuration == null) return false;
+        decodedDuration == null)
+      return false;
     return song!.duration >= const Duration(seconds: 90) &&
         decodedDuration >= const Duration(seconds: 10) &&
         decodedDuration <= const Duration(seconds: 60) &&
@@ -580,23 +752,29 @@ class AndroidAudioEngine implements AudioEngine {
     Song? track,
     Duration? decodedDuration,
   ) {
-    if (_retired || !identical(_player, player) ||
+    if (_retired ||
+        !identical(_player, player) ||
         _sourceFailed ||
-        !isTruncatedHttpAddonAudio(track, decodedDuration)) return false;
+        !isTruncatedHttpAddonAudio(track, decodedDuration))
+      return false;
     _sourceFailed = true;
     // Native auto-advance may have changed the item before the engine
     // received its duration. Keep retry/error state on that actual item.
     _loadedTrack = track;
-    AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected: '
-        'expectedMs=${track!.duration.inMilliseconds} '
-        'decodedMs=${decodedDuration!.inMilliseconds}');
-    _emit(_state.copyWith(
-      currentTrack: track,
-      isPlaying: false,
-      position: Duration.zero,
-      bufferedPosition: Duration.zero,
-      duration: decodedDuration,
-    ));
+    AppLog.instance.add(
+      '[Playback] HTTP add-on truncated audio rejected: '
+      'expectedMs=${track!.duration.inMilliseconds} '
+      'decodedMs=${decodedDuration!.inMilliseconds}',
+    );
+    _emit(
+      _state.copyWith(
+        currentTrack: track,
+        isPlaying: false,
+        position: Duration.zero,
+        bufferedPosition: Duration.zero,
+        duration: decodedDuration,
+      ),
+    );
     _onTrackError?.call(track);
     // Pause immediately, before the asynchronous decoder retirement.
     unawaited(_wait(player.pause()).catchError((Object _) {}));
@@ -671,16 +849,20 @@ class AndroidAudioEngine implements AudioEngine {
         // A duration event at a sequence transition may still represent the
         // previous item. Prefer the newly indexed source's own duration.
         final index = player.currentIndex;
-        final indexedDuration = index != null && index >= 0 &&
-                index < player.sequence.length
+        final indexedDuration =
+            index != null && index >= 0 && index < player.sequence.length
             ? player.sequence[index].duration
             : null;
-        final verifiedDuration = indexedDuration ??
-            (_loadedSingleTrackOnly ? dur : null);
-        if (!_awaitingInitialSeek && !_shouldSuppressTrackSync() &&
+        final verifiedDuration =
+            indexedDuration ?? (_loadedSingleTrackOnly ? dur : null);
+        if (!_awaitingInitialSeek &&
+            !_shouldSuppressTrackSync() &&
             _rejectTruncatedActiveHttpTrack(
-              player, _resolveTrack(index), verifiedDuration,
-            )) return;
+              player,
+              _resolveTrack(index),
+              verifiedDuration,
+            ))
+          return;
         _emit(_state.copyWith(duration: dur));
       }),
     );
@@ -705,8 +887,11 @@ class AndroidAudioEngine implements AudioEngine {
         if (state == just_audio.ProcessingState.completed) {
           if (_sourceFailed) return;
           if (_rejectTruncatedActiveHttpTrack(
-            player, _resolveTrack(player.currentIndex), player.duration,
-          )) return; // A preview is not a completed track.
+            player,
+            _resolveTrack(player.currentIndex),
+            player.duration,
+          ))
+            return; // A preview is not a completed track.
           if (_loadedTrack?.atmosEncoded == true) {
             AtmosDiagnostics.record('playback_end', {
               'codec': 'eac3_joc',
@@ -767,11 +952,16 @@ class AndroidAudioEngine implements AudioEngine {
     // Check the current IndexedAudioSource instead, then watch durationStream
     // for delayed decoder metadata.
     final player = _player;
-    if (player != null && index != null &&
-        index >= 0 && index < player.sequence.length &&
+    if (player != null &&
+        index != null &&
+        index >= 0 &&
+        index < player.sequence.length &&
         _rejectTruncatedActiveHttpTrack(
-          player, nextTrack, player.sequence[index].duration,
-        )) return;
+          player,
+          nextTrack,
+          player.sequence[index].duration,
+        ))
+      return;
     // Report the native slot even if adjacent songs have identical IDs or
     // metadata. A single-source fast start has native index 0 regardless of
     // its absolute logical position, so never report that as a queue index.
@@ -898,14 +1088,18 @@ class AndroidAudioEngine implements AudioEngine {
     int? initialIndex,
   }) async {
     try {
-      final loadedDuration = await _wait(player
-          .setAudioSource(source, initialIndex: initialIndex, preload: true)
-          .timeout(const Duration(seconds: 30)));
+      final loadedDuration = await _wait(
+        player
+            .setAudioSource(source, initialIndex: initialIndex, preload: true)
+            .timeout(const Duration(seconds: 30)),
+      );
       final actualDuration = loadedDuration ?? player.duration;
       if (isTruncatedHttpAddonAudio(_loadedTrack, actualDuration)) {
-        AppLog.instance.add('[Playback] HTTP add-on truncated audio rejected at load: '
-            'expectedMs=${_loadedTrack?.duration.inMilliseconds} '
-            'decodedMs=${actualDuration?.inMilliseconds}');
+        AppLog.instance.add(
+          '[Playback] HTTP add-on truncated audio rejected at load: '
+          'expectedMs=${_loadedTrack?.duration.inMilliseconds} '
+          'decodedMs=${actualDuration?.inMilliseconds}',
+        );
         throw const FormatException(
           'The HTTP add-on returned a preview or truncated audio stream.',
         );
@@ -967,7 +1161,8 @@ class AndroidAudioEngine implements AudioEngine {
     // The active queue slot is supplied by PlayerService. Searching by ID
     // alone wrongly loads the first occurrence of a duplicated song.
     final selectedIndex = _selectedPlaylistIndexProvider?.call() ?? -1;
-    var index = selectedIndex >= 0 &&
+    var index =
+        selectedIndex >= 0 &&
             selectedIndex < playlist.length &&
             playlist[selectedIndex].id == track.id
         ? selectedIndex
@@ -1061,7 +1256,7 @@ class AndroidAudioEngine implements AudioEngine {
       return;
     }
 
-    final unresolvedQueue = hasUnresolvedAudioSources(playlist);
+    final unresolvedQueue = requiresOnDemandAndroidSequence(playlist);
     // Repeat All is a logical queue setting, not permission to send pending
     // Discovery slots as empty URIs to Android. Keep one playable source
     // loaded and use PlayerService's manual completion until resolved.
@@ -1316,7 +1511,11 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   void _maybeArmCrossfade(just_audio.AudioPlayer player, Duration pos) {
-    if (_retired || _sourceFailed || _crossfadeArmed || _loadedTrack?.atmosEncoded == true) return;
+    if (_retired ||
+        _sourceFailed ||
+        _crossfadeArmed ||
+        _loadedTrack?.atmosEncoded == true)
+      return;
     final cfg = _crossfadeConfigProvider();
     if (cfg.enabled) _prewarmStemCandidate(player, pos);
     final duration = player.duration;
@@ -1495,24 +1694,35 @@ class AndroidAudioEngine implements AudioEngine {
         }
         // A muted track must stay muted through the preparation and ramp.
         _rampUserVolume = outgoing.volume;
-        final incomingDuration = await _wait(incoming
-            .setAudioSource(source, preload: true)
-            .timeout(const Duration(seconds: 30)));
-        if (!valid()) { releaseIfOwned(); return; }
+        final incomingDuration = await _wait(
+          incoming
+              .setAudioSource(source, preload: true)
+              .timeout(const Duration(seconds: 30)),
+        );
+        if (!valid()) {
+          releaseIfOwned();
+          return;
+        }
         // This crossfade decoder bypasses _loadSource. Never commit or
         // advance the queue with a 30-second preview.
         final actualDuration = incomingDuration ?? incoming.duration;
         if (isTruncatedHttpAddonAudio(next, actualDuration)) {
-          AppLog.instance.add('[Playback] HTTP add-on crossfade preview rejected: '
-              'expectedMs=${next.duration.inMilliseconds} '
-              'decodedMs=${actualDuration?.inMilliseconds}');
+          AppLog.instance.add(
+            '[Playback] HTTP add-on crossfade preview rejected: '
+            'expectedMs=${next.duration.inMilliseconds} '
+            'decodedMs=${actualDuration?.inMilliseconds}',
+          );
           releaseIfOwned();
-          try { await _wait(incoming.stop()); } catch (_) {}
+          try {
+            await _wait(incoming.stop());
+          } catch (_) {}
           return; // Keep outgoing audio until normal completion.
         }
-        final entrance = modelPair ? modelEntry :
-            (upcomingProfile?.leadInSeconds ?? 0);
-        final entry = (modelEntry != null || (entrance >= 0.4 && entrance <= 3)) &&
+        final entrance = modelPair
+            ? modelEntry
+            : (upcomingProfile?.leadInSeconds ?? 0);
+        final entry =
+            (modelEntry != null || (entrance >= 0.4 && entrance <= 3)) &&
                 (upcomingProfile?.durationSeconds ?? 0) >= 20
             ? Duration(milliseconds: (entrance * 1000).round())
             : Duration.zero;

@@ -77,6 +77,15 @@ func rawDocument(_ url: URL, id: String, replacement: Data? = nil) throws -> Dat
 
 var contractStage = "startup"
 do {
+  if CommandLine.arguments.count == 6 && CommandLine.arguments[1] == "--library-copy" {
+    let container = URL(fileURLWithPath: CommandLine.arguments[2])
+    let root = URL(fileURLWithPath: CommandLine.arguments[3])
+    let job = try LokalTransferJob.decodeDocument(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[4])))
+    let boundary = CommandLine.arguments[5]
+    let library = try LokalTransferLibrary(root: root, testingBoundary: { if $0 == boundary { exit(96) } })
+    _ = try library.install(job, from: LokalTransferFiles(container: container))
+    exit(0)
+  }
   if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--probe-write-lock" {
     let path = URL(fileURLWithPath: CommandLine.arguments[2])
       .appendingPathComponent(LokalTransferJournal.directoryName)
@@ -381,6 +390,8 @@ do {
   try rejects("staged bytes alone do not grant an importer path") { _ = try files.importURL(transfer) }
   transfer = try store.update(id: binaryJob.id, revision: 1) { try $0.transition(to: .validating, nowMs: 1050) }
   try require(Data(contentsOf: files.importURL(transfer)) == Data("abc".utf8), "current owned import path")
+  contractStage = "deterministic library file promotion"
+  try runLibraryContracts(container: root, job: transfer, files: files)
   try store.update(id: binaryJob.id, revision: 1) { try $0.cancel(nowMs: 1060) }
   try files.discard(transfer)
   try require(files.retainedSize(transfer) == nil, "cancel cleanup uses the retired file revision")

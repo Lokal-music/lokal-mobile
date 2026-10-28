@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
+import '../../core/utils/app_log.dart';
 import 'morneye_network.dart';
 import 'morneye_storage.dart';
 
@@ -81,6 +82,46 @@ class MorneyePending {
   final String url;
   final String state;
   final DateTime createdAt;
+}
+
+/// Expose the signed gateway's retry contract under the names consumed by
+/// the installed Mornye/Tidal JS extensions. The raw gateway uses snake_case;
+/// Tidal's signedJSON reads camelCase. Without these fields a terminal 403
+/// ticket rejection looks like a transient failure, and the extension keeps
+/// retrying quality tiers without ever opening an audio transfer.
+///
+/// Do not manufacture an authorization success or a playable URL.
+Map<String, Object?> morneyeSignedAddonResponse(
+  Map<String, Object?> response,
+  Map<String, Object?> contract,
+) {
+  final status = (response['status'] as num?)?.toInt();
+  final code = '${contract['code'] ?? ''}'.toUpperCase();
+  final explicitMode = '${contract['retry_mode'] ?? ''}'.trim();
+  // A 4xx response other than throttling/timeouts cannot become playable by
+  // retrying the exact same signed ticket. A gateway can explicitly override
+  // this with its retry contract.
+  final terminalClientError = status != null &&
+      status >= 400 && status < 500 && status != 408 && status != 429;
+  final retryMode = explicitMode.isNotEmpty
+      ? explicitMode : (terminalClientError ? 'none' : '');
+  final retrySeconds = (contract['retry_after_seconds'] as num?)?.toDouble() ??
+      0.0;
+  return {
+    ...response,
+    'code': code,
+    'retryable': contract['retryable'] == true && retryMode != 'none',
+    'retryMode': retryMode,
+    'retryAfterSeconds': retrySeconds,
+    'needsVerification': status == 428 || code == 'VERIFY_REQUIRED',
+    // Retain backwards-compatible snake_case fields for other clients.
+    if (code.isNotEmpty) ...{
+      'error_code': code,
+      'error_origin': contract['origin'],
+      'error_action': contract['action'],
+      'retry_after_seconds': retrySeconds,
+    },
+  };
 }
 
 class MorneyeSignedSession {
@@ -426,7 +467,9 @@ class MorneyeSignedSession {
       await _refresh(record).catchError((_) {});
       record = this.record();
       for (var attempt = 0; attempt < 3; attempt++) {
+        final clock = Stopwatch()..start();
         final response = await _request(record, method, path, body, headers);
+        clock.stop();
         Map<String, Object?> contract = {};
         try {
           final decoded = jsonDecode(response['body'] as String);
@@ -468,15 +511,19 @@ class MorneyeSignedSession {
           record = this.record();
           continue;
         }
-        return {
-          ...response,
-          if (code.isNotEmpty) ...{
-            'error_code': code,
-            'error_origin': contract['origin'],
-            'error_action': contract['action'],
-            'retry_after_seconds': contract['retry_after_seconds'] ?? 0,
-          },
-        };
+        final addonResponse = morneyeSignedAddonResponse(response, contract);
+        if (path == '/tickets') {
+          // The gateway ticket decision is the dividing line between
+          // "Resolving Tidal stream" and an actual media transfer.
+          // Never record a ticket, URL, request body or session credentials.
+          AppLog.instance.add(
+            '[Morneye] ticket request status=$status '
+            'code=${RegExp(r'^[A-Z][A-Z0-9_]{0,63}$').hasMatch(code) ? code : 'unspecified'} '
+            'retryable=${addonResponse['retryable'] == true} '
+            'elapsedMs=${clock.elapsedMilliseconds}',
+          );
+        }
+        return addonResponse;
       }
       return {'ok': false, 'error': 'Signed request failed'};
     } catch (error) {

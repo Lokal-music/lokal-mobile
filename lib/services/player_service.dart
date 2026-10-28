@@ -730,6 +730,12 @@ class PlayerService {
   @visibleForTesting
   bool get debugPositionSaveTimerActive => _positionSaveTimer?.isActive == true;
 
+  /// Read the actual just_audio sequence during explicit native acceptance.
+  /// This installs no observation or recurring work in production.
+  @visibleForTesting
+  int? get debugNativeSequenceLength =>
+      _usingRustBackend ? null : _justAudioPlayer?.sequence.length;
+
   // Periodic health-check for hardware volume verification
   Timer? _hwVolumeHealthTimer;
 
@@ -887,6 +893,9 @@ class PlayerService {
   VoidCallback? cancelPendingSongResolution;
   int _pendingPlaybackGeneration = 0;
 
+  /// UI preflight must not start an old selection after a newer play/pause.
+  int get playbackRequestRevision => _pendingPlaybackGeneration;
+
   void _cancelPendingPlayback() {
     _pendingPlaybackGeneration++;
     if (_pendingPlaybackId == null) return;
@@ -931,7 +940,7 @@ class PlayerService {
     _notifyUpNextChanged();
     if (!_usingRustBackend &&
         _audioSourceSequence != null &&
-        !hasUnresolvedAudioSources(_playlist) &&
+        !requiresOnDemandAndroidSequence(_playlist) &&
         _androidEngine?.isSingleTrackOnly != true) {
       for (final index in changed) {
         if (index == _currentIndex) continue;
@@ -1742,7 +1751,7 @@ class PlayerService {
       // queue until they are actually ready.
       if (_playlist.isNotEmpty &&
           !_usingRustBackend &&
-          !hasUnresolvedAudioSources(_playlist)) {
+          !requiresOnDemandAndroidSequence(_playlist)) {
         unawaited(_rebuildPlaylist());
       }
     });
@@ -4217,7 +4226,7 @@ class PlayerService {
       androidSingleTrackOnly:
           !_usingRustBackend &&
           ((_androidEngine?.isSingleTrackOnly ?? false) ||
-              hasUnresolvedAudioSources(_playlist) ||
+              requiresOnDemandAndroidSequence(_playlist) ||
               _audioSourceSequence == null),
     )) {
       _debugLog('_onSongFinished: skipping manual completion handling');
@@ -4501,7 +4510,7 @@ class PlayerService {
         _audioSourceSequence == null ||
         song.isPending ||
         song.filePath?.isNotEmpty != true ||
-        hasUnresolvedAudioSources(_playlist))
+        requiresOnDemandAndroidSequence(_playlist))
       return;
     final source = await _buildAudioSourceForSong(song);
     _audioSourceSequence!.insert(playlistIndex, source);
@@ -7248,7 +7257,7 @@ class PlayerService {
     if (_usingRustBackend) return;
     if (_playlist.isEmpty ||
         _currentIndex < 0 ||
-        hasUnresolvedAudioSources(_playlist))
+        requiresOnDemandAndroidSequence(_playlist))
       return;
 
     try {
@@ -7306,7 +7315,7 @@ class PlayerService {
         // asynchronous in-place restore has populated the full sequence.
         final nativeMode =
             (_androidEngine?.isSingleTrackOnly == true ||
-                    hasUnresolvedAudioSources(_playlist)) &&
+                    requiresOnDemandAndroidSequence(_playlist)) &&
                 _playlist.length > 1
             ? just_audio.LoopMode.off
             : just_audio.LoopMode.all;
@@ -7371,15 +7380,48 @@ class PlayerService {
     await _updateNotificationState();
   }
 
+  Future<void> _enterOnDemandNativeQueueMode({bool force = false}) async {
+    if (_usingRustBackend ||
+        (!force && !requiresOnDemandAndroidSequence(_playlist)))
+      return;
+    final engine = _androidEngine;
+    if (engine == null) return;
+    final selection = _selectionGeneration;
+    final playback = _pendingPlaybackGeneration;
+    final collapsed = await IosLocalAudioRequests.wait(
+      engine.enterOnDemandQueueMode(
+        concatenated: _audioSourceSequence,
+        isCurrent: () => selection == _selectionGeneration && identical(engine, _androidEngine),
+        mayResume: () => playback == _pendingPlaybackGeneration,
+      ),
+    );
+    if (!identical(engine, _androidEngine)) return;
+    if (collapsed) _audioSourceSequence = null;
+    await _updateLoopMode();
+  }
+
   Future<void> _syncPlaylistAfterShuffle({required int oldCurrentIndex}) async {
     // Shuffling a Discovery playlist does not make its pending songs playable.
     // Let the logical order change immediately, without rebuilding Media3
     // with empty URLs or resetting the currently playing decoder.
-    if (hasUnresolvedAudioSources(_playlist)) return;
+    if (requiresOnDemandAndroidSequence(_playlist)) {
+      await _enterOnDemandNativeQueueMode();
+      return;
+    }
     final player = _justAudioPlayer;
     final seq = _audioSourceSequence;
-    if (player == null || seq == null) {
+    if (player == null) {
       await _rebuildPlaylist();
+      return;
+    }
+    if (seq == null) {
+      // Fast-start restoration mutates the player directly. Keep its current
+      // decoder while retiring an order that predates the logical shuffle.
+      if (player.sequence.isEmpty) {
+        await _rebuildPlaylist();
+      } else {
+        await _enterOnDemandNativeQueueMode(force: true);
+      }
       return;
     }
     if (_playlist.isEmpty || _currentIndex < 0) {
@@ -7455,7 +7497,7 @@ class PlayerService {
     if (mode == LoopMode.all &&
         !_usingRustBackend &&
         _playlist.length > 1 &&
-        !hasUnresolvedAudioSources(_playlist) &&
+        !requiresOnDemandAndroidSequence(_playlist) &&
         _androidEngine?.isSingleTrackOnly == true &&
         _androidEngine?.isCrossfadeActive == false) {
       final engine = _androidEngine!;
@@ -7467,6 +7509,7 @@ class PlayerService {
           isCurrent: () =>
               _selectionGeneration == selection &&
               loopModeNotifier.value == LoopMode.all &&
+              !requiresOnDemandAndroidSequence(_playlist) &&
               identical(_androidEngine, engine),
         );
         if (restored &&
@@ -7774,28 +7817,18 @@ class PlayerService {
     final at = _playlist.length;
     _playlist.add(song);
     _playlistQueueEntryIds.add(null);
-    if (!_usingRustBackend && _audioSourceSequence != null) {
-      if (hasUnresolvedAudioSources(_playlist)) {
-        final native = _audioSourceSequence!;
-        final cursor = _justAudioPlayer?.currentIndex ?? _currentIndex;
-        if (cursor >= 0 && cursor + 1 < native.children.length) {
-          native.removeRange(cursor + 1, native.children.length);
-        }
-        _audioSourceSequence = null;
-        unawaited(
-          _justAudioPlayer?.setLoopMode(just_audio.LoopMode.off) ??
-              Future<void>.value(),
-        );
+    if (!_usingRustBackend) {
+      if (requiresOnDemandAndroidSequence(_playlist)) {
+        await _enterOnDemandNativeQueueMode();
+      } else if (_audioSourceSequence == null) {
+        await _enterOnDemandNativeQueueMode(force: true);
       } else {
         try {
           await _insertIntoAudioSequence(at, song);
         } catch (error) {
-          _debugLog('Flow queue tail append deferred: $error');
-          _audioSourceSequence = null;
-          unawaited(
-            _justAudioPlayer?.setLoopMode(just_audio.LoopMode.off) ??
-                Future<void>.value(),
-          );
+          if (IosLocalAudioRequests.isRetired(error)) rethrow;
+          _debugLog('Native queue append deferred; preserving logical queue');
+          await _enterOnDemandNativeQueueMode(force: true);
         }
       }
     }
@@ -7815,28 +7848,18 @@ class PlayerService {
       _playlist.insert(insertIndex, song);
       _playlistQueueEntryIds.insert(insertIndex, entry.id);
 
-      if (!_usingRustBackend && _audioSourceSequence != null) {
-        if (hasUnresolvedAudioSources(_playlist)) {
-          // The player's source list cannot contain a pending Discovery
-          // entry. Keep only currently playing/past native items, and hand
-          // upcoming selection to QueuePreResolver in logical order.
-          final native = _audioSourceSequence!;
-          final cursor = _justAudioPlayer?.currentIndex ?? _currentIndex;
-          if (cursor >= 0 && cursor + 1 < native.children.length) {
-            native.removeRange(cursor + 1, native.children.length);
-          }
-          _audioSourceSequence = null;
-          unawaited(
-            _justAudioPlayer?.setLoopMode(just_audio.LoopMode.off) ??
-                Future<void>.value(),
-          );
+      if (!_usingRustBackend) {
+        if (requiresOnDemandAndroidSequence(_playlist)) {
+          await _enterOnDemandNativeQueueMode();
+        } else if (_audioSourceSequence == null) {
+          await _enterOnDemandNativeQueueMode(force: true);
         } else {
           try {
             await _insertIntoAudioSequence(insertIndex, song);
           } catch (error) {
-            _debugLog(
-              'Native queue append failed; preserving logical queue: $error',
-            );
+            if (IosLocalAudioRequests.isRetired(error)) rethrow;
+            _debugLog('Native queue append deferred; preserving logical queue');
+            await _enterOnDemandNativeQueueMode(force: true);
           }
         }
       }

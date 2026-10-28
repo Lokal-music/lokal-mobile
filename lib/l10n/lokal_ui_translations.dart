@@ -1,5 +1,10 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Starting {source}…": "Démarrage de {source}…",
+  "Checking metadata on {source}…": "Vérification des métadonnées sur {source}…",
+  "Verifying recording on {source}…": "Vérification du morceau sur {source}…",
+  "Resolving audio from {source}…": "Recherche de l’audio sur {source}…",
+  "Preparing {source}…": "Préparation de {source}…",
   "Audio output": "Sortie audio",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume et crossfeed",
   "Advanced output": "Sortie avancée",
@@ -630,6 +635,11 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Starting {source}…": "{source} wird gestartet…",
+  "Checking metadata on {source}…": "Metadaten auf {source} prüfen…",
+  "Verifying recording on {source}…": "Aufnahme auf {source} prüfen…",
+  "Resolving audio from {source}…": "Audio von {source} ermitteln…",
+  "Preparing {source}…": "{source} wird vorbereitet…",
   "Audio output": "Audioausgabe",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, Lautstärke und Crossfeed",
   "Advanced output": "Erweiterte Ausgabe",
@@ -1253,6 +1263,11 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Starting {source}…": "Iniciando {source}…",
+  "Checking metadata on {source}…": "Comprobando metadatos en {source}…",
+  "Verifying recording on {source}…": "Verificando la grabación en {source}…",
+  "Resolving audio from {source}…": "Resolviendo audio de {source}…",
+  "Preparing {source}…": "Preparando {source}…",
   "Audio output": "Salida de audio",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volumen y mezcla de canales",
   "Advanced output": "Salida avanzada",
@@ -1884,6 +1899,11 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Starting {source}…": "Avvio di {source}…",
+  "Checking metadata on {source}…": "Controllo dei metadati su {source}…",
+  "Verifying recording on {source}…": "Verifica della registrazione su {source}…",
+  "Resolving audio from {source}…": "Ricerca dell’audio da {source}…",
+  "Preparing {source}…": "Preparazione di {source}…",
   "Audio output": "Uscita audio",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume e crossfeed",
   "Advanced output": "Uscita avanzata",
@@ -2517,6 +2537,11 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Starting {source}…": "Iniciando {source}…",
+  "Checking metadata on {source}…": "Verificando metadados em {source}…",
+  "Verifying recording on {source}…": "Verificando a gravação em {source}…",
+  "Resolving audio from {source}…": "Resolvendo áudio de {source}…",
+  "Preparing {source}…": "Preparando {source}…",
   "Audio output": "Saída de áudio",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume e crossfeed",
   "Advanced output": "Saída avançada",
@@ -3145,6 +3170,11 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Starting {source}…": "{source} starten…",
+  "Checking metadata on {source}…": "Metadata op {source} controleren…",
+  "Verifying recording on {source}…": "Opname op {source} controleren…",
+  "Resolving audio from {source}…": "Audio van {source} ophalen…",
+  "Preparing {source}…": "{source} voorbereiden…",
   "Audio output": "Audio-uitvoer",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volume en crossfeed",
   "Advanced output": "Geavanceerde uitvoer",
@@ -3785,6 +3815,11 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Starting {source}…": "Uruchamianie {source}…",
+  "Checking metadata on {source}…": "Sprawdzanie metadanych w {source}…",
+  "Verifying recording on {source}…": "Weryfikowanie nagrania w {source}…",
+  "Resolving audio from {source}…": "Wyszukiwanie dźwięku z {source}…",
+  "Preparing {source}…": "Przygotowywanie {source}…",
   "Audio output": "Wyjście audio",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, głośność i crossfeed",
   "Advanced output": "Zaawansowane wyjście",
@@ -4415,6 +4450,11 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Starting {source}…": "Startar {source}…",
+  "Checking metadata on {source}…": "Kontrollerar metadata på {source}…",
+  "Verifying recording on {source}…": "Verifierar inspelningen på {source}…",
+  "Resolving audio from {source}…": "Hämtar ljud från {source}…",
+  "Preparing {source}…": "Förbereder {source}…",
   "Audio output": "Ljudutgång",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, volym och crossfeed",
   "Advanced output": "Avancerad utgång",
@@ -5051,6 +5091,11 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Starting {source}…": "正在启动 {source}…",
+  "Checking metadata on {source}…": "正在检查 {source} 的元数据…",
+  "Verifying recording on {source}…": "正在验证 {source} 上的录音…",
+  "Resolving audio from {source}…": "正在解析 {source} 的音频…",
+  "Preparing {source}…": "正在准备 {source}…",
   "Audio output": "音频输出",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay、蓝牙、音量和交叉馈送",
   "Advanced output": "高级输出",
@@ -5686,6 +5731,11 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Starting {source}…": "{source} başlatılıyor…",
+  "Checking metadata on {source}…": "{source} üzerindeki meta veriler denetleniyor…",
+  "Verifying recording on {source}…": "{source} üzerindeki kayıt doğrulanıyor…",
+  "Resolving audio from {source}…": "{source} üzerinden ses çözümleniyor…",
+  "Preparing {source}…": "{source} hazırlanıyor…",
   "Audio output": "Ses çıkışı",
   "AirPlay, Bluetooth, volume and crossfeed": "AirPlay, Bluetooth, ses düzeyi ve çapraz besleme",
   "Advanced output": "Gelişmiş çıkış",
