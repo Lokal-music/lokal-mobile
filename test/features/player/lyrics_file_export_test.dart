@@ -279,17 +279,17 @@ void main() {
     );
     expect(source.lines.map((line) => line.translation),
       ['From my beautiful land', 'From my holy land']);
-    final export = prepareLyricsFileExport(
+    final portableFile = prepareLyricsFileExport(
       _song, source, includeDisplayedSubline: true,
     );
-    expect(export.extension, 'lrc');
-    expect(export.content,
+    expect(portableFile.extension, 'lrc');
+    expect(portableFile.content,
       '[00:19.51]De mi tierra bella\n'
       '[00:19.51]From my beautiful land\n'
       '[00:21.99]De mi tierra santa\n'
       '[00:21.99]From my holy land\n',
     );
-    final reparsed = LyricsService().parseLyricsText(export.content);
+    final reparsed = LyricsService().parseLyricsText(portableFile.content);
     expect(reparsed.lines.map((line) => line.translation),
       ['From my beautiful land', 'From my holy land']);
   });
