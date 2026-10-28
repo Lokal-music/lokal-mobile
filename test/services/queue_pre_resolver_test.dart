@@ -239,6 +239,55 @@ void main() {
       expect(_owned('x').isPending, isFalse);
     });
 
+    testResolver('playlist starts its first pending track before any prefetch', (
+      tester,
+    ) async {
+      final first = pending('first');
+      host.playlist = [first, pending('second'), pending('third')];
+      // The player publishes a new pending Song before stopping the old
+      // engine. That change must not start downloads for tracks 2 and 3.
+      host.playAt(0);
+      expect(resolver.schedule(), isEmpty);
+      host.queue.value++;
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(lookups.asked, isEmpty);
+
+      // Its foreground resolution is now the only add-on request.
+      final started = resolver.resolveNow(first);
+      expect(lookups.asked, ['first']);
+      resolver.schedule();
+      await tester.pump(const Duration(seconds: 3));
+      expect(lookups.asked, ['first']);
+
+      lookups.answer('first');
+      expect((await started)?.id, 'discovery:first');
+      // After the foreground handoff the next-four window opens normally.
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(lookups.asked, ['first', 'second']);
+      await tester.pump(const Duration(seconds: 2));
+      expect(lookups.asked, ['first', 'second', 'third']);
+    });
+
+    testResolver('pending selection defers existing stagger without losing work', (
+      tester,
+    ) async {
+      final first = pending('first');
+      host.playlist = [_owned('old'), first, pending('second')];
+      resolver.schedule();
+      expect(lookups.asked, ['first']);
+      // Existing background work for the selected track is retained.
+      host.playAt(1);
+      await tester.pump(const Duration(seconds: 2));
+      expect(lookups.asked, ['first']);
+      final started = resolver.resolveNow(first);
+      expect(lookups.asked, ['first']);
+      lookups.answer('first');
+      expect((await started)?.id, 'discovery:first');
+      // A next track that was deferred during the handoff is still resolved.
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(lookups.asked, ['first', 'second']);
+    });
+
     testResolver('the first lookup runs at once, the rest 2 s apart', (
       tester,
     ) async {
