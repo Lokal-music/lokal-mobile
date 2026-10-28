@@ -111,6 +111,75 @@ class _Player implements ja.AudioPlayer {
 }
 
 void main() {
+  test('large Library queues prepare only the tapped track', () async {
+    final library = List<Song>.generate(
+      2654,
+      (i) => Song(
+        id: 'song-$i', title: 'Recording $i', artist: 'Artist',
+        duration: const Duration(minutes: 3), fileType: 'FLAC',
+        filePath: '/music/song-$i.flac',
+      ),
+    );
+    expect(hasUnresolvedAudioSources(library), isFalse);
+    expect(requiresOnDemandAndroidSequence(library), isTrue);
+    final player = _Player();
+    var nativeSequenceBuilds = 0;
+    var singleSourceBuilds = 0;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async {
+        nativeSequenceBuilds++;
+        throw StateError('The complete Library must not be materialized');
+      },
+      sourceBuilder: (song) async {
+        singleSourceBuilds++;
+        return ja.AudioSource.uri(Uri.file(song.filePath!));
+      },
+      playlistProvider: () => library,
+      selectedPlaylistIndexProvider: () => 1730,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await engine.load(library[1730]);
+    expect(nativeSequenceBuilds, 0);
+    expect(singleSourceBuilds, 1);
+    expect(engine.isSingleTrackOnly, isTrue);
+    expect(
+      await engine.restoreFastStartPlaylist(isCurrent: () => true),
+      isFalse,
+    );
+    expect(singleSourceBuilds, 1,
+        reason: 'No background restore across thousands of library songs');
+  });
+
+  test('remote songs stay on demand, small local queues retain native sequence', () {
+    const local = Song(
+      id: 'local', title: 'Local', artist: 'A',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/music/local.flac',
+    );
+    const desktop = Song(
+      id: 'desktop', title: 'PC only', artist: 'A',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: 'lokal://1/abc', sourceType: 'lokal',
+      remoteId: 'abc', remoteServerId: 1,
+    );
+    expect(requiresOnDemandAndroidSequence([local, desktop]), isTrue);
+    expect(requiresOnDemandAndroidSequence([local, local]), isFalse);
+  });
+
   testWidgets('native Android playback uses the selected duplicate occurrence',
       (tester) async {
     // Different entries can have the same ID and source path; identity alone
