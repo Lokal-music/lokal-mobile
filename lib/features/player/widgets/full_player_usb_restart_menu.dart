@@ -39,6 +39,7 @@ Future<void> showFullPlayerSongMenu(
   required Song song,
   required PlayerService player,
   List<LokalSongMenuAction> extras = const [],
+  bool keepBrowseActions = false,
 }) async {
   final connectedDac = await isUsbDacPhysicallyConnected();
   if (!context.mounted) return;
@@ -48,7 +49,9 @@ Future<void> showFullPlayerSongMenu(
   await SongActionsBottomSheet.show(
     context,
     current,
-    nowPlaying: true,
+    nowPlaying: !keepBrowseActions,
+    followPlaybackSong: true,
+    hideMediaActions: true,
     extras: [
       ...extras,
       if (showUsbRestartMenuAction(
