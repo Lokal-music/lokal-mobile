@@ -7,6 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _EmbeddedPlayer extends PlayerNotifier {
+  @override
+  PlayerState build() => const PlayerState();
+}
+
 class _Harness extends StatefulWidget {
   const _Harness();
 
@@ -291,6 +296,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            playerProvider.overrideWith(_EmbeddedPlayer.new),
             currentSongProvider.overrideWithValue(song('now')),
             upNextProvider.overrideWithValue([song('a'), song('b'), song('q')]),
             queueProvider.overrideWithValue([song('q')]),

@@ -107,7 +107,7 @@ void main() {
     expect(file.content, raw);
   });
 
-  test('exports selected translations rather than stale raw LRC', () async {
+  test('exports selected translation only when explicitly requested', () async {
     const raw = '[00:01.00]こんにちは';
     const lyrics = LyricsData(
       lines: [
@@ -120,9 +120,16 @@ void main() {
       isSynchronized: true,
       rawContent: raw,
     );
-    final file = prepareLyricsFileExport(_song, lyrics);
-    expect(file.extension, 'lrc');
-    expect(file.content, '[00:01.00]こんにちは\nHello\n');
+    final original = prepareLyricsFileExport(_song, lyrics);
+    expect(original.extension, 'lrc');
+    expect(original.content, raw);
+    final translated = prepareLyricsFileExport(
+      _song,
+      lyrics,
+      includeDisplayedSubline: true,
+    );
+    expect(translated.extension, 'lrc');
+    expect(translated.content, '[00:01.00]こんにちは\n[00:01.00]Hello\n');
     expect(
       await saveCurrentLyricsFile(
         song: _song,
@@ -162,9 +169,12 @@ void main() {
       lyrics,
       includeDisplayedSubline: true,
     );
-    expect(file.extension, 'elrc');
+    expect(file.extension, 'lrc');
     expect(file.mimeType, 'text/plain');
-    expect(file.content, '[00:01.25]<00:01.25>さくら\nSakura\n');
+    expect(file.content, '[00:01.25]さくら\n[00:01.25]Sakura\n');
+    final restored = LyricsService().parseLyricsText(file.content);
+    expect(restored.lines, hasLength(1));
+    expect(restored.lines.single.translation, 'Sakura');
   });
 
   test(
@@ -187,6 +197,59 @@ void main() {
       expect(file.content, raw);
     },
   );
+
+  test('normal save preserves TTML despite an available translation', () {
+    const raw = '<tt><body><p begin="1s">日本語</p></body></tt>';
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 1),
+          text: '日本語',
+          translation: 'Japanese',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: raw,
+    );
+    final original = prepareLyricsFileExport(_song, lyrics);
+    expect(original.extension, 'ttml');
+    expect(original.content, raw);
+    final translated = prepareLyricsFileExport(
+      _song,
+      lyrics,
+      includeDisplayedSubline: true,
+    );
+    expect(translated.extension, 'lrc');
+    expect(translated.content, '[00:01.00]日本語\n[00:01.00]Japanese\n');
+  });
+
+  test('translation export skips blank and duplicate sublines', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(timestamp: Duration.zero, text: 'Same', translation: 'Same'),
+        LyricsLine(timestamp: Duration.zero, text: 'Blank', translation: '  '),
+        LyricsLine(
+          timestamp: Duration.zero,
+          text: 'Different',
+          translation: ' Autre ',
+        ),
+      ],
+      isSynchronized: false,
+      rawContent: 'Same\nBlank\nDifferent',
+    );
+    expect(
+      prepareLyricsFileExport(_song, lyrics).content,
+      'Same\nBlank\nDifferent',
+    );
+    expect(
+      prepareLyricsFileExport(
+        _song,
+        lyrics,
+        includeDisplayedSubline: true,
+      ).content,
+      'Same\nBlank\nDifferent\nAutre\n',
+    );
+  });
 
   test('rejects blank lines but keeps words-only lyric content', () async {
     const empty = LyricsData(
@@ -270,10 +333,165 @@ void main() {
     );
     final file = prepareLyricsFileExport(_song, lyrics);
     expect(file.extension, 'elrc');
-    expect(
-      file.content,
-      '[00:01.05]<00:01.05>Hello <00:01.40>world\nBonjour monde\n',
+    expect(file.content, '[00:01.05]<00:01.05>Hello <00:01.40>world\n');
+    final withTranslation = prepareLyricsFileExport(
+      _song,
+      lyrics,
+      includeDisplayedSubline: true,
     );
+    expect(withTranslation.extension, 'lrc');
+    expect(
+      withTranslation.content,
+      '[00:01.05]Hello world\n[00:01.05]Bonjour monde\n',
+    );
+    final restored = LyricsService().parseLyricsText(withTranslation.content);
+    expect(restored.lines.single.text, 'Hello world');
+    expect(restored.lines.single.translation, 'Bonjour monde');
+  });
+
+  test('legacy unstamped translated LRC exports as portable timed pairs', () {
+    final source = LyricsService().parseLyricsText(
+      '[00:19.51]De mi tierra bella\n'
+      'From my beautiful land\n'
+      '[00:21.99]De mi tierra santa\n'
+      'From my holy land',
+    );
+    expect(source.lines.map((line) => line.translation), [
+      'From my beautiful land',
+      'From my holy land',
+    ]);
+    final portableFile = prepareLyricsFileExport(
+      _song,
+      source,
+      includeDisplayedSubline: true,
+    );
+    expect(portableFile.extension, 'lrc');
+    expect(
+      portableFile.content,
+      '[00:19.51]De mi tierra bella\n'
+      '[00:19.51]From my beautiful land\n'
+      '[00:21.99]De mi tierra santa\n'
+      '[00:21.99]From my holy land\n',
+    );
+    final reparsed = LyricsService().parseLyricsText(portableFile.content);
+    expect(reparsed.lines.map((line) => line.translation), [
+      'From my beautiful land',
+      'From my holy land',
+    ]);
+  });
+
+  test('two simultaneous vocalists retain translations on export/reimport', () {
+    const original = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 2),
+          text: 'Lead',
+          translation: 'Translated lead',
+        ),
+        LyricsLine(timestamp: Duration(seconds: 2), text: 'Backing'),
+        LyricsLine(timestamp: Duration(seconds: 4), text: 'Next'),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final output = prepareLyricsFileExport(
+      _song,
+      original,
+      includeDisplayedSubline: true,
+    );
+    expect(output.extension, 'lrc');
+    expect(output.content, contains('[00:02.00]Lead\n'));
+    expect(output.content, contains('[lokaltr:0]\n[00:02.00]Translated lead'));
+    expect(output.content, contains('[00:02.00]Backing\n'));
+    final reimported = LyricsService().parseLyricsText(output.content);
+    expect(reimported.lines.map((line) => line.text), [
+      'Lead',
+      'Backing',
+      'Next',
+    ]);
+    expect(reimported.lines.map((line) => line.translation), [
+      'Translated lead',
+      null,
+      null,
+    ]);
+  });
+
+  test('multiple simultaneous vocalists each keep their subline', () {
+    const original = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(seconds: 2),
+          text: 'Lead',
+          translation: 'Translation one',
+        ),
+        LyricsLine(
+          timestamp: Duration(seconds: 2),
+          text: 'Harmony',
+          translation: 'Translation two',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final output = prepareLyricsFileExport(
+      _song,
+      original,
+      includeDisplayedSubline: true,
+    );
+    final reimported = LyricsService().parseLyricsText(output.content);
+    expect(reimported.lines.map((line) => line.text), ['Lead', 'Harmony']);
+    expect(reimported.lines.map((line) => line.translation), [
+      'Translation one',
+      'Translation two',
+    ]);
+  });
+
+  test('portable bilingual LRC retains partially translated rows', () {
+    const lyrics = LyricsData(
+      lines: [
+        LyricsLine(
+          timestamp: Duration(milliseconds: 19510),
+          text: 'De mi tierra bella',
+          translation: 'From my beautiful land',
+        ),
+        LyricsLine(
+          timestamp: Duration(milliseconds: 21990),
+          text: 'De mi tierra santa',
+        ),
+        LyricsLine(
+          timestamp: Duration(milliseconds: 24730),
+          text: 'Oigo ese grito',
+          translation: 'I hear that cry',
+        ),
+      ],
+      isSynchronized: true,
+      rawContent: '',
+    );
+    final exported = prepareLyricsFileExport(
+      _song,
+      lyrics,
+      includeDisplayedSubline: true,
+    );
+    expect(exported.extension, 'lrc');
+    expect(
+      exported.content,
+      '[00:19.51]De mi tierra bella\n'
+      '[00:19.51]From my beautiful land\n'
+      '[00:21.99]De mi tierra santa\n'
+      '[00:24.73]Oigo ese grito\n'
+      '[00:24.73]I hear that cry\n',
+    );
+    final restored = LyricsService().parseLyricsText(exported.content);
+    expect(restored.lines.map((line) => line.text), [
+      'De mi tierra bella',
+      'De mi tierra santa',
+      'Oigo ese grito',
+    ]);
+    expect(restored.lines.map((line) => line.translation), [
+      'From my beautiful land',
+      null,
+      'I hear that cry',
+    ]);
   });
 
   test('saves plain text and supports cancellation', () async {

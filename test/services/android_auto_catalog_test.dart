@@ -62,7 +62,7 @@ class _Player implements PlayerService {
   PlaybackContext? context;
 
   @override
-  Future<void> play(Song song, {List<Song>? playlist, PlaybackContext? context}) async {
+  Future<void> play(Song song, {List<Song>? playlist, int? playlistIndex, PlaybackContext? context}) async {
     selected = song;
     queued = playlist;
     this.context = context;

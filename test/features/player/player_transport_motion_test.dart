@@ -11,8 +11,14 @@ void main() {
     (tester) async {
       var playing = false, l = 0.0;
       late StateSetter change;
+      SharedPreferences.setMockInitialValues({});
       await tester.pumpWidget(
-        MaterialApp(
+        ProviderScope(
+          overrides: [
+            lokalInitialAppearanceProvider.overrideWithValue(
+              const LokalAppearance()),
+          ],
+          child: MaterialApp(
           home: Scaffold(
             body: Center(
               child: SizedBox(
@@ -34,6 +40,7 @@ void main() {
                 ),
               ),
             ),
+          ),
           ),
         ),
       );
@@ -59,6 +66,53 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('unboxed play/pause animates both ways without restoring a box',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var playing = false;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        lokalInitialAppearanceProvider.overrideWithValue(
+          const LokalAppearance(unboxedPlayerControls: true)),
+      ],
+      child: MaterialApp(home: Scaffold(body: Center(child: SizedBox(
+        width: 360,
+        child: StatefulBuilder(builder: (context, setState) =>
+            PlayerTransportControls(
+          playing: playing, compact: false, lyricsProgress: 0,
+          accent: Colors.white, onAccent: Colors.black,
+          onPrevious: () {}, onNext: () {},
+          onPlayPause: () => setState(() => playing = !playing),
+        )),
+      )))),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('apple-play')), findsOneWidget);
+    expect(find.byKey(const ValueKey('apple-pause')), findsNothing);
+    expect(find.byType(AnimatedIcon), findsNothing);
+    expect(find.byType(AnimatedSwitcher), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('player-play-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('apple-play')), findsOneWidget,
+        reason: 'old play glyph remains visible during transition');
+    expect(find.byKey(const ValueKey('apple-pause')), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('apple-play')), findsNothing);
+    expect(find.byKey(const ValueKey('apple-pause')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('player-play-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('apple-play')), findsOneWidget);
+    expect(find.byKey(const ValueKey('apple-pause')), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('apple-pause')), findsNothing);
+    expect(find.byKey(const ValueKey('apple-play')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Apple glyph centers follow the screenshot quarter-width layout',
     (tester) async {
       SharedPreferences.setMockInitialValues({});

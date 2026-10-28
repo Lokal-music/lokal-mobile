@@ -683,3 +683,13 @@ from the static matrix. Automatic animation acceptance remains false in the
 capture report: this is an explicit visual review, not a quantitative animation
 test. Installed WidgetKit, application-language binding, signed shared access,
 command actions and Home Screen scheduling remain unfinished gates.
+
+
+### Parent stabilization validation — 28 October 2026
+
+[Widget run 23](https://github.com/lokal-music/lokal-mobile/actions/runs/40672723473)
+passes all four focused jobs again at the parent stabilization checkpoint:
+metadata/real host bridge, native storage/publication policies, extension
+linkage and render/capture orchestration. Run 22 retains its independently
+reviewed compositor captures. These successes do not embed or provision the
+extension in the engineering IPA and do not qualify installed WidgetKit behavior.

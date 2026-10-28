@@ -5,6 +5,7 @@ import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/core/utils/navigation_helper.dart';
 import 'package:flick/features/queue/screens/queue_screen.dart';
 import 'package:flick/models/song.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flick/providers/player_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -54,6 +55,11 @@ class _Player extends PlayerNotifier {
         queue: [song('Manual')],
       );
   @override
+  Future<void> playFromPlaylistIndex(int index) async {
+    played.add('playlist:$index');
+  }
+
+  @override
   Future<void> playFromUpNextIndex(int index) async {
     played.add('next:$index');
   }
@@ -79,13 +85,16 @@ void main() {
     bool reorderDemo = false,
     bool autoplayOnly = false,
     bool discoveryPendingOnly = false,
+    bool withPrevious = false,
     LokalThemeId theme = LokalThemeId.dark,
+    double scale = 1,
+    Size? viewSize,
   }) async {
     // Give the sheet enough height for both sliver sections to be mounted.
     // Existing sheet sizing tests keep their regular phone dimensions.
-    tester.view.physicalSize = reorderDemo
-        ? const Size(400, 1300)
-        : const Size(400, 800);
+    tester.view.physicalSize =
+        viewSize ??
+        (reorderDemo ? const Size(400, 1300) : const Size(400, 800));
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     player = _Player();
@@ -122,6 +131,15 @@ void main() {
         ],
       );
     }
+    if (withPrevious) {
+      final tracks = [song('A'), song('B'), song('C'), song('D')];
+      player.initial = PlayerState(
+        playlist: tracks,
+        currentIndex: 2,
+        currentSong: tracks[2],
+        upNext: [tracks[3]],
+      );
+    }
     if (autoplayOnly) {
       player.initial = PlayerState(
         currentSong: song('Now'),
@@ -129,11 +147,12 @@ void main() {
       );
     }
     opens = 0;
-    if (Platform.environment.containsKey('LOKAL_QUEUE_PREVIEW')) {
+    if (scale != 1 || Platform.environment.containsKey('LOKAL_QUEUE_PREVIEW')) {
       await tester.runAsync(() async {
         for (final entry in {
           'DMSans': 'assets/fonts/DMSans-Regular.ttf',
           'DMMono': 'assets/fonts/DMMono-Regular.ttf',
+          'NotoSansSC': 'assets/fonts/NotoSansSC-Regular.ttf',
           'MaterialIcons': 'fonts/MaterialIcons-Regular.otf',
           'packages/lucide_icons_flutter/Lucide':
               'packages/lucide_icons_flutter/assets/lucide.ttf',
@@ -152,6 +171,11 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: LokalTheme.build(LokalTokens.themes[theme]!),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
             home: Builder(
               builder: (context) => Scaffold(
                 body: Center(
@@ -237,6 +261,26 @@ void main() {
       expect(find.byType(QueueList), findsNothing);
     },
   );
+  testWidgets(
+    'middle selection exposes previous tracks at their absolute indexes',
+    (tester) async {
+      await pump(tester, withPrevious: true);
+      expect(find.text('Previous in queue'), findsOneWidget);
+      expect(find.text('Track B'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('queue-previous-toggle')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Track B'), findsOneWidget);
+      expect(find.text('Track A'), findsOneWidget);
+      await tester.tap(find.text('Track B'));
+      await tester.pumpAndSettle();
+
+      expect(player.played, ['playlist:1']);
+      expect(opens, 1);
+    },
+  );
+
   testWidgets('unresolved Discovery queue shows unknown duration, not 00:00', (
     tester,
   ) async {
@@ -344,6 +388,108 @@ void main() {
       reason: 'Popup Queue title was too far left of the content',
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('previous queue remains usable in every locale at 200 percent', (
+    tester,
+  ) async {
+    final previous = l10n;
+    addTearDown(() => LocaleController.instance.bind(previous));
+    final semantics = tester.ensureSemantics();
+    try {
+      for (final theme in [LokalThemeId.dark, LokalThemeId.light]) {
+        for (final locale in kSupportedLocales) {
+          LocaleController.instance.bindLocale(locale);
+          await pump(
+            tester,
+            withPrevious: true,
+            theme: theme,
+            scale: 2,
+            viewSize: const Size(320, 700),
+          );
+          await tester.drag(
+            find.byType(CustomScrollView),
+            const Offset(0, -350),
+          );
+          await tester.pumpAndSettle();
+          final toggle = find.byKey(const ValueKey('queue-previous-toggle'));
+          await tester.scrollUntilVisible(
+            toggle,
+            -100,
+            scrollable: find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+          await tester.pumpAndSettle();
+          expect(tester.getSize(toggle).height, greaterThanOrEqualTo(44));
+          expect(
+            find.bySemanticsLabel(lokalText('Previous in queue')),
+            findsOneWidget,
+          );
+          if (locale.languageCode != 'en') {
+            expect(lokalText('Previous in queue'), isNot('Previous in queue'));
+          }
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          final nearest = find.byKey(const ValueKey('previous:1'));
+          await tester.ensureVisible(nearest);
+          await tester.pumpAndSettle();
+          final title = tester.renderObject<RenderParagraph>(
+            find.descendant(of: nearest, matching: find.text('Track B')),
+          );
+          expect(
+            title.didExceedMaxLines,
+            isFalse,
+            reason: 'Large text must leave room for the recording title.',
+          );
+          await tester.scrollUntilVisible(
+            toggle,
+            -100,
+            scrollable: find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+          await tester.pumpAndSettle();
+          final output = Platform.environment['LOKAL_IOS290_UI_PREVIEW'];
+          if (output != null) {
+            await tester.runAsync(() async {
+              final image =
+                  await (boundary.currentContext!.findRenderObject()!
+                          as RenderRepaintBoundary)
+                      .toImage(pixelRatio: 2);
+              final bytes = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              image.dispose();
+              final directory = Directory(output)..createSync(recursive: true);
+              await File(
+                '${directory.path}/queue-previous-${locale.toLanguageTag()}-${theme.name}.png',
+              ).writeAsBytes(bytes!.buffer.asUint8List());
+            });
+          }
+          await tester.ensureVisible(nearest);
+          await tester.pumpAndSettle();
+          await tester.tap(nearest);
+          await tester.pumpAndSettle();
+          expect(player.played, ['playlist:1']);
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$locale / ${theme.name}',
+          );
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpAndSettle();
+        }
+      }
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('sheet adopts the active light palette', (tester) async {

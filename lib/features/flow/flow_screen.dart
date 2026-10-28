@@ -86,7 +86,13 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
   Widget build(BuildContext context) {
     final flowAsync = ref.watch(flowControllerProvider);
     final libraryAsync = ref.watch(flowLibraryProvider);
-    final player = ref.watch(playerProvider);
+    // Playback position updates roughly every 250 ms. The Flow mix and song
+    // list only need track identity and play/pause, not progress ticks.
+    final playback = ref.watch(
+      playerProvider.select(
+        (state) => (song: state.currentSong, isPlaying: state.isPlaying),
+      ),
+    );
     final backgroundError = ref.watch(flowMessageProvider);
     final data = flowAsync.value;
     final library = libraryAsync.value;
@@ -105,7 +111,13 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
           ? const Center(
               child: CircularProgressIndicator(semanticsLabel: 'Loading Flow'),
             )
-          : _content(data, library, player, backgroundError),
+          : _content(
+              data,
+              library,
+              playback.song,
+              playback.isPlaying,
+              backgroundError,
+            ),
     );
     if (widget.embedded) return body;
     return Scaffold(
@@ -126,16 +138,17 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
   Widget _content(
     FlowData data,
     FlowLibrary library,
-    PlayerState player,
+    Song? currentSong,
+    bool isPlaying,
     String? error,
   ) {
     final songs = library.mix(data, DateTime.now());
     final ownsQueue = ref
         .read(flowPlaybackProvider)
         .ownsSession(data.session.seed);
-    final currentInMix = songs.any((s) => s.id == player.currentSong?.id);
+    final currentInMix = songs.any((s) => s.id == currentSong?.id);
     final active = ownsQueue && currentInMix;
-    final playing = active && player.isPlaying;
+    final playing = active && isPlaying;
     final enabled = !_busy && library.unlocked && songs.isNotEmpty;
     return CustomScrollView(
       slivers: [
@@ -253,8 +266,8 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${player.isPlaying ? 'Playing' : 'Paused'} · '
-                        '${player.currentSong!.title}',
+                        '${isPlaying ? 'Playing' : 'Paused'} · '
+                        '${currentSong!.title}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -271,7 +284,7 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
           SliverList.builder(
             itemCount: songs.length,
             itemBuilder: (context, index) =>
-                _songTile(songs[index], index, library, player),
+                _songTile(songs[index], index, library, currentSong?.id),
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -334,9 +347,9 @@ class _FlowScreenState extends ConsumerState<FlowScreen> {
     Song song,
     int index,
     FlowLibrary library,
-    PlayerState player,
+    String? currentSongId,
   ) {
-    final current = player.currentSong?.id == song.id;
+    final current = currentSongId == song.id;
     final liked = library.favoriteIds.contains(song.id);
     return ListTile(
       selected: current,

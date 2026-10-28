@@ -63,6 +63,7 @@ class _FakePlayer extends PlayerNotifier {
   Future<void> play(
     Song song, {
     List<Song>? playlist,
+    int? playlistIndex,
     PlaybackContext? context,
   }) async {
     played.add(song);
@@ -482,7 +483,8 @@ void main() {
         fallbackRoot: p.join(root.path, 'Fallback'),
         registerFolder: (_, _) async {},
         upsert: (entity) async => saved.add(entity),
-        tag: (_, _) async => true,
+        tag: (_, _, _) async => true,
+        lyricsLookup: (_) async => null,
         cover: (_, _, _) async {},
         indexMedia: (_) async {},
       ),

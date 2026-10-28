@@ -16,6 +16,8 @@ class _Player implements ja.AudioPlayer {
     positions.stream.listen((value) => currentPosition = value);
   }
   Duration currentPosition = Duration.zero;
+  Duration? currentDuration = const Duration(minutes: 3);
+  int? activeIndex = 0;
   bool currentPlaying = false;
   int playCalls = 0;
   final errors = StreamController<ja.PlayerException>.broadcast(sync: true);
@@ -33,13 +35,18 @@ class _Player implements ja.AudioPlayer {
   double currentVolume = 1.0;
   int loads = 0, seeks = 0;
   int disposals = 0;
+  final indices = StreamController<int?>.broadcast(sync: true);
+  final durations = StreamController<Duration?>.broadcast(sync: true);
+  final processing = StreamController<ja.ProcessingState>.broadcast(sync: true);
+  int? lastInitialIndex;
+  int? lastSeekIndex;
   bool failLoad = false;
   Completer<void>? hungSeek;
   Completer<Duration?>? hungLoad;
   @override
   List<ja.IndexedAudioSource> get sequence => sources;
   @override
-  int? get currentIndex => 0;
+  int? get currentIndex => activeIndex;
   @override
   bool get playing => currentPlaying;
   @override
@@ -47,7 +54,7 @@ class _Player implements ja.AudioPlayer {
   @override
   Duration get bufferedPosition => Duration.zero;
   @override
-  Duration? get duration => const Duration(minutes: 3);
+  Duration? get duration => currentDuration;
   @override
   Stream<ja.PlayerException> get errorStream => errors.stream;
   @override
@@ -59,14 +66,13 @@ class _Player implements ja.AudioPlayer {
   @override
   Stream<Duration> get bufferedPositionStream => idle<Duration>();
   @override
-  Stream<Duration?> get durationStream => idle<Duration?>();
+  Stream<Duration?> get durationStream => durations.stream;
   @override
   Stream<ja.SequenceState> get sequenceStateStream => idle<ja.SequenceState>();
   @override
-  Stream<int?> get currentIndexStream => idle<int?>();
+  Stream<int?> get currentIndexStream => indices.stream;
   @override
-  Stream<ja.ProcessingState> get processingStateStream =>
-      idle<ja.ProcessingState>();
+  Stream<ja.ProcessingState> get processingStateStream => processing.stream;
   @override
   ja.ProcessingState get processingState => ja.ProcessingState.ready;
   @override
@@ -77,6 +83,7 @@ class _Player implements ja.AudioPlayer {
     Duration? initialPosition,
   }) async {
     loads++;
+    lastInitialIndex = initialIndex;
     if (failLoad) throw ja.PlayerException(0, 'Source error', 0);
     if (hungLoad != null) return await hungLoad!.future;
     sources = [ja.AudioSource.uri(Uri.parse('file:///song.flac'))];
@@ -87,8 +94,10 @@ class _Player implements ja.AudioPlayer {
   @override
   Future<void> seek(Duration? position, {int? index}) async {
     seeks++;
+    lastSeekIndex = index;
     await hungSeek?.future;
     if (position != null) currentPosition = position;
+    if (index != null) activeIndex = index;
   }
 
   @override
@@ -1048,4 +1057,194 @@ void main() {
     expect(retired, [same(firstNative)]);
     expect(replacement.loads, 1);
   });
+  testWidgets('native Android playback uses the selected duplicate occurrence',
+      (tester) async {
+    // Different entries can have the same ID and source path; identity alone
+    // must not snap the selected song back to the first occurrence.
+    final first = Song(
+      id: 'repeated', title: 'Repeat', artist: 'Artist',
+      duration: const Duration(minutes: 3),
+      filePath: '/repeat.flac', fileType: 'FLAC',
+    );
+    final second = Song(
+      id: 'repeated', title: 'Repeat', artist: 'Artist',
+      duration: const Duration(minutes: 3),
+      filePath: '/repeat.flac', fileType: 'FLAC',
+    );
+    final between = Song(
+      id: 'different', title: 'Other', artist: 'Artist',
+      duration: const Duration(minutes: 3),
+      filePath: '/other.flac', fileType: 'FLAC',
+    );
+    final playlist = [first, between, second];
+    final player = _Player();
+    final nativeIndices = <int>[];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async => ja.ConcatenatingAudioSource(
+        children: [
+          for (final song in playlist)
+            ja.AudioSource.uri(Uri.file(song.filePath!)),
+        ],
+      ),
+      sourceBuilder: (song) async =>
+          ja.AudioSource.uri(Uri.file(song.filePath!)),
+      playlistProvider: () => playlist,
+      selectedPlaylistIndexProvider: () => 2,
+      onNativePlaylistIndex: nativeIndices.add,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await engine.load(second);
+    expect(player.lastInitialIndex, 2,
+        reason: 'native source preparation must select second occurrence');
+    expect(player.lastSeekIndex, 2,
+        reason: 'the initial seek must use the exact queue index');
+
+    // Index changes must also reach PlayerService even when two adjacent
+    // sequence entries represent identical logical tracks.
+    player.sources = [
+      for (final song in playlist)
+        ja.AudioSource.uri(Uri.file(song.filePath!)),
+    ];
+    player.activeIndex = 1;
+    player.indices.add(1);
+    await tester.pump();
+    expect(nativeIndices, contains(1));
+    player.activeIndex = 2;
+    player.indices.add(2);
+    await tester.pump();
+    expect(nativeIndices.last, 2);
+  });
+
+  testWidgets('native playlist auto-advance rejects a 30-second HTTP item',
+      (tester) async {
+    final player = _Player();
+    final first = const Song(
+      id: 'first', title: 'Local', artist: 'Artist',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/first.flac',
+    );
+    final preview = const Song(
+      id: 'second', title: 'Qobuz full track', artist: 'Artist',
+      duration: Duration(minutes: 4), fileType: 'FLAC',
+      sourcePackage: 'konnekted.progressive',
+      filePath: 'lokal-progressive://123',
+    );
+    final failed = <Song>[];
+    var completed = 0;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async => ja.ConcatenatingAudioSource(children: [
+        ja.AudioSource.uri(Uri.file('/first.flac')),
+        ja.AudioSource.uri(Uri.parse('https://cdn.example/preview.flac')),
+      ]),
+      sourceBuilder: (_) async =>
+          ja.AudioSource.uri(Uri.file('/first.flac')),
+      playlistProvider: () => [first, preview],
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+      onTrackError: failed.add,
+    )..onTrackEnded = () => completed++;
+    addTearDown(() async {
+      await engine.dispose();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+      await player.errors.close();
+    });
+    await engine.load(first);
+    final firstSource = ja.AudioSource.uri(Uri.file('/first.flac'));
+    firstSource.duration = const Duration(minutes: 3);
+    final previewSource =
+        ja.AudioSource.uri(Uri.parse('https://cdn.example/preview.flac'));
+    previewSource.duration = const Duration(seconds: 30);
+    player.sources = [firstSource, previewSource];
+    player.activeIndex = 1;
+    player.currentDuration = const Duration(seconds: 30);
+    player.indices.add(1);
+    await tester.pump();
+    expect(failed.map((s) => s.id), ['second']);
+    player.processing.add(ja.ProcessingState.completed);
+    await tester.pump();
+    expect(completed, 0, reason: 'a preview must never advance the queue');
+    expect(player.currentPlaying, isFalse);
+  });
+
+  testWidgets('a 30-second crossfade candidate is rejected before handoff',
+      (tester) async {
+    final outgoing = _Player();
+    final incoming = _Player()
+      ..currentDuration = const Duration(seconds: 30);
+    final first = const Song(
+      id: 'first', title: 'Local', artist: 'Artist',
+      duration: Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/first.flac',
+    );
+    final next = const Song(
+      id: 'second', title: 'Qobuz full track', artist: 'Artist',
+      duration: Duration(minutes: 4), fileType: 'FLAC',
+      sourcePackage: 'konnekted.progressive',
+      filePath: 'lokal-progressive://456',
+    );
+    final advanced = <Song>[];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => outgoing,
+      secondaryPlayerProvider: () async => incoming,
+      sourcesBuilder: () async =>
+          ja.AudioSource.uri(Uri.file('/first.flac')),
+      sourceBuilder: (_) async =>
+          ja.AudioSource.uri(Uri.parse('https://cdn.example/preview.flac')),
+      playlistProvider: () => [first, next],
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+      crossfadeConfigProvider: () => const AndroidCrossfadeConfig(
+        enabled: true, durationSecs: 3, curve: AndroidCrossfadeCurve.linear,
+      ),
+      onNextSong: () => next,
+      onTrackAdvanced: advanced.add,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await outgoing.positions.close();
+      await incoming.positions.close();
+      await outgoing.indices.close();
+      await incoming.indices.close();
+      await outgoing.durations.close();
+      await incoming.durations.close();
+      await outgoing.processing.close();
+      await incoming.processing.close();
+      await outgoing.errors.close();
+      await incoming.errors.close();
+    });
+    await engine.load(first);
+    await engine.play();
+    outgoing.positions.add(const Duration(minutes: 2, seconds: 58));
+    for (var i = 0; i < 8; i++) await tester.pump();
+    expect(incoming.loads, 1);
+    expect(incoming.playCalls, 0);
+    expect(advanced, isEmpty);
+    expect(outgoing.currentPlaying, isTrue);
+  });
+
+
 }

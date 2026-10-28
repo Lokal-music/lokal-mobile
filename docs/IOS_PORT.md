@@ -5,26 +5,29 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **72 reviewed merged
-mobile PRs after #172 through #272**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **86 reviewed merged
+mobile PRs after #172 through #290**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
 and platform adaptations.
 
-**This source is not a finalized release.** Build 67 is the current independently
+**This source is not a finalized release.** Build 74 is the current independently
 verified engineering package, passing both complete native suites on iOS 18.6
-and 26.0 through #261. Its generated WebKit fixture passes settled-seek,
-native-clock and newly delivered frame gates on explicit replay, with repeated
-playing/paused resets. Actual queue reorder and unconfigured widget-channel
-checks also pass. The inspected unsigned IPA, source, notices and matching
-symbols are preserved together; build 53 remains an older retained checkpoint.
-The later logger/sharing/through-#272 source passes its iOS 18.6 suite in build
-72, but iOS 26 fails initial WebKit readiness. Build 73's real Rust polling
-probe passes on iOS 18.6; its later replacement WebKit readiness fails, while
-iOS 26 fails boot before app acceptance. Neither is a complete native pass.
-The current stabilization passes **830 combined host tests**, including
-15 persistence regressions, and extends the native acceptance probes.
+and 26.0 for the through-#272 source plus adaptive Rust polling and coherent
+paused persistence. Both real engines reload paused cursor snapshots from native
+preferences; Rust has no recurring paused progress observations or position-save
+timer, and explicit Resume rearms saving. WebKit passes settled replay, clock,
+new-frame and repeated playing/paused reset gates. Its bounded cold-document
+readiness wait is separate from the unchanged native quiet/replay requirements.
+
+The inspected IPA, 34 native binaries, 26 matching symbol bundles, Dart AOT
+symbols, notices and 2,262 exported source files are preserved together. Build 67
+remains an older verified checkpoint. The newer through-#290 parity continuation
+adds explicit bilingual saves, full queue history, source validation/foreground
+priority, Library add actions and power/memory handling; its own native
+acceptance is pending. Combined host regression results are recorded in the
+[source audit](IOS_POST172_REVIEW.md#reviewed-through-290--28-october-2026).
 
 | Checkpoint | Accepted scope and limit |
 | --- | --- |
@@ -43,6 +46,8 @@ The current stabilization passes **830 combined host tests**, including
 | [Build 72](https://github.com/lokal-music/lokal-mobile/actions/runs/40565173355) / PR #276 | Complete iOS 18.6 pass through #272. iOS 26 fails initial WebKit readiness: its native WebContent launch takes 23.029 seconds against a 15-second readiness gate. Not dual-runtime acceptance. |
 | [Widget run 22](https://github.com/lokal-music/lokal-mobile/actions/runs/40573226374) / PR #277 | All four focused jobs pass, with 450 images, nine pixel OCR checks and four actual app-hosted compositor captures. Visual review confirms visible advancing progress in both appearances. Installed WidgetKit remains unqualified. |
 | [Build 73](https://github.com/lokal-music/lokal-mobile/actions/runs/40573226701) / PR #277 | Real iOS 18.6 Rust polling/paused-seek probe passes; later replacement WebKit readiness fails after native retirement succeeds. iOS 26 boot fails before app acceptance. No newer package promotion. |
+
+| [Build 74](https://github.com/lokal-music/lokal-mobile/actions/runs/40672723535) / PR #291 | Both complete native suites pass for through-#272 plus adaptive Rust polling and coherent paused persistence. Paused native preferences and six-second idle windows pass on both runtimes. WebKit delivers five/four new replay frames. IPA/source/notices/34 binaries/26 symbol bundles independently reverified; tree `dccad48229b68e0fb5503e34769330869ae40d36`. Later through-#290 changes are excluded. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
@@ -1614,3 +1619,48 @@ analysis has no errors (620 existing warning/information items). Enforced
 lockfile resolution, readiness/localization inventory, actionlint, diff checks
 and 15 Python widget-capture policy cases pass. Hosted native acceptance of the
 new persistence assertions and separated WebContent readiness gates is pending.
+
+
+### Build 74 package and both native runtimes accepted
+
+[Hosted run 40672723535](https://github.com/lokal-music/lokal-mobile/actions/runs/40672723535)
+passes the complete app/FFI/playback/reset acceptance suite on separate iOS 18.6
+and 26.0 hosts. The parent stabilization source is CI merge
+`5e36a44b28f34d171ae14a76eb9e52d30f4eb95e`, tree
+`dccad48229b68e0fb5503e34769330869ae40d36`, exactly equivalent in files to
+PR #291 head `d4400d8c86b9b760e794c7883ecaee608347587a`.
+
+| Evidence | iOS 18.6 | iOS 26.0 |
+| --- | --- | --- |
+| System paused position reloaded from native preferences | Pass | Pass |
+| Rust paused periodic progress callbacks | 0 | 0 |
+| Paused idle window with save timer stopped | 6,018 ms | 6,016 ms |
+| Forward/backward paused seeks reloaded from native preferences | Pass | Pass |
+| Foreground preserves Pause; explicit Resume advances | 523 ms | 534 ms |
+| Settled WebKit replay: new frames | 5 | 4 |
+| Replay bridge / native clock advance | 585 / 499 ms | 500 / 586 ms |
+| Playing/paused reset, selected-video retention, acknowledged cleanup | Pass | Pass |
+
+The package artifact is `12811152042`, archive SHA-256
+`689665eb5d7b616d98017947c973e98095c23c274035dd54b7f8821b41ce8878`.
+The IPA SHA-256 is
+`69417b9c9c560a2748847b3b519bfe1a2ccf2b38b83dd1e28901bd70d126cad4`.
+Independent inspection checks every packaged Mach-O's iOS arm64 platform,
+deployment floor and UUID against 26 matching native dSYM bundles; Dart AOT
+symbols, bundle/privacy/resources/notices and all 2,262 source-export files
+match the committed tree. The four explicitly export-ignored Opus files remain
+accounted for. The unsigned package needs local signing.
+
+The runtime archives are `12812018295` (18.6, SHA-256
+`12874559e86a97426db6d792345083b4fca3cba99e4d8de7e043695599b0bf36`)
+and `12813730383` (26.0, SHA-256
+`3930c968e9392cdd4f32645642c7d5b988f8ca4b98f1b7f487bedf5de8fdfb58`).
+They retain 31 actual native screenshots and detailed observations. The isolated
+widget run 23 also passes all four jobs. This does not qualify installed
+WidgetKit or embed the optional extension in the engineering IPA.
+
+This checkpoint covers through #272 plus adaptive Rust polling and ordered
+paused persistence. It excludes the newer through-#290 source. It is engineering
+acceptance with generated local media and controlled provider fixtures; actual
+iOS 16 runtime, physical Windows signing/installation, live providers/receivers,
+background/accessory behavior and remaining features have separate gates.

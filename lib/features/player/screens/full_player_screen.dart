@@ -16,6 +16,7 @@ import 'package:flick/core/theme/lokal_appearance.dart';
 
 import '../widgets/lyrics_source_button.dart';
 import '../widgets/lyrics_file_export.dart';
+import '../widgets/lyrics_save_button.dart';
 import '../widgets/player_panel_stage.dart';
 import '../widgets/motion_art_widget.dart';
 
@@ -434,7 +435,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     LyricsData lyrics, {
     bool includeDisplayedSubline = false,
   }) async {
-    if (_savingLyricsFile ||
+    if (!mounted || _savingLyricsFile ||
         _lyricsForSongId != song.id ||
         _displayedSong?.id != song.id) {
       return;
@@ -467,62 +468,94 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     }
   }
 
+  VoidCallback? _saveTranslatedLyricsAction(Song song) {
+    final selected = _sublineLyrics;
+    if (selected == null ||
+        !selected.lines.any((line) =>
+            line.translation?.trim().isNotEmpty == true &&
+            line.translation!.trim() != line.text.trim())) {
+      return null;
+    }
+    return () => unawaited(
+      _saveLyricsFile(song, selected, includeDisplayedSubline: true),
+    );
+  }
+
   void _showSpaceOptions() {
     if (!_immersiveLyrics) return;
     final shownSong = _displayedSong;
     final source = _lyrics;
+    void saveFromSheet({required bool includeTranslation}) {
+      final currentSong = _displayedSong;
+      if (shownSong == null ||
+          currentSong?.id != shownSong.id ||
+          _lyricsForSongId != shownSong.id) {
+        return;
+      }
+      final selected = includeTranslation ? _sublineLyrics : _lyrics;
+      if (selected == null || !hasUsableLyrics(selected)) return;
+      unawaited(_saveLyricsFile(
+        shownSong,
+        selected,
+        includeDisplayedSubline: includeTranslation,
+      ));
+    }
+
     showModalBottomSheet<void>(
       context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.library_music_outlined),
-                title: const Text('Lyrics source'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  unawaited(_chooseImmersiveLyricsSource());
-                },
-              ),
-              if (source != null && hasUsableLyrics(source))
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, refreshSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
                 ListTile(
-                  leading: const Icon(LucideIcons.download),
-                  title: Text(l10n.saveLyrics),
-                  enabled: !_savingLyricsFile,
+                  leading: const Icon(Icons.library_music_outlined),
+                  title: Text(lokalText('Lyrics source')),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    // The sheet may outlive the song that supplied its lyrics.
-                    // Also use the latest displayed translation/romanization
-                    // when the subline controls changed inside this sheet.
-                    final currentSong = _displayedSong;
-                    if (shownSong == null ||
-                        currentSong?.id != shownSong.id ||
-                        _lyricsForSongId != shownSong.id) {
-                      return;
-                    }
-                    final displayed = _sublineLyrics ?? _lyrics;
-                    if (displayed != null && hasUsableLyrics(displayed)) {
-                      unawaited(_saveLyricsFile(
-                        shownSong,
-                        displayed,
-                        includeDisplayedSubline: _sublineLyrics != null,
-                      ));
-                    }
+                    unawaited(_chooseImmersiveLyricsSource());
                   },
                 ),
-              if (source != null)
-                LyricsSublineButtons(
-                  lyrics: source,
-                  onChanged: (updated) {
-                    if (mounted && identical(_lyrics, source)) {
-                      setState(() => _sublineLyrics = updated);
-                    }
-                  },
-                ),
-            ],
+                if (source != null && hasUsableLyrics(source))
+                  ListTile(
+                    leading: const Icon(LucideIcons.download),
+                    title: Text(lokalText('Save original lyrics')),
+                    enabled: !_savingLyricsFile,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      saveFromSheet(includeTranslation: false);
+                    },
+                  ),
+                if (source != null && hasUsableLyrics(source))
+                  ListTile(
+                    leading: const Icon(Icons.translate_rounded),
+                    title: Text(lokalText('Save with selected translation')),
+                    subtitle: Text(lokalText('Includes the active translation or romanization.')),
+                    enabled: !_savingLyricsFile &&
+                        _sublineLyrics?.lines.any((line) =>
+                            line.translation?.trim().isNotEmpty == true &&
+                            line.translation!.trim() != line.text.trim()) == true,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      saveFromSheet(includeTranslation: true);
+                    },
+                  ),
+                if (source != null)
+                  LyricsSublineButtons(
+                    lyrics: source,
+                    onChanged: (updated) {
+                      if (mounted && identical(_lyrics, source)) {
+                        setState(() => _sublineLyrics = updated);
+                        refreshSheet(() {});
+                      }
+                    },
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1905,26 +1938,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                 ),
               ),
             ),
-            if (display != null && hasUsableLyrics(display))
-              IconButton(
+            if (data != null && hasUsableLyrics(data))
+              LyricsSaveButton(
                 key: const ValueKey('save-current-lyrics-file'),
-                tooltip: lokalText('Save lyrics to file'),
-                visualDensity: VisualDensity.compact,
-                icon: _savingLyricsFile
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(LucideIcons.download,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant, size: 19),
-                onPressed: _savingLyricsFile
-                    ? null
-                    : () => unawaited(_saveLyricsFile(
-                        song,
-                        display,
-                        includeDisplayedSubline: _sublineLyrics != null,
-                      )),
+                saving: _savingLyricsFile,
+                iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                onSaveOriginal: () => unawaited(_saveLyricsFile(song, data)),
+                onSaveWithTranslation: _saveTranslatedLyricsAction(song),
               ),
             if (hasImmersiveLyrics(data))
               IconButton(
@@ -2128,7 +2148,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               }
               return;
             }
-            _carouselKey.currentState?.animateToPrevious() ?? _player.previous();
+            if (shouldRestartCurrentTrackOnPrevious(_player.positionNotifier.value)) {
+              await _player.previous();
+            } else {
+              _carouselKey.currentState?.animateToPrevious() ?? _player.previous();
+            }
           },
           onNext: () async {
             if (_videoActive) {

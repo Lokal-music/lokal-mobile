@@ -1,3 +1,4 @@
+import 'package:flick/services/motion_art/motion_art_memory_pressure.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -96,6 +97,7 @@ Future<void> _bootstrapApp({
   Future<void> Function()? afterNativeInitialization,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
+  MotionArtMemoryPressure.instance.start();
 
   // Snapshot install freshness before anything can write to the preference
   // store: new installations start on the adaptive refresh-rate default.

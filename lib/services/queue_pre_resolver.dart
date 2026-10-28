@@ -29,6 +29,9 @@ abstract class PreResolveHost {
   /// The songs in play order (already shuffled when shuffle is on).
   List<Song> get playlist;
   int get currentIndex;
+
+  /// Changes only when the whole playback context is replaced, not on skips.
+  int get contextRevision;
   bool get repeatAll;
 
   /// Fires when the song playing changes.
@@ -137,10 +140,12 @@ class QueuePreResolver {
   Timer? _settle;
   _Lookup? _statusOwner;
   PreResolveHost? _host;
+  int? _observedContextRevision;
 
   /// Unlike staged songs, HTTP and live Morneye tracks have intentionally
   /// opaque in-memory handles. They are usable while their registered
   /// descriptors exist, even though File(handle).existsSync() is false.
+  @visibleForTesting
   static bool isPlayableResolvedSource(Song song) {
     if (song.sourcePackage == 'konnekted.progressive') {
       return DiscoveryProgressiveStreams.instance.contains(song.filePath);
@@ -176,6 +181,7 @@ class QueuePreResolver {
 
   void attach(PreResolveHost host) {
     _host = host;
+    _observedContextRevision = host.contextRevision;
     host.songChanges.addListener(_onSongChanged);
     host.queueChanges.addListener(_onQueueChanged);
     if (host is PlayerServiceHost) {
@@ -210,6 +216,7 @@ class QueuePreResolver {
   /// A placeholder for a song still to be found; [resolve] finds it.
   Song pending({
     required String key,
+
     /// Preserve the durable song ID for saved Likes, so the heart status
     /// remains attached to the same track after the source is re-resolved.
     String? stableId,
@@ -291,20 +298,66 @@ class QueuePreResolver {
     return index >= 0 && index < playlist.length ? playlist[index].id : null;
   }
 
+  /// A freshly selected placeholder must resolve before the queue's next-four
+  /// downloads start. PlayerService publishes the selected Song *before*
+  /// stopping the old audio engine and calling resolveNow(). Without this
+  /// guard, that notification starts up to four competing add-on downloads
+  /// while the first song has not even begun resolving.
+  bool get _currentNeedsForeground {
+    final host = _host;
+    if (host == null) return false;
+    final index = host.currentIndex;
+    final playlist = host.playlist;
+    return index >= 0 && index < playlist.length && playlist[index].isPending;
+  }
+
   /// Looks up the placeholders coming up. Returns the ids asked for, in
   /// order (for the tests).
   List<String> schedule() {
     final host = _host;
     if (host == null) return const [];
+    final contextChanged = _observedContextRevision != host.contextRevision;
+    _observedContextRevision = host.contextRevision;
+    // The first online playlist/AutoQueue item has no prepared stream yet.
+    // Do not race its upcoming items against the foreground resolver during
+    // engine stop and add-on initialization. Foreground completion will
+    // schedule prefetch again after the queue settles.
+    if (_currentNeedsForeground) {
+      if (contextChanged || host.currentIndex == 0) {
+        // A new playback context, including a middle selection, must also
+        // preempt prefetch jobs left from the previous queue. Each Morneye
+        // download owns a QuickJS runtime, so those stale jobs can exhaust
+        // the first song's CPU/network budget before it even begins.
+        final selectedId = _currentId();
+        for (final entry in _running.entries.toList()) {
+          if (entry.key != selectedId && !entry.value.onDemand) {
+            _running.remove(entry.key)?.stop();
+          }
+        }
+        for (final entry in _timers.entries.toList()) {
+          if (entry.key != selectedId) {
+            entry.value.cancel();
+            _timers.remove(entry.key);
+          }
+        }
+      }
+      // During a normal skip, keep already-running prefetch work. Existing
+      // stagger callbacks still check this reservation before launching.
+      return const [];
+    }
     // Never disable the entire next-four preload window while a live FLAC
     // is downloading: a long Qobuz transfer can otherwise leave the whole
     // Search queue unresolved. Give the playing stream a brief head start,
     // then stagger background requests rather than waiting for completion.
     final current = host is PlayerServiceHost
-        ? host.player.currentSongNotifier.value : null;
-    final liveTransfer = current?.sourcePackage == 'konnekted.morneye-live' &&
-        MorneyeLiveRegistry.instance.resolve(current?.filePath)
-                ?.isTransferring == true;
+        ? host.player.currentSongNotifier.value
+        : null;
+    final liveTransfer =
+        current?.sourcePackage == 'konnekted.morneye-live' &&
+        MorneyeLiveRegistry.instance
+                .resolve(current?.filePath)
+                ?.isTransferring ==
+            true;
     // The foreground request gets the add-on runtime and bandwidth first.
     // Queue notifications during its download must not start competing work.
     if (_running.values.any((lookup) => lookup.onDemand && !lookup.cancelled)) {
@@ -324,8 +377,7 @@ class QueuePreResolver {
       if (!keep.contains(id)) _running.remove(id)?.stop();
     }
     final asked = <String>[];
-    var delay = liveTransfer
-        ? const Duration(seconds: 3) : Duration.zero;
+    var delay = liveTransfer ? const Duration(seconds: 3) : Duration.zero;
     for (final song in upcoming) {
       final id = song.id;
       if (_recentSong(id) case final ready?) {
@@ -333,8 +385,8 @@ class QueuePreResolver {
         host.replacePending(id, ready);
         continue;
       }
-      if (!_registered.containsKey(id) &&
-          !_savedSongResolvers.containsKey(id)) continue;
+      if (!_registered.containsKey(id) && !_savedSongResolvers.containsKey(id))
+        continue;
       if (_running.containsKey(id) || _timers.containsKey(id)) {
         // Respect its existing slot in the two-second stagger instead of
         // starting a newly revealed fourth track immediately alongside it.
@@ -347,7 +399,10 @@ class QueuePreResolver {
         // A delayed timer may fire after a foreground resolution started.
         // Foreground completion schedules the window again, so don't launch
         // competing provider requests while the selected track prepares.
-        if (_running.values.any((lookup) => lookup.onDemand && !lookup.cancelled)) {
+        if (_running.values.any(
+              (lookup) => lookup.onDemand && !lookup.cancelled,
+            ) ||
+            _currentNeedsForeground) {
           return;
         }
         // Started later: still coming up in the queue as it is now?
@@ -530,6 +585,9 @@ class PlayerServiceHost implements PreResolveHost {
 
   @override
   int get currentIndex => player.currentIndex;
+
+  @override
+  int get contextRevision => player.queueContextRevision;
 
   @override
   bool get repeatAll => player.loopModeNotifier.value == LoopMode.all;

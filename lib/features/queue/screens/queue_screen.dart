@@ -60,6 +60,7 @@ class QueueList extends ConsumerStatefulWidget {
 
 class _QueueListState extends ConsumerState<QueueList> {
   bool _selectionMode = false;
+  bool _showPrevious = false;
   final _selected = <String>{};
   List<Song>? _optimisticSongs;
   bool _reordering = false;
@@ -134,6 +135,15 @@ class _QueueListState extends ConsumerState<QueueList> {
     final manualQueue = ref.watch(queueProvider);
     final autoplay = ref.watch(autoplayUpNextProvider);
     final current = ref.watch(currentSongProvider);
+    // Select only the index; position updates must not rebuild the queue
+    // sheet just to reconstruct its (potentially very long) history.
+    final currentIndex = ref.watch(
+      playerProvider.select((state) => state.currentIndex),
+    );
+    final playbackOrder = ref.read(playerProvider).playlist;
+    final previousCount = current == null
+        ? 0
+        : currentIndex.clamp(0, playbackOrder.length);
     // A paused/no-context manual queue is still editable. With active
     // playback, Up Next already contains every manual queue entry.
     final manualOnly = upcoming.isEmpty && manualQueue.isNotEmpty;
@@ -273,6 +283,45 @@ class _QueueListState extends ConsumerState<QueueList> {
                     ),
                   ),
                 ),
+              if (previousCount > 0 && !_selectionMode) ...[
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(h, 0, h, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: _PreviousQueueHeader(
+                      count: previousCount,
+                      expanded: _showPrevious,
+                      color: mutedColor,
+                      onTap: () =>
+                          setState(() => _showPrevious = !_showPrevious),
+                    ),
+                  ),
+                ),
+                if (_showPrevious)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(h, 0, h, 14),
+                    sliver: SliverList.builder(
+                      itemCount: previousCount,
+                      itemBuilder: (context, offset) {
+                        // Nearest previous song first. Index remains absolute
+                        // so duplicates and queued occurrences stay distinct.
+                        final index = previousCount - offset - 1;
+                        return _QueueRow(
+                          key: ValueKey('previous:$index'),
+                          song: playbackOrder[index],
+                          index: index,
+                          past: true,
+                          darkBackdrop: widget.embedded,
+                          onTap: () async {
+                            await ref
+                                .read(playerProvider.notifier)
+                                .playFromPlaylistIndex(index);
+                            _openPlayer();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
               if (songs.isNotEmpty) ...[
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(h, 5, h, 5),
@@ -443,6 +492,62 @@ class _QueueListState extends ConsumerState<QueueList> {
 /// and a visual grip hint. The whole row is wrapped in a delayed drag
 /// recognizer, so a long press works on artwork, title, duration and actions.
 /// Ordinary taps and vertical scrolling remain unchanged.
+class _PreviousQueueHeader extends StatelessWidget {
+  const _PreviousQueueHeader({
+    required this.count,
+    required this.expanded,
+    required this.color,
+    required this.onTap,
+  });
+  final int count;
+  final bool expanded;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    expanded: expanded,
+    label: lokalText('Previous in queue'),
+    value: '$count',
+    onTap: onTap,
+    child: ExcludeSemantics(
+      child: InkWell(
+        key: const ValueKey('queue-previous-toggle'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  lokalText('Previous in queue'),
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('$count', style: TextStyle(color: color, fontSize: 12)),
+              const SizedBox(width: 12),
+              Icon(
+                expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                size: 17,
+                color: color,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class _QueueRow extends StatelessWidget {
   const _QueueRow({
     super.key,
@@ -453,6 +558,7 @@ class _QueueRow extends StatelessWidget {
     this.selecting = false,
     this.selected = false,
     this.autoplay = false,
+    this.past = false,
     this.darkBackdrop = false,
   });
 
@@ -463,6 +569,7 @@ class _QueueRow extends StatelessWidget {
   final bool selecting;
   final bool selected;
   final bool autoplay;
+  final bool past;
   final bool darkBackdrop;
 
   @override
@@ -471,6 +578,13 @@ class _QueueRow extends StatelessWidget {
     final palette = darkBackdrop ? LokalTokens.resolve(LokalThemeId.dark) : t;
     final textColor = palette.text;
     final mutedColor = palette.muted;
+    final largeText = MediaQuery.textScalerOf(context).scale(14) > 20;
+    final duration = Text(
+      song.duration > Duration.zero
+          ? song.formattedDuration
+          : (song.isPending ? '…' : '—'),
+      style: TextStyle(color: mutedColor, fontSize: 11),
+    );
     final surface = darkBackdrop
         ? palette.text.withValues(alpha: .085)
         : t.surface2;
@@ -505,7 +619,7 @@ class _QueueRow extends StatelessWidget {
                           children: [
                             Text(
                               song.title,
-                              maxLines: 1,
+                              maxLines: largeText ? 2 : 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: textColor,
@@ -520,23 +634,21 @@ class _QueueRow extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(color: mutedColor, fontSize: 12),
                             ),
+                            if (largeText) ...[
+                              const SizedBox(height: 3),
+                              duration,
+                            ],
                           ],
                         ),
                       ),
-                      const SizedBox(width: 5),
-                      Text(
-                        song.duration > Duration.zero
-                            ? song.formattedDuration
-                            : (song.isPending ? '…' : '—'),
-                        style: TextStyle(color: mutedColor, fontSize: 11),
-                      ),
+                      if (!largeText) ...[const SizedBox(width: 5), duration],
                       const SizedBox(width: 4),
                     ],
                   ),
                 ),
               ),
             ),
-            if (!selecting && !autoplay) ...[
+            if (!selecting && !autoplay && !past) ...[
               Tooltip(
                 message: lokalText('More'),
                 triggerMode: TooltipTriggerMode.manual,
@@ -572,10 +684,14 @@ class _QueueRow extends StatelessWidget {
                   ),
                 ),
               ),
-            ] else if (autoplay)
+            ] else if (autoplay || past)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Icon(LucideIcons.sparkles, color: mutedColor, size: 18),
+                child: Icon(
+                  past ? LucideIcons.history : LucideIcons.sparkles,
+                  color: mutedColor,
+                  size: 18,
+                ),
               )
             else
               const SizedBox(width: 16),
