@@ -1995,6 +1995,7 @@ fn negotiate_android_direct_playback_format(
     };
 
     let mut claimed_handle = open_claimed_usb_handle(&device)?;
+    claim_audio_control_interfaces_for_probe(&mut claimed_handle);
     let lock_requested = current_lock_requested_for_fd(device.fd);
     let mut cleanup_interface: Option<u8> = None;
     let negotiated = (|| {
@@ -3468,16 +3469,50 @@ pub fn android_direct_set_hardware_mute(muted: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// UAC2 clock entity controls belong to AudioControl, not AudioStreaming.
+/// An unclaimed AC interface can return LIBUSB_ERROR_IO for GET_RANGE on
+/// Android even when the streaming interface is already claimed. Only claim
+/// this during native setup/probing; never perform an unsolicited probe during
+/// a live USB stream.
+fn claim_audio_control_interfaces_for_probe(claimed: &mut AndroidDirectUsbClaimedHandle) {
+    if let Ok(config) = claimed.handle.device().active_config_descriptor() {
+        let mut seen = std::collections::HashSet::new();
+        for interface in config.interfaces() {
+            for descriptor in interface.descriptors() {
+                if descriptor.class_code() != USB_CLASS_AUDIO
+                    || descriptor.sub_class_code() != USB_SUBCLASS_AUDIOCONTROL
+                    || !seen.insert(descriptor.interface_number())
+                {
+                    continue;
+                }
+                if let Err(error) =
+                    claimed.ensure_interface_claimed(descriptor.interface_number())
+                {
+                    dev_eprintln!(
+                        "[USB] Cannot claim AudioControl interface {} for clock probe: {}",
+                        descriptor.interface_number(), error
+                    );
+                }
+            }
+        }
+    }
+}
+
 fn inspect_android_usb_capabilities(
     device: &AndroidDirectUsbDevice,
 ) -> Result<AndroidDirectUsbCapabilityModel, String> {
-    prepare_direct_usb_libusb();
-    let context =
-        Context::new().map_err(|error| format!("Failed to create libusb context: {}", error))?;
-    let handle = unsafe { context.open_device_with_fd(device.fd) }
-        .map_err(|error| format!("Failed to wrap Android USB file descriptor: {}", error))?;
-    let inspected_device = handle.device();
-    build_android_usb_capability_model(&inspected_device, &handle, resolve_device_speed(&inspected_device))
+    let mut claimed = open_transient_usb_handle(device)?;
+    claim_audio_control_interfaces_for_probe(&mut claimed);
+    let inspected_device = claimed.handle.device();
+    let result = build_android_usb_capability_model(
+        &inspected_device,
+        &claimed.handle,
+        resolve_device_speed(&inspected_device),
+    );
+    // This read-only capability probe must never keep exclusive control of
+    // the DAC; stream ownership is managed by the normal direct-USB path.
+    release_claimed_interfaces(&claimed.handle, &claimed.claimed_interfaces);
+    result
 }
 
 fn build_android_usb_capability_model(
@@ -3865,6 +3900,7 @@ fn create_android_usb_backend_inner(
     let device = claimed_handle.handle.device();
     let speed = resolve_device_speed(&device);
     let lock_requested = current_lock_requested_for_fd(state.device.fd);
+    claim_audio_control_interfaces_for_probe(&mut claimed_handle);
     set_capability_model(
         build_android_usb_capability_model(&device, &claimed_handle.handle, speed).ok(),
     );
@@ -6676,16 +6712,63 @@ fn get_sampling_frequency_ranges(
     let value = UAC2_CLOCK_SOURCE_SAM_FREQ_CONTROL;
     let index = (interface_number as u16) | ((clock_id as u16) << 8);
     let mut data = [0u8; 512];
-    let transferred = handle
-        .read_control(
-            request_type,
-            UAC2_REQUEST_GET_RANGE,
-            value,
-            index,
-            &mut data,
-            Duration::from_secs(1),
-        )
-        .map_err(|error| format!("Failed to read sampling-frequency range: {}", error))?;
+    // Most DACs accept an oversized GET_RANGE buffer, but some UAC2 firmware
+    // STALLs unless wLength matches its actual range payload. Retry with a
+    // two-byte count read, followed by the exact-sized descriptor, instead of
+    // treating that transport error as proof the DAC has zero supported rates.
+    let transferred = match handle.read_control(
+        request_type,
+        UAC2_REQUEST_GET_RANGE,
+        value,
+        index,
+        &mut data,
+        Duration::from_secs(1),
+    ) {
+        Ok(length) => length,
+        Err(initial_error) => {
+            let mut count_buf = [0u8; 2];
+            let count_len = handle.read_control(
+                request_type,
+                UAC2_REQUEST_GET_RANGE,
+                value,
+                index,
+                &mut count_buf,
+                Duration::from_secs(1),
+            ).map_err(|probe_error| format!(
+                "Sampling-frequency GET_RANGE failed (512-byte request: {}; count probe: {})",
+                initial_error, probe_error,
+            ))?;
+            if count_len != 2 {
+                return Err(format!(
+                    "Sampling-frequency GET_RANGE count probe returned {} bytes, expected 2",
+                    count_len,
+                ));
+            }
+            let count = u16::from_le_bytes(count_buf) as usize;
+            let expected = 2usize.saturating_add(count.saturating_mul(12));
+            if count == 0 || expected > data.len() {
+                return Err(format!(
+                    "Sampling-frequency GET_RANGE invalid count {} (maximum {} bytes)",
+                    count, data.len(),
+                ));
+            }
+            dev_eprintln!(
+                "[USB] GET_RANGE oversized request rejected ({}); retrying exact {} bytes",
+                initial_error, expected,
+            );
+            handle.read_control(
+                request_type,
+                UAC2_REQUEST_GET_RANGE,
+                value,
+                index,
+                &mut data[..expected],
+                Duration::from_secs(1),
+            ).map_err(|error| format!(
+                "Sampling-frequency exact-sized GET_RANGE ({} bytes) failed: {}",
+                expected, error,
+            ))?
+        }
+    };
     if transferred < 2 {
         return Err(format!(
             "Sampling-frequency GET_RANGE returned {} bytes, expected at least 2",
@@ -6699,6 +6782,29 @@ fn get_sampling_frequency_ranges(
     }
 
     let expected = 2 + count * 12;
+    if expected > data.len() {
+        return Err(format!(
+            "Sampling-frequency GET_RANGE requested {} bytes, maximum supported is {}",
+            expected, data.len()
+        ));
+    }
+    let transferred = if transferred < expected {
+        // Some devices return only the two-byte header for an oversized
+        // request. One bounded exact-length retry avoids a false empty list.
+        handle.read_control(
+            request_type,
+            UAC2_REQUEST_GET_RANGE,
+            value,
+            index,
+            &mut data[..expected],
+            Duration::from_secs(1),
+        ).map_err(|error| format!(
+            "Sampling-frequency exact-sized GET_RANGE ({} bytes) failed: {}",
+            expected, error,
+        ))?
+    } else {
+        transferred
+    };
     if transferred < expected {
         return Err(format!(
             "Sampling-frequency GET_RANGE returned {} bytes, expected at least {} for {} subranges",

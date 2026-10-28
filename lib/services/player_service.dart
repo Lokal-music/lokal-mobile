@@ -620,6 +620,21 @@ List<Song> selectAutoplayRecommendations({
   return List.unmodifiable(available.take(count));
 }
 
+/// Only transient endpoint/transport failures benefit from repeated native
+/// reopen attempts. A recording whose PCM tuple has already been rejected
+/// cannot become supported by claiming the same interface three more times.
+@visibleForTesting
+bool shouldRetryDirectUsbManualRestart({
+  required Object error,
+  String? fallbackReason,
+}) {
+  final reason = '${error.toString()} ${fallbackReason ?? ''}'.toLowerCase();
+  return !RegExp(
+    r'no isochronous out endpoint|track format .*unsupported|'
+    r'no compatible direct usb output format',
+  ).hasMatch(reason);
+}
+
 /// Singleton service to manage global audio playback state.
 ///
 /// Uses just_audio for playback with gapless playback support.
@@ -2448,7 +2463,13 @@ class PlayerService {
         } catch (attemptError) {
           AppLog.instance.add('[USB] Manual restart attempt $attempt/3 '
               'failed: $attemptError');
-          if (attempt == 3) rethrow;
+          // A format rejection is deterministic for this recording. Repeated
+          // close/claim/open cycles cannot change its advertised bit depth
+          // or sample rate, and thrash the DAC and Android audio session.
+          if (attempt == 3 || !shouldRetryDirectUsbManualRestart(
+            error: attemptError,
+            fallbackReason: _sessionManager.fallbackReason,
+          )) rethrow;
           // Drain callbacks from the failed endpoint before trying a new
           // native registration, not just another play() on the same handle.
           await Future<void>.delayed(

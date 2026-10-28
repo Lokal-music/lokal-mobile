@@ -81,6 +81,78 @@ void main() {
       },
     ];
 
+    test('empty GET_RANGE does not turn an endpoint into unsupported PCM', () {
+      const requested = Uac2AudioFormat(
+        sampleRate: 44100, bitDepth: 16, channels: 2,
+      );
+      // The VENTURE-DAS-32 reports a real PCM alternate setting but the
+      // UAC2 clock GET_RANGE request returns LIBUSB_ERROR_IO. Leave the
+      // requested sample rate for native SET_CUR / GET_CUR verification.
+      final unknownClock = <Map<String, dynamic>>[
+        {
+          'format_tag': 'PCM',
+          'bit_resolution': 16,
+          'channels': 2,
+          'subslot_size': 2,
+          'service_interval_us': 125,
+          'max_packet_bytes': 96,
+          'sample_rates': <int>[],
+        },
+      ];
+      expect(Uac2Service.choosePcmUsbAltFormat(
+        requested, unknownClock, bitPerfect: true,
+      ), requested);
+    });
+
+    test('unknown clock does not bypass PCM packet or depth constraints', () {
+      const requested = Uac2AudioFormat(
+        sampleRate: 48000, bitDepth: 24, channels: 2,
+      );
+      final alt = <String, dynamic>{
+        'format_tag': 'PCM',
+        'bit_resolution': 24,
+        'channels': 2,
+        'subslot_size': 3,
+        'service_interval_us': 1000,
+        'max_packet_bytes': 300,
+        'sample_rates': <int>[],
+      };
+      expect(Uac2Service.choosePcmUsbAltFormat(
+        requested, [alt], bitPerfect: true,
+      ), requested);
+      expect(Uac2Service.choosePcmUsbAltFormat(
+        requested, [{...alt, 'max_packet_bytes': 200}],
+        bitPerfect: true,
+      ), isNull);
+      expect(Uac2Service.choosePcmUsbAltFormat(
+        requested, [{...alt, 'bit_resolution': 16, 'subslot_size': 2}],
+        bitPerfect: true,
+      ), isNull);
+      expect(Uac2Service.choosePcmUsbAltFormat(
+        requested, [{...alt, 'channels': 1}],
+        bitPerfect: true,
+      ), isNull);
+    });
+
+    test('unknown clock never guesses a disallowed sample rate', () {
+      const requested = Uac2AudioFormat(
+        sampleRate: 44100, bitDepth: 16, channels: 2,
+      );
+      final alt = <String, dynamic>{
+        'format_tag': 'PCM',
+        'bit_resolution': 16,
+        'channels': 2,
+        'subslot_size': 2,
+        'service_interval_us': 1000,
+        'max_packet_bytes': 192,
+        'sample_rates': <int>[],
+      };
+      expect(Uac2Service.choosePcmUsbAltFormat(
+        requested, [alt], bitPerfect: true,
+        disallowedSampleRates: {44100},
+      ), isNull);
+    });
+
     test('96/16 is rejected despite both values appearing in capability lists', () {
       final requested = const Uac2AudioFormat(
         sampleRate: 96000, bitDepth: 16, channels: 2,
@@ -130,6 +202,28 @@ void main() {
         ),
         isNull,
       );
+    });
+  });
+
+  group('manual USB restart recovery classification', () {
+    test('does not repeat a known unsupported PCM format', () {
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('Track cannot be restored over direct USB '
+            '(resolved engine: NORMAL_ANDROID)'),
+        fallbackReason: 'track format 44100Hz/16-bit is unsupported by this DAC',
+      ), isFalse);
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('No isochronous OUT endpoint can carry '
+            '44100 Hz / 16-bit / 2 ch'),
+      ), isFalse);
+    });
+    test('still retries transient URB failure and stale USB handle', () {
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('libusb_submit_transfer failed with code -6'),
+      ), isTrue);
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('DAC did not reappear in Android USB inventory'),
+      ), isTrue);
     });
   });
 
