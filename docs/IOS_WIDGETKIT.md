@@ -664,3 +664,22 @@ compilation, compositor captures and visual timer review remain pending.
 `CAPTURED.json` explicitly leaves automatic progress-animation acceptance false.
 This exercises the displayed app-hosted layout; installed WidgetKit, Home Screen
 scheduling, App Group provisioning and actual playback remain separate gates.
+
+## Native render 22: displayed progress accepted in the preview app
+
+[Run 22](https://github.com/lokal-music/lokal-mobile/actions/runs/40573226374)
+passes all four jobs at PR head `851b9080c0c8fb3d22620246157fe24c69069ce1`,
+tree `29d3e01f50bf57ce09d31640e633e3c22e573b7a`. The standalone extension links
+for device/simulator and all real-SDK/data/storage/publication gates pass.
+Archive `12767106863` independently verifies SHA-256
+`e3bffe6024a9a3d781589ee5d4f8b94ca53933ab36b38b397c22821280c4a125`;
+the 450 static images and nine pixel OCR checks reverify after extraction.
+
+All four compositor images have the exact token/bundle/active-scene readiness
+record. Visual inspection confirms metadata/artwork and a rendered progress bar
+that advances between frames in both appearances. The native screen captures,
+readiness records and source/checksum review gallery are preserved separately
+from the static matrix. Automatic animation acceptance remains false in the
+capture report: this is an explicit visual review, not a quantitative animation
+test. Installed WidgetKit, application-language binding, signed shared access,
+command actions and Home Screen scheduling remain unfinished gates.
