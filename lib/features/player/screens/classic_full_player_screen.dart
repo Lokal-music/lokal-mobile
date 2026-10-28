@@ -21,7 +21,7 @@ import 'package:flick/features/player/widgets/player_controls.dart';
 import 'package:flick/features/player/widgets/player_layout_sheet.dart';
 import 'package:flick/features/player/widgets/player_navigation.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
-import 'package:flick/features/player/widgets/pitch_bottom_sheet.dart';
+import 'package:flick/features/player/widgets/full_player_usb_restart_menu.dart';
 import 'package:flick/features/player/widgets/speed_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/sleep_timer_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/song_stage.dart';
@@ -576,9 +576,10 @@ class _ClassicFullPlayerScreenState
                 icon: Icons.more_vert,
                 albumColor: albumColor,
                 albumColorMode: albumColorMode,
-                onTap: () => SongActionsBottomSheet.show(
+                onTap: () => unawaited(showFullPlayerSongMenu(
                   context,
-                  song,
+                  song: song,
+                  player: _playerService,
                   extras: [
                     LokalSongMenuAction(
                       icon: Icons.lyrics_outlined,
@@ -603,19 +604,13 @@ class _ClassicFullPlayerScreenState
                           SpeedBottomSheet.show(context, _playerService),
                     ),
                     LokalSongMenuAction(
-                      icon: Icons.tune_rounded,
-                      label: 'Pitch',
-                      onTap: () =>
-                          PitchBottomSheet.show(context, _playerService),
-                    ),
-                    LokalSongMenuAction(
                       icon: Icons.bedtime_outlined,
                       label: 'Sleep timer',
                       onTap: () =>
                           SleepTimerBottomSheet.show(context, _playerService),
                     ),
                   ],
-                ),
+                )),
               ),
             ],
           ),
