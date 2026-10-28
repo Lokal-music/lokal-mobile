@@ -2535,6 +2535,41 @@ class PlayerService {
     );
   }
 
+  /// Do not infer 16-bit audio from a sample rate alone. A 24-bit FLAC
+  /// labelled only as 96 kHz previously started as 96k/16, causing an
+  /// avoidable 'No isochronous OUT endpoint' refusal on some USB DACs.
+  /// Returning null asks the caller to probe the actual file first.
+  @visibleForTesting
+  static Uac2AudioFormat? derivePcmDirectUsbFormat({
+    int? sampleRate,
+    int? bitDepth,
+    String? resolution,
+  }) {
+    final label = resolution ?? '';
+    final labelBits = int.tryParse(
+      RegExp(r'(\\d+)\\s*[- ]?bit', caseSensitive: false)
+          .firstMatch(label)?.group(1) ?? '',
+    );
+    final labelKhz = double.tryParse(
+      RegExp(r'(\\d+(?:\\.\\d+)?)\\s*kHz', caseSensitive: false)
+          .firstMatch(label)?.group(1) ?? '',
+    );
+    final labelRate = labelKhz == null ? null : (labelKhz * 1000).round();
+    // Conflicting structured and display metadata are not reliable enough
+    // for direct USB: probe the actual file rather than choosing arbitrarily.
+    if (bitDepth != null && labelBits != null && bitDepth != labelBits) {
+      return null;
+    }
+    if (sampleRate != null && labelRate != null && sampleRate != labelRate) {
+      return null;
+    }
+    final rate = sampleRate ?? labelRate;
+    final bits = bitDepth ?? labelBits;
+    if (rate == null || rate <= 0 || bits == null ||
+        !const {16, 24, 32}.contains(bits)) return null;
+    return Uac2AudioFormat(sampleRate: rate, bitDepth: bits, channels: 2);
+  }
+
   Uac2AudioFormat? _deriveUac2FormatFromSong(Song? song) {
     if (song == null) return null;
 
@@ -2571,38 +2606,10 @@ class PlayerService {
       }
     }
 
-    final structuredSampleRate = song.sampleRate;
-    final structuredBitDepth = song.bitDepth;
-    if (structuredSampleRate != null || structuredBitDepth != null) {
-      return Uac2AudioFormat(
-        sampleRate: structuredSampleRate ?? 44100,
-        bitDepth: structuredBitDepth ?? 16,
-        channels: 2,
-      );
-    }
-
-    final resolution = song.resolution ?? '';
-    final bitDepthMatch = RegExp(
-      r'(\d+)-bit',
-      caseSensitive: false,
-    ).firstMatch(resolution);
-    final sampleRateMatch = RegExp(
-      r'(\d+(?:\.\d+)?)\s*kHz',
-      caseSensitive: false,
-    ).firstMatch(resolution);
-
-    final bitDepth = int.tryParse(bitDepthMatch?.group(1) ?? '');
-    final sampleRateKhz = double.tryParse(sampleRateMatch?.group(1) ?? '');
-    final sampleRate = sampleRateKhz != null
-        ? (sampleRateKhz * 1000).round()
-        : null;
-
-    if (bitDepth == null && sampleRate == null) return null;
-
-    return Uac2AudioFormat(
-      sampleRate: sampleRate ?? 44100,
-      bitDepth: bitDepth ?? 16,
-      channels: 2,
+    return derivePcmDirectUsbFormat(
+      sampleRate: song.sampleRate,
+      bitDepth: song.bitDepth,
+      resolution: song.resolution,
     );
   }
 
@@ -5158,17 +5165,23 @@ class PlayerService {
               final probed = await rust_audio.audioProbeFormat(
                 path: resolvedPath,
               );
-              final probedBitDepth = probed.bitsPerSample ?? 16;
+              final probedBitDepth = probed.bitsPerSample;
               _debugLog(
                 '[Engine] Metadata missing — probed format: '
                 '${probed.sampleRate}Hz/$probedBitDepth-bit/'
                 '${probed.channels}ch',
               );
-              trackFormat = Uac2AudioFormat(
-                sampleRate: probed.sampleRate,
-                bitDepth: probedBitDepth,
-                channels: probed.channels,
-              );
+              if (probedBitDepth != null &&
+                  const {16, 24, 32}.contains(probedBitDepth)) {
+                trackFormat = Uac2AudioFormat(
+                  sampleRate: probed.sampleRate,
+                  bitDepth: probedBitDepth,
+                  channels: probed.channels,
+                );
+              } else {
+                _debugLog('[Engine] Direct USB requires measured PCM depth; '
+                    'probe returned ${probed.bitsPerSample}, not assuming 16-bit');
+              }
             } catch (e) {
               _debugLog('[Engine] Format probe failed: $e');
             }
@@ -5193,7 +5206,11 @@ class PlayerService {
             _sessionManager.initializedMode ==
                 AudioEngineType.usbDacExperimental &&
             _rustEngine != null;
-        final requestedUsbOutputFormat = alreadyInUsbMode
+        // In bit-perfect mode, a candidate rate/depth from independent
+        // capability lists is not proof the DAC supports that combination.
+        // Never replace the track's verified PCM format with a fallback.
+        final requestedUsbOutputFormat =
+            alreadyInUsbMode && !isBitPerfectModeEnabled
             ? await _uac2Service.suggestAndroidExperimentalUsbOutputFormat(
                 requested: trackFormat,
               )
@@ -5207,6 +5224,16 @@ class PlayerService {
             _sameUac2Format(currentUsbFormat, targetUsbOutputFormat);
 
         if (formatMatches) {
+          // A failed native transfer can leave the cached format unchanged
+          // even after libusb has released its registration.
+          final debug = await _uac2Service.getAndroidPlaybackDebugState();
+          final rust = _mapValue(debug?['rustAudioState']);
+          final usb = _mapValue(rust?['direct_usb']);
+          final registered = usb?['registered'] == true;
+          if (!registered) {
+            _debugLog('[Engine] Cached USB format matches but native DAC is '
+                'not registered; re-preparing instead of reusing stale state');
+          } else {
           _debugLog(
             '[Engine] USB engine already active with matching format '
             '(${targetUsbOutputFormat.sampleRate}Hz/'
@@ -5215,6 +5242,16 @@ class PlayerService {
           );
           _sessionManager.clearFallbackReason();
           return normalizedEngine;
+          }
+        }
+
+        // Change the USB alternate setting only after the previous stream
+        // has stopped. Updating native playback format while an old 16-bit
+        // URB queue is still submitting can fail the next libusb transfer.
+        if (alreadyInUsbMode && !formatMatches &&
+            _rustAudioService.isInitialized) {
+          _debugLog('[Engine] Stopping old USB stream before PCM renegotiation');
+          await _rustAudioService.stop();
         }
 
         final prepared = await _uac2Service
