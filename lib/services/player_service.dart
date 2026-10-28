@@ -2332,16 +2332,18 @@ class PlayerService {
         song != null && !song.isPending && (song.filePath?.isNotEmpty ?? false)
             ? song
             : null;
+    if (playableSong == null) {
+      AppLog.instance.add('[USB] Manual restart requires a resolved '
+          'playable track to verify the exclusive USB stream');
+      return false;
+    }
     // A recovery is not a seek. Start at the beginning to avoid exercising
     // stale decoder/seek state while the USB device is being re-claimed.
     const position = Duration.zero;
     final wasPlaying = isPlayingNotifier.value;
     // Do not guess a playable track's bit depth from a previous recording:
     // the normal engine-preparation path probes missing metadata itself.
-    final format = playableSong != null
-        ? _deriveUac2FormatFromSong(playableSong)
-        : (_uac2Service.currentDeviceStatus?.currentFormat ??
-            _uac2Service.lastKnownFormat);
+    final format = _deriveUac2FormatFromSong(playableSong);
 
     AppLog.instance.add('[USB] Manual engine restart requested '
         '(playing=$wasPlaying, track=${song?.title ?? 'none'}, '
@@ -2404,8 +2406,7 @@ class PlayerService {
           if (!success) {
             throw StateError('Native DAC reset or direct route selection failed');
           }
-          if (playableSong != null &&
-              !await _verifyManualUsbRestartPlayback()) {
+          if (!await _verifyManualUsbRestartPlayback()) {
             throw StateError('USB stream did not sustain verified audio');
           }
           _sessionManager.clearFallbackReason();
