@@ -2559,11 +2559,11 @@ class PlayerService {
   }) {
     final label = resolution ?? '';
     final labelBits = int.tryParse(
-      RegExp(r'(\\d+)\\s*[- ]?bit', caseSensitive: false)
+      RegExp(r'(\d+)\s*[- ]?bit', caseSensitive: false)
           .firstMatch(label)?.group(1) ?? '',
     );
     final labelKhz = double.tryParse(
-      RegExp(r'(\\d+(?:\\.\\d+)?)\\s*kHz', caseSensitive: false)
+      RegExp(r'(\d+(?:\.\d+)?)\s*kHz', caseSensitive: false)
           .firstMatch(label)?.group(1) ?? '',
     );
     final labelRate = labelKhz == null ? null : (labelKhz * 1000).round();
