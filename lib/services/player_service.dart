@@ -124,11 +124,12 @@ Future<bool> restartDirectUsbSessionSequence({
   return true;
 }
 
-/// USB format incompatibility is specific to the recording, not a DAC
-/// transport failure. A different recording must get another chance to use
-/// direct USB; replaying the same unsupported recording must not loop.
+/// A temporary Android route for one recording (unsupported PCM format,
+/// Atmos or signed HTTP add-on) must not disable the user's preferred direct
+/// USB route for future compatible recordings. Do not retry for the same
+/// recording, which would cause an engine-flapping loop.
 @visibleForTesting
-bool shouldRearmUsbAfterIncompatibleTrack({
+bool shouldRearmUsbAfterTrackScopedFallback({
   required String? incompatibleTrackKey,
   required String requestedTrackKey,
 }) =>
@@ -640,7 +641,7 @@ class PlayerService {
   bool _motionArtDuringBitPerfect = false;
   bool _midStreamUsbFallbackActive = false;
   Future<bool>? _manualUsbRestartInFlight;
-  String? _usbIncompatibleTrackKey;
+  String? _usbTrackScopedFallbackKey;
   bool _deadRustEngineRecoveryActive = false;
   final List<DateTime> _deadRustEngineRecoveryTimestamps = <DateTime>[];
   late final AudioSessionManager _sessionManager;
@@ -5407,22 +5408,31 @@ class PlayerService {
   String _usbTrackKey(Song song) =>
       '${song.id}|${song.filePath}|${song.sampleRate}|${song.bitDepth}|${song.fileType}';
 
-  Future<void> _rearmUsbForNewTrackAfterFormatFallback(Song song) async {
+  Future<void> _rearmUsbAfterTrackScopedFallback(Song song) async {
     final key = _usbTrackKey(song);
-    if (!shouldRearmUsbAfterIncompatibleTrack(
-      incompatibleTrackKey: _usbIncompatibleTrackKey,
+    if (!shouldRearmUsbAfterTrackScopedFallback(
+      incompatibleTrackKey: _usbTrackScopedFallbackKey,
       requestedTrackKey: key,
     )) {
       return;
     }
-    _usbIncompatibleTrackKey = null;
+    _usbTrackScopedFallbackKey = null;
     AppLog.instance.add('[USB] Re-evaluating direct USB for a new recording '
-        'after a track-specific PCM format fallback');
+        'after track-scoped Android routing');
     // Respect the connected route and the user's engine preference. Do not
     // clear suppression caused by an actual USB transport failure.
     await _sessionManager.syncRouteSelection(
-      reason: 'new recording after unsupported direct USB format',
+      reason: 'new recording after track-scoped Android routing',
     );
+  }
+
+  Future<void> _stopUsbStreamBeforeEngineRouteChange() async {
+    if (_sessionManager.initializedMode ==
+            AudioEngineType.usbDacExperimental &&
+        _rustAudioService.isInitialized) {
+      _debugLog('[USB] Stopping native stream before leaving direct route');
+      await _rustAudioService.stop();
+    }
   }
 
   Future<AudioEngineType> _prepareRequestedEngineForSong(
@@ -5444,6 +5454,14 @@ class PlayerService {
 
     switch (engineForSong) {
       case AudioEngineType.normalAndroid:
+        if (normalizedEngine == AudioEngineType.usbDacExperimental) {
+          _usbTrackScopedFallbackKey = _usbTrackKey(song);
+          AppLog.instance.add('[USB] Android-only playback for this '
+              'recording; direct USB will be reconsidered on the next one');
+        }
+        // Never release the native interface while Rust still has a live
+        // isochronous submission queue; stop its pump first.
+        await _stopUsbStreamBeforeEngineRouteChange();
         await _uac2Service.releaseAndroidDirectUsbRuntime();
         await _rustAudioService.setHighResMode(false);
         // Keep the failure reason visible so disabling crossfade can tell the
@@ -5453,11 +5471,13 @@ class PlayerService {
         }
         return engineForSong;
       case AudioEngineType.rustOboe:
+        await _stopUsbStreamBeforeEngineRouteChange();
         await _uac2Service.releaseAndroidDirectUsbRuntime();
         await _rustAudioService.setHighResMode(false);
         _sessionManager.clearFallbackReason();
         return engineForSong;
       case AudioEngineType.dapInternalHighRes:
+        await _stopUsbStreamBeforeEngineRouteChange();
         await _uac2Service.releaseAndroidDirectUsbRuntime();
         await _rustAudioService.setHighResMode(true);
         _sessionManager.clearFallbackReason();
@@ -5530,7 +5550,7 @@ class PlayerService {
             }
             await _uac2Service.releaseAndroidDirectUsbRuntime();
             await _rustAudioService.setHighResMode(false);
-            _usbIncompatibleTrackKey = _usbTrackKey(song);
+            _usbTrackScopedFallbackKey = _usbTrackKey(song);
             await _sessionManager.recordFallback(
               requestedMode: normalizedEngine,
               fallbackMode: AudioEngineType.normalAndroid,
@@ -5924,7 +5944,7 @@ class PlayerService {
         // Route changes are already pushed into the session manager via the
         // device listener initialized in initAudio(). Re-querying the platform
         // here adds latency to the first tap on stable speaker routes.
-        await _rearmUsbForNewTrackAfterFormatFallback(song);
+        await _rearmUsbAfterTrackScopedFallback(song);
         final desiredEngine = _sessionManager.selectedMode;
         final activeEngine = await _ensureEngineReady(
           desiredEngine,
