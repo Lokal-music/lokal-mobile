@@ -2424,6 +2424,12 @@ class PlayerService {
       sourcesBuilder: _buildAudioSources,
       sourceBuilder: _buildAudioSourceForSong,
       playlistProvider: () => List<Song>.unmodifiable(_playlist),
+      selectedPlaylistIndexProvider: () => _currentIndex,
+      onNativePlaylistIndex: (index) {
+        if (index >= 0 && index < _playlist.length) {
+          _setCurrentIndex(index);
+        }
+      },
       configurePlayer: _configureAndroidPlayer,
       disposeEngine: _disposeAndroidEngine,
       retireStalledPlayer: _retireStalledAndroidPlayer,
@@ -5037,12 +5043,21 @@ class PlayerService {
       return;
     }
 
-    final resolvedIndex = _playlist.indexWhere((entry) => entry.id == song.id);
-    if (resolvedIndex == -1 || resolvedIndex == _currentIndex) {
+    // Duplicate IDs represent distinct queue occurrences. The selected
+    // position is authoritative until native Media3 reports an actual index
+    // transition; an ID-only lookup would jump to the first occurrence.
+    if (_currentIndex >= 0 &&
+        _currentIndex < _playlist.length &&
+        _playlist[_currentIndex].id == song.id) {
       return;
     }
-
-    _setCurrentIndex(resolvedIndex);
+    final exact = _playlist.indexWhere((entry) => identical(entry, song));
+    final resolvedIndex = exact >= 0
+        ? exact
+        : _playlist.indexWhere((entry) => entry.id == song.id);
+    if (resolvedIndex >= 0 && resolvedIndex != _currentIndex) {
+      _setCurrentIndex(resolvedIndex);
+    }
   }
 
   void _rememberRestoredPlaybackContext(Song song, Duration position) {
