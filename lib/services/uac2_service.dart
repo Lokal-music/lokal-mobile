@@ -448,11 +448,14 @@ class Uac2Service {
     bool verifyPhysicalAttachment = false,
   }) async {
     if (Platform.isAndroid) {
-      // On USB transfer failure, the frozen direct session may be stale.
-      // A forced query reads UsbManager's live inventory without opening or
-      // claiming an interface; only use it when diagnosing an already failed
-      // stream, never in the normal hot playback path.
-      if (verifyPhysicalAttachment) return _listDevicesAndroid();
+      // Verified inventory is used by settings, hotplug monitoring and
+      // recovery. Bypass both the frozen Rust playback session and the
+      // Android UsbManager cache: missing broadcasts must not hide a
+      // connected DAC or leave a detached one listed. This query only
+      // enumerates USB devices; it does not open/claim an interface.
+      if (verifyPhysicalAttachment) {
+        return _listDevicesAndroid(refresh: true);
+      }
       final currentPlaybackDevice = _currentAndroidPlaybackDeviceIfReusable(
         requireActivatableDeviceName: false,
       );
@@ -474,9 +477,14 @@ class Uac2Service {
     }
   }
 
-  Future<List<Uac2DeviceInfo>> _listDevicesAndroid() async {
+  Future<List<Uac2DeviceInfo>> _listDevicesAndroid({
+    bool refresh = false,
+  }) async {
     try {
-      final raw = await _channel.invokeMethod<List<dynamic>>('listDevices');
+      final raw = await _channel.invokeMethod<List<dynamic>>(
+        'listDevices',
+        {'refresh': refresh},
+      );
       if (raw == null) {
         devLog(
           'Uac2Service.listDevices (Android): no UsbManager devices returned',

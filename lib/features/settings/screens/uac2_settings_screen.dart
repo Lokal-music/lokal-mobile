@@ -43,6 +43,71 @@ UsbDacClaimPresentation classifyUsbDacClaim({
       : UsbDacClaimPresentation.inactive;
 }
 
+/// A displayed USB status may be synthesized from physical detection rather
+/// than a playback session. Re-tapping that row should retry selection, not
+/// disconnect a non-existent session.
+@visibleForTesting
+bool shouldDisconnectUsbDacOnTap({
+  required bool isConnected,
+  required bool isSelected,
+  required bool hasLiveStatus,
+}) => isConnected && isSelected && hasLiveStatus;
+
+/// Match the physical USB inventory, not just vendor/product IDs: several
+/// identical DACs can be attached at once, and an old playback status might
+/// belong to a device which has since been unplugged.
+@visibleForTesting
+bool sameUsbDacDevice(Uac2DeviceInfo a, Uac2DeviceInfo b) {
+  if (a.deviceName != null && b.deviceName != null) {
+    return a.deviceName == b.deviceName;
+  }
+  if (a.vendorId != b.vendorId || a.productId != b.productId) return false;
+  if (a.serial != null && b.serial != null) return a.serial == b.serial;
+  return true;
+}
+
+/// A connected USB DAC must always get a visible Status section. Merely
+/// detecting the device does NOT establish exclusive ownership, streaming or
+/// bit-perfect verification. Only the live status can assert those.
+@visibleForTesting
+Uac2DeviceStatus? usbDacStatusForDisplay({
+  required List<Uac2DeviceInfo>? physicalDevices,
+  required Uac2DeviceStatus? liveStatus,
+  required Uac2DeviceInfo? selectedDevice,
+}) {
+  if (physicalDevices == null) {
+    // Discovery is still loading: keep a known active USB route visible.
+    return liveStatus != null &&
+            (liveStatus.routeType == Uac2RouteType.externalUsb ||
+                liveStatus.isExternalRoute)
+        ? liveStatus
+        : null;
+  }
+  if (physicalDevices.isEmpty) return null;
+  final active = liveStatus == null
+      ? null
+      : physicalDevices.where(
+          (device) => sameUsbDacDevice(device, liveStatus.device),
+        ).firstOrNull;
+  if (active != null &&
+      (liveStatus!.routeType == Uac2RouteType.externalUsb ||
+          liveStatus.isExternalRoute)) {
+    return liveStatus;
+  }
+  final selected = selectedDevice == null
+      ? null
+      : physicalDevices.where(
+          (device) => sameUsbDacDevice(device, selectedDevice),
+        ).firstOrNull;
+  return Uac2DeviceStatus(
+    device: selected ?? active ?? physicalDevices.first,
+    state: Uac2State.connected,
+    routeType: Uac2RouteType.externalUsb,
+    routeLabel: 'USB DAC detected',
+    isExternalRoute: true,
+  );
+}
+
 /// The USB DAC page: connected devices, what the DAC can do and is doing,
 /// then the engine, bit-perfect, format and DSD preferences, all on one page.
 class Uac2SettingsScreen extends ConsumerStatefulWidget {
@@ -60,6 +125,15 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     final selectedDevice = ref.watch(selectedUac2DeviceProvider);
     final deviceStatus = ref.watch(uac2DeviceStatusProvider);
     final appPreferences = ref.watch(appPreferencesProvider);
+    final physicalDevices = devicesAsync.asData?.value;
+    final shownStatus = usbDacStatusForDisplay(
+      physicalDevices: physicalDevices,
+      liveStatus: deviceStatus,
+      selectedDevice: selectedDevice,
+    );
+    final hasLiveStatus = shownStatus != null &&
+        identical(shownStatus, deviceStatus);
+    final shownDevice = shownStatus?.device;
     final isochronous =
         ref.watch(audioEnginePreferenceProvider).asData?.value ==
         AudioEnginePreference.isochronousUsb;
@@ -87,18 +161,18 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
             title: l10n.usbAudioDevices,
             children: devicesAsync.when(
               data: (devices) =>
-                  _deviceRows(devices, selectedDevice, deviceStatus),
+                  _deviceRows(devices, selectedDevice, shownStatus, hasLiveStatus),
               loading: () => [_loadingRow()],
               error: (error, _) => [_errorRow(error), _refreshRow()],
             ),
           ),
-          if (deviceStatus != null)
+          if (shownStatus != null)
             LokalSettingsSection(
               title: l10n.status,
               children: _statusRows(
-                deviceStatus,
-                usbDetected: devicesAsync.asData?.value.isNotEmpty == true ||
-                    deviceStatus.routeType == Uac2RouteType.externalUsb,
+                shownStatus,
+                usbDetected: true,
+                hasLiveStatus: hasLiveStatus,
               ),
             ),
           if (showVolume)
@@ -106,14 +180,14 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
               title: l10n.volumeControl,
               children: const [Uac2VolumeControl()],
             ),
-          if (selectedDevice != null) ...[
+          if (shownDevice != null) ...[
             LokalSettingsSection(
               title: l10n.deviceInformation,
-              children: _deviceInfoRows(selectedDevice),
+              children: _deviceInfoRows(shownDevice),
             ),
             LokalSettingsSection(
               title: l10n.capabilities,
-              children: _capabilityRows(selectedDevice),
+              children: _capabilityRows(shownDevice),
             ),
           ],
         ],
@@ -151,6 +225,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     List<Uac2DeviceInfo> devices,
     Uac2DeviceInfo? selectedDevice,
     Uac2DeviceStatus? deviceStatus,
+    bool hasLiveStatus,
   ) {
     if (devices.isEmpty) {
       return [
@@ -164,7 +239,7 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     }
     return [
       for (final device in devices)
-        _deviceRow(device, selectedDevice, deviceStatus),
+        _deviceRow(device, selectedDevice, deviceStatus, hasLiveStatus),
       _refreshRow(),
     ];
   }
@@ -173,16 +248,15 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     Uac2DeviceInfo device,
     Uac2DeviceInfo? selectedDevice,
     Uac2DeviceStatus? deviceStatus,
+    bool hasLiveStatus,
   ) {
-    final isSelected =
-        selectedDevice?.vendorId == device.vendorId &&
-        selectedDevice?.productId == device.productId &&
-        selectedDevice?.serial == device.serial;
-    final isConnected =
-        isSelected &&
-        (deviceStatus?.state == Uac2State.connected ||
-            deviceStatus?.state == Uac2State.prewarming ||
-            deviceStatus?.state == Uac2State.streaming);
+    final isSelected = selectedDevice != null &&
+        sameUsbDacDevice(device, selectedDevice);
+    final isConnected = deviceStatus != null &&
+        sameUsbDacDevice(device, deviceStatus.device) &&
+        (deviceStatus.state == Uac2State.connected ||
+            deviceStatus.state == Uac2State.prewarming ||
+            deviceStatus.state == Uac2State.streaming);
     return LokalSettingRow(
       label: '${device.manufacturer} ${device.productName}'.trim(),
       description:
@@ -195,7 +269,18 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
           : isSelected
           ? Icon(Icons.check_circle_rounded, color: context.lokal.accent)
           : null,
-      onTap: () => _handleDeviceSelection(device, isSelected, isConnected),
+      onTap: () => _handleDeviceSelection(
+        device,
+        isSelected,
+        // Only disconnect a genuine live session. A selected device with
+        // merely detected/synthetic status must remain reselectable if its
+        // first selection did not initialize the DAC.
+        shouldDisconnectUsbDacOnTap(
+          isConnected: isConnected,
+          isSelected: isSelected,
+          hasLiveStatus: hasLiveStatus,
+        ),
+      ),
     );
   }
 
@@ -272,8 +357,13 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
   List<Widget> _statusRows(
     Uac2DeviceStatus status, {
     required bool usbDetected,
+    required bool hasLiveStatus,
   }) {
-    final diagnostics = ref.watch(audioOutputDiagnosticsProvider);
+    // Do not display stale streaming/bit-perfect assertions for a DAC that
+    // is merely present in the USB inventory. Only the live matched route
+    // can contribute playback diagnostics.
+    final liveDiagnostics = ref.watch(audioOutputDiagnosticsProvider);
+    final diagnostics = hasLiveStatus ? liveDiagnostics : null;
     final t = context.lokal;
     Color good(bool ok) => ok ? t.accent : t.orange;
     final format = status.currentFormat;
@@ -375,7 +465,16 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
           valueColor: good(diagnostics.audioFocusHeld),
         ),
       ],
-      if (claimPresentation == UsbDacClaimPresentation.connectedIdle)
+      if (!hasLiveStatus)
+        notice(
+          'USB DAC detected. Connection and supported formats are shown '
+          'before playback; exclusive USB output is verified only after '
+          'audio starts.',
+          warning: false,
+          icon: Icons.info_outline_rounded,
+        ),
+      if (hasLiveStatus &&
+          claimPresentation == UsbDacClaimPresentation.connectedIdle)
         notice(
           'USB registration starts with direct playback and is released '
           'when playback stops.',
