@@ -452,9 +452,16 @@ class _KonnektedCoverFlowSectionState
           initialIndex: list.length ~/ 2,
           albums: list,
           onPlay: widget.onPlay,
-          onSelect: (i) => widget.onPlay(list[i].songs.first, [
-            for (final entry in list) ...entry.songs,
-          ]),
+          onSelect: (i) => widget.onPlay(
+            list[i].coverSong ?? list[i].songs.first,
+            [
+              // Cover Flow is a shelf of recommended tracks. Expanding each
+              // card's back must not turn a front-face tap into a queue of
+              // every album (nor duplicate songs across featured covers).
+              for (final entry in list)
+                entry.coverSong ?? entry.songs.first,
+            ],
+          ),
           cover: (entry) {
             final placeholder = Container(
               color: t.surface3,
@@ -462,8 +469,8 @@ class _KonnektedCoverFlowSectionState
               child: Icon(Icons.music_note_rounded, color: t.muted, size: 56),
             );
             return CachedImageWidget(
-              imagePath: entry.songs.first.albumArt,
-              audioSourcePath: entry.songs.first.filePath,
+              imagePath: (entry.coverSong ?? entry.songs.first).albumArt,
+              audioSourcePath: (entry.coverSong ?? entry.songs.first).filePath,
               fit: BoxFit.cover,
               placeholder: placeholder,
               errorWidget: placeholder,
