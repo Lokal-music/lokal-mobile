@@ -300,6 +300,9 @@ class PlayerNotifier extends Notifier<PlayerState> {
           queue: remote.queue.map(convert).toList(),
           upNext: const [],
           autoplayUpNext: const [],
+          // Desktop queue indices belong to its own playback context.
+          // Never display the previous mobile playlist as desktop history.
+          playlist: const [],
           currentIndex: remote.currentIndex,
         );
       } else if (previous?.controlsDesktop == true) {
