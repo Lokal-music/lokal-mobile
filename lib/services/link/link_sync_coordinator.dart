@@ -287,10 +287,10 @@ class LinkSyncCoordinator {
         if (reply.body['hasMore'] != true) break;
       }
     }
-    // A sync cursor only pulls *new* operations. Old installations already
-    // consumed their desktop playlist positions, so repair their persisted
-    // order from the durable journal even when this sync pulls zero rows.
-    await _repairPreviouslySyncedPlaylistOrder();
+    // A cursor only returns new events. Explicit Sync Now must also rebuild
+    // playlists missing from the mobile store after a legacy or partial merge.
+    // Replaying their durable operation history also repairs order and deletes.
+    if (!_background) await _reconcileDesktopPlaylists();
     _requireReady();
     _report(LinkSyncPhase.finalizing);
     if (!_background) {
@@ -300,14 +300,12 @@ class LinkSyncCoordinator {
     if (changed || !_background) MilestoneService.changes.add(null);
   }
 
-  /// One-time, non-destructive repair for users whose playlists were already
-  /// imported before numeric ordering was reliably materialized. Replaying the
-  /// local journal requires no desktop re-export or deleting/recreating lists.
-  /// Only playlists actually created by this paired desktop are eligible.
-  Future<void> _repairPreviouslySyncedPlaylistOrder() async {
-    final prefs = await SharedPreferences.getInstance();
-    final flag = '$_prefix.playlist_order_repaired_v1';
-    if (prefs.getBool(flag) == true) return;
+  /// Recover every playlist owned by the paired desktop on an explicit sync,
+  /// even when the pull cursor has advanced or its local copy disappeared.
+  /// The journal is authoritative for deletes, so this does not resurrect
+  /// intentionally removed playlists. Mobile-origin and other desktop users'
+  /// playlists are not reconstructed from unrelated operations.
+  Future<void> _reconcileDesktopPlaylists() async {
     final desktopId = credentials.desktopId;
     if (desktopId == null || desktopId.isEmpty) return;
 
@@ -315,42 +313,25 @@ class LinkSyncCoordinator {
         .filter()
         .entityEqualTo('playlist')
         .findAll();
-    final remoteIds = <String>{};
-    final hasMembershipHistory = <String>{};
+    final desktopPlaylistIds = <String>{};
     for (final operation in operations) {
-      if (operation.op == 'playlist.create' &&
-          operation.deviceId == desktopId) {
-        remoteIds.add(operation.entityId);
-      }
-      if (operation.op == 'playlist.add' ||
-          operation.op == 'playlist.move' ||
-          operation.op == 'playlist.remove') {
-        hasMembershipHistory.add(operation.entityId);
+      if (operation.deviceId == desktopId &&
+          operation.op == 'playlist.create') {
+        desktopPlaylistIds.add(operation.entityId);
       }
     }
-    var repaired = false;
-    for (final id in remoteIds) {
+    var reconciled = false;
+    for (final id in desktopPlaylistIds) {
       _requireReady();
-      // Guard against inventing playlists or replaying an unrelated user's
-      // journal; only repair entries already mapped by an earlier sync.
-      final localId = prefs.getString('lokal.link.playlist_local.$id');
-      if (localId == null) continue;
-      final existing = await PlaylistService.instance.getPlaylist(localId);
-      if (existing == null) continue;
-      // A partial/legacy journal with no membership events is not enough
-      // evidence to clear someone's already populated mobile playlist.
-      if (existing.songIds.isNotEmpty &&
-          !hasMembershipHistory.contains(id)) continue;
       await _materialize({
         'entity': 'playlist',
         'entity_id': id,
         'op': 'playlist.create',
         'fields': <String, dynamic>{},
       });
-      repaired = true;
+      reconciled = true;
     }
-    await prefs.setBool(flag, true);
-    if (repaired) onChanged?.call();
+    if (reconciled) onChanged?.call();
   }
 
   Future<void> _materializeLibraryPage(List<Map<String, dynamic>> items) async {
@@ -419,13 +400,11 @@ class LinkSyncCoordinator {
           });
           if (song != null) return song.id;
 
-          // A playlist entry can exist online without ever having been
-          // downloaded on this device. Rebuild a catalogue reference from
-          // explicit sender metadata instead of silently dropping it.
+          // Desktop playlists must retain entries even when their original
+          // audio has not been copied or the mobile catalogue cannot match it.
+          // Keep a metadata-backed pending reference, rather than silently
+          // shortening the list until the next explicit file copy.
           final fields = member.fields;
-          if (fields['online_ref'] != true && fields['online_ref'] != 1) {
-            return null;
-          }
           final title = fields['title']?.toString().trim() ?? '';
           final artist = fields['artist']?.toString().trim() ?? '';
           if (title.isEmpty || artist.isEmpty) return null;
