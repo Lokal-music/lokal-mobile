@@ -531,7 +531,8 @@ class DiscoveryAddon {
         (exactManifestUrl.origin != base.origin ||
             exactManifestUrl.pathSegments.lastOrNull != 'manifest.json' ||
             exactManifestUrl.hasQuery ||
-            exactManifestUrl.hasFragment)) {
+            exactManifestUrl.hasFragment ||
+            normalizeAddonEndpoint(exactManifestUrl.toString()) != base)) {
       throw const DiscoveryException('Invalid add-on manifest URL.');
     }
     final json = exactManifestUrl == null
