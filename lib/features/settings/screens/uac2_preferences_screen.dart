@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
@@ -74,10 +77,76 @@ class _Choice {
 }
 
 class _Uac2PreferencesSectionsState
-    extends ConsumerState<Uac2PreferencesSections> {
+    extends ConsumerState<Uac2PreferencesSections>
+    with WidgetsBindingObserver {
   bool _pendingEngineRestart = false;
   bool _forceUsbRestartInProgress = false;
+  bool _usbRecordPermissionInProgress = false;
+  PermissionStatus? _usbRecordPermissionStatus;
   bool _awaiting432HzConfirm = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_refreshUsbRecordPermissionStatus());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshUsbRecordPermissionStatus());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _refreshUsbRecordPermissionStatus() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final status = await Permission.microphone.status;
+      if (mounted) setState(() => _usbRecordPermissionStatus = status);
+    } catch (_) {
+      // Permission status is best-effort; USB playback works without it.
+    }
+  }
+
+  Future<void> _requestUsbRecordPermission(BuildContext context) async {
+    if (!Platform.isAndroid || _usbRecordPermissionInProgress) return;
+    setState(() => _usbRecordPermissionInProgress = true);
+    String? feedback;
+    try {
+      var status = await Permission.microphone.status;
+      if (status.isGranted) {
+        feedback = 'USB audio recording permission is already granted.';
+      } else if (status.isPermanentlyDenied) {
+        await openAppSettings();
+        feedback = 'Enable Microphone permission for Lokal in Android '
+            'settings to remove the USB recording warning.';
+      } else {
+        // User explicitly selected the USB engine or its permission setting.
+        // Lokal does not initialize a microphone recorder.
+        status = await Permission.microphone.request();
+        feedback = status.isGranted
+            ? 'Permission granted. The USB recording warning should no '
+                'longer appear; Android may still request USB access.'
+            : 'Permission not granted. USB playback remains available, '
+                'but Android may show its recording warning.';
+      }
+      if (mounted) setState(() => _usbRecordPermissionStatus = status);
+    } catch (error) {
+      feedback = 'Could not request USB recording permission: $error';
+    } finally {
+      if (mounted) setState(() => _usbRecordPermissionInProgress = false);
+    }
+    if (context.mounted && feedback != null) {
+      LokalToast.show(context, feedback, duration: const Duration(seconds: 5));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +206,33 @@ class _Uac2PreferencesSectionsState
                 ),
               ),
             _modeStatusRow(diagnostics),
+            if (Platform.isAndroid &&
+                audioEngineAsync.asData?.value ==
+                    AudioEnginePreference.isochronousUsb)
+              LokalSettingRow(
+                label: 'USB audio recording permission',
+                description: _usbRecordPermissionStatus?.isGranted == true
+                    ? 'Granted. USB access permission is handled separately.'
+                    : 'Optional: remove Android’s recording warning for '
+                        'USB DACs that expose an audio input. Lokal does '
+                        'not record audio. Tap to grant permission.',
+                icon: Icons.mic_none_rounded,
+                enabled: !_usbRecordPermissionInProgress,
+                trailing: _usbRecordPermissionInProgress
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : _usbRecordPermissionStatus?.isGranted == true
+                        ? Icon(Icons.check_circle_outline_rounded,
+                            color: context.lokal.accent)
+                        : null,
+                onTap: _usbRecordPermissionInProgress ||
+                        _usbRecordPermissionStatus?.isGranted == true
+                    ? null
+                    : () => _requestUsbRecordPermission(context),
+              ),
             if (audioEngineAsync.asData?.value ==
                 AudioEnginePreference.isochronousUsb)
               LokalSettingRow(
@@ -680,6 +776,13 @@ class _Uac2PreferencesSectionsState
       }
       ref.invalidate(audioEnginePreferenceProvider);
       if (sheet.mounted) Navigator.of(sheet).pop();
+      // Selecting direct USB is an explicit user action. Ask once for the
+      // optional runtime permission, if absent, rather than prompting at
+      // every app launch. A denial never blocks USB playback.
+      if (engine == AudioEnginePreference.isochronousUsb &&
+          Platform.isAndroid && context.mounted) {
+        await _requestUsbRecordPermission(context);
+      }
       if (current != engine && mounted) {
         setState(() => _pendingEngineRestart = true);
       }
