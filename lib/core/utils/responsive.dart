@@ -73,14 +73,13 @@ class Responsive {
     return value * scaleFactor;
   }
 
-  /// Get a text size that respects the user's system accessibility setting.
+  /// Get a width-adaptive base font size.
   ///
-  /// Text is deliberately not width-scaled: combining width scaling with the
-  /// platform TextScaler applies two competing scale rules and can make text
-  /// unexpectedly small or large. Use [scale] for spacing and dimensions;
-  /// Flutter's own Text widgets will also apply the system scaler automatically.
+  /// Do not apply MediaQuery.textScaler here: Flutter's Text widgets apply the
+  /// platform TextScaler themselves. Applying it here too would double-scale
+  /// text for users who increase or reduce the system font size.
   static double textSize(BuildContext context, double baseSize) {
-    return MediaQuery.textScalerOf(context).scale(baseSize);
+    return scale(context, baseSize);
   }
 
   /// Scale a dimension against the available screen width, then keep it within
