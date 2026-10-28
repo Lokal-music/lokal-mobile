@@ -317,8 +317,26 @@ class QueuePreResolver {
     // engine stop and add-on initialization. Foreground completion will
     // schedule prefetch again after the queue settles.
     if (_currentNeedsForeground) {
-      // Existing stagger slots can stay scheduled. Their callback checks
-      // this same reservation and will defer until foreground completes.
+      if (host.currentIndex == 0) {
+        // Starting a *new* playlist or AutoQueue at index zero must also
+        // preempt prefetch jobs left from the previous queue. Each Morneye
+        // download owns a QuickJS runtime, so those stale jobs can exhaust
+        // the first song's CPU/network budget before it even begins.
+        final selectedId = _currentId();
+        for (final entry in _running.entries.toList()) {
+          if (entry.key != selectedId && !entry.value.onDemand) {
+            _running.remove(entry.key)?.stop();
+          }
+        }
+        for (final entry in _timers.entries.toList()) {
+          if (entry.key != selectedId) {
+            entry.value.cancel();
+            _timers.remove(entry.key);
+          }
+        }
+      }
+      // During a normal skip, keep already-running prefetch work. Existing
+      // stagger callbacks still check this reservation before launching.
       return const [];
     }
     // Never disable the entire next-four preload window while a live FLAC
