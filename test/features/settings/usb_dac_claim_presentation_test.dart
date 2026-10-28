@@ -102,6 +102,40 @@ void main() {
       ), same(live));
     });
   });
+  group('USB DAC row selection with synthetic vs live statuses', () {
+    test('selected, detected-only device retries selection instead of disconnect', () {
+      expect(shouldDisconnectUsbDacOnTap(
+        isConnected: true,
+        isSelected: true,
+        hasLiveStatus: false,
+      ), isFalse);
+    });
+
+    test('selected DAC with an actual live connection can disconnect', () {
+      expect(shouldDisconnectUsbDacOnTap(
+        isConnected: true,
+        isSelected: true,
+        hasLiveStatus: true,
+      ), isTrue);
+    });
+
+    test('unselected detected DAC is selected first, never disconnected', () {
+      expect(shouldDisconnectUsbDacOnTap(
+        isConnected: true,
+        isSelected: false,
+        hasLiveStatus: true,
+      ), isFalse);
+    });
+
+    test('selected but disconnected DAC cannot trigger disconnect', () {
+      expect(shouldDisconnectUsbDacOnTap(
+        isConnected: false,
+        isSelected: true,
+        hasLiveStatus: true,
+      ), isFalse);
+    });
+  });
+
   group('USB DAC status presentation', () {
     test('connected idle device is not shown as registration failure', () {
       expect(
