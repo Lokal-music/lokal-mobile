@@ -387,8 +387,15 @@ class Uac2Service {
     );
   }
 
-  Future<List<Uac2DeviceInfo>> listDevices() async {
+  Future<List<Uac2DeviceInfo>> listDevices({
+    bool verifyPhysicalAttachment = false,
+  }) async {
     if (Platform.isAndroid) {
+      // On USB transfer failure, the frozen direct session may be stale.
+      // A forced query reads UsbManager's live inventory without opening or
+      // claiming an interface; only use it when diagnosing an already failed
+      // stream, never in the normal hot playback path.
+      if (verifyPhysicalAttachment) return _listDevicesAndroid();
       final currentPlaybackDevice = _currentAndroidPlaybackDeviceIfReusable(
         requireActivatableDeviceName: false,
       );
@@ -674,6 +681,16 @@ class Uac2Service {
         selectedFormat.sampleRate != format.sampleRate ||
         selectedFormat.bitDepth != format.bitDepth ||
         selectedFormat.channels != format.channels;
+    if (usingFallbackFormat && isBitPerfectEnabledSync) {
+      devLog(
+        'Uac2Service.prepareAndroidExperimentalUsbPlayback: refusing '
+        'non-exact format during bit-perfect playback '
+        '(requested ${format.sampleRate}Hz/${format.bitDepth}-bit/'
+        '${format.channels}ch, candidate ${selectedFormat.sampleRate}Hz/'
+        '${selectedFormat.bitDepth}-bit/${selectedFormat.channels}ch)',
+      );
+      return false;
+    }
     if (usingFallbackFormat) {
       devLog(
         'Uac2Service.prepareAndroidExperimentalUsbPlayback: using fallback '
