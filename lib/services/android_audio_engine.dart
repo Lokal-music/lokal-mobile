@@ -337,6 +337,87 @@ class AndroidAudioEngine implements AudioEngine {
   bool get isSingleTrackOnly => _loadedSingleTrackOnly;
   bool get isCrossfadeActive => _crossfadeConfigProvider().enabled;
 
+  /// Collapse a previously restored/full native playlist when a network,
+  /// pending or 65th entry makes the logical queue on-demand. Retain the
+  /// decoder, current source and position: the native sequence must not carry
+  /// stale slots after shuffle or play unexpected entries automatically.
+  ///
+  /// [concatenated] is the sequence originally handed to setAudioSource.
+  /// Fast-start restoration instead adds sources directly to AudioPlayer, so
+  /// that path must remove them through the player API.
+  Future<bool> enterOnDemandQueueMode({
+    just_audio.ConcatenatingAudioSource? concatenated,
+  }) async {
+    final restoring = _sequenceRestoreCompletion;
+    if (restoring != null) await restoring.future;
+    final player = _player;
+    final active = _loadedTrack;
+    if (player == null || active == null) return false;
+    if (player.sequence.isEmpty) return false;
+    if (player.sequence.length == 1) {
+      _loadedSingleTrackOnly = true;
+      _playlistSignature = const <String>[];
+      return true;
+    }
+
+    final nativeIndex = player.currentIndex;
+    if (nativeIndex == null || nativeIndex < 0 ||
+        nativeIndex >= player.sequence.length) return false;
+
+    _restoringFastStartPlaylist = true;
+    try {
+      if (concatenated != null &&
+          concatenated.children.length == player.sequence.length) {
+        if (nativeIndex + 1 < concatenated.children.length) {
+          await concatenated.removeRange(
+              nativeIndex + 1, concatenated.children.length);
+        }
+        if (nativeIndex > 0) {
+          await concatenated.removeRange(0, nativeIndex);
+        }
+      } else {
+        if (nativeIndex + 1 < player.sequence.length) {
+          await player.removeAudioSourceRange(
+              nativeIndex + 1, player.sequence.length);
+        }
+        if (nativeIndex > 0) {
+          await player.removeAudioSourceRange(0, nativeIndex);
+        }
+      }
+      _loadedSingleTrackOnly = true;
+      _playlistSignature = const <String>[];
+      devLog('[Playback] Collapsed native playlist to active track for '
+          'on-demand queue');
+      return true;
+    } catch (error) {
+      // A partially trimmed Media3 sequence must not be reused against a
+      // reordered logical queue. Restore just the currently audible item.
+      devLog('[Playback] Native queue collapse failed, restoring active '
+          'track only: $error');
+      try {
+        final position = player.position;
+        final wasPlaying = player.playing;
+        final source = await _sourceBuilder(active);
+        await player.setAudioSource(
+          source, initialPosition: position,
+        ).timeout(const Duration(seconds: 30));
+        if (wasPlaying) {
+          unawaited(player.play().catchError((Object _) {}));
+        }
+        _loadedSingleTrackOnly = true;
+        _playlistSignature = const <String>[];
+        return true;
+      } catch (fallbackError) {
+        _sourceFailed = true;
+        devLog('[Playback] Native queue collapse recovery failed: '
+            '$fallbackError');
+        return false;
+      }
+    } finally {
+      _restoringFastStartPlaylist = false;
+    }
+  }
+
   /// Expand a fast-started *single source* into the full playlist in place.
   /// Unlike setAudioSource(), insertAudioSources preserves the live decoder,
   /// playing state and position. The caller performs this asynchronously,
@@ -392,6 +473,8 @@ class AndroidAudioEngine implements AudioEngine {
           )) return false;
 
       _restoringFastStartPlaylist = true;
+      final completed = Completer<void>();
+      _sequenceRestoreCompletion = completed;
       // Followed by preceding tracks: the existing track stays the active
       // source, with its logical index shifted to match the full playlist.
       if (after.isNotEmpty) await player.addAudioSources(after);
@@ -409,6 +492,8 @@ class AndroidAudioEngine implements AudioEngine {
     } finally {
       if (_restoringFastStartPlaylist) {
         _restoringFastStartPlaylist = false;
+        _sequenceRestoreCompletion?.complete();
+        _sequenceRestoreCompletion = null;
         // A failed partial insert cannot be treated as a valid playlist.
         // Retain manual-completion mode and force a fresh sequence on the
         // next track instead of accidentally repeating/skipping wrong songs.
@@ -424,6 +509,7 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   bool _restoringFastStartPlaylist = false;
+  Completer<void>? _sequenceRestoreCompletion;
 
   final StreamController<PlaybackState> _controller =
       StreamController<PlaybackState>.broadcast();
