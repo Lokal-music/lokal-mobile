@@ -37,7 +37,7 @@ enum LokalSettingsGroup {
   ),
   about(
     'About',
-    'Version, what’s new, help, licences and logs',
+    'Version, what’s new, licences and logs',
     Icons.info_outline_rounded,
   ),
 
