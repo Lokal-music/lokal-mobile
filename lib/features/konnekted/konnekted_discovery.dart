@@ -810,6 +810,23 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   found.id,
                   quality: quality,
                   forPlayback: !forDownload && !found.atmosDownload,
+                  trackHint: morneyeSelectedTrackHint(
+                    id: found.id,
+                    title: found.title,
+                    artist: found.artist,
+                    durationMs: found.duration?.inMilliseconds,
+                  ),
+                  onResolutionStage: (stage) {
+                    if (finished) return;
+                    final detail = switch (stage) {
+                      'initializing' => 'Starting',
+                      'metadata' => 'Checking metadata on',
+                      'availability' => 'Verifying recording on',
+                      'preparing_media' => 'Resolving audio from',
+                      _ => 'Preparing',
+                    };
+                    onStatus?.call('${detail} ${addon.displayName}…');
+                  },
                   // Even an explicit Qobuz Save (live == null) needs the
                   // host's measured byte progress. The guest's initial 5%
                   // only means its download ticket is being resolved.
