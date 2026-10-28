@@ -20,6 +20,7 @@ import 'package:flick/features/milestone/screens/milestones_screen.dart';
 import 'package:flick/features/recap/screens/listening_recap_screen.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
 import 'package:flick/features/whats_new/widgets/whats_new_bottom_sheet.dart';
+import 'package:flick/features/manual/screens/manual_screen.dart';
 import 'package:flick/providers/app_preferences_provider.dart';
 import 'package:flick/providers/lastfm_provider.dart';
 import 'package:flick/providers/listenbrainz_provider.dart';
@@ -321,12 +322,7 @@ class _KonnektedYouState extends ConsumerState<KonnektedYou> {
                 label: lokalText('Help'),
                 description: lokalText('Every control, explained.'),
                 icon: Icons.help_outline_rounded,
-                onTap: () => navigate(
-                  const KonnektedDestination.settingsAt(
-                    LokalSettingsGroup.about,
-                    section: 'Help',
-                  ),
-                ),
+                onTap: () => _push(const ManualScreen()),
               ),
               LokalSettingLink(
                 label: lokalText('About'),
