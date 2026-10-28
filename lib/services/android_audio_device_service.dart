@@ -81,6 +81,19 @@ class AndroidPlaybackDeviceInfo {
   );
 }
 
+/// Prevent identical Android route polls from generating session-change events.
+@visibleForTesting
+bool sameAndroidPlaybackDeviceSnapshot(
+  AndroidPlaybackDeviceInfo first,
+  AndroidPlaybackDeviceInfo second,
+) =>
+    first.hasUsbDac == second.hasUsbDac &&
+    first.hasAttachedUac2Device == second.hasAttachedUac2Device &&
+    first.routeType == second.routeType &&
+    first.routeLabel == second.routeLabel &&
+    first.manufacturer == second.manufacturer &&
+    first.model == second.model;
+
 class AndroidAudioDeviceService {
   AndroidAudioDeviceService._();
 
@@ -168,15 +181,21 @@ class AndroidAudioDeviceService {
       final raw = await _channel.invokeMapMethod<Object?, Object?>(
         'getPlaybackDeviceInfo',
       );
-      final info = raw == null
-          ? AndroidPlaybackDeviceInfo.unknown
-          : AndroidPlaybackDeviceInfo.fromMap(raw);
-      deviceInfoNotifier.value = info;
-      return info;
+      // A null or failed route probe does not prove a physical USB detach.
+      // A refresh may also have started *before* Rust acquired direct USB;
+      // publishing its late result would reopen route selection mid-stream.
+      if (Uac2Service.instance.shouldFreezeAndroidDirectUsbSessionQueries ||
+          raw == null) {
+        return deviceInfoNotifier.value;
+      }
+      final info = AndroidPlaybackDeviceInfo.fromMap(raw);
+      if (!sameAndroidPlaybackDeviceSnapshot(deviceInfoNotifier.value, info)) {
+        deviceInfoNotifier.value = info;
+      }
+      return deviceInfoNotifier.value;
     } catch (e) {
       devLog('AndroidAudioDeviceService.refresh failed: $e');
-      deviceInfoNotifier.value = AndroidPlaybackDeviceInfo.unknown;
-      return AndroidPlaybackDeviceInfo.unknown;
+      return deviceInfoNotifier.value;
     }
   }
 }
