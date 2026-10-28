@@ -205,6 +205,28 @@ void main() {
     });
   });
 
+  group('manual USB restart recovery classification', () {
+    test('does not repeat a known unsupported PCM format', () {
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('Track cannot be restored over direct USB '
+            '(resolved engine: NORMAL_ANDROID)'),
+        fallbackReason: 'track format 44100Hz/16-bit is unsupported by this DAC',
+      ), isFalse);
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('No isochronous OUT endpoint can carry '
+            '44100 Hz / 16-bit / 2 ch'),
+      ), isFalse);
+    });
+    test('still retries transient URB failure and stale USB handle', () {
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('libusb_submit_transfer failed with code -6'),
+      ), isTrue);
+      expect(shouldRetryDirectUsbManualRestart(
+        error: StateError('DAC did not reappear in Android USB inventory'),
+      ), isTrue);
+    });
+  });
+
   group('direct USB transfer recovery classification', () {
     test('libusb I/O -1, busy -6 and URB failure permit bounded reset', () {
       expect(
