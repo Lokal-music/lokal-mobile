@@ -5463,10 +5463,6 @@ class PlayerService {
         _sessionManager.clearFallbackReason();
         return engineForSong;
       case AudioEngineType.usbDacExperimental:
-        await _releaseAndroidManagedAudioResources(
-          reason: 'before direct USB initialization',
-        );
-
         var trackFormat = _deriveUac2FormatFromSong(song);
         if (trackFormat == null) {
           final resolvedPath = await _resolveRustPath(song);
@@ -5512,6 +5508,45 @@ class PlayerService {
           }
         }
 
+        // Check the DAC's *actual alternate settings* before stopping the
+        // healthy current USB stream. This is a song-format incompatibility,
+        // not a broken USB transport or a reason to blacklist the DAC.
+        // Never downconvert 24-bit to a 16-bit alternate in bit-perfect mode.
+        if (!trackFormat.isDsdStream &&
+            _uac2Service.isBitPerfectEnabledSync) {
+          final supported =
+              await _uac2Service.suggestAndroidExperimentalUsbOutputFormat(
+            requested: trackFormat,
+          );
+          if (!exactDirectUsbFormatSupported(trackFormat, supported)) {
+            AppLog.instance.add('[USB] Track-only Android fallback: '
+                '${trackFormat.sampleRate}Hz/${trackFormat.bitDepth}-bit/'
+                '${trackFormat.channels}ch is unavailable on this DAC; '
+                'will retry direct USB for the next recording');
+            if (_sessionManager.initializedMode ==
+                    AudioEngineType.usbDacExperimental &&
+                _rustAudioService.isInitialized) {
+              await _rustAudioService.stop();
+            }
+            await _uac2Service.releaseAndroidDirectUsbRuntime();
+            await _rustAudioService.setHighResMode(false);
+            _usbIncompatibleTrackKey = _usbTrackKey(song);
+            await _sessionManager.recordFallback(
+              requestedMode: normalizedEngine,
+              fallbackMode: AudioEngineType.normalAndroid,
+              reason: 'track format ${trackFormat.sampleRate}Hz/'
+                  '${trackFormat.bitDepth}-bit is unsupported by this DAC '
+                  '(track-specific; retry on next recording)',
+            );
+            return AudioEngineType.normalAndroid;
+          }
+        }
+
+        // Only retire the Android player after the candidate format has
+        // passed the DAC compatibility check.
+        await _releaseAndroidManagedAudioResources(
+          reason: 'before direct USB initialization',
+        );
         final alreadyInUsbMode =
             _sessionManager.initializedMode ==
                 AudioEngineType.usbDacExperimental &&
