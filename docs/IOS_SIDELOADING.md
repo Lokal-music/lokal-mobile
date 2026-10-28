@@ -23,17 +23,18 @@ is required to perform these installation and acceptance steps.
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
 The current independently verified engineering checkpoint is
-[build 67](https://github.com/lokal-music/lokal-mobile/actions/runs/40551780392),
-through reviewed #261, passing both complete iOS 18.6 and 26.0 suites on separate
-hosted Macs. The artifact is `Lokal-iPhone-engineering-unsigned-67-attempt1`.
+[build 74](https://github.com/lokal-music/lokal-mobile/actions/runs/40672723535),
+through reviewed #272 plus adaptive Rust polling and coherent paused persistence,
+passing both complete iOS 18.6 and 26.0 suites on separate hosted Macs.
+The artifact is `Lokal-iPhone-engineering-unsigned-74-attempt1`.
 Its IPA SHA-256 is
-`bf8b3cf557b433a7eed74610a2865dd68997dffbec9a44ebb69974fdd9b2ba10`.
+`69417b9c9c560a2748847b3b519bfe1a2ccf2b38b83dd1e28901bd70d126cad4`.
 All 34 arm64 iOS binaries, 26 matching native symbol bundles, Dart AOT symbols,
-notices and 2,239 exported source files are retained/rechecked. Source/checksums
+notices and 2,262 exported source files are retained/rechecked. Source/checksums
 and limits are recorded in [the evidence ledger](IOS_PORT.md). Later
-through-#272 source has separate host/native gates and is not included in this IPA.
+through-#290 source has separate host/native gates and is not included in this IPA.
 The engineering IPA is saved after binary inspection, before runtime tests;
-read the associated run's result before choosing a newer artifact. Build 67 also
+read the associated run's result before choosing a newer artifact. Build 74 also
 passes the real WebKit settled-seek, clock/frame and repeated-reset gates on
 both runtimes. It packages an iOS 16+ app; actual iOS 16 runtime
 acceptance is still open. Physical iPhone installation, background

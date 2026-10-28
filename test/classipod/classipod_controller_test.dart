@@ -17,6 +17,7 @@ class _Service implements PlayerService {
   Future<void> play(
     Song song, {
     List<Song>? playlist,
+    int? playlistIndex,
     PlaybackContext? context,
   }) => recorder.play(song, playlist!, context!);
   @override

@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flick/services/motion_art/shared_motion_playback.dart';
+import 'package:flick/services/motion_art/motion_art_memory_pressure.dart';
 
 /// Renders Apple Music Motion Art for an album while falling back to [fallback]
 /// (typically the Ken Burns [AnimatedAlbumArt] or a static artwork widget).
@@ -146,11 +147,14 @@ class _MotionArtViewState extends State<MotionArtView>
   bool _routeIsCurrent = true;
   bool _tickerEnabled = true;
   bool _loading = false;
+  bool get _suspendedForMemoryPressure =>
+      MotionArtMemoryPressure.instance.isSuspended;
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   bool get _canPlay =>
       widget.enabled &&
       widget.playbackActive &&
       !_suppressed &&
+      !_suspendedForMemoryPressure &&
       _routeIsCurrent &&
       _tickerEnabled &&
       _lifecycle == AppLifecycleState.resumed;
@@ -179,7 +183,13 @@ class _MotionArtViewState extends State<MotionArtView>
   @override
   void initState() {
     super.initState();
+    // The process observer is already registered at bootstrap; starting here
+    // also keeps isolated widget tests consistent.
+    MotionArtMemoryPressure.instance.start();
     WidgetsBinding.instance.addObserver(this);
+    MotionArtMemoryPressure.instance.suspended.addListener(
+      _onMemoryPressureChanged,
+    );
     movingCoverRevision.addListener(_onRevisionChanged);
     SecureSpotifyTokenStore.sessionRevision.addListener(_onRevisionChanged);
     if (widget.enabled) {
@@ -238,6 +248,19 @@ class _MotionArtViewState extends State<MotionArtView>
       return;
     }
     _syncPlayback();
+  }
+
+  void _onMemoryPressureChanged() {
+    if (!mounted) return;
+    if (_suspendedForMemoryPressure) {
+      // Optional video decoding must release its buffers before music.
+      // Drop the shared lease immediately: the 500 ms handoff is only for
+      // normal mini/full-player transitions, not memory pressure.
+      _teardown(immediate: true);
+    } else {
+      _beginLoad();
+    }
+    setState(() {});
   }
 
   void _syncPlayback() {
@@ -302,6 +325,9 @@ class _MotionArtViewState extends State<MotionArtView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    MotionArtMemoryPressure.instance.suspended.removeListener(
+      _onMemoryPressureChanged,
+    );
     movingCoverRevision.removeListener(_onRevisionChanged);
     SecureSpotifyTokenStore.sessionRevision.removeListener(_onRevisionChanged);
     AnimatedArtworkService.instance.revision.removeListener(_onRevisionChanged);
@@ -310,7 +336,7 @@ class _MotionArtViewState extends State<MotionArtView>
     super.dispose();
   }
 
-  void _teardown() {
+  void _teardown({bool immediate = false}) {
     _generation++;
     _loading = false;
     _timer?.cancel();
@@ -324,17 +350,20 @@ class _MotionArtViewState extends State<MotionArtView>
     final lease = _sharedLease;
     _controller = null;
     _sharedLease = null;
-    unawaited(_disposeVideo(controller, lease: lease));
+    unawaited(_disposeVideo(controller, lease: lease, immediate: immediate));
   }
 
   Future<void> _disposeVideo(
     VideoPlayerController? controller, {
     MotionPlaybackLease<VideoPlayerController>? lease,
+    bool immediate = false,
   }) async {
     if (controller == null) return;
     if (lease != null) {
       await lease.release(
         immediate:
+            immediate ||
+            _suspendedForMemoryPressure ||
             _suppressed ||
             _performance ||
             !widget.enabled ||
@@ -370,6 +399,7 @@ class _MotionArtViewState extends State<MotionArtView>
         !_loading &&
         widget.enabled &&
         !_suppressed &&
+        !_suspendedForMemoryPressure &&
         !_reduceMotion &&
         _routeIsCurrent &&
         _lifecycle == AppLifecycleState.resumed) {
@@ -558,7 +588,10 @@ class _MotionArtViewState extends State<MotionArtView>
   Widget build(BuildContext context) {
     Widget present(Widget child, {bool canvas = false}) =>
         widget.presentationBuilder?.call(context, child, canvas) ?? child;
-    if (_suppressed || _performance || !widget.enabled)
+    if (_suppressed ||
+        _suspendedForMemoryPressure ||
+        _performance ||
+        !widget.enabled)
       return present(widget.fallback);
     final controller = _controller;
     if (!_hasVideo || controller == null || !controller.value.isInitialized) {

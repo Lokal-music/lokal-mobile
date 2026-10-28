@@ -1,4 +1,5 @@
 import 'package:flick/models/song.dart';
+import 'package:flick/models/shuffle_mode.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -54,6 +55,37 @@ Future<void> probeIosQueueReorder(
     'paused_current_source_preserved': true,
   };
   await player.clearQueue();
+  // Real native sequence indices must retain a tapped duplicate occurrence,
+  // even when a library alias maps two rows to the exact same Song object.
+  await player.setShuffleMode(ShuffleMode.off);
+  final repeated = [source, next[0], source, next[1]];
+  await player.play(source, playlist: repeated, playlistIndex: 2);
+  await player.pause();
+  await tester.pump(const Duration(milliseconds: 200));
+  expect(player.currentIndex, 2);
+  expect(
+    player.playlist.map((song) => song.id),
+    repeated.map((song) => song.id),
+  );
+  expect(player.upNextNotifier.value.map((song) => song.id), [next[1].id]);
+  await player.previousBySwipe();
+  await player.pause();
+  expect(player.currentIndex, 1);
+  expect(player.currentSongNotifier.value?.id, next[0].id);
+  await player.playFromPlaylistIndex(0);
+  await player.pause();
+  expect(player.currentIndex, 0);
+  expect(player.currentSongNotifier.value?.id, source.id);
+  expect(
+    player.playlist.map((song) => song.id),
+    repeated.map((song) => song.id),
+  );
+  binding.reportData!['full_queue_occurrence_selection'] = {
+    'shared_object_occurrence_index': 2,
+    'ordered_context_preserved': true,
+    'previous_swipe_index': 1,
+    'absolute_history_selection_index': 0,
+  };
   await player.play(source, playlist: [source]);
   await player.pause();
 }

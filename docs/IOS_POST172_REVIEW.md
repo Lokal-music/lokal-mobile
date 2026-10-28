@@ -1,8 +1,9 @@
 # iPhone review of mobile PRs after #172
 
-Current review: **72 merged product PRs after #172 through #272**. The newest
-continuation includes artwork quality/repair, Unicode local-lyrics search,
-background motion-art release and Desktop Copy favorite identity. Reviewed
+Current review: **86 merged product PRs after #172 through #290**. The newest
+continuation includes explicit bilingual lyrics export, Library add actions, full
+queue history/occurrences, source validation and foreground loading priority,
+static Flow artwork and motion-art memory pressure handling. Reviewed
 Android USB changes remain excluded. Each source checkpoint requires its own
 acceptance; review/inclusion does not qualify a physical iPhone release.
 
@@ -875,3 +876,90 @@ information items). Eight new artwork/search/execution-test files pass analysis
 with fatal infos. Enforced lockfile resolution, readiness inventory, actionlint
 and diff checks pass. Native latest-source and physical-device gates remain
 separate. Native Rust, bridge/CocoaPods locks and Android CI state are unchanged.
+
+
+### Reviewed through #290 — 28 October 2026
+
+Fourteen newly merged product PRs bring the reviewed total to **86**. This
+includes formerly open #269. The source checkpoint is merged main
+`31b8901663bce1e67b272852546bbf8412c37a40`; 44 final source/test files and the
+base files needed for overlapping merges were fetched and checked against
+their Git blob hashes. Shared changes are adapted onto the iPhone implementation,
+preserving native request fences, Keychain ownership, localized controls and
+precise lyric/file handling. Android direct USB recovery remains excluded.
+
+| PR / exact merged source | iPhone behavior and adaptation |
+| --- | --- |
+| [269](https://github.com/lokal-music/lokal-mobile/pull/269) / `b8661d64ec15b1482ad4ee1fce4f6fe18bedf429` | Ported shared decoder memory-pressure release and bounded recovery; Android exit diagnostics excluded. |
+| [278](https://github.com/lokal-music/lokal-mobile/pull/278) / `a9cabcb719bc5d8f9c27209ddaf7f139b4ffa8d7` | Original save remains normal tap; explicit long-press selected translation/romaji export, root modal, localized large-text controls. |
+| [279](https://github.com/lokal-music/lokal-mobile/pull/279) / `9a0ff6f95d6dd20b65807aa136a44902598ff847` | Static Flow artwork and narrow playback subscriptions preserve actions and localization without a continuous decorative ticker. |
+| [280](https://github.com/lokal-music/lokal-mobile/pull/280) / `6693352e191ecc844cba73022b44f5098978102b` | Reject explicit and decoded-short HTTP add-on previews; retain iOS asynchronous request retirement fences. |
+| [281](https://github.com/lokal-music/lokal-mobile/pull/281) / `f292491b5c29d99aabe469260cb43719767ddc3d` | Library add menu uses root modal ownership, direct folder picker, playlist/link/M3U actions; fix name-dialog controller lifetime. |
+| [282](https://github.com/lokal-music/lokal-mobile/pull/282) / `adbe1ff1f193b09426813725161438b4b88009ef` | Both transport glyphs animate only on state change, reduced-motion respected; Previous restarts at ten seconds, swipes still navigate. |
+| [283](https://github.com/lokal-music/lokal-mobile/pull/283) / `983f365341b2ce9b88cb8e53c9fbac43d4780e64` | Persist an exact same-origin manifest.json URL in existing secure storage; preserve encoded segments, localized actionable errors. |
+| [284](https://github.com/lokal-music/lokal-mobile/pull/284) / `ef4fa0f0dca99a40d0bb0b6498f895594c198d43` | Excluded: Android direct USB format probing, libusb transport recovery, and DAC registration; no iPhone USB behavior imported. |
+| [285](https://github.com/lokal-music/lokal-mobile/pull/285) / `ac5418b3724acdfea2a6af1ee01bab4492c4fe6c` | Explicit bilingual saves use same-time paired LRC with simultaneous-vocal association tags; preserve original documents, UTF-8 filename limits and millisecond timing. |
+| [286](https://github.com/lokal-music/lokal-mobile/pull/286) / `074857d5bdfa37785b6fa1e284232465a3a48817` | Reserve selected-track resolution ahead of prefetch, cancel stale context lookahead using a context revision; retain native stop fences. |
+| [287](https://github.com/lokal-music/lokal-mobile/pull/287) / `6da7008e14945ee907271377cb3ceb46098e06a0` | Keep full ordered queue and absolute previous occurrences; carry tapped row index through reconstruction and iOS recovery, accessible localized history header and large-text title layout. |
+| [288](https://github.com/lokal-music/lokal-mobile/pull/288) / `8912272516480b481497ebaf3eeff798c6492ea3` | Use the final valid parser without the upstream duplicate tail; apply non-null cached-lines initialization while retaining Unicode local search and revision guards. |
+| [289](https://github.com/lokal-music/lokal-mobile/pull/289) / `136a3c4f2a8025f188ee1971a18323d30b22897e` | Excluded: Android exclusive USB route polling, stream preservation and manual engine restart. |
+| [290](https://github.com/lokal-music/lokal-mobile/pull/290) / `31b8901663bce1e67b272852546bbf8412c37a40` | Excluded: Android track-scoped direct USB format fallback/rearm and verified DAC restart UI. |
+
+The queue and resolver changes require a combined adaptation: selecting a middle
+track no longer rotates it to index zero. A revision identifies a newly replaced
+playback context so old lookahead cannot occupy its first foreground lookup;
+ordinary skips retain useful prefetch. Explicit selection indices also survive
+reconstruction of expired stream handles and aliases that reuse one Song object
+for several playlist rows. The native queue probe exercises a repeated middle
+occurrence, Previous swipe and absolute history selection with the real player.
+That extended native probe awaits this source's hosted build.
+
+The save menu and queue history use bundled-font layout/action checks across all
+eleven languages, dark/light appearances, 200% text and a 320-point width.
+Large-text queue rows put duration below the artist and allow two title lines.
+Host renders are layout evidence, not native iPhone captures. Ordinary saves
+retain the original lyric document; translation/romanization export is explicit.
+No dependencies, Rust/FFI or native audio paths are changed by this continuation.
+
+Build 74 now passes both complete native suites for the **parent stabilization
+source through #272**, including the actual stopped save timer, native paused
+cursor reloads and WebKit reset/replay. Its archive, IPA, 34 binaries, 26 matching
+symbol bundles, notices and 2,262 source files are independently verified.
+It does not include or qualify this newer through-#290 batch.
+
+Validation: **940 combined Flutter regressions pass** for the completed source,
+including both platforms' shared widget contracts, all new parity cases and the
+parent audio/reset/persistence suite. The eight new source/test files pass strict
+analysis. Whole app/integration analysis has no errors (630 warning/information
+items). Enforced lockfile resolution, readiness/localization inventory, actionlint,
+diff checks and 15 Python widget policies pass. The 44 bundled-font host captures
+cover both new menus in all eleven languages and both appearances at 200% text.
+Native acceptance for this batch and physical-device acceptance remain separate
+gates. Android CI remains manually disabled; native Rust/FFI, PCM/DSD/USB source,
+dependency locks and signing/provisioning are unchanged.
+
+
+The selection path preserves an occurrence before any asynchronous source work:
+
+```mermaid
+sequenceDiagram
+    participant Row as Library row
+    participant Provider as Player notifier
+    participant Service as Player service
+    participant Resolver as Source resolver
+    participant Native as iOS audio engine
+    Row->>Provider: Play(song, ordered list, tapped index)
+    Provider->>Service: Preserve occurrence index
+    Service->>Service: Capture iOS selection generation and index
+    Service->>Resolver: Resolve selected source before lookahead
+    Note over Service,Native: Native stop/load awaits remain fenced by request epoch
+    Resolver-->>Service: Playable recording or explicit failure
+    Service->>Native: Load complete ordered context at selected index
+    Native-->>Service: Confirm actual sequence index
+    Service-->>Row: Full history, current occurrence and Up Next
+```
+
+Expired-source reconstruction keeps the original index. A new playback-context
+revision cancels obsolete prefetch even when the selected index is in the middle.
+The separate desktop remote context does not display a previous phone playlist
+as its own history.

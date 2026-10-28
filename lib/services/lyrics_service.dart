@@ -862,7 +862,13 @@ class LyricsService {
       buffer.writeln();
     }
 
+    final timestampCounts = <int, int>{};
     for (final line in lines) {
+      final time = line.timestamp.inMilliseconds;
+      timestampCounts[time] = (timestampCounts[time] ?? 0) + 1;
+    }
+    for (var index = 0; index < lines.length; index++) {
+      final line = lines[index];
       final words = line.words;
       if (words != null && words.isNotEmpty) {
         final enhanced = words
@@ -872,10 +878,13 @@ class LyricsService {
       } else {
         buffer.writeln('${formatTimestamp(line.timestamp)}${line.text}');
       }
-      // Kept the way it's read: unstamped, right under its line.
+      // Portable bilingual LRC pairs share a timestamp in other players too.
       if (line.translation case final translation?
-          when translation.trim().isNotEmpty) {
-        buffer.writeln(translation.trim());
+          when translation.trim().isNotEmpty && translation.trim() != line.text.trim()) {
+        if ((timestampCounts[line.timestamp.inMilliseconds] ?? 0) > 1) {
+          buffer.writeln('[lokaltr:$index]');
+        }
+        buffer.writeln('${formatTimestamp(line.timestamp)}${translation.trim()}');
       }
     }
     return buffer.toString().trimRight();
@@ -1045,6 +1054,11 @@ class LyricsService {
     // line is that line's translation; the rest are notes and credits.
     final plainLines = <LyricsLine>[];
     final translations = <(List<int>, String)>[];
+    // An optional association tag is emitted only for simultaneous vocal
+    // groups, where an otherwise portable timestamped translation would be
+    // indistinguishable from another sung voice.
+    final taggedTranslation = RegExp(r'^\[lokaltr:(\d+)\]$');
+    int? taggedSourceIndex;
     var previous = <int>[]; // indexes the last stamped row made
 
     for (final row in rows) {
@@ -1060,6 +1074,13 @@ class LyricsService {
         continue;
       }
 
+      final marker = taggedTranslation.firstMatch(line.trim());
+      if (marker != null) {
+        taggedSourceIndex = int.tryParse(marker.group(1)!);
+        previous = [];
+        continue;
+      }
+
       final matches = timestampPattern.allMatches(line).toList();
       if (matches.isNotEmpty) {
         hasTimestamps = true;
@@ -1067,6 +1088,23 @@ class LyricsService {
         final words = _extractWords(body, offsetMs);
         final lyricText = body.replaceAll(_wordTimestampPattern, '').trim();
         previous = [];
+        final target = taggedSourceIndex;
+        taggedSourceIndex = null;
+        if (target != null &&
+            target >= 0 &&
+            target < parsedLines.length &&
+            matches.length == 1 &&
+            lyricText.isNotEmpty &&
+            parsedLines[target].translation == null) {
+          final time = _parseTimestamp(matches.single.group(1) ?? '');
+          if (time != null &&
+              parsedLines[target].timestamp.inMilliseconds ==
+                  (time.inMilliseconds + offsetMs).clamp(0, 1 << 62)) {
+            parsedLines[target] =
+                parsedLines[target].withTranslation(lyricText);
+            continue;
+          }
+        }
         for (final match in matches) {
           final parsedTime = _parseTimestamp(match.group(1) ?? '');
           if (parsedTime == null) continue;
@@ -1106,9 +1144,33 @@ class LyricsService {
           }
         }
       }
-      parsedLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      // Bilingual LRC commonly repeats the original timestamp for its
+      // translation. Fold adjacent pairs before sorting so original/subline
+      // ordering survives; leave simultaneous word-timed or 3+ vocal parts
+      // separate. Unstamped translations above remain supported.
+      final bilingualLines = <LyricsLine>[];
+      for (var i = 0; i < parsedLines.length;) {
+        var end = i + 1;
+        while (end < parsedLines.length &&
+            parsedLines[end].timestamp == parsedLines[i].timestamp) {
+          end++;
+        }
+        if (end == i + 2 &&
+            parsedLines[i].translation == null &&
+            parsedLines[i + 1].translation == null &&
+            parsedLines[i + 1].words == null &&
+            parsedLines[i].text.trim() != parsedLines[i + 1].text.trim()) {
+          bilingualLines.add(
+            parsedLines[i].withTranslation(parsedLines[i + 1].text),
+          );
+        } else {
+          bilingualLines.addAll(parsedLines.getRange(i, end));
+        }
+        i = end;
+      }
+      bilingualLines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       return LyricsData(
-        lines: parsedLines,
+        lines: bilingualLines,
         isSynchronized: true,
         source: source,
         rawContent: raw,

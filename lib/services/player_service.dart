@@ -66,6 +66,14 @@ import 'package:flick/services/external_playback_owner.dart';
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/core/utils/dev_log.dart';
 
+/// Standard Previous-button behavior across the full and mini players.
+/// At ten seconds or later restart the active song; earlier presses select
+/// the previous queue entry. Artwork swipes always navigate between tracks.
+const Duration previousButtonRestartThreshold = Duration(seconds: 10);
+
+bool shouldRestartCurrentTrackOnPrevious(Duration position) =>
+    position >= previousButtonRestartThreshold;
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -499,7 +507,13 @@ List<Song> selectAutoplayRecommendations({
 }
 
 class _IosPlaySelection {
-  _IosPlaySelection(this.song, this.playlist, this.selection);
+  _IosPlaySelection(
+    this.song,
+    this.playlist,
+    this.selection, {
+    this.requestedIndex,
+  });
+  final int? requestedIndex;
   Song song;
   List<Song>? playlist;
   final int selection;
@@ -566,6 +580,8 @@ class PlayerService {
   final CastingService _castingService = CastingService.instance;
   final ExternalPlaybackOwner _externalPlaybackOwner = ExternalPlaybackOwner();
   int get playbackIntentRevision => _pendingPlaybackGeneration;
+  int _queueContextRevision = 0;
+  int get queueContextRevision => _queueContextRevision;
   bool get isCasting => _castingService.isActive;
   final ColorExtractionService _colorExtractionService =
       ColorExtractionService();
@@ -789,7 +805,7 @@ class PlayerService {
   AdvanceListOrder _advanceListOrder = AdvanceListOrder.alphabetical;
   AdvanceListOrder get advanceListOrder => _advanceListOrder;
 
-  // Wrap-around queue: tapping a song mid-list queues preceding songs at the end.
+  // Wrap-around navigation at the start; selecting a song retains its full queue.
   final ValueNotifier<bool> wrapAroundQueueNotifier = ValueNotifier(true);
   bool get wrapAroundQueue => wrapAroundQueueNotifier.value;
 
@@ -951,6 +967,19 @@ class PlayerService {
     durationNotifier.value = pending.duration;
     currentSongNotifier.value = pending;
     _playbackManager.updateTrack(pending);
+    final resolver = pendingSongResolver;
+    Future<({Song? song, Object? failure})> resolveSelected() async {
+      try {
+        return (
+          song: resolver == null ? null : await resolver(pending),
+          failure: null,
+        );
+      } catch (error) {
+        return (song: null, failure: error);
+      }
+    }
+
+    final lookup = resolveSelected();
     try {
       if (_castingService.isActive) {
         await _castingService.delegatePause();
@@ -961,19 +990,15 @@ class PlayerService {
       if (IosLocalAudioRequests.isRetired(e)) rethrow;
       _debugLog('[Playback] stop before looking up ${pending.title}: $e');
     }
-    final resolver = pendingSongResolver;
     if (generation != _pendingPlaybackGeneration ||
         _pendingPlaybackId != pending.id)
       return;
     unawaited(() async {
-      Song? resolved;
-      Object? failure;
-      try {
-        resolved = resolver == null ? null : await resolver(pending);
-      } catch (e) {
-        failure = e;
-        _debugLog('[Playback] lookup failed for ${pending.title}: $e');
-      }
+      final result = await lookup;
+      final resolved = result.song;
+      final failure = result.failure;
+      if (failure != null)
+        _debugLog('[Playback] lookup failed for ${pending.title}: $failure');
       // Something else was asked for meanwhile: it owns playback now.
       if (generation != _pendingPlaybackGeneration ||
           _pendingPlaybackId != pending.id)
@@ -1732,6 +1757,7 @@ class PlayerService {
   }
 
   void _replacePlaybackContext(List<Song> songs) {
+    _queueContextRevision++;
     _audioSourceSequence = null;
     _playlist
       ..clear()
@@ -2328,7 +2354,11 @@ class PlayerService {
       if (requested != null &&
           requested.selection == _selectionGeneration &&
           !requested.prepared) {
-        _selectPlaybackSong(requested.song, playlist: requested.playlist);
+        _selectPlaybackSong(
+          requested.song,
+          playlist: requested.playlist,
+          indexHint: requested.requestedIndex,
+        );
         requested.prepared = true;
       }
       final queued = _songAtCurrentIndex();
@@ -2646,6 +2676,12 @@ class PlayerService {
       sourcesBuilder: _buildAudioSources,
       sourceBuilder: _buildAudioSourceForSong,
       playlistProvider: () => List<Song>.unmodifiable(_playlist),
+      selectedPlaylistIndexProvider: () => _currentIndex,
+      onNativePlaylistIndex: (index) {
+        // A delayed old sequence must not undo the staged iPhone selection.
+        if (Platform.isIOS && _pendingPresentationTrackId != null) return;
+        if (index >= 0 && index < _playlist.length) _setCurrentIndex(index);
+      },
       configurePlayer: _configureAndroidPlayer,
       disposeEngine: _disposeAndroidEngine,
       retireStalledPlayer: _retireStalledAndroidPlayer,
@@ -5361,12 +5397,21 @@ class PlayerService {
       return;
     }
 
-    final resolvedIndex = _playlist.indexWhere((entry) => entry.id == song.id);
-    if (resolvedIndex == -1 || resolvedIndex == _currentIndex) {
+    // Duplicate IDs represent distinct queue occurrences. The selected
+    // position is authoritative until native Media3 reports an actual index
+    // transition; an ID-only lookup would jump to the first occurrence.
+    if (_currentIndex >= 0 &&
+        _currentIndex < _playlist.length &&
+        _playlist[_currentIndex].id == song.id) {
       return;
     }
-
-    _setCurrentIndex(resolvedIndex);
+    final exact = _playlist.indexWhere((entry) => identical(entry, song));
+    final resolvedIndex = exact >= 0
+        ? exact
+        : _playlist.indexWhere((entry) => entry.id == song.id);
+    if (resolvedIndex >= 0 && resolvedIndex != _currentIndex) {
+      _setCurrentIndex(resolvedIndex);
+    }
   }
 
   void _rememberRestoredPlaybackContext(Song song, Duration position) {
@@ -5742,17 +5787,25 @@ class PlayerService {
   Future<void> play(
     Song song, {
     List<Song>? playlist,
+    int? playlistIndex,
     PlaybackContext? context,
   }) {
     final selection = ++_selectionGeneration;
     _debugLog('[UI] tap(${song.id})');
     _cancelPendingPlayback();
     final pauseRevision = _iosPauseRevision;
+    // Capture the occurrence before re-resolution can reconstruct Song objects.
+    final requestedIndex = playlist != null
+        ? selectedPlaylistIndex(playlist, song, indexHint: playlistIndex)
+        : playlistIndex == null
+        ? null
+        : selectedPlaylistIndex(_playlist, song, indexHint: playlistIndex);
     final selectionIntent = Platform.isIOS && !_castingService.isActive
         ? _IosPlaySelection(
             song,
             playlist == null ? null : List<Song>.unmodifiable(playlist),
             selection,
+            requestedIndex: requestedIndex,
           )
         : null;
     if (selectionIntent != null) {
@@ -5761,7 +5814,11 @@ class PlayerService {
       if (phase == LocalAudioPhase.recovering ||
           phase == LocalAudioPhase.lost ||
           phase == LocalAudioPhase.blocked) {
-        _selectPlaybackSong(song, playlist: selectionIntent.playlist);
+        _selectPlaybackSong(
+          song,
+          playlist: selectionIntent.playlist,
+          indexHint: selectionIntent.requestedIndex,
+        );
         selectionIntent.prepared = true;
         _pendingPresentationTrackId = song.id;
         _publishRestoredPlaybackState(song, position: Duration.zero);
@@ -5781,6 +5838,7 @@ class PlayerService {
       await _playInternal(
         song,
         playlist: selectionIntent?.playlist ?? playlist,
+        playlistIndex: requestedIndex,
         selectionIntent: selectionIntent,
       );
     }, remoteOutput: _castingService.isActive);
@@ -5912,19 +5970,30 @@ class PlayerService {
     });
   }
 
-  List<Song> _wrapAroundPlaylist(List<Song> songs, Song current) {
-    final start = songs.indexWhere((s) => s.id == current.id);
-    if (start <= 0) return songs;
-    return [...songs.sublist(start), ...songs.sublist(0, start)];
+  /// Keep a selected queue occurrence through source re-resolution.
+  static int selectedPlaylistIndex(
+    List<Song> songs,
+    Song selected, {
+    int? indexHint,
+  }) {
+    if (indexHint != null &&
+        indexHint >= 0 &&
+        indexHint < songs.length &&
+        songs[indexHint].id == selected.id) {
+      return indexHint;
+    }
+    final exact = songs.indexWhere((entry) => identical(entry, selected));
+    return exact >= 0
+        ? exact
+        : songs.indexWhere((entry) => entry.id == selected.id);
   }
 
-  void _selectPlaybackSong(Song song, {List<Song>? playlist}) {
+  void _selectPlaybackSong(Song song, {List<Song>? playlist, int? indexHint}) {
     if (playlist != null) {
-      final sourcePlaylist = wrapAroundQueueNotifier.value
-          ? _wrapAroundPlaylist(playlist, song)
-          : playlist;
-      _replacePlaybackContext(sourcePlaylist);
-      _setCurrentIndex(_playlist.indexWhere((entry) => entry.id == song.id));
+      _replacePlaybackContext(playlist);
+      _setCurrentIndex(
+        selectedPlaylistIndex(_playlist, song, indexHint: indexHint),
+      );
       if (isShuffleNotifier.value) {
         final shuffled = buildShufflePlaybackOrder(
           songs: _playlist,
@@ -5940,8 +6009,10 @@ class PlayerService {
       }
       _insertQueuedEntriesAfterCurrent();
     } else {
-      final existingIndex = _playlist.indexWhere(
-        (entry) => entry.id == song.id,
+      final existingIndex = selectedPlaylistIndex(
+        _playlist,
+        song,
+        indexHint: indexHint,
       );
       if (existingIndex == -1) {
         _replacePlaybackContext([song]);
@@ -5977,9 +6048,21 @@ class PlayerService {
   Future<void> _playInternal(
     Song song, {
     List<Song>? playlist,
+    int? playlistIndex,
     _IosPlaySelection? selectionIntent,
   }) => _runForCurrentOutput(() async {
     final intent = _pendingPlaybackGeneration;
+    final originalPlaylist = playlist;
+    final requestedIndex =
+        selectionIntent?.requestedIndex ??
+        playlistIndex ??
+        (originalPlaylist != null
+            ? selectedPlaylistIndex(originalPlaylist, song)
+            : _currentIndex >= 0 &&
+                  _currentIndex < _playlist.length &&
+                  identical(_playlist[_currentIndex], song)
+            ? _currentIndex
+            : null);
     if (!_castingService.isActive) {
       await IosLocalAudioRequests.wait(_externalPlaybackOwner.releaseCurrent());
     }
@@ -6050,7 +6133,11 @@ class PlayerService {
       _crossfadeUiHandoffFromPath = null;
 
       if (selectionIntent?.prepared != true) {
-        _selectPlaybackSong(song, playlist: playlist);
+        _selectPlaybackSong(
+          song,
+          playlist: playlist,
+          indexHint: requestedIndex,
+        );
         if (selectionIntent != null) selectionIntent.prepared = true;
       }
 
@@ -7073,7 +7160,7 @@ class PlayerService {
     );
   }
 
-  /// Swipe/slide to previous: always goes to previous track, ignoring >3s restart rule.
+  /// Swipe/slide to previous: always goes to previous track, ignoring the 10s restart rule.
   /// Use this for carousel swipe gestures.
   Future<void> previousBySwipe() => previous(allowRestart: false);
 
@@ -7088,7 +7175,8 @@ class PlayerService {
       return;
     }
 
-    if (allowRestart && positionNotifier.value.inSeconds > 3) {
+    if (allowRestart &&
+        shouldRestartCurrentTrackOnPrevious(positionNotifier.value)) {
       await seek(Duration.zero);
       return;
     }
@@ -7144,7 +7232,7 @@ class PlayerService {
     if (_playlist.isEmpty) return null;
     // For swipe/slide (previousBySwipe / allowRestart=false) the peek always
     // shows the previous track so the carousel can slide. For the control
-    // button (allowRestart=true) the 3s restart is handled inside
+    // button (allowRestart=true) the 10s restart is handled inside
     // _previousInternal and FullPlayerScreen avoids animating when it would
     // restart, so peek remains unconditional for the slide gesture.
     if (_currentIndex > 0) return _playlist[_currentIndex - 1];
@@ -7882,6 +7970,15 @@ class PlayerService {
     _notifyQueueChanged();
     _notifyUpNextChanged();
     _debounceQueueChanged();
+  }
+
+  Future<void> playFromPlaylistIndex(int index) {
+    _cancelPendingPlayback();
+    return _enqueuePlaybackRequest(() async {
+      if (index < 0 || index >= _playlist.length) return;
+      _setCurrentIndex(index);
+      await _playSongAtCurrentIndex();
+    }, remoteOutput: _castingService.isActive);
   }
 
   Future<void> playFromUpNextIndex(int index) {

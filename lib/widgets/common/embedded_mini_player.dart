@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/utils/navigation_helper.dart';
 import 'package:flick/providers/providers.dart';
+import 'package:flick/services/player_service.dart'
+    show shouldRestartCurrentTrackOnPrevious;
 import 'package:flick/providers/mini_player_config_provider.dart';
 import 'package:flick/widgets/common/mini_player_bar.dart';
 
@@ -76,8 +78,12 @@ class _EmbeddedMiniPlayerState extends ConsumerState<EmbeddedMiniPlayer> {
       },
       onPlayPause: () => ref.read(playerProvider.notifier).togglePlayPause(),
       onPrevious: () {
-        _songChangeDirection = 1;
-        ref.read(playerProvider.notifier).previous(allowRestart: false);
+        // A tap past the restart threshold does not change artwork; keep
+        // the pending slide direction clear for the next genuine track skip.
+        _songChangeDirection = shouldRestartCurrentTrackOnPrevious(
+          ref.read(playerProvider).position,
+        ) ? 0 : 1;
+        ref.read(playerProvider.notifier).previous();
       },
       onNext: () {
         _songChangeDirection = -1;

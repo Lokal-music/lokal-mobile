@@ -537,7 +537,7 @@ class _LokalSongBrowserState extends ConsumerState<LokalSongBrowser> {
               return LokalTrackRow(
                 song: song,
                 subtitle: widget.subtitleOf?.call(song),
-                onTap: () => lokalPlay(context, ref, songs, start: song),
+                onTap: () => lokalPlay(context, ref, songs, start: song, startIndex: index),
                 onRemove: widget.onRemove == null
                     ? null
                     : () => widget.onRemove!(song),

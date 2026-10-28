@@ -1,10 +1,10 @@
+import 'package:flutter/services.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/flow/domain/flow_models.dart';
 import 'package:flick/features/flow/flow_hero.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flick/l10n/l10n.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget heroApp({
@@ -13,14 +13,15 @@ Widget heroApp({
   required VoidCallback onSave,
   required VoidCallback onTune,
   bool playing = false,
+  bool disableAnimations = true,
   double scale = 1,
 }) => MaterialApp(
   theme: LokalTheme.build(tokens),
   home: MediaQuery(
     data: MediaQueryData(
-      textScaler: TextScaler.linear(scale),
       size: const Size(320, 650),
-      disableAnimations: true,
+      disableAnimations: disableAnimations,
+      textScaler: TextScaler.linear(scale),
     ),
     child: Scaffold(
       body: SingleChildScrollView(
@@ -52,6 +53,7 @@ void main() {
       await (FontLoader(family)..addFont(rootBundle.load(asset))).load();
     }
   });
+
   testWidgets(
     'Flow hero fits every locale at large text without losing actions',
     (tester) async {
@@ -181,4 +183,58 @@ void main() {
     expect(tester.getSize(find.byType(FlowInfinityOrb)).width, 88);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Flow orb never schedules continuous frames with motion enabled',
+    (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 650)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      var playCalls = 0;
+      final tokens = LokalTokens.resolve(LokalThemeId.dark);
+
+      await tester.pumpWidget(
+        heroApp(
+          tokens: tokens,
+          playing: false,
+          disableAnimations: false,
+          onPlay: () => playCalls++,
+          onSave: () {},
+          onTune: () {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      final orb = find.byType(FlowInfinityOrb);
+      expect(orb, findsOneWidget);
+      expect(
+        find.descendant(of: orb, matching: find.byType(AnimatedBuilder)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: orb, matching: find.byType(Transform)),
+        findsNothing,
+      );
+      expect(tester.binding.transientCallbackCount, 0);
+
+      await tester.tap(orb);
+      await tester.pump();
+      expect(playCalls, 1);
+
+      await tester.pumpWidget(
+        heroApp(
+          tokens: tokens,
+          playing: true,
+          disableAnimations: false,
+          onPlay: () => playCalls++,
+          onSave: () {},
+          onTune: () {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Pause Flow'), findsOneWidget);
+      expect(tester.binding.transientCallbackCount, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

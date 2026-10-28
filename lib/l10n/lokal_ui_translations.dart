@@ -1,5 +1,13 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Previous in queue": "Précédents dans la file",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Le manifeste du module a renvoyé HTTP 404. Vérifiez que le lien manifest.json est valide et toujours accessible.",
+  "The add-on manifest URL is invalid.": "L’URL du manifeste du module est invalide.",
+  "Invalid add-on manifest URL.": "URL de manifeste du module invalide.",
+  "Save original lyrics": "Enregistrer les paroles originales",
+  "Save with selected translation": "Enregistrer avec la traduction choisie",
+  "Includes the active translation or romanization.": "Inclut la traduction ou la romanisation active.",
+  "Save lyrics to file (hold for options)": "Enregistrer les paroles (maintenir pour les options)",
   "Refresh low-quality covers": "Améliorer les pochettes de faible qualité",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Vérifier les pochettes de moins de 640 px et remplacer uniquement celles d’un album identique. Les pochettes personnalisées sont conservées.",
   "Repair only covers smaller than 640 px.": "Améliorer uniquement les pochettes de moins de 640 px.",
@@ -618,6 +626,14 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Previous in queue": "Vorherige in der Warteschlange",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Das Add-on-Manifest meldet HTTP 404. Prüfe, ob der Link manifest.json gültig und weiterhin erreichbar ist.",
+  "The add-on manifest URL is invalid.": "Die URL des Add-on-Manifests ist ungültig.",
+  "Invalid add-on manifest URL.": "Ungültige URL des Add-on-Manifests.",
+  "Save original lyrics": "Originaltext speichern",
+  "Save with selected translation": "Mit ausgewählter Übersetzung speichern",
+  "Includes the active translation or romanization.": "Enthält die aktive Übersetzung oder Umschrift.",
+  "Save lyrics to file (hold for options)": "Songtext speichern (für Optionen gedrückt halten)",
   "Refresh low-quality covers": "Cover mit geringer Qualität verbessern",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Cover unter 640 px prüfen und nur bei genau passendem Album ersetzen. Eigene Cover bleiben erhalten.",
   "Repair only covers smaller than 640 px.": "Nur Cover unter 640 px verbessern.",
@@ -1229,6 +1245,14 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Previous in queue": "Anteriores en la cola",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "El manifiesto del complemento devolvió HTTP 404. Comprueba que el enlace manifest.json sea válido y siga disponible.",
+  "The add-on manifest URL is invalid.": "La URL del manifiesto del complemento no es válida.",
+  "Invalid add-on manifest URL.": "URL del manifiesto del complemento no válida.",
+  "Save original lyrics": "Guardar letra original",
+  "Save with selected translation": "Guardar con la traducción seleccionada",
+  "Includes the active translation or romanization.": "Incluye la traducción o romanización activa.",
+  "Save lyrics to file (hold for options)": "Guardar letra (mantén pulsado para ver opciones)",
   "Refresh low-quality covers": "Mejorar carátulas de baja calidad",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Revisar carátulas de menos de 640 px y sustituirlas solo si el álbum coincide exactamente. Se conservan las carátulas personalizadas.",
   "Repair only covers smaller than 640 px.": "Mejorar solo carátulas de menos de 640 px.",
@@ -1848,6 +1872,14 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Previous in queue": "Precedenti in coda",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Il manifesto del componente aggiuntivo ha restituito HTTP 404. Verifica che il collegamento manifest.json sia valido e ancora accessibile.",
+  "The add-on manifest URL is invalid.": "L’URL del manifesto del componente aggiuntivo non è valido.",
+  "Invalid add-on manifest URL.": "URL del manifesto del componente aggiuntivo non valido.",
+  "Save original lyrics": "Salva il testo originale",
+  "Save with selected translation": "Salva con la traduzione selezionata",
+  "Includes the active translation or romanization.": "Include la traduzione o la traslitterazione attiva.",
+  "Save lyrics to file (hold for options)": "Salva il testo (tieni premuto per le opzioni)",
   "Refresh low-quality covers": "Migliora copertine di bassa qualità",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Controlla le copertine inferiori a 640 px e sostituiscile solo se l’album corrisponde esattamente. Le copertine personalizzate vengono conservate.",
   "Repair only covers smaller than 640 px.": "Migliora solo le copertine inferiori a 640 px.",
@@ -2469,6 +2501,14 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Previous in queue": "Anteriores na fila",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "O manifesto do complemento retornou HTTP 404. Verifique se o link manifest.json é válido e ainda está acessível.",
+  "The add-on manifest URL is invalid.": "A URL do manifesto do complemento é inválida.",
+  "Invalid add-on manifest URL.": "URL do manifesto do complemento inválida.",
+  "Save original lyrics": "Salvar letra original",
+  "Save with selected translation": "Salvar com a tradução selecionada",
+  "Includes the active translation or romanization.": "Inclui a tradução ou romanização ativa.",
+  "Save lyrics to file (hold for options)": "Salvar letra (mantenha pressionado para opções)",
   "Refresh low-quality covers": "Melhorar capas de baixa qualidade",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Verificar capas menores que 640 px e substituir apenas quando o álbum corresponder exatamente. Capas personalizadas são preservadas.",
   "Repair only covers smaller than 640 px.": "Melhorar apenas capas menores que 640 px.",
@@ -3085,6 +3125,14 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Previous in queue": "Eerdere nummers in de wachtrij",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Het add-onmanifest gaf HTTP 404 terug. Controleer of de link manifest.json geldig en nog bereikbaar is.",
+  "The add-on manifest URL is invalid.": "De URL van het add-onmanifest is ongeldig.",
+  "Invalid add-on manifest URL.": "Ongeldige URL voor het add-onmanifest.",
+  "Save original lyrics": "Originele songtekst opslaan",
+  "Save with selected translation": "Opslaan met gekozen vertaling",
+  "Includes the active translation or romanization.": "Inclusief de actieve vertaling of romanisatie.",
+  "Save lyrics to file (hold for options)": "Songtekst opslaan (ingedrukt houden voor opties)",
   "Refresh low-quality covers": "Omslagen van lage kwaliteit verbeteren",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Controleer omslagen kleiner dan 640 px en vervang ze alleen bij een exacte albumovereenkomst. Eigen omslagen blijven behouden.",
   "Repair only covers smaller than 640 px.": "Alleen omslagen kleiner dan 640 px verbeteren.",
@@ -3713,6 +3761,14 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Previous in queue": "Poprzednie w kolejce",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Manifest dodatku zwrócił HTTP 404. Sprawdź, czy adres manifest.json jest poprawny i nadal dostępny.",
+  "The add-on manifest URL is invalid.": "Adres URL manifestu dodatku jest nieprawidłowy.",
+  "Invalid add-on manifest URL.": "Nieprawidłowy adres URL manifestu dodatku.",
+  "Save original lyrics": "Zapisz oryginalny tekst",
+  "Save with selected translation": "Zapisz z wybranym tłumaczeniem",
+  "Includes the active translation or romanization.": "Zawiera aktywne tłumaczenie lub transliterację.",
+  "Save lyrics to file (hold for options)": "Zapisz tekst (przytrzymaj, aby zobaczyć opcje)",
   "Refresh low-quality covers": "Popraw okładki niskiej jakości",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Sprawdź okładki mniejsze niż 640 px i zastąp je tylko przy dokładnej zgodności albumu. Własne okładki zostaną zachowane.",
   "Repair only covers smaller than 640 px.": "Popraw tylko okładki mniejsze niż 640 px.",
@@ -4331,6 +4387,14 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Previous in queue": "Tidigare i kön",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Tilläggets manifest svarade med HTTP 404. Kontrollera att länken manifest.json är giltig och fortfarande tillgänglig.",
+  "The add-on manifest URL is invalid.": "URL:en till tilläggets manifest är ogiltig.",
+  "Invalid add-on manifest URL.": "Ogiltig URL till tilläggets manifest.",
+  "Save original lyrics": "Spara originaltext",
+  "Save with selected translation": "Spara med vald översättning",
+  "Includes the active translation or romanization.": "Inkluderar den aktiva översättningen eller romaniseringen.",
+  "Save lyrics to file (hold for options)": "Spara text (håll inne för alternativ)",
   "Refresh low-quality covers": "Förbättra omslag med låg kvalitet",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "Kontrollera omslag mindre än 640 px och ersätt bara vid exakt albummatchning. Egna omslag bevaras.",
   "Repair only covers smaller than 640 px.": "Förbättra bara omslag mindre än 640 px.",
@@ -4955,6 +5019,14 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Previous in queue": "队列中的前序曲目",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "扩展清单返回了 HTTP 404。请检查 manifest.json 链接是否有效且仍可访问。",
+  "The add-on manifest URL is invalid.": "扩展清单的网址无效。",
+  "Invalid add-on manifest URL.": "扩展清单网址无效。",
+  "Save original lyrics": "保存原始歌词",
+  "Save with selected translation": "保存并包含所选翻译",
+  "Includes the active translation or romanization.": "包含当前翻译或罗马字。",
+  "Save lyrics to file (hold for options)": "将歌词保存到文件（长按查看选项）",
   "Refresh low-quality covers": "改善低画质封面",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "检查小于 640 像素的封面，仅在专辑完全匹配时替换。保留自定义封面。",
   "Repair only covers smaller than 640 px.": "仅改善小于 640 像素的封面。",
@@ -5578,6 +5650,14 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Previous in queue": "Kuyruktaki önceki parçalar",
+  "The add-on manifest returned HTTP 404. Check that the manifest.json link is valid and still accessible.": "Eklenti bildirimi HTTP 404 döndürdü. manifest.json bağlantısının geçerli ve hâlâ erişilebilir olduğunu kontrol edin.",
+  "The add-on manifest URL is invalid.": "Eklenti bildiriminin URL’si geçersiz.",
+  "Invalid add-on manifest URL.": "Geçersiz eklenti bildirimi URL’si.",
+  "Save original lyrics": "Orijinal sözleri kaydet",
+  "Save with selected translation": "Seçili çeviriyle kaydet",
+  "Includes the active translation or romanization.": "Etkin çeviriyi veya Latin harfleriyle yazımı içerir.",
+  "Save lyrics to file (hold for options)": "Sözleri dosyaya kaydet (seçenekler için basılı tut)",
   "Refresh low-quality covers": "Düşük kaliteli kapakları iyileştir",
   "Check covers smaller than 640 px and replace only exact album matches. Custom artwork is preserved.": "640 pikselden küçük kapakları denetle ve yalnızca albüm tam eşleştiğinde değiştir. Özel kapaklar korunur.",
   "Repair only covers smaller than 640 px.": "Yalnızca 640 pikselden küçük kapakları iyileştir.",

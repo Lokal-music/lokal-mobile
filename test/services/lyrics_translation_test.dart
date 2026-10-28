@@ -34,6 +34,22 @@ void main() {
   ];
 
   group('LRC translation lines (desktop v9.2)', () {
+    test('saving simultaneous vocal translations preserves each association', () {
+      final lines = [
+        LyricsLine(timestamp: const Duration(seconds: 2), text: 'First voice',
+          translation: 'First translation'),
+        LyricsLine(timestamp: const Duration(seconds: 2), text: 'Second voice',
+          translation: 'Second translation'),
+      ];
+      final raw = service.buildLrcContent(lines: lines);
+      expect(raw, contains('[lokaltr:0]'));
+      expect(raw, contains('[lokaltr:1]'));
+      final restored = service.parseLyricsText(raw);
+      expect(restored.lines.map((line) => line.text), ['First voice', 'Second voice']);
+      expect(restored.lines.map((line) => line.translation),
+        ['First translation', 'Second translation']);
+    });
+
     test('an unstamped line under a stamped one is its translation', () {
       const raw =
           '﻿[ti:Kiss]\r\n'
@@ -49,6 +65,82 @@ void main() {
       ]);
       expect(translations(raw), ['The last kiss', 'Tasted of tobacco']);
     });
+
+    test('paired timestamps import as translations, not extra sung rows', () {
+      const raw =
+          '[00:19.51]Original first\n'
+          '[00:19.51]Translation first\n'
+          '[00:21.99]Original second\n'
+          '[00:24.73]Original third\n'
+          '[00:24.73]Translation third';
+      final lyrics = service.parseLyricsText(raw);
+      expect(lyrics.lines.map((line) => line.text), [
+        'Original first',
+        'Original second',
+        'Original third',
+      ]);
+      expect(lyrics.lines.map((line) => line.translation), [
+        'Translation first',
+        null,
+        'Translation third',
+      ]);
+      expect(lyrics.lines.map((line) => line.timestamp.inMilliseconds), [
+        19510,
+        21990,
+        24730,
+      ]);
+    });
+
+    test(
+      'same-time word-timed vocals and multi-vocal groups remain distinct',
+      () {
+        final lyrics = service.parseLyricsText(
+          '[00:01.00]<00:01.00>Main\n'
+          '[00:01.00]<00:01.00>Backing\n'
+          '[00:02.00]Voice one\n'
+          '[00:02.00]Voice two\n'
+          '[00:02.00]Voice three',
+        );
+        expect(lyrics.lines.map((line) => line.text), [
+          'Main',
+          'Backing',
+          'Voice one',
+          'Voice two',
+          'Voice three',
+        ]);
+        expect(lyrics.lines.every((line) => line.translation == null), isTrue);
+      },
+    );
+
+    test('explicit tagged translation only binds to matching source time', () {
+      final lyrics = service.parseLyricsText(
+        '[00:01.00]Voice one\n'
+        '[lokaltr:0]\n[00:01.00]Translated voice one\n'
+        '[00:01.00]Voice two\n'
+        '[00:03.00]Next',
+      );
+      expect(lyrics.lines.map((line) => line.text), [
+        'Voice one',
+        'Voice two',
+        'Next',
+      ]);
+      expect(lyrics.lines.map((line) => line.translation), [
+        'Translated voice one',
+        null,
+        null,
+      ]);
+    });
+
+    test(
+      'identical simultaneous lyric text is not mistaken for translation',
+      () {
+        final lyrics = service.parseLyricsText(
+          '[00:01.00]Repeat\n[00:01.00]Repeat',
+        );
+        expect(lyrics.lines, hasLength(2));
+        expect(lyrics.lines.every((line) => line.translation == null), isTrue);
+      },
+    );
 
     test('old Mac line endings work too', () {
       expect(translations('[00:01.00]Uno\rOne\r[00:02.00]Dos\rTwo'), [
@@ -108,7 +200,11 @@ void main() {
       );
       final saved = LyricsEditorModel.fromLyrics(lyrics).normalizeForSave();
       final lrc = service.buildLrcContent(lines: saved);
-      expect(lrc, '[00:01.00]Uno\nOne\n[00:02.00]Dos\nTwo');
+      expect(
+        lrc,
+        '[00:01.00]Uno\n[00:01.00]One\n'
+        '[00:02.00]Dos\n[00:02.00]Two',
+      );
       expect(translations(lrc), ['One', 'Two']);
     });
   });

@@ -304,6 +304,83 @@ void main() {
   });
 
   group('addon protocol and trust boundary', () {
+    test('Qobuz sample CDN and declared preview are never full audio', () {
+      final client = MockClient((_) async => fail('No network expected'));
+      addTearDown(client.close);
+      final addon = DiscoveryAddon(
+        DiscoveryHttp(client), endpoint: 'https://addon.example',
+      );
+      expect(
+        () => addon.parseStream({'url': 'https://sample2.qobuz.com/file'}),
+        throwsA(isA<DiscoveryException>()),
+      );
+      expect(
+        () => addon.parseStream({
+          'url': 'https://cdn.example/audio.flac', 'isPreview': true,
+        }),
+        throwsA(isA<DiscoveryException>()),
+      );
+      expect(
+        () => addon.parseStream({
+          'url': 'https://cdn.example/audio.mp3', 'duration': 30,
+        }, expectedDuration: const Duration(seconds: 224)),
+        throwsA(isA<DiscoveryException>()),
+      );
+      // A zero/invalid early alias must not mask a later 30-second preview.
+      for (final firstClaim in [0, -1, 'invalid', null]) {
+        expect(
+          () => addon.parseStream({
+            'url': 'https://cdn.example/audio.mp3',
+            'streamDuration': firstClaim,
+            'duration': 30,
+          }, expectedDuration: const Duration(seconds: 220)),
+          throwsA(isA<DiscoveryException>()),
+        );
+      }
+      // A real short recording is not a preview just because it is short.
+      expect(
+        addon.parseStream({
+          'url': 'https://cdn.example/short.mp3', 'duration': 35,
+        }, expectedDuration: const Duration(seconds: 35)).url.path,
+        '/short.mp3',
+      );
+    });
+
+    test('a Qobuz inline sample retries the dedicated stream endpoint', () async {
+      final requests = <String>[];
+      final client = MockClient((request) async {
+        requests.add(request.url.path);
+        if (request.url.path == '/search') {
+          return jsonResponse({
+            'tracks': [{
+              'id': 'song-1',
+              'title': 'Full recording',
+              'artist': 'Artist',
+              'duration': 220,
+              'streamURL': 'https://sample2.qobuz.com/file',
+            }],
+          });
+        }
+        if (request.url.path == '/stream/song-1') {
+          return jsonResponse({
+            'url': 'https://cdn.example/full.flac',
+            'format': 'audio/flac',
+          });
+        }
+        return http.Response('missing', 404);
+      });
+      addTearDown(client.close);
+      final addon = DiscoveryAddon(
+        DiscoveryHttp(client),
+        endpoint: 'https://addon.example',
+        configId: 'qobuz',
+      );
+      final track = (await addon.search('Full recording')).single;
+      final resolved = await addon.resolve(track);
+      expect(resolved.url.toString(), 'https://cdn.example/full.flac');
+      expect(requests, ['/search', '/stream/song-1']);
+    });
+
     test(
       'normalizes manifest URL, encodes ids and keeps credentials on API',
       () async {

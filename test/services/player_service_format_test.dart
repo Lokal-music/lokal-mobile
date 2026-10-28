@@ -3,6 +3,27 @@ import 'package:flick/services/player_service.dart';
 import 'package:flick/services/android_audio_engine.dart';
 
 void main() {
+  group('Previous-button restart threshold', () {
+    test('restarts the current song at ten seconds or later', () {
+      expect(previousButtonRestartThreshold, const Duration(seconds: 10));
+      expect(shouldRestartCurrentTrackOnPrevious(Duration.zero), isFalse);
+      expect(
+        shouldRestartCurrentTrackOnPrevious(
+          const Duration(milliseconds: 9999),
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRestartCurrentTrackOnPrevious(const Duration(seconds: 10)),
+        isTrue,
+      );
+      expect(
+        shouldRestartCurrentTrackOnPrevious(const Duration(minutes: 3)),
+        isTrue,
+      );
+    });
+  });
+
   group('canonicalPlaybackFileType', () {
     test('prefers the real file extension over stale stored file type', () {
       expect(

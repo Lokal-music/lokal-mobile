@@ -13,23 +13,28 @@ import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/providers/player_provider.dart';
+import 'package:flick/services/player_service.dart' show PlayerService;
 import 'package:flick/widgets/lokal/lokal_glass.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/widgets/lokal/lokal_swipe_to_queue.dart';
+
 import 'replayable_stream_songs.dart';
 
 /// Shared pieces of Lokal's Library screens: Apple Music's iOS layout on the
 /// theme's own solid background, glass only for the small round buttons.
 
 /// Plays [queue] from [start] (or its first song); [shuffle] plays it in a
-/// random order. A failure shows a short message instead of throwing.
+/// random order. [startIndex] identifies repeated occurrences in the visible
+/// list, including when two entries refer to the same Song object.
+/// A failure shows a short message instead of throwing.
 Future<void> lokalPlay(
   BuildContext context,
   WidgetRef ref,
   List<Song> queue, {
   Song? start,
+  int? startIndex,
   bool shuffle = false,
 }) async {
   if (queue.isEmpty) return;
@@ -38,20 +43,31 @@ Future<void> lokalPlay(
   );
   // Playback must use the same reconstructed entry as the queue, not a
   // stale favorite object from before the provider refreshed.
-  final selectedId = shuffle ? list.first.id : (start ?? queue.first).id;
-  final selected = list.firstWhere(
-    (song) => song.id == selectedId,
-    orElse: () => list.first,
-  );
+  final requested =
+      start ??
+      (startIndex != null && startIndex >= 0 && startIndex < queue.length
+          ? queue[startIndex]
+          : queue.first);
+  final index = shuffle
+      ? 0
+      : PlayerService.selectedPlaylistIndex(
+          queue,
+          requested,
+          indexHint: startIndex,
+        );
+  final selectedIndex = index < 0 ? 0 : index;
+  final selected = list[selectedIndex];
   try {
     await ref
         .read(playerProvider.notifier)
-        .play(selected, playlist: list);
+        .play(selected, playlist: list, playlistIndex: selectedIndex);
   } catch (_) {
     if (!context.mounted) return;
     LokalToast.show(
       context,
-      lokalText('Couldn’t play this song. Check that its file or server is available.'),
+      lokalText(
+        'Couldn’t play this song. Check that its file or server is available.',
+      ),
     );
   }
 }
@@ -292,6 +308,7 @@ class LokalPlayShufflePills extends ConsumerWidget {
   const LokalPlayShufflePills({super.key, required this.songs, this.extra});
 
   final List<Song> songs;
+
   /// A third pill after Shuffle, e.g. Start radio.
   final Widget? extra;
 
@@ -420,13 +437,16 @@ class LokalTrackRow extends ConsumerWidget {
       enabled: available,
       onQueue: needsStreamReResolution(song)
           ? () async {
-              await ref.read(playerProvider.notifier)
+              await ref
+                  .read(playerProvider.notifier)
                   .addToQueue(replayableStreamSong(song));
               if (context.mounted) {
                 LokalToast.show(
                   context,
-                  lokalText('Added “{arg0}” to the queue',
-                      args: {'arg0': song.title}),
+                  lokalText(
+                    'Added “{arg0}” to the queue',
+                    args: {'arg0': song.title},
+                  ),
                 );
               }
             }
