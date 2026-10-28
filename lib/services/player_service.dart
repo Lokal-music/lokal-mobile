@@ -107,6 +107,23 @@ Future<void> stopSourceBeforePendingLookup({
   }
 }
 
+/// A manual restart must close the old audio engine before the USB interface
+/// is re-claimed, and only resume playback after the direct route is selected.
+/// Failed resets never report success merely because a device is still listed.
+@visibleForTesting
+Future<bool> restartDirectUsbSessionSequence({
+  required Future<void> Function() stopEngine,
+  required Future<bool> Function() resetTransport,
+  required Future<bool> Function() reselectDirectRoute,
+  required Future<void> Function() restorePlayback,
+}) async {
+  await stopEngine();
+  if (!await resetTransport()) return false;
+  if (!await reselectDirectRoute()) return false;
+  await restorePlayback();
+  return true;
+}
+
 /// Coalesce progress updates without indefinitely postponing diagnostics.
 @visibleForTesting
 Timer coalescePlaybackDiagnosticsRefresh({
@@ -597,6 +614,7 @@ class PlayerService {
   bool _priorityAnchorEnabled = false;
   bool _motionArtDuringBitPerfect = false;
   bool _midStreamUsbFallbackActive = false;
+  Future<bool>? _manualUsbRestartInFlight;
   bool _deadRustEngineRecoveryActive = false;
   final List<DateTime> _deadRustEngineRecoveryTimestamps = <DateTime>[];
   late final AudioSessionManager _sessionManager;
@@ -2222,6 +2240,152 @@ class PlayerService {
       }
     });
     return _sessionManager.selectedMode == AudioEngineType.usbDacExperimental;
+  }
+
+  /// Explicit recovery for a stuck USB engine. The existing retry method
+  /// only changes route selection; it does not necessarily close a still-live
+  /// Rust engine or reopen the native endpoint. This force restart works even
+  /// after Android fallback and does not require a physical USB replug.
+  ///
+  /// It runs inside the playback request queue so taps/auto-skip cannot
+  /// reconfigure USB while a new source is being resolved. Preserve user
+  /// intent (playing vs paused), playlist, exact track occurrence and position.
+  Future<bool> forceRestartUsbAudioEngine() {
+    final pending = _manualUsbRestartInFlight;
+    if (pending != null) return pending;
+
+    final completion = Completer<bool>();
+    _manualUsbRestartInFlight = completion.future;
+    unawaited(_enqueuePlaybackRequest(() async {
+      try {
+        completion.complete(await _forceRestartUsbAudioEngineInternal());
+      } catch (error) {
+        AppLog.instance.add('[USB] Manual engine restart failed: $error');
+        completion.complete(false);
+      } finally {
+        _manualUsbRestartInFlight = null;
+      }
+    }));
+    return completion.future;
+  }
+
+  Future<bool> _forceRestartUsbAudioEngineInternal() async {
+    if (!Platform.isAndroid) return false;
+    final preference = await _preferencesService.getAudioEnginePreference();
+    if (preference != AudioEnginePreference.isochronousUsb) {
+      AppLog.instance.add('[USB] Manual restart refused: direct USB '
+          'is not the selected playback engine');
+      return false;
+    }
+
+    await initAudio();
+    final song = currentSongNotifier.value ?? _songAtCurrentIndex();
+    final playableSong = song != null &&
+        !song.isPending &&
+        (song.filePath?.isNotEmpty ?? false);
+    final position = positionNotifier.value;
+    final wasPlaying = isPlayingNotifier.value;
+    final format = (playableSong ? _deriveUac2FormatFromSong(song) : null) ??
+        _uac2Service.currentDeviceStatus?.currentFormat ??
+        _uac2Service.lastKnownFormat;
+
+    AppLog.instance.add('[USB] Manual engine restart requested '
+        '(playing=$wasPlaying, track=${song?.title ?? 'none'}, '
+        'positionMs=${position.inMilliseconds})');
+
+    try {
+      final success = await restartDirectUsbSessionSequence(
+        stopEngine: () async {
+          // This lazy switch detaches the active engine, including the Rust
+          // callback, before the native USB interface is released.
+          await _sessionManager.switchMode(
+            AudioEngineType.normalAndroid,
+            reason: 'force restart direct USB - detach old engine',
+          );
+          // A stale Rust service may outlive its engine after a transport
+          // failure. Shut it down as well, rather than reusing a dead pump.
+          if (_rustAudioService.isInitialized) {
+            await _disposeUsbEngine();
+          }
+          await _releaseAndroidManagedAudioResources(
+            reason: 'force restart direct USB',
+          );
+        },
+        resetTransport: () async {
+          return _uac2Service.resetAndroidDirectUsbPath(format: format);
+        },
+        reselectDirectRoute: () async {
+          return _sessionManager.retryExperimentalUsbForCurrentDevice();
+        },
+        restorePlayback: () async {
+          if (!playableSong) return;
+          await _prepareImmediatePlaybackAsset(song);
+          final engine = await _ensureEngineReady(
+            AudioEngineType.usbDacExperimental,
+            song: song,
+            reason: 'manual direct USB engine restart',
+          );
+          if (engine != AudioEngineType.usbDacExperimental) {
+            throw StateError('Track cannot be restored over direct USB '
+                '(resolved engine: ${engine.logLabel})');
+          }
+          await _runWithSuppressedSequenceStateUpdates(() async {
+            await _playbackManager.playTrack(
+              song,
+              initialPosition: position,
+              autoPlay: wasPlaying,
+            );
+          });
+          if (wasPlaying) {
+            _ensurePositionSaveTimer();
+          }
+        },
+      );
+      if (!success) {
+        throw StateError('Native DAC reset or direct route selection failed');
+      }
+      _sessionManager.clearFallbackReason();
+      await _refreshAudioOutputDiagnostics(
+        reason: 'manual USB engine restart',
+        activeSong: playableSong ? song : null,
+      );
+      AppLog.instance.add('[USB] Manual engine restart complete '
+          '(resumed=$wasPlaying, directRoute=true)');
+      return true;
+    } catch (error) {
+      AppLog.instance.add('[USB] Manual restart could not restore direct '
+          'USB output: $error');
+      // Do not leave a half-initialized USB engine selected or pretend
+      // bit-perfect is active. Restore Android-managed playback if possible.
+      try {
+        await _uac2Service.releaseAndroidDirectUsbRuntime();
+        await _sessionManager.recordFallback(
+          requestedMode: AudioEngineType.usbDacExperimental,
+          fallbackMode: AudioEngineType.normalAndroid,
+          reason: 'manual USB restart failed: $error',
+        );
+        await _sessionManager.switchMode(
+          AudioEngineType.normalAndroid,
+          initializeNewEngine: true,
+          reason: 'manual USB restart unsuccessful',
+        );
+        if (playableSong) {
+          await _prepareImmediatePlaybackAsset(song);
+          await _runWithSuppressedSequenceStateUpdates(() async {
+            await _playbackManager.playTrack(
+              song,
+              initialPosition: position,
+              autoPlay: wasPlaying,
+            );
+          });
+        }
+      } catch (fallbackError) {
+        AppLog.instance.add('[USB] Manual restart Android fallback failed: '
+            '$fallbackError');
+      }
+      await _refreshAudioOutputDiagnostics(reason: 'manual USB restart failed');
+      return false;
+    }
   }
 
   Future<bool> isHiFiModeEnabled() async {
