@@ -67,7 +67,6 @@ import 'package:flick/features/player/widgets/pitch_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/full_player_usb_restart_menu.dart';
 import 'package:flick/features/konnekted/library/lokal_navigation.dart';
 import 'package:flick/features/player/widgets/song_metadata_sheet.dart';
-import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/speed_bottom_sheet.dart';
 import 'package:flick/features/settings/screens/casting_settings_screen.dart';
 import 'package:flick/features/settings/screens/equalizer_screen.dart';
