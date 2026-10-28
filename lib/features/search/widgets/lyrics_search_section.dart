@@ -102,8 +102,9 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
         return;
       }
       final key = '${song.id}|${song.filePath}|${song.fileSizeBytes ?? 0}|$sourceRevision';
-      var lines = _textCache[key];
-      if (lines == null) {
+      final cachedLines = _textCache[key];
+      var lines = cachedLines ?? <String>[];
+      if (cachedLines == null) {
         var readSucceeded = false;
         try {
           final own = await _lyrics.loadLyricsForSong(
