@@ -773,7 +773,7 @@ class PlayerService {
   AdvanceListOrder _advanceListOrder = AdvanceListOrder.alphabetical;
   AdvanceListOrder get advanceListOrder => _advanceListOrder;
 
-  // Wrap-around queue: tapping a song mid-list queues preceding songs at the end.
+  // Wrap-around navigation: Previous on the first item jumps to the last.\n  // Selection never rotates the source queue or discards earlier songs.
   final ValueNotifier<bool> wrapAroundQueueNotifier = ValueNotifier(true);
   bool get wrapAroundQueue => wrapAroundQueueNotifier.value;
 
@@ -2450,6 +2450,12 @@ class PlayerService {
       sourcesBuilder: _buildAudioSources,
       sourceBuilder: _buildAudioSourceForSong,
       playlistProvider: () => List<Song>.unmodifiable(_playlist),
+      selectedPlaylistIndexProvider: () => _currentIndex,
+      onNativePlaylistIndex: (index) {
+        if (index >= 0 && index < _playlist.length) {
+          _setCurrentIndex(index);
+        }
+      },
       configurePlayer: _configureAndroidPlayer,
       disposeEngine: _disposeAndroidEngine,
       retireStalledPlayer: _retireStalledAndroidPlayer,
@@ -5076,12 +5082,21 @@ class PlayerService {
       return;
     }
 
-    final resolvedIndex = _playlist.indexWhere((entry) => entry.id == song.id);
-    if (resolvedIndex == -1 || resolvedIndex == _currentIndex) {
+    // Duplicate IDs represent distinct queue occurrences. The selected
+    // position is authoritative until native Media3 reports an actual index
+    // transition; an ID-only lookup would jump to the first occurrence.
+    if (_currentIndex >= 0 &&
+        _currentIndex < _playlist.length &&
+        _playlist[_currentIndex].id == song.id) {
       return;
     }
-
-    _setCurrentIndex(resolvedIndex);
+    final exact = _playlist.indexWhere((entry) => identical(entry, song));
+    final resolvedIndex = exact >= 0
+        ? exact
+        : _playlist.indexWhere((entry) => entry.id == song.id);
+    if (resolvedIndex >= 0 && resolvedIndex != _currentIndex) {
+      _setCurrentIndex(resolvedIndex);
+    }
   }
 
   void _rememberRestoredPlaybackContext(Song song, Duration position) {
@@ -5470,10 +5485,13 @@ class PlayerService {
     return operation;
   }
 
-  List<Song> _wrapAroundPlaylist(List<Song> songs, Song current) {
-    final start = songs.indexWhere((s) => s.id == current.id);
-    if (start <= 0) return songs;
-    return [...songs.sublist(start), ...songs.sublist(0, start)];
+  /// A tap into the middle of a playlist must keep the entries preceding it.
+  /// Prefer the exact occurrence for playlists containing the same song twice.
+  @visibleForTesting
+  static int selectedPlaylistIndex(List<Song> songs, Song selected) {
+    final exactIndex = songs.indexWhere((entry) => identical(entry, selected));
+    if (exactIndex >= 0) return exactIndex;
+    return songs.indexWhere((entry) => entry.id == selected.id);
   }
 
   Future<void> _playInternal(Song song, {List<Song>? playlist}) async {
@@ -5481,6 +5499,15 @@ class PlayerService {
     // conversion alone cannot protect an ordinary queue left open longer
     // than the media registration lifetime. Re-arm stale queue entries
     // before the Android player builds any future audio sources.
+    // Capture the original slot before online stream descriptors are refreshed:
+    // different occurrences of the same song ID may resolve to one Song object.
+    final requestedIndex = playlist == null
+        ? -1
+        : selectedPlaylistIndex(playlist, song);
+    final selectedCurrentSlot = playlist == null &&
+        _currentIndex >= 0 &&
+        _currentIndex < _playlist.length &&
+        identical(_playlist[_currentIndex], song);
     final recovered = replayableStreamSelection(song, playlist ?? _playlist);
     if (!identical(song, recovered.selected) && recovered.selected.isPending) {
       AppLog.instance.add(
@@ -5528,11 +5555,15 @@ class PlayerService {
       _crossfadeUiHandoffFromPath = null;
 
       if (playlist != null) {
-        final sourcePlaylist = wrapAroundQueueNotifier.value
-            ? _wrapAroundPlaylist(playlist, song)
-            : playlist;
-        _replacePlaybackContext(sourcePlaylist);
-        _setCurrentIndex(_playlist.indexWhere((entry) => entry.id == song.id));
+        // Keep the caller's complete, original playback order. Rotating the
+        // list to start at the tapped item silently moves earlier tracks to
+        // Up Next and makes the selected item appear at index zero in every
+        // playlist, radio and Cover Flow entry point. Wrap-around navigation
+        // remains a separate preference at the actual start of the queue.
+        _replacePlaybackContext(playlist);
+        _setCurrentIndex(requestedIndex >= 0 && requestedIndex < _playlist.length
+            ? requestedIndex
+            : selectedPlaylistIndex(_playlist, song));
         if (isShuffleNotifier.value) {
           final shuffled = buildShufflePlaybackOrder(
             songs: _playlist,
@@ -5548,9 +5579,9 @@ class PlayerService {
         }
         _insertQueuedEntriesAfterCurrent();
       } else {
-        final existingIndex = _playlist.indexWhere(
-          (entry) => entry.id == song.id,
-        );
+        final existingIndex = selectedCurrentSlot
+            ? _currentIndex
+            : selectedPlaylistIndex(_playlist, song);
         if (existingIndex == -1) {
           _replacePlaybackContext([song]);
           _setCurrentIndex(0);
@@ -7338,6 +7369,18 @@ class PlayerService {
     _notifyQueueChanged();
     _notifyUpNextChanged();
     _debounceQueueChanged();
+  }
+
+  /// Jump to an absolute playlist slot, including one before Now Playing.
+  /// Unlike play(song, playlist: ...), this leaves the queue untouched and
+  /// addresses a specific occurrence even when a song appears twice.
+  Future<void> playFromPlaylistIndex(int index) {
+    _cancelPendingPlayback();
+    return _enqueuePlaybackRequest(() async {
+      if (index < 0 || index >= _playlist.length) return;
+      _setCurrentIndex(index);
+      await _playSongAtCurrentIndex();
+    });
   }
 
   Future<void> playFromUpNextIndex(int index) {

@@ -36,6 +36,8 @@ class PlayerState {
   final List<Song> queue;
   final List<Song> upNext;
   final List<Song> autoplayUpNext;
+  /// The full ordered playback context, including tracks before Now Playing.
+  final List<Song> playlist;
   final int currentIndex;
 
   const PlayerState({
@@ -52,6 +54,7 @@ class PlayerState {
     this.queue = const [],
     this.upNext = const [],
     this.autoplayUpNext = const [],
+    this.playlist = const [],
     this.currentIndex = -1,
   });
 
@@ -69,6 +72,7 @@ class PlayerState {
     List<Song>? queue,
     List<Song>? upNext,
     List<Song>? autoplayUpNext,
+    List<Song>? playlist,
     int? currentIndex,
     bool clearSong = false,
     bool clearSleepTimer = false,
@@ -89,6 +93,7 @@ class PlayerState {
       queue: queue ?? this.queue,
       upNext: upNext ?? this.upNext,
       autoplayUpNext: autoplayUpNext ?? this.autoplayUpNext,
+      playlist: playlist ?? this.playlist,
       currentIndex: currentIndex ?? this.currentIndex,
     );
   }
@@ -153,6 +158,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
       queue: _service.queueNotifier.value,
       upNext: _service.upNextNotifier.value,
       autoplayUpNext: _service.autoplayQueueNotifier.value,
+      playlist: _service.playlist,
       currentIndex: _service.currentIndexNotifier.value,
     );
 
@@ -207,6 +213,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
         queue: _service.queueNotifier.value,
         upNext: _service.upNextNotifier.value,
         autoplayUpNext: _service.autoplayQueueNotifier.value,
+        playlist: _service.playlist,
         currentIndex: _service.currentIndexNotifier.value,
         clearSong: _service.currentSongNotifier.value == null,
         clearSleepTimer: _service.sleepTimerRemainingNotifier.value == null,
@@ -293,7 +300,10 @@ class PlayerNotifier extends Notifier<PlayerState> {
           queue: remote.queue.map(convert).toList(),
           upNext: const [],
           autoplayUpNext: const [],
-          currentIndex: remote.currentIndex,
+          // Desktop queue indices belong to its own playback context.
+          // Never display the previous mobile playlist as desktop history.
+          playlist: const [],
+          currentIndex: -1,
         );
       } else if (previous?.controlsDesktop == true) {
         syncState();
@@ -515,6 +525,13 @@ class PlayerNotifier extends Notifier<PlayerState> {
     await _service.playFromQueueIndex(index);
   }
 
+  /// Plays any slot in the existing context without rebuilding the queue.
+  Future<void> playFromPlaylistIndex(int index) async {
+    // Remote desktop state does not expose the mobile playlist's indices.
+    if (_desktop != null) return;
+    await _service.playFromPlaylistIndex(index);
+  }
+
   Future<void> playFromUpNextIndex(int index) async {
     await _service.playFromUpNextIndex(index);
   }
@@ -553,7 +570,11 @@ class PlayerNotifier extends Notifier<PlayerState> {
   Future<void> moveQueueItemToNext(int index) async {
     final desktop = _desktop;
     if (desktop != null) {
-      await desktop.reorderQueue(index, state.currentIndex + 1);
+      // The desktop index belongs to the remote queue, not to the cleared
+      // mobile playlist snapshot.
+      final remoteIndex =
+          ref.read(lokalRemoteControllerProvider).snapshot?.currentIndex ?? -1;
+      await desktop.reorderQueue(index, remoteIndex + 1);
       return;
     }
     await _service.moveQueueItemToNext(index);

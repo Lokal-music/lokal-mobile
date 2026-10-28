@@ -26,6 +26,8 @@ class _Player implements ja.AudioPlayer {
   final processing = StreamController<ja.ProcessingState>.broadcast(sync: true);
   double currentVolume = 1.0;
   int loads = 0, seeks = 0;
+  int? lastInitialIndex;
+  int? lastSeekIndex;
   bool failLoad = false;
   Completer<void>? hungSeek;
   Completer<Duration?>? hungLoad;
@@ -69,6 +71,7 @@ class _Player implements ja.AudioPlayer {
     Duration? initialPosition,
   }) async {
     loads++;
+    lastInitialIndex = initialIndex;
     if (failLoad) throw ja.PlayerException(0, 'Source error', 0);
     if (hungLoad != null) return await hungLoad!.future;
     sources = [ja.AudioSource.uri(Uri.parse('file:///song.flac'))];
@@ -79,6 +82,7 @@ class _Player implements ja.AudioPlayer {
   @override
   Future<void> seek(Duration? position, {int? index}) async {
     seeks++;
+    lastSeekIndex = index;
     await hungSeek?.future;
     if (position != null) currentPosition = position;
     if (index != null) activeIndex = index;
@@ -107,6 +111,78 @@ class _Player implements ja.AudioPlayer {
 }
 
 void main() {
+  testWidgets('native Android playback uses the selected duplicate occurrence',
+      (tester) async {
+    // Different entries can have the same ID and source path; identity alone
+    // must not snap the selected song back to the first occurrence.
+    final first = Song(
+      id: 'repeated', title: 'Repeat', artist: 'Artist',
+      duration: const Duration(minutes: 3),
+      filePath: '/repeat.flac', fileType: 'FLAC',
+    );
+    final second = Song(
+      id: 'repeated', title: 'Repeat', artist: 'Artist',
+      duration: const Duration(minutes: 3),
+      filePath: '/repeat.flac', fileType: 'FLAC',
+    );
+    final between = Song(
+      id: 'different', title: 'Other', artist: 'Artist',
+      duration: const Duration(minutes: 3),
+      filePath: '/other.flac', fileType: 'FLAC',
+    );
+    final playlist = [first, between, second];
+    final player = _Player();
+    final nativeIndices = <int>[];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async => ja.ConcatenatingAudioSource(
+        children: [
+          for (final song in playlist)
+            ja.AudioSource.uri(Uri.file(song.filePath!)),
+        ],
+      ),
+      sourceBuilder: (song) async =>
+          ja.AudioSource.uri(Uri.file(song.filePath!)),
+      playlistProvider: () => playlist,
+      selectedPlaylistIndexProvider: () => 2,
+      onNativePlaylistIndex: nativeIndices.add,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await engine.load(second);
+    expect(player.lastInitialIndex, 2,
+        reason: 'native source preparation must select second occurrence');
+    expect(player.lastSeekIndex, 2,
+        reason: 'the initial seek must use the exact queue index');
+
+    // Index changes must also reach PlayerService even when two adjacent
+    // sequence entries represent identical logical tracks.
+    player.sources = [
+      for (final song in playlist)
+        ja.AudioSource.uri(Uri.file(song.filePath!)),
+    ];
+    player.activeIndex = 1;
+    player.indices.add(1);
+    await tester.pump();
+    expect(nativeIndices, contains(1));
+    player.activeIndex = 2;
+    player.indices.add(2);
+    await tester.pump();
+    expect(nativeIndices.last, 2);
+  });
+
   testWidgets('native playlist auto-advance rejects a 30-second HTTP item',
       (tester) async {
     final player = _Player();

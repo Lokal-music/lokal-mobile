@@ -54,6 +54,11 @@ class _Player extends PlayerNotifier {
         queue: [song('Manual')],
       );
   @override
+  Future<void> playFromPlaylistIndex(int index) async {
+    played.add('playlist:$index');
+  }
+
+  @override
   Future<void> playFromUpNextIndex(int index) async {
     played.add('next:$index');
   }
@@ -79,6 +84,7 @@ void main() {
     bool reorderDemo = false,
     bool autoplayOnly = false,
     bool discoveryPendingOnly = false,
+    bool withPrevious = false,
     LokalThemeId theme = LokalThemeId.dark,
   }) async {
     // Give the sheet enough height for both sliver sections to be mounted.
@@ -110,6 +116,15 @@ void main() {
             sourcePackage: Song.pendingSourcePackage,
           ),
         ],
+      );
+    }
+    if (withPrevious) {
+      final tracks = [song('A'), song('B'), song('C'), song('D')];
+      player.initial = PlayerState(
+        playlist: tracks,
+        currentIndex: 2,
+        currentSong: tracks[2],
+        upNext: [tracks[3]],
       );
     }
     if (autoplayOnly) {
@@ -227,6 +242,24 @@ void main() {
       expect(find.byType(QueueList), findsNothing);
     },
   );
+  testWidgets('middle selection exposes previous tracks at their absolute indexes',
+      (tester) async {
+    await pump(tester, withPrevious: true);
+    expect(find.text('Previous in queue'), findsOneWidget);
+    expect(find.text('Track B'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('queue-previous-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Track B'), findsOneWidget);
+    expect(find.text('Track A'), findsOneWidget);
+    await tester.tap(find.text('Track B'));
+    await tester.pumpAndSettle();
+
+    expect(player.played, ['playlist:1']);
+    expect(opens, 1);
+  });
+
   testWidgets('unresolved Discovery queue shows unknown duration, not 00:00', (tester) async {
     await pump(tester, discoveryPendingOnly: true);
     expect(find.text('Unresolved Discovery'), findsOneWidget);

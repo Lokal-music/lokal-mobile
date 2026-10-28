@@ -64,6 +64,7 @@ class QueueList extends ConsumerStatefulWidget {
 
 class _QueueListState extends ConsumerState<QueueList> {
   bool _selectionMode = false;
+  bool _showPrevious = false;
   final _selected = <String>{};
   List<Song>? _optimisticSongs;
   bool _reordering = false;
@@ -126,6 +127,15 @@ class _QueueListState extends ConsumerState<QueueList> {
     final manualQueue = ref.watch(queueProvider);
     final autoplay = ref.watch(autoplayUpNextProvider);
     final current = ref.watch(currentSongProvider);
+    // Select only the index; position updates must not rebuild the queue
+    // sheet just to reconstruct its (potentially very long) history.
+    final currentIndex = ref.watch(
+      playerProvider.select((state) => state.currentIndex),
+    );
+    final playbackOrder = ref.read(playerProvider).playlist;
+    final previousCount = current == null
+        ? 0
+        : currentIndex.clamp(0, playbackOrder.length);
     // A paused/no-context manual queue is still editable. With active
     // playback, Up Next already contains every manual queue entry.
     final manualOnly = upcoming.isEmpty && manualQueue.isNotEmpty;
@@ -224,6 +234,61 @@ class _QueueListState extends ConsumerState<QueueList> {
                         canOpen: widget.onOpenPlayer != null),
                   ),
                 ),
+              if (previousCount > 0 && !_selectionMode) ...[
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(h, 0, h, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: InkWell(
+                      key: const ValueKey('queue-previous-toggle'),
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => setState(() => _showPrevious = !_showPrevious),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        child: Row(
+                          children: [
+                            Text(lokalText('Previous in queue'),
+                              style: TextStyle(color: mutedColor,
+                                fontWeight: FontWeight.w700, fontSize: 12,
+                                letterSpacing: 1.1)),
+                            const SizedBox(width: 8),
+                            Text('$previousCount',
+                              style: TextStyle(color: mutedColor, fontSize: 12)),
+                            const Spacer(),
+                            Icon(_showPrevious
+                                ? LucideIcons.chevronUp
+                                : LucideIcons.chevronDown,
+                              size: 17, color: mutedColor),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (_showPrevious)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(h, 0, h, 14),
+                    sliver: SliverList.builder(
+                      itemCount: previousCount,
+                      itemBuilder: (context, offset) {
+                        // Nearest previous song first. Index remains absolute
+                        // so duplicates and queued occurrences stay distinct.
+                        final index = previousCount - offset - 1;
+                        return _QueueRow(
+                          key: ValueKey('previous:$index'),
+                          song: playbackOrder[index],
+                          index: index,
+                          past: true,
+                          darkBackdrop: widget.embedded,
+                          onTap: () async {
+                            await ref.read(playerProvider.notifier)
+                                .playFromPlaylistIndex(index);
+                            _openPlayer();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
               if (songs.isNotEmpty) ...[
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(h, 5, h, 5),
@@ -380,6 +445,7 @@ class _QueueRow extends StatelessWidget {
     this.selecting = false,
     this.selected = false,
     this.autoplay = false,
+    this.past = false,
     this.darkBackdrop = false,
   });
 
@@ -390,6 +456,7 @@ class _QueueRow extends StatelessWidget {
   final bool selecting;
   final bool selected;
   final bool autoplay;
+  final bool past;
   final bool darkBackdrop;
 
   @override
@@ -446,7 +513,7 @@ class _QueueRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (!selecting && !autoplay) ...[
+            if (!selecting && !autoplay && !past) ...[
               IconButton(
                 tooltip: 'More',
                 icon: Icon(LucideIcons.ellipsis, color: mutedColor, size: 19),
@@ -481,10 +548,11 @@ class _QueueRow extends StatelessWidget {
                   ),
                 ),
               ),
-            ] else if (autoplay)
+            ] else if (autoplay || past)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Icon(LucideIcons.sparkles, color: mutedColor, size: 18),
+                child: Icon(past ? LucideIcons.history : LucideIcons.sparkles,
+                  color: mutedColor, size: 18),
               )
             else
               const SizedBox(width: 16),
