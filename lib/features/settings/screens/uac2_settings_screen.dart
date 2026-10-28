@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/models/audio_output_diagnostics.dart';
+import 'package:flick/models/audio_engine_type.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/services/uac2_preferences_service.dart'
     show AudioEnginePreference;
@@ -12,6 +13,34 @@ import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
 import 'package:flick/widgets/uac2/uac2_volume_control.dart';
 import 'package:flick/widgets/uac2/uac2_hotplug_monitor.dart';
 import 'package:flick/l10n/l10n.dart';
+
+/// Native USB registration is a playback-session state, not USB discovery.
+/// A connected idle DAC must not appear to have failed registration.
+enum UsbDacClaimPresentation {
+  claimed,
+  registeredUnclaimed,
+  connectedIdle,
+  inactive,
+  failed,
+}
+
+@visibleForTesting
+UsbDacClaimPresentation classifyUsbDacClaim({
+  required bool registered,
+  required bool claimed,
+  required bool connected,
+  required bool directUsbPlaybackAttempt,
+}) {
+  if (registered) {
+    return claimed
+        ? UsbDacClaimPresentation.claimed
+        : UsbDacClaimPresentation.registeredUnclaimed;
+  }
+  if (directUsbPlaybackAttempt) return UsbDacClaimPresentation.failed;
+  return connected
+      ? UsbDacClaimPresentation.connectedIdle
+      : UsbDacClaimPresentation.inactive;
+}
 
 /// The USB DAC page: connected devices, what the DAC can do and is doing,
 /// then the engine, bit-perfect, format and DSD preferences, all on one page.
@@ -240,6 +269,17 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
     final t = context.lokal;
     Color good(bool ok) => ok ? t.accent : t.orange;
     final format = status.currentFormat;
+    final claimPresentation = diagnostics == null
+        ? UsbDacClaimPresentation.inactive
+        : classifyUsbDacClaim(
+            registered: diagnostics.directUsbRegistered,
+            claimed: diagnostics.usbInterfaceClaimed,
+            connected: status.isExternalRoute ||
+                status.routeType == Uac2RouteType.externalUsb,
+            directUsbPlaybackAttempt:
+                diagnostics.selectedMode == AudioEngineType.usbDacExperimental &&
+                status.state == Uac2State.streaming,
+          );
     Widget notice(String text, {bool warning = true, IconData? icon}) =>
         Padding(
           padding: const EdgeInsets.all(12),
@@ -301,12 +341,20 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
         ),
         _InfoRow(
           label: l10n.dacClaim,
-          value: diagnostics.directUsbRegistered
-              ? (diagnostics.usbInterfaceClaimed
-                    ? l10n.claimedByFlick
-                    : l10n.registeredNotClaimed)
-              : l10n.notRegistered,
-          valueColor: good(diagnostics.usbInterfaceClaimed),
+          value: switch (claimPresentation) {
+            UsbDacClaimPresentation.claimed => l10n.claimedByFlick,
+            UsbDacClaimPresentation.registeredUnclaimed =>
+              l10n.registeredNotClaimed,
+            UsbDacClaimPresentation.connectedIdle =>
+              '${l10n.connected} · ${l10n.idle}',
+            UsbDacClaimPresentation.inactive => l10n.idle,
+            UsbDacClaimPresentation.failed => l10n.notRegistered,
+          },
+          valueColor: claimPresentation == UsbDacClaimPresentation.failed
+              ? t.orange
+              : (claimPresentation == UsbDacClaimPresentation.claimed
+                  ? t.accent
+                  : null),
         ),
         _InfoRow(
           label: l10n.audioFocus,
@@ -314,6 +362,13 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
           valueColor: good(diagnostics.audioFocusHeld),
         ),
       ],
+      if (claimPresentation == UsbDacClaimPresentation.connectedIdle)
+        notice(
+          'USB registration starts with direct playback and is released '
+          'when playback stops.',
+          warning: false,
+          icon: Icons.info_outline_rounded,
+        ),
       if (diagnostics != null &&
           diagnostics.verificationReason != null &&
           diagnostics.verificationReason != diagnostics.fallbackReason)
