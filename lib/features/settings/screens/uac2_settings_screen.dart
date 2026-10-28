@@ -287,8 +287,9 @@ class _Uac2SettingsScreenState extends ConsumerState<Uac2SettingsScreen> {
             // state, and its fallback can already select normal Android.
             directUsbPlaybackAttempt:
                 status.state == Uac2State.error ||
-                (diagnostics.fallbackReason?.toLowerCase().contains('usb') == true &&
-                    diagnostics.initializedMode == AudioEngineType.usbDacExperimental) ||
+                (RegExp(r'direct usb|usb dac|usb path|uac2|libusb|isochronous',
+                    caseSensitive: false)
+                    .hasMatch(diagnostics.fallbackReason ?? '')) ||
                 (diagnostics.selectedMode == AudioEngineType.usbDacExperimental &&
                     status.state == Uac2State.streaming),
           );
