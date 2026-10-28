@@ -130,6 +130,119 @@ void main() {
       }
     });
 
+    test('rejects route result when USB ownership activates mid-probe', () {
+      expect(
+        shouldDiscardStaleDirectUsbRouteProbe(
+          reason: 'audio route change',
+          directUsbSessionWasActive: false,
+          selectedMode: AudioEngineType.usbDacExperimental,
+          initializedMode: AudioEngineType.usbDacExperimental,
+          playbackActive: true,
+          directUsbSessionActive: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not discard intentional changes or non-live USB results', () {
+      for (final reason in [
+        'bit-perfect preference changed',
+        'manual direct USB retry',
+        'engine preference changed',
+      ]) {
+        expect(
+          shouldDiscardStaleDirectUsbRouteProbe(
+            reason: reason,
+            directUsbSessionWasActive: false,
+            selectedMode: AudioEngineType.usbDacExperimental,
+            initializedMode: AudioEngineType.usbDacExperimental,
+            playbackActive: true,
+            directUsbSessionActive: true,
+          ),
+          isFalse,
+        );
+      }
+
+      expect(
+        shouldDiscardStaleDirectUsbRouteProbe(
+          reason: 'audio route change',
+          directUsbSessionWasActive: false,
+          selectedMode: AudioEngineType.usbDacExperimental,
+          initializedMode: AudioEngineType.usbDacExperimental,
+          playbackActive: true,
+          directUsbSessionActive: false,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldDiscardStaleDirectUsbRouteProbe(
+          reason: 'audio route change',
+          directUsbSessionWasActive: true,
+          selectedMode: AudioEngineType.usbDacExperimental,
+          initializedMode: AudioEngineType.usbDacExperimental,
+          playbackActive: true,
+          directUsbSessionActive: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('failed route query retains the exact live USB status', () {
+      final usbStatus = Uac2DeviceStatus(
+        device: Uac2DeviceInfo(
+          vendorId: 0x1234,
+          productId: 0x5678,
+          serial: null,
+          productName: 'Audiocular D07',
+          manufacturer: 'Audiocular',
+          deviceName: '/dev/bus/usb/001/002',
+        ),
+        state: Uac2State.streaming,
+        routeType: Uac2RouteType.externalUsb,
+        routeLabel: 'Audiocular D07',
+        isExternalRoute: true,
+        currentFormat: const Uac2AudioFormat(
+          sampleRate: 96000,
+          bitDepth: 24,
+          channels: 2,
+        ),
+      );
+      final preserved = directUsbStatusToPreserveOnFailedRouteProbe(
+        currentStatus: usbStatus,
+        directUsbPlaybackActive: true,
+      );
+      expect(identical(preserved, usbStatus), isTrue);
+      expect(preserved?.routeType, Uac2RouteType.externalUsb);
+      expect(preserved?.currentFormat?.sampleRate, 96000);
+      expect(preserved?.state, Uac2State.streaming);
+
+      // Explicit release must NOT keep stale USB device state.
+      expect(
+        directUsbStatusToPreserveOnFailedRouteProbe(
+          currentStatus: usbStatus,
+          directUsbPlaybackActive: false,
+        ),
+        isNull,
+      );
+      expect(
+        directUsbStatusToPreserveOnFailedRouteProbe(
+          currentStatus: null,
+          directUsbPlaybackActive: true,
+        ),
+        isNull,
+      );
+      expect(
+        directUsbStatusToPreserveOnFailedRouteProbe(
+          currentStatus: usbStatus.copyWith(
+            routeType: Uac2RouteType.unknown,
+            isExternalRoute: false,
+          ),
+          directUsbPlaybackActive: true,
+        ),
+        isNull,
+      );
+    });
+
     test('equivalent route snapshots do not notify the session again', () {
       const before = AndroidPlaybackDeviceInfo(
         hasUsbDac: true,
