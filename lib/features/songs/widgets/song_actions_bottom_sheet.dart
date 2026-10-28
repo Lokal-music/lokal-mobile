@@ -53,13 +53,17 @@ class LokalSongMenuAction {
 /// Motion-art and video controls have dedicated, track-aware full-player
 /// surfaces. They should not be repeated as unconditional song-menu rows.
 @visibleForTesting
-bool showMovingCoverMenuAction({required bool nowPlaying}) => !nowPlaying;
+bool showMovingCoverMenuAction({
+  required bool nowPlaying,
+  bool hideMediaActions = false,
+}) => !nowPlaying && !hideMediaActions;
 
 @visibleForTesting
 bool showWatchVideoMenuAction({
   required bool nowPlaying,
   required bool videosEnabled,
-}) => !nowPlaying && videosEnabled;
+  bool hideMediaActions = false,
+}) => !nowPlaying && !hideMediaActions && videosEnabled;
 
 @visibleForTesting
 Song? songForOpenMenu({
@@ -78,6 +82,7 @@ class SongActionsBottomSheet extends ConsumerWidget {
     this.extras = const [],
     this.queueActions = true,
     this.nowPlaying = false,
+    this.hideMediaActions = false,
   });
 
   final Song song;
@@ -93,6 +98,9 @@ class SongActionsBottomSheet extends ConsumerWidget {
 
   /// Hides browsing actions that have dedicated controls in Now Playing.
   final bool nowPlaying;
+  /// Full-player variants can retain their existing browse actions while
+  /// hiding motion/video rows already surfaced on the player footer.
+  final bool hideMediaActions;
 
   /// Opens the menu for [song].
   static Future<void> show(
@@ -103,6 +111,8 @@ class SongActionsBottomSheet extends ConsumerWidget {
     List<LokalSongMenuAction> extras = const [],
     bool queueActions = true,
     bool nowPlaying = false,
+    bool hideMediaActions = false,
+    bool followPlaybackSong = false,
   }) {
     final t = context.lokal;
     return showModalBottomSheet<void>(
@@ -127,8 +137,9 @@ class SongActionsBottomSheet extends ConsumerWidget {
           extras: extras,
           queueActions: queueActions,
           nowPlaying: nowPlaying,
+          hideMediaActions: hideMediaActions,
         );
-        if (!nowPlaying) return forSong(song);
+        if (!nowPlaying && !followPlaybackSong) return forSong(song);
         // The sheet can remain open while playback auto-advances. Do not
         // leave source-specific actions, metadata, or Like state stuck on
         // the song for which it was first opened.
@@ -136,7 +147,7 @@ class SongActionsBottomSheet extends ConsumerWidget {
           valueListenable: PlayerService().currentSongNotifier,
           builder: (_, currentSong, __) {
             final liveSong = songForOpenMenu(
-              nowPlaying: nowPlaying,
+              nowPlaying: nowPlaying || followPlaybackSong,
               openedSong: song,
               currentSong: currentSong,
             );
@@ -187,7 +198,10 @@ class SongActionsBottomSheet extends ConsumerWidget {
         .disabledSongs
         .contains(movingCoverSongKey(song));
     final rows = <Widget>[
-      if (showMovingCoverMenuAction(nowPlaying: nowPlaying))
+      if (showMovingCoverMenuAction(
+        nowPlaying: nowPlaying,
+        hideMediaActions: hideMediaActions,
+      ))
         _MenuRow(
         icon: motionOff ? Icons.motion_photos_on : Icons.motion_photos_off,
         label: motionOff
@@ -296,6 +310,7 @@ class SongActionsBottomSheet extends ConsumerWidget {
       if (showWatchVideoMenuAction(
         nowPlaying: nowPlaying,
         videosEnabled: videos,
+        hideMediaActions: hideMediaActions,
       ))
         _MenuRow(
           icon: Icons.smart_display_rounded,
