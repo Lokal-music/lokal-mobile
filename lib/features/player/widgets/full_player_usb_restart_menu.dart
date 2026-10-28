@@ -9,6 +9,8 @@ import 'package:flick/services/player_service.dart';
 import 'package:flick/services/uac2_service.dart';
 import 'package:flick/services/uac2_preferences_service.dart';
 
+import 'usb_dac_quick_status_sheet.dart';
+
 /// USB restart remains available on Android after an audio-engine fallback:
 /// physical attachment, not current playback routing, governs visibility.
 @visibleForTesting
@@ -54,6 +56,23 @@ Future<void> showFullPlayerSongMenu(
     hideMediaActions: true,
     extras: [
       ...extras,
+      if (showUsbRestartMenuAction(
+        android: Platform.isAndroid,
+        connectedDac: connectedDac,
+      ))
+        LokalSongMenuAction(
+          icon: Icons.usb_rounded,
+          label: 'USB DAC status',
+          onTap: () {
+            // The song sheet closes before its callbacks run; open the next
+            // sheet on the following frame to avoid overlapping routes.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) {
+                unawaited(showUsbDacQuickStatusSheet(context));
+              }
+            });
+          },
+        ),
       if (showUsbRestartMenuAction(
         android: Platform.isAndroid,
         connectedDac: connectedDac,
