@@ -314,10 +314,22 @@ class LinkSyncCoordinator {
         .entityEqualTo('playlist')
         .findAll();
     final desktopPlaylistIds = <String>{};
+    final desktopDeletions = <String>{};
     for (final operation in operations) {
-      if (operation.deviceId == desktopId &&
-          operation.op == 'playlist.create') {
+      if (operation.deviceId != desktopId) continue;
+      if (operation.op == 'playlist.create') {
         desktopPlaylistIds.add(operation.entityId);
+      } else if (operation.op == 'playlist.delete') {
+        desktopDeletions.add(operation.entityId);
+      }
+    }
+    // A playlist originally created on the phone can later be deleted on
+    // desktop. Include mapped deletions so an old consumed cursor cannot
+    // silently leave the deleted mobile copy behind.
+    final prefs = await SharedPreferences.getInstance();
+    for (final id in desktopDeletions) {
+      if (prefs.getString('lokal.link.playlist_local.$id') != null) {
+        desktopPlaylistIds.add(id);
       }
     }
     var reconciled = false;
