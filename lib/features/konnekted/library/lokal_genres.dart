@@ -128,5 +128,6 @@ class LokalGenrePage extends ConsumerWidget {
       return const <Song>[];
     }),
     initialSort: LokalSongSort.artist,
+    preferencesKey: 'lokal.genre.${lokalGenreKey(genre.name)}.song_browser_view.v1',
   );
 }
