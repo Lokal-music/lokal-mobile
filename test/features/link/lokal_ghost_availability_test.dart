@@ -2,6 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/features/link/lokal_ghost_availability.dart';
 
 void main() {
+  test('HTTP desktop reachability is bounded and handles offline failure', () async {
+    expect(await desktopHttpReachable(() async {}), isTrue);
+    expect(await desktopHttpReachable(() async {
+      throw StateError('Connection refused');
+    }), isFalse);
+    expect(await desktopHttpReachable(
+      () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      timeout: const Duration(milliseconds: 5),
+    ), isFalse);
+  });
+
   test('paired desktop credentials allow HTTP playback without a websocket', () {
     expect(desktopStreamingCredentialsMatch(
       storedUsername: 'desktop-a:guest',
