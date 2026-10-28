@@ -64,6 +64,7 @@ import '../widgets/lyrics_subline_buttons.dart';
 import 'package:flick/features/player/widgets/shuffle_mode_sheet.dart';
 import 'package:flick/features/player/widgets/sleep_timer_bottom_sheet.dart';
 import 'package:flick/features/player/widgets/pitch_bottom_sheet.dart';
+import 'package:flick/features/player/widgets/full_player_usb_restart_menu.dart';
 import 'package:flick/features/konnekted/library/lokal_navigation.dart';
 import 'package:flick/features/player/widgets/song_metadata_sheet.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
@@ -853,24 +854,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     MaterialPageRoute<void>(builder: (_) => const CastingSettingsScreen()),
   );
 
-  /// The Now Playing menu retains only actions that aren't already surfaced
-  /// as player controls or as taps on the track title, artist, and quality pill.
-  void _openMore(Song song) {
-    SongActionsBottomSheet.show(
-      context,
-      song,
-      nowPlaying: true,
-      extras: [
-        LokalSongMenuAction(
-          icon: Icons.graphic_eq_rounded,
-          label: 'Pitch',
-          onTap: () {
-            if (mounted) PitchBottomSheet.show(context, _player);
-          },
-        ),
-      ],
-    );
-  }
+  /// The menu follows the current recording, and the USB recovery option
+  /// appears only when UsbManager sees a physically attached DAC.
+  Future<void> _openMore(Song song) => showFullPlayerSongMenu(
+    context,
+    song: song,
+    player: _player,
+  );
 
   // ───────────────────────────── build ─────────────────────────────
 
@@ -1223,7 +1213,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
           Align(alignment: Alignment.centerRight,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               _roundIcon(LucideIcons.cast, _openCasting, active: isCasting),
-              _roundIcon(Icons.more_vert, () => _openMore(song)),
+              _roundIcon(Icons.more_vert, () => unawaited(_openMore(song))),
             ])),
         ],
       ),
@@ -2303,6 +2293,18 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   : '${speed.toStringAsFixed(2)}x',
               () => SpeedBottomSheet.show(context, _player),
               active: (speed - 1.0).abs() >= 0.01,
+              width: (constraints.maxWidth - 8) / 4,
+            ),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: _player.pitchSemitonesNotifier,
+            builder: (_, pitch, __) => chip(
+              Icons.graphic_eq_rounded,
+              pitch.abs() < 0.01
+                  ? l10n.pitch
+                  : '${pitch > 0 ? '+' : ''}${pitch.toStringAsFixed(0)} st',
+              () => PitchBottomSheet.show(context, _player),
+              active: pitch.abs() >= 0.01,
               width: (constraints.maxWidth - 8) / 4,
             ),
           ),
