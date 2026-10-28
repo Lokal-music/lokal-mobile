@@ -2377,62 +2377,60 @@ class PlayerService {
         AppLog.instance.add('[USB] Manual restart attempt $attempt/3');
         try {
           final success = await restartDirectUsbSessionSequence(
-        stopEngine: () async {
-          // This lazy switch detaches the active engine, including the Rust
-          // callback, before the native USB interface is released.
-          await _sessionManager.switchMode(
-            AudioEngineType.normalAndroid,
-            reason: 'force restart direct USB - detach old engine',
+            stopEngine: () async {
+              // Dispose the old Rust callback and engine before releasing
+              // the native interface, including when the last handle died.
+              await _sessionManager.switchMode(
+                AudioEngineType.normalAndroid,
+                reason: 'force restart direct USB - detach old engine',
+              );
+              if (_rustAudioService.isInitialized) {
+                await _disposeUsbEngine();
+              }
+              await _releaseAndroidManagedAudioResources(
+                reason: 'force restart direct USB',
+              );
+            },
+            resetTransport: () async {
+              // A failed host handle can temporarily remove the device from
+              // UsbManager. Wait for actual enumeration, never frozen state.
+              final present = await awaitReattachedUsbDevice(
+                physicallyPresent: () async =>
+                    (await _uac2Service.listDevices(
+                      verifyPhysicalAttachment: true,
+                    )).isNotEmpty,
+                pauseBetweenChecks: () => Future<void>.delayed(
+                  const Duration(milliseconds: 250),
+                ),
+              );
+              if (!present) {
+                throw StateError('DAC did not reappear in Android USB inventory');
+              }
+              return _uac2Service.resetAndroidDirectUsbPath(format: format);
+            },
+            reselectDirectRoute: () =>
+                _sessionManager.retryExperimentalUsbForCurrentDevice(),
+            restorePlayback: () async {
+              await _prepareImmediatePlaybackAsset(playableSong);
+              final engine = await _ensureEngineReady(
+                AudioEngineType.usbDacExperimental,
+                song: playableSong,
+                reason: 'manual direct USB engine restart',
+              );
+              if (engine != AudioEngineType.usbDacExperimental) {
+                throw StateError('Track cannot be restored over direct USB '
+                    '(resolved engine: ${engine.logLabel})');
+              }
+              await _runWithSuppressedSequenceStateUpdates(() async {
+                await _playbackManager.playTrack(
+                  playableSong,
+                  initialPosition: Duration.zero,
+                  autoPlay: true,
+                );
+              });
+              _ensurePositionSaveTimer();
+            },
           );
-          // A stale Rust service may outlive its engine after a transport
-          // failure. Shut it down as well, rather than reusing a dead pump.
-          if (_rustAudioService.isInitialized) {
-            await _disposeUsbEngine();
-          }
-          await _releaseAndroidManagedAudioResources(
-            reason: 'force restart direct USB',
-          );
-        },
-        resetTransport: () async {
-          final physicallyPresent = await awaitReattachedUsbDevice(
-            physicallyPresent: () async => (await _uac2Service.listDevices(
-              verifyPhysicalAttachment: true,
-            )).isNotEmpty,
-            pauseBetweenChecks: () =>
-                Future<void>.delayed(const Duration(milliseconds: 250)),
-          );
-          if (!physicallyPresent) {
-            throw StateError('DAC did not reappear in Android USB inventory');
-          }
-          return _uac2Service.resetAndroidDirectUsbPath(format: format);
-        },
-        reselectDirectRoute: () async {
-          return _sessionManager.retryExperimentalUsbForCurrentDevice();
-        },
-        restorePlayback: () async {
-          if (playableSong == null) return;
-          await _prepareImmediatePlaybackAsset(playableSong);
-          final engine = await _ensureEngineReady(
-            AudioEngineType.usbDacExperimental,
-            song: playableSong,
-            reason: 'manual direct USB engine restart',
-          );
-          if (engine != AudioEngineType.usbDacExperimental) {
-            throw StateError('Track cannot be restored over direct USB '
-                '(resolved engine: ${engine.logLabel})');
-          }
-          await _runWithSuppressedSequenceStateUpdates(() async {
-            await _playbackManager.playTrack(
-              playableSong,
-              initialPosition: position,
-              autoPlay: true,
-            );
-          });
-          if (playableSong != null) {
-            _ensurePositionSaveTimer();
-          }
-        },
-      );
           if (!success) {
             throw StateError('Native DAC reset or direct route selection failed');
           }
