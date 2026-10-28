@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import '../../core/utils/app_log.dart';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -466,7 +468,9 @@ class MorneyeSignedSession {
       await _refresh(record).catchError((_) {});
       record = this.record();
       for (var attempt = 0; attempt < 3; attempt++) {
+        final clock = Stopwatch()..start();
         final response = await _request(record, method, path, body, headers);
+        clock.stop();
         Map<String, Object?> contract = {};
         try {
           final decoded = jsonDecode(response['body'] as String);
@@ -508,7 +512,19 @@ class MorneyeSignedSession {
           record = this.record();
           continue;
         }
-        return morneyeSignedAddonResponse(response, contract);
+        final addonResponse = morneyeSignedAddonResponse(response, contract);
+        if (path == '/tickets') {
+          // The gateway ticket decision is the dividing line between
+          // "Resolving Tidal stream" and an actual media transfer.
+          // Never record a ticket, URL, request body or session credentials.
+          AppLog.instance.add(
+            '[Morneye] ticket request status=$status '
+            'code=${code.isEmpty ? 'unspecified' : code} '
+            'retryMode=${addonResponse['retryMode']} '
+            'elapsedMs=${clock.elapsedMilliseconds}',
+          );
+        }
+        return addonResponse;
       }
       return {'ok': false, 'error': 'Signed request failed'};
     } catch (error) {
