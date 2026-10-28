@@ -5411,6 +5411,15 @@ class PlayerService {
     // conversion alone cannot protect an ordinary queue left open longer
     // than the media registration lifetime. Re-arm stale queue entries
     // before the Android player builds any future audio sources.
+    // Capture the original slot before online stream descriptors are refreshed:
+    // different occurrences of the same song ID may resolve to one Song object.
+    final requestedIndex = playlist == null
+        ? -1
+        : selectedPlaylistIndex(playlist, song);
+    final selectedCurrentSlot = playlist == null &&
+        _currentIndex >= 0 &&
+        _currentIndex < _playlist.length &&
+        identical(_playlist[_currentIndex], song);
     final recovered = replayableStreamSelection(song, playlist ?? _playlist);
     if (!identical(song, recovered.selected) && recovered.selected.isPending) {
       AppLog.instance.add(
@@ -5464,7 +5473,9 @@ class PlayerService {
         // playlist, radio and Cover Flow entry point. Wrap-around navigation
         // remains a separate preference at the actual start of the queue.
         _replacePlaybackContext(playlist);
-        _setCurrentIndex(selectedPlaylistIndex(_playlist, song));
+        _setCurrentIndex(requestedIndex >= 0 && requestedIndex < _playlist.length
+            ? requestedIndex
+            : selectedPlaylistIndex(_playlist, song));
         if (isShuffleNotifier.value) {
           final shuffled = buildShufflePlaybackOrder(
             songs: _playlist,
@@ -5480,9 +5491,9 @@ class PlayerService {
         }
         _insertQueuedEntriesAfterCurrent();
       } else {
-        final existingIndex = _playlist.indexWhere(
-          (entry) => entry.id == song.id,
-        );
+        final existingIndex = selectedCurrentSlot
+            ? _currentIndex
+            : selectedPlaylistIndex(_playlist, song);
         if (existingIndex == -1) {
           _replacePlaybackContext([song]);
           _setCurrentIndex(0);
