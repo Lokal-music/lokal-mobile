@@ -526,6 +526,9 @@ class PlayerService {
     if (Platform.isIOS) {
       IosLocalAudioRequests.lifecycle.register(this, _retireIosPlayback);
       IosLocalAudioRequests.restoreSession = _restoreIosAudioSession;
+      _rustAudioService.positionNotifier.addListener(
+        _persistPausedRustPosition,
+      );
     }
     // Prepare sidecar/embedded lyrics at playback time, independently of
     // whether either full-player layout or Lyrics pane is visible.
@@ -706,6 +709,10 @@ class PlayerService {
 
   // Timer to periodically save position
   Timer? _positionSaveTimer;
+  bool _iosPositionSavingPaused = false;
+
+  @visibleForTesting
+  bool get debugPositionSaveTimerActive => _positionSaveTimer?.isActive == true;
 
   // Periodic health-check for hardware volume verification
   Timer? _hwVolumeHealthTimer;
@@ -2339,6 +2346,7 @@ class PlayerService {
       _networkLoadingGen++;
       _positionSaveTimer?.cancel();
       _positionSaveTimer = null;
+      _iosPositionSavingPaused = true;
       isNetworkLoadingNotifier.value = false;
       onlinePreparationTitleNotifier.value = null;
       isPlayingNotifier.value = false;
@@ -3917,6 +3925,22 @@ class PlayerService {
       final shouldUseRust = state.engine.usesRustBackend;
       if (_usingRustBackend != shouldUseRust) {
         _usingRustBackend = shouldUseRust;
+      }
+      if (Platform.isIOS &&
+          _iosPositionSavingPaused &&
+          !shouldUseRust &&
+          !state.isPlaying &&
+          !state.isBuffering &&
+          state.currentTrack != null &&
+          previous?.currentTrack?.id == state.currentTrack?.id &&
+          previous?.position != state.position) {
+        unawaited(
+          _savePosition(
+            song: state.currentTrack,
+            position: state.position,
+            wasPlaying: false,
+          ),
+        );
       }
       final shouldTrackReplayFromState = shouldTrackReplayFromPlaybackState(
         usingRustBackend: shouldUseRust,
@@ -5960,6 +5984,7 @@ class PlayerService {
       await IosLocalAudioRequests.wait(_externalPlaybackOwner.releaseCurrent());
     }
     if (intent != _pendingPlaybackGeneration) return;
+    if (Platform.isIOS) _iosPositionSavingPaused = false;
     // Qobuz/Morneye and HTTP add-on handles are ephemeral. The Likes-page
     // conversion alone cannot protect an ordinary queue left open longer
     // than the media registration lifetime. Re-arm stale queue entries
@@ -6340,7 +6365,11 @@ class PlayerService {
     _maybeRerouteTrackToRustDecoder(song, position: positionNotifier.value);
   }
 
-  Future<void> _savePosition({Song? song, Duration? position}) async {
+  Future<void> _savePosition({
+    Song? song,
+    Duration? position,
+    bool? wasPlaying,
+  }) async {
     final resolvedSong = song ?? currentSongNotifier.value;
     if (!_shouldPersistSong(resolvedSong)) return;
     final persistedSong = resolvedSong!;
@@ -6351,7 +6380,7 @@ class PlayerService {
         position ?? positionNotifier.value,
         playlistSongIds: _playlistNonQueueIds(),
         currentIndex: _currentIndex,
-        wasPlaying: isPlayingNotifier.value,
+        wasPlaying: wasPlaying ?? isPlayingNotifier.value,
       );
     } catch (e) {
       _debugLog('Failed to save last played position: $e');
@@ -6360,6 +6389,49 @@ class PlayerService {
 
   Future<void> persistLastPlayed() async {
     await _savePosition();
+  }
+
+  void _persistPausedRustPosition() {
+    if (!_iosPositionSavingPaused ||
+        !_usingRustBackend ||
+        isPlayingNotifier.value ||
+        _iosLocalRetirement ||
+        _castingService.isActive ||
+        _pendingPresentationTrackId != null) {
+      return;
+    }
+    final phase = IosLocalAudioRequests.lifecycle.phase.value;
+    if (phase != LocalAudioPhase.ready && phase != LocalAudioPhase.paused) {
+      return;
+    }
+    final song = currentSongNotifier.value;
+    if (song == null ||
+        _playbackManager.latestState?.currentTrack?.id != song.id) {
+      return;
+    }
+    // RustAudioEngine publishes requested seeks optimistically. Persist only
+    // the actual native cursor notifier, including backward paused seeks.
+    unawaited(
+      _savePosition(
+        song: song,
+        position: _rustAudioService.positionNotifier.value,
+        wasPlaying: false,
+      ),
+    );
+  }
+
+  Future<void> _confirmPausedPositionSaving({required bool persist}) async {
+    if (!Platform.isIOS) return;
+    _iosPositionSavingPaused = true;
+    _positionSaveTimer?.cancel();
+    _positionSaveTimer = null;
+    if (!persist) return;
+    await _savePosition(
+      position: _usingRustBackend && _playbackManager.hasAttachedEngine
+          ? _rustAudioService.positionNotifier.value
+          : positionNotifier.value,
+      wasPlaying: false,
+    );
   }
 
   Future<void> restorePlaybackModes() async {
@@ -6455,6 +6527,8 @@ class PlayerService {
   }
 
   Future<void> _pauseLocalOutput() async {
+    final intent = _pendingPlaybackGeneration;
+    final songId = currentSongNotifier.value?.id;
     _debugLog(
       '[Playback] pause() called, hasAttachedEngine=${_playbackManager.hasAttachedEngine}',
     );
@@ -6468,6 +6542,7 @@ class PlayerService {
       _debugLog(
         '[Playback] pause(): no engine attached, returning after optimistic update',
       );
+      await _confirmPausedPositionSaving(persist: true);
       return;
     }
     var pauseConfirmed = false;
@@ -6480,6 +6555,13 @@ class PlayerService {
       if (Platform.isIOS) {
         onlinePlaybackError.value = 'Audio did not confirm Pause. Try again.';
       }
+    }
+    if (pauseConfirmed) {
+      await _confirmPausedPositionSaving(
+        persist:
+            intent == _pendingPlaybackGeneration &&
+            currentSongNotifier.value?.id == songId,
+      );
     }
     await _refreshAudioOutputDiagnostics(
       reason: 'playback paused',
@@ -6509,6 +6591,7 @@ class PlayerService {
   }
 
   Future<void> _resumeLocalOutput() async {
+    if (Platform.isIOS) _iosPositionSavingPaused = false;
     await IosLocalAudioRequests.wait(initAudio());
 
     final song = currentSongNotifier.value ?? _songAtCurrentIndex();
@@ -6888,6 +6971,7 @@ class PlayerService {
                 ? limit
                 : position;
             _publishRestoredPlaybackState(song, position: target);
+            await _savePosition(position: target, wasPlaying: false);
           }
           return;
         }
@@ -8032,6 +8116,7 @@ class PlayerService {
   }
 
   void _ensurePositionSaveTimer() {
+    if (Platform.isIOS && _iosPositionSavingPaused) return;
     _positionSaveTimer?.cancel();
     _positionSaveTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _savePosition();
@@ -8119,6 +8204,9 @@ class PlayerService {
     if (Platform.isIOS) {
       IosLocalAudioRequests.lifecycle.unregister(this);
       IosLocalAudioRequests.restoreSession = null;
+      _rustAudioService.positionNotifier.removeListener(
+        _persistPausedRustPosition,
+      );
     }
     _playbackDiagnosticsDebounceTimer?.cancel();
     _playbackDiagnosticsDebounceTimer = null;

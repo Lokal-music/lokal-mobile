@@ -1,6 +1,6 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-Status: implementation and hosted native validation, 27 October 2026 (Europe/Paris).
+Status: implementation and hosted native validation, 28 October 2026 (Europe/Paris).
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
@@ -19,8 +19,12 @@ native-clock and newly delivered frame gates on explicit replay, with repeated
 playing/paused resets. Actual queue reorder and unconfigured widget-channel
 checks also pass. The inspected unsigned IPA, source, notices and matching
 symbols are preserved together; build 53 remains an older retained checkpoint.
-The later logger/sharing/through-#272 source requires its own full native
-acceptance. The expanded latest-source host selection passes 803 cases.
+The later logger/sharing/through-#272 source passes its iOS 18.6 suite in build
+72, but iOS 26 fails initial WebKit readiness. Build 73's real Rust polling
+probe passes on iOS 18.6; its later replacement WebKit readiness fails, while
+iOS 26 fails boot before app acceptance. Neither is a complete native pass.
+The current stabilization passes **830 combined host tests**, including
+15 persistence regressions, and extends the native acceptance probes.
 
 | Checkpoint | Accepted scope and limit |
 | --- | --- |
@@ -36,12 +40,17 @@ acceptance. The expanded latest-source host selection passes 803 cases.
 | [Widget run 21](https://github.com/lokal-music/lokal-mobile/actions/runs/40553935455) / PR #271 | All four focused native jobs pass: device/simulator extension linkage, contracts and 450 actual images in eleven locales, including nine independent OCR checks of visible recording/artist/recommendation text. Static layout evidence does not qualify live timer drawing, installed Home Screen behavior or signed shared access. |
 | [Build 66](https://github.com/lokal-music/lokal-mobile/actions/runs/40524454354) / PR #265 | iOS 18.6 reaches an initial native view but no local decoder/JavaScript readiness; release cleanup also times out. iOS 26 fails its control/recovery boot before app acceptance. This source has no complete dual-runtime acceptance. |
 | [Build 67](https://github.com/lokal-music/lokal-mobile/actions/runs/40551780392) / PR #270 | Complete iOS 18.6 and 26 acceptance through #261. Both settled replays advance bridge/native clocks and five new frames, with repeated playing/paused resets. IPA/source/notices/34 binaries/26 native symbol bundles are independently reverified. Tree `054b7aa18dbbbae333802eeea73a9e225cb42735`. This does not qualify later logger, sharing or through-#272 changes. |
+| [Build 72](https://github.com/lokal-music/lokal-mobile/actions/runs/40565173355) / PR #276 | Complete iOS 18.6 pass through #272. iOS 26 fails initial WebKit readiness: its native WebContent launch takes 23.029 seconds against a 15-second readiness gate. Not dual-runtime acceptance. |
+| [Widget run 22](https://github.com/lokal-music/lokal-mobile/actions/runs/40573226374) / PR #277 | All four focused jobs pass, with 450 images, nine pixel OCR checks and four actual app-hosted compositor captures. Visual review confirms visible advancing progress in both appearances. Installed WidgetKit remains unqualified. |
+| [Build 73](https://github.com/lokal-music/lokal-mobile/actions/runs/40573226701) / PR #277 | Real iOS 18.6 Rust polling/paused-seek probe passes; later replacement WebKit readiness fails after native retirement succeeds. iOS 26 boot fails before app acceptance. No newer package promotion. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
 [Windows installation and acceptance](IOS_SIDELOADING.md), the
 [widget implementation gates](IOS_WIDGETKIT.md), and
 [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md).
+The next implementation batch follows [the transfer architecture](IOS_TRANSFERS.md):
+durable job ownership, native background networking and the paired-desktop adapter.
 
 The earlier iOS 18.5 startup abort matches
 [WebKit bug 293831](https://bugs.webkit.org/show_bug.cgi?id=293831). CI explicitly
@@ -1553,3 +1562,55 @@ ImageRenderer timer limitation as a separate capture path. Fifteen Python
 policy/orchestration tests pass. Hosted compilation/captures and visual review
 are pending; this does not qualify installed WidgetKit or automatically assert
 progress animation. The accepted 450-image checkpoint remains unchanged.
+
+### Release stabilization: paused persistence and native startup budgets
+
+Build 72's iOS 26 native log measures 23.029459 seconds to launch WebContent.
+Build 73 separately confirms retirement and a replacement view, but its new
+document starts loading only about 15 seconds after creation. These observations
+justify a separate **45-second bounded document-readiness budget**, without an
+application restart/retry. Native retirement still has its original 15-second
+gate; settled seek, new decoded frames, source-clock advancement, repeated
+paused reset and acknowledged cleanup retain their existing requirements.
+
+Build 73's real Rust probe observes zero steady paused progress callbacks and
+one event batch over 1,346 ms, both paused seeks, no foreground auto-resume and
+534 ms progress after explicit Resume. This accepts that focused probe, not the
+failed whole run. Widget run 22's archive `12767106863` independently verifies
+SHA-256 `e3bffe6024a9a3d781589ee5d4f8b94ca53933ab36b38b397c22821280c4a125`.
+Its 450 images/nine OCR checks reverify, and the four compositor images visibly
+show the native bar advancing in both appearances. This is app-hosted layout
+evidence, not Home Screen scheduling, shared provisioning or actual audio.
+
+The #257 persistence continuation serializes saves/clears across service
+instances, freezes caller-owned queue IDs at invocation, and reads the complete
+saved context before asynchronous library lookup. A failed operation reports
+its error without blocking newer work. New writes store the entire versioned snapshot in
+one preference value, avoiding a partially replaced set of recording fields.
+Legacy keys remain readable until the first new snapshot; a tombstone prevents
+Clear or a damaged/future record from reviving legacy data. Rejected/throwing
+platform writes reload the committed cache value and preserve the primary error.
+This does not certify filesystem flush timing after abrupt power loss.
+Fifteen regressions cover overlapping/delayed/failing writes, clear ordering,
+queue mutation, coherent restore, stale indices, rejected platform writes, single-value snapshots, failed Clear,
+invalid/future records and legacy/missing library data.
+
+On iPhone only, confirmed Pause cancels the five-second save timer and saves
+the final observed position. Rejected/retired Pause cannot take that path.
+Explicit Play/Resume restores periodic saving. Paused Rust seeks persist from
+the actual native cursor notifier rather than the engine's optimistic requested
+position; the system path observes its paused engine updates. Restored selections
+without an attached engine persist their selected cursor directly. Reset, newer
+selection and disposal guards prevent an old source's cursor from being applied
+to a replacement selection. The extended native probes reload actual platform
+preferences after system/Rust Pause and both paused seek directions, cross the
+old five-second interval, and check timer rearming only after explicit Resume.
+Those new native assertions remain pending. Physical battery measurements remain
+separate; no native Rust/FFI, dependency or Android scheduling changes are made.
+
+The complete stabilization selection passes **830 Flutter regressions**. Four
+new/changed persistence/probe files pass strict analysis. Whole app/integration
+analysis has no errors (620 existing warning/information items). Enforced
+lockfile resolution, readiness/localization inventory, actionlint, diff checks
+and 15 Python widget-capture policy cases pass. Hosted native acceptance of the
+new persistence assertions and separated WebContent readiness gates is pending.

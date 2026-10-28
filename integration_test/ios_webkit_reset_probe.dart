@@ -58,11 +58,24 @@ Future<void> probeIosWebKitReset(
   video.timingAvailableNotifier.addListener(changed);
   binding.reportData!['media_reset_webkit_retirement_trace'] = trace;
 
-  Future<void> until(FutureOr<bool> Function() ready, String reason) async {
+  Future<void> until(
+    FutureOr<bool> Function() ready,
+    String reason, {
+    bool coldBootstrap = false,
+  }) async {
+    // Build 72's native log measures a 23.029-second WebContent launch on a
+    // fresh iOS 26 simulator; build 73 also delays a replacement document.
+    // Give new WebContent documents a separate bounded readiness budget.
+    // Native retirement and subsequent seek/frame gates retain their limits.
+    final deadline = Stopwatch()..start();
+    final attempts = coldBootstrap ? 180 : 60;
     Object? pollingError;
     StackTrace? pollingStack;
     try {
-      for (var i = 0; i < 60; i++) {
+      for (var i = 0; i < attempts; i++) {
+        if (coldBootstrap && deadline.elapsed >= const Duration(seconds: 45)) {
+          break;
+        }
         await tester.pump(const Duration(milliseconds: 250));
         expect(
           lifecycle.phase.value,
@@ -81,6 +94,8 @@ Future<void> probeIosWebKitReset(
       pollingStack = stack;
     }
     final diagnostics = observation(reason);
+    diagnostics['gate_elapsed_ms'] = deadline.elapsedMilliseconds;
+    diagnostics['cold_bootstrap'] = coldBootstrap;
     if (pollingError != null) {
       diagnostics['polling_error'] = pollingError.toString();
     }
@@ -230,7 +245,10 @@ Future<void> probeIosWebKitReset(
       await until(
         () => video.timingAvailableNotifier.value && views.length == 1,
         'Production video bridge did not observe the local decoder',
+        coldBootstrap: true,
       );
+      binding.reportData!['media_reset_webkit_initial_ready_ms'] =
+          clock.elapsedMilliseconds;
       final initialProgress = await progress('initial');
       final presentation = key.currentState;
       space.value = true;
@@ -248,9 +266,13 @@ Future<void> probeIosWebKitReset(
       await until(
         () =>
             lifecycle.phase.value == LocalAudioPhase.paused &&
-            views.length == 2 &&
-            video.timingAvailableNotifier.value,
+            views.length == 2,
         'WebKit reset did not acknowledge retirement and create a paused replacement',
+      );
+      await until(
+        () => video.timingAvailableNotifier.value && views.length == 2,
+        'Replacement WebKit document did not observe the local decoder',
+        coldBootstrap: true,
       );
       expect(views.last, isNot(same(oldView)));
       expect(key.currentState, same(presentation));
@@ -293,9 +315,13 @@ Future<void> probeIosWebKitReset(
       await until(
         () =>
             lifecycle.phase.value == LocalAudioPhase.paused &&
-            views.length == 3 &&
-            video.timingAvailableNotifier.value,
+            views.length == 3,
         'Repeated paused video reset did not reconstruct the selected source',
+      );
+      await until(
+        () => video.timingAvailableNotifier.value && views.length == 3,
+        'Repeated replacement WebKit document did not observe the local decoder',
+        coldBootstrap: true,
       );
       expect(key.currentState, same(presentation));
       expect(video.playingNotifier.value, isFalse);

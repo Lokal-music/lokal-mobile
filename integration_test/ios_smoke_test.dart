@@ -369,6 +369,9 @@ void main() {
     await binding.takeScreenshot('ios-main-player');
     await player.pause();
     expect(player.isPlayingNotifier.value, false);
+    await expectIosPausedPositionSaved(
+      tester, player, player.positionNotifier.value);
+    binding.reportData!['system_pause_position_native_preferences'] = 'passed';
 
     await probeIosQueueReorder(tester, binding, player, song);
 

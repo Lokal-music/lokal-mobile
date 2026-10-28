@@ -1,6 +1,6 @@
 # iPhone integration follow-up
 
-Checked 26 October 2026. These findings guide remaining implementation; they do
+Updated 28 October 2026. These findings guide remaining implementation; they do
 not establish receiver, account or physical-iPhone acceptance.
 
 ## Media-services reset
@@ -10,12 +10,14 @@ with playback remaining paused until a user starts it again. See
 [the current AVAudioSession reset contract](https://developer.apple.com/documentation/avfaudio/avaudiosession/mediaserviceswereresetnotification).
 This differs from an ordinary resumable interruption.
 
-The locked `audio_session` 0.2.4 already delivers
-`AVAudioSession().mediaServicesWereResetStream`; an additional Swift session owner
-is unnecessary. PlayerService currently subscribes to interruptions and noisy
-routes, but does not consume this reset event. Recovery remains unimplemented. The [implementation architecture](IOS_MEDIA_RESET_ARCHITECTURE.md)
-records the native request fence, radio participation, cleanup ordering and
-required acceptance before enabling it.
+The port now implements epoch-fenced recovery with native session notifications,
+confirmed output retirement, preserved paused selection/queue and explicit Play
+to reconstruct output. The [implementation architecture](IOS_MEDIA_RESET_ARCHITECTURE.md)
+records request fencing, radio participation and cleanup ordering. Build 67
+passes the complete iOS 18.6/26 controlled-notification suites. Later builds 72
+and 73 have incomplete WebKit acceptance and do not supersede that package.
+See [the current evidence ledger](IOS_PORT.md) for exact source scopes; posted
+notifications do not prove a real media-daemon restart.
 
 ```mermaid
 flowchart LR
@@ -114,8 +116,8 @@ correct HTTP ranges, smooth concurrent captions and provider-controlled iPhone
 video quality. A new manual live-WebKit probe records observed behavior without
 turning a network restriction into successful acceptance.
 
-Media-services reset recovery remains the next local-playback lifecycle task.
-It must invalidate in-flight Rust HTTP probes before they can create a new output,
+The earlier reset design below is now implemented; its physical daemon-reset
+qualification remains separate. The implementation must continue to invalidate in-flight Rust HTTP probes before they can create a new output,
 await confirmed old-engine destruction, preserve queue/position while staying
 paused until user action, and include the separate radio player. Merely rebuilding
 the Dart player or queuing cleanup behind an old Play is insufficient: the former
