@@ -5241,6 +5241,7 @@ class PlayerService {
             alreadyInUsbMode &&
             _sameUac2Format(currentUsbFormat, targetUsbOutputFormat);
 
+        var lostNativeRegistration = false;
         if (formatMatches) {
           // A failed native transfer can leave the cached format unchanged
           // even after libusb has released its registration.
@@ -5249,6 +5250,7 @@ class PlayerService {
           final usb = _mapValue(rust?['direct_usb']);
           final explicitlyUnregistered = usb?['registered'] == false;
           if (explicitlyUnregistered) {
+            lostNativeRegistration = true;
             _debugLog('[Engine] Cached USB format matches but native DAC is '
                 'not registered; re-preparing instead of reusing stale state');
           } else {
@@ -5266,7 +5268,8 @@ class PlayerService {
         // Change the USB alternate setting only after the previous stream
         // has stopped. Updating native playback format while an old 16-bit
         // URB queue is still submitting can fail the next libusb transfer.
-        if (alreadyInUsbMode && !formatMatches &&
+        if (alreadyInUsbMode &&
+            (!formatMatches || lostNativeRegistration) &&
             _rustAudioService.isInitialized) {
           _debugLog('[Engine] Stopping old USB stream before PCM renegotiation');
           await _rustAudioService.stop();
