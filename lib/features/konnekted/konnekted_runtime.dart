@@ -196,6 +196,8 @@ class _KonnektedRuntimeState extends ConsumerState<KonnektedRuntime>
 
     ref.listenManual(appPreferencesProvider, (_, _) => _maybeShowWhatsNew());
     ref.listenManual(appBuildInfoProvider, (_, _) => _maybeShowWhatsNew());
+    // Recheck once the per-minor release notes have loaded.
+    ref.listenManual(whatsNewProvider, (_, _) => _maybeShowWhatsNew());
 
     ref.listenManual(currentSongProvider, (_, _) => _maybeOpenExternalPlayer());
     ref.listenManual(isPlayingProvider, (_, _) => _maybeOpenExternalPlayer());
@@ -264,7 +266,6 @@ class _KonnektedRuntimeState extends ConsumerState<KonnektedRuntime>
       return;
     }
     final notifier = ref.read(whatsNewProvider.notifier);
-    notifier.evaluate();
     final entry = ref.read(whatsNewProvider).pendingEntry;
     if (entry == null) return;
     _showingWhatsNew = true;

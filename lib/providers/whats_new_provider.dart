@@ -2,16 +2,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flick/providers/app_build_info_provider.dart';
 import 'package:flick/features/whats_new/data/changelog_data.dart';
+import 'package:flick/features/whats_new/data/lokal_minor_release_notes.dart';
 import 'package:flick/providers/app_preferences_provider.dart';
+
+/// Release notes for the first tagged build of each major.minor line.
+final lokalMinorReleaseNotesProvider =
+    FutureProvider.family<ChangelogEntry?, String>((ref, minor) =>
+        loadLokalMinorRelease(minor));
 
 class WhatsNewState {
   const WhatsNewState({required this.currentEntry, required this.pendingEntry});
 
-  /// Current Lokal notes labeled with the installed version and build.
-  /// Null while installed build metadata is loading or unavailable.
+  /// The notes for this installed major.minor line, not the current patch.
   final ChangelogEntry? currentEntry;
 
-  /// The entry that should be shown to the user as new, if any.
+  /// The minor-version entry not yet seen by this installation.
   final ChangelogEntry? pendingEntry;
 }
 
@@ -20,43 +25,58 @@ class WhatsNewNotifier extends Notifier<WhatsNewState> {
   WhatsNewState build() {
     final info = ref.watch(appBuildInfoProvider).value;
     final lastSeen = ref.watch(appPreferencesProvider).lastSeenChangelogVersion;
-    return _resolve(info, lastSeen);
+    final minor = lokalMinorVersion(info?.version);
+    final notes = minor == null
+        ? null
+        : (ref.watch(lokalMinorReleaseNotesProvider(minor)).value ??
+            lokalMinorReleaseFallback[minor]);
+    return _resolve(info, lastSeen, notes);
   }
 
-  WhatsNewState _resolve(AppBuildInfo? info, String? lastSeen) {
-    if (info == null) {
+  WhatsNewState _resolve(
+    AppBuildInfo? info,
+    String? lastSeen,
+    ChangelogEntry? notes,
+  ) {
+    final minor = lokalMinorVersion(info?.version);
+    if (minor == null) {
       return const WhatsNewState(currentEntry: null, pendingEntry: null);
     }
-    final current = ChangelogEntry(
-      version: info.label,
-      date: kLokalReleaseNotes.date,
-      sections: kLokalReleaseNotes.sections,
-    );
+    // Old installations stored version+build. Treat any patch of the same
+    // minor as already seen, and persist just the minor going forward.
+
     return WhatsNewState(
-      currentEntry: current,
-      pendingEntry: lastSeen != null && lastSeen != info.identity
-          ? current
+      currentEntry: notes,
+      pendingEntry: notes != null && lokalMinorHasChanged(minor, lastSeen)
+          ? notes
           : null,
     );
   }
 
-  /// Re-evaluates whether a "What's New" entry should be presented. Call this
-  /// after the app preferences have finished loading so the stored
-  /// "last seen" version is accurate.
+  /// Re-read preferences after asynchronous initialization. The provider
+  /// rebuilds again when GitHub release notes finish loading.
   void evaluate() {
-    final preferences = ref.read(appPreferencesProvider);
-    final lastSeen = preferences.lastSeenChangelogVersion;
-
-    state = _resolve(ref.read(appBuildInfoProvider).value, lastSeen);
+    final info = ref.read(appBuildInfoProvider).value;
+    final minor = lokalMinorVersion(info?.version);
+    final notes = minor == null
+        ? null
+        : (ref.read(lokalMinorReleaseNotesProvider(minor)).value ??
+            lokalMinorReleaseFallback[minor]);
+    state = _resolve(
+      info,
+      ref.read(appPreferencesProvider).lastSeenChangelogVersion,
+      notes,
+    );
   }
 
-  /// Marks the running version as seen so the sheet does not re-appear.
+  /// Mark this major.minor release as seen. Patches never show the same note.
   Future<void> markCurrentVersionSeen() async {
     final info = ref.read(appBuildInfoProvider).value;
-    if (info == null) return;
+    final minor = lokalMinorVersion(info?.version);
+    if (minor == null) return;
     await ref
         .read(appPreferencesProvider.notifier)
-        .setLastSeenChangelogVersion(info.identity);
+        .setLastSeenChangelogVersion(minor);
     state = WhatsNewState(currentEntry: state.currentEntry, pendingEntry: null);
   }
 }
