@@ -2,11 +2,20 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/services/uac2_service.dart';
 import 'package:flick/services/uac2_preferences_service.dart';
+
+/// USB restart remains available on Android after an audio-engine fallback:
+/// physical attachment, not current playback routing, governs visibility.
+@visibleForTesting
+bool showUsbRestartMenuAction({
+  required bool android,
+  required bool connectedDac,
+}) => android && connectedDac;
 
 /// Physical USB attachment, not current routing or the song's codec, decides
 /// if the Now Playing menu offers DAC recovery. The player can be on Android
@@ -42,7 +51,10 @@ Future<void> showFullPlayerSongMenu(
     nowPlaying: true,
     extras: [
       ...extras,
-      if (connectedDac)
+      if (showUsbRestartMenuAction(
+        android: Platform.isAndroid,
+        connectedDac: connectedDac,
+      ))
         LokalSongMenuAction(
           icon: Icons.restart_alt_rounded,
           label: 'Force restart USB audio engine',
@@ -74,6 +86,11 @@ Future<void> _restartUsbEngineFromFullPlayer(
       AudioEnginePreference.isochronousUsb) {
     notice('Select Isochronous USB as the playback engine in USB DAC '
         'settings before restarting.', short: true);
+    return;
+  }
+  if (!context.mounted) return;
+  if (!await isUsbDacPhysicallyConnected()) {
+    notice('USB DAC is no longer connected.', short: true);
     return;
   }
   if (!context.mounted) return;
