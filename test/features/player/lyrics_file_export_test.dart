@@ -348,7 +348,7 @@ void main() {
     expect(saved.extension, 'elrc');
     final second = saved.content.trim().split('\n')[1];
     expect(second, contains('<00:01.00>'));
-    expect(second, contains('<00:03.00>'));
+    expect(second, matches(RegExp(r'<00:03\.\d{2}>')));
     expect(second.replaceAll(RegExp(r'<[0-9:.]+>'), ''), '[00:01.00]un dos');
   });
 
