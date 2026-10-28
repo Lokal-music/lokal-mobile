@@ -2286,11 +2286,12 @@ class PlayerService {
             : null;
     final position = positionNotifier.value;
     final wasPlaying = isPlayingNotifier.value;
-    final format = (playableSong != null
-            ? _deriveUac2FormatFromSong(playableSong)
-            : null) ??
-        _uac2Service.currentDeviceStatus?.currentFormat ??
-        _uac2Service.lastKnownFormat;
+    // Do not guess a playable track's bit depth from a previous recording:
+    // the normal engine-preparation path probes missing metadata itself.
+    final format = playableSong != null
+        ? _deriveUac2FormatFromSong(playableSong)
+        : (_uac2Service.currentDeviceStatus?.currentFormat ??
+            _uac2Service.lastKnownFormat);
 
     AppLog.instance.add('[USB] Manual engine restart requested '
         '(playing=$wasPlaying, track=${song?.title ?? 'none'}, '
