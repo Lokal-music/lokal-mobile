@@ -36,6 +36,27 @@ bool shouldDeferDirectUsbRouteProbe({
     playbackActive &&
     directUsbSessionActive;
 
+/// A device notification may begin probing before the direct USB session is
+/// claimed. Discard only that outdated, incidental result if USB ownership
+/// became active while the platform queries were pending.
+@visibleForTesting
+bool shouldDiscardStaleDirectUsbRouteProbe({
+  required String reason,
+  required bool directUsbSessionWasActive,
+  required AudioEngineType selectedMode,
+  required AudioEngineType? initializedMode,
+  required bool playbackActive,
+  required bool directUsbSessionActive,
+}) =>
+    !directUsbSessionWasActive &&
+    shouldDeferDirectUsbRouteProbe(
+      reason: reason,
+      selectedMode: selectedMode,
+      initializedMode: initializedMode,
+      playbackActive: playbackActive,
+      directUsbSessionActive: directUsbSessionActive,
+    );
+
 class AudioSessionManager {
   AudioSessionManager({
     AndroidAudioDeviceService? deviceService,
@@ -293,7 +314,22 @@ class AudioSessionManager {
           'while direct USB holds the playback session');
       return;
     }
+    final directUsbSessionWasActive =
+        _uac2Service.shouldFreezeAndroidDirectUsbSessionQueries;
     final desired = await _resolvePreferredMode(refresh: true);
+    if (shouldDiscardStaleDirectUsbRouteProbe(
+      reason: reason,
+      directUsbSessionWasActive: directUsbSessionWasActive,
+      selectedMode: selectedMode,
+      initializedMode: initializedMode,
+      playbackActive: _isPlaybackActive(),
+      directUsbSessionActive:
+          _uac2Service.shouldFreezeAndroidDirectUsbSessionQueries,
+    )) {
+      _debugLog('[Session] Discarding outdated Android route probe: '
+          'direct USB became active during resolution');
+      return;
+    }
     final previous = selectedMode;
     if (previous == desired) {
       return;
