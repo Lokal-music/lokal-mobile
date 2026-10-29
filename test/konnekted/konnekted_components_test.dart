@@ -564,7 +564,9 @@ void main() {
     for (final gone in ['Classipod', 'Listening hub', 'Manage library']) {
       expect(find.text(gone), findsNothing);
     }
-    expect(find.text('Spotify library'), findsOneWidget);
+    expect(find.text('Spotify library'), findsNothing);
+    expect(find.text('Downloads'), findsNothing);
+    expect(find.text('Videos'), findsOneWidget);
     expect(find.text('Linked playlists'), findsOneWidget);
   });
 
