@@ -51,14 +51,6 @@ String _text(Object? node) {
   return '';
 }
 
-String _title(Map row) {
-  final direct = _text(row['title']);
-  if (direct.isNotEmpty) return direct;
-  return _text(_at(row, [
-    'flexColumns', '0', // The fallback below handles indexed lists.
-  ]));
-}
-
 String _columnTitle(Map row) {
   final direct = _text(row['title']);
   if (direct.isNotEmpty) return direct;
