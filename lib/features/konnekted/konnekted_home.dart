@@ -181,24 +181,12 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
                   onPlay: onPlay,
                 ),
               ),
-              SliverToBoxAdapter(
-                child: KonnektedSongShelf(
-                  title: lokalText('Fresh in your library'),
-                  songs: ref.watch(konnektedRecentlyAddedProvider),
-                  emptyTitle: 'A collection that’s yours',
-                  emptyMessage:
-                      'Newly added music appears here after you scan a folder.',
-                  onSeeAll: () =>
-                      onNavigate(KonnektedDestination.recentlyAdded),
-                  onRetry: () => ref.invalidate(songsProvider),
-                  onPlay: onPlay,
-                ),
-              ),
             ],
-            // The floating dock reserves its height as bottom padding.
+            // The shell already provides the dock's full clearance through
+            // MediaQuery.padding.bottom. Add only a small visual margin.
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 28 + MediaQuery.paddingOf(context).bottom,
+                height: 12 + MediaQuery.paddingOf(context).bottom,
               ),
             ),
           ],
