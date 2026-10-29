@@ -111,7 +111,54 @@ func runImportOwnershipContracts(job: LokalTransferJob) throws {
   try registry.revoke(scope: LokalTransferScope(desktopID: job.identity.desktopID,
     origin: origin + "/", pairingID: job.identity.pairingID))
   try rejects("equivalent origin spelling revokes the matching copy") { try recovery.cancellation.check() }
+
+  let beforeCleanup = try registry.capture(third)
+  let cleanupTicket = try registry.beginCleanup(beforeCleanup)
+  try rejects("cleanup intent fences publication queued before the file barrier") {
+    _ = try registry.claim(beforeCleanup, job: job, permission: .write)
+  }
+  try rejects("pending cleanup blocks new writers before its file barrier completes") {
+    _ = try registry.claim(registry.capture(third), job: job, permission: .write)
+  }
+  let cleanup = try registry.claim(cleanupTicket, job: job, permission: .cleanup)
+  try registry.validateCleanup(third, jobID: job.id, revision: job.revision, leaseID: cleanup.id)
+  try require(registry.cleanupCancellation(third, jobID: job.id, revision: job.revision,
+    leaseID: cleanup.id) === cleanup.cancellation, "cleanup receives its own exact revocable token")
+  let cleanupResults = ImportLeaseResults()
+  DispatchQueue.concurrentPerform(iterations: 12) { _ in
+    do { cleanupResults.add(try registry.claim(cleanupTicket, job: job, permission: .cleanup).id) }
+    catch { cleanupResults.add(nil) }
+  }
+  try require(cleanupResults.snapshot == (1, 0), "12 cleanup claims coalesce without creating another writer")
+  for requiresWrite in [true, false] {
+    try rejects("cleanup cannot impersonate publication or committed-receipt authority") {
+      try registry.validate(third, jobID: job.id, revision: job.revision,
+        leaseID: cleanup.id, requiresWrite: requiresWrite)
+    }
+  }
+  try rejects("cleanup cannot obtain a publication token") {
+    _ = try registry.writerCancellation(third, jobID: job.id, revision: job.revision, leaseID: cleanup.id)
+  }
+  try rejects("normal claims cannot upgrade active cleanup authority") {
+    _ = try registry.claim(cleanupTicket, job: job, permission: .write)
+  }
+  try rejects("a retired client cannot validate replacement cleanup") {
+    try registry.validateCleanup(first, jobID: job.id, revision: job.revision, leaseID: cleanup.id)
+  }
+  registry.revokeAll()
+  try rejects("clear immediately retires cleanup without waiting on a file queue") { try cleanup.cancellation.check() }
+  try rejects("an old cleanup ticket cannot survive the mutation barrier") {
+    _ = try registry.claim(cleanupTicket, job: job, permission: .cleanup)
+  }
+  let aborted = try registry.beginCleanup(registry.capture(third))
+  registry.abortCleanup(aborted)
+  try rejects("aborted cleanup cannot later claim a lease") {
+    _ = try registry.claim(aborted, job: job, permission: .cleanup)
+  }
   let last = try registry.claim(registry.capture(third), job: job, permission: .write)
+  try rejects("a publication writer cannot authorize abandonment") {
+    try registry.validateCleanup(third, jobID: job.id, revision: job.revision, leaseID: last.id)
+  }
   registry.stopClient(third)
   try rejects("client teardown invalidates its direct writer guard") {
     try registry.validate(third, jobID: job.id, revision: job.revision,

@@ -329,6 +329,47 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
+  /// Retire only our named private copy link after native worker drainage and
+  /// the app's Isar cleanup barrier. An edited public hard link remains intact;
+  /// strict public hash/mtime verification is never weakened for this purpose.
+  func discardPrivateLibraryPart(_ work: LokalTransferImportCustody,
+                                 cancellation: LokalTransferCopyCancellation,
+                                 validateCleanupAuthority: () throws -> Void) throws {
+    try work.validate(); try cancellation.check(); try validateCleanupAuthority()
+    guard work.resolution == nil else { throw LokalTransferError.invalidTransition }
+    guard let nonce = work.copyNonce else { return }
+    let name = try libraryPartName(work.job, nonce: nonce)
+    try locked {
+      try checkRoot(); try cancellation.check(); try validateCleanupAuthority()
+      let fd = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+      guard fd >= 0 else {
+        if errno == ENOENT { return }
+        throw LokalTransferError.posix("open_cleanup_import_part", errno)
+      }
+      defer { close(fd) }
+      var held = stat()
+      if let proof = work.publication { held = try proof.verifyIdentity(fd) }
+      else {
+        guard fstat(fd, &held) == 0, held.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              held.st_nlink == 1, held.st_size >= 0,
+              Int64(held.st_size) <= work.job.receivedBytes! else { throw LokalTransferError.unsafeFile }
+      }
+      try checkRoot(); try validateCleanupAuthority()
+      try cancellation.whileCurrent {
+        var current = stat(), named = stat()
+        guard fstat(fd, &current) == 0, current.st_dev == held.st_dev,
+              current.st_ino == held.st_ino, current.st_nlink == held.st_nlink,
+              fstatat(directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
+              named.st_dev == current.st_dev, named.st_ino == current.st_ino,
+              named.st_nlink == current.st_nlink else { throw LokalTransferError.unsafeFile }
+        guard unlinkat(directory, name, 0) == 0 else {
+          throw LokalTransferError.posix("cleanup_private_import_part", errno)
+        }
+      }
+      guard fsync(directory) == 0 else { throw LokalTransferError.posix("sync_cleanup_import_part", errno) }
+    }
+  }
+
   static func digest(_ fd: Int32, checkCancellation: () throws -> Void = {}) throws -> String {
     try checkCancellation()
     #if canImport(CryptoKit)

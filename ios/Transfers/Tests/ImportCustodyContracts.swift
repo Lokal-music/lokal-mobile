@@ -225,6 +225,52 @@ func runImportCustodyContracts(container: URL) throws {
   try require(children.allSatisfy { $0.terminationStatus == 0 }, "all concurrent custody writers finish")
   try require(concurrentStore.snapshot().custodies.count == 1, "six actual processes reserve exactly one immutable work record")
 
+  for boundary in ["beforeCommit", "afterCommit", "none"] {
+    let directory = try root("resolution-" + boundary)
+    let store = try LokalTransferJournal(container: directory)
+    let job = try validating(store)
+    let work = try store.reserveImport(id: job.id, revision: 1, songID: 42)
+    let resolution = LokalTransferImportResolution(mode: .abandoned, abandonment: .missingFile)
+    try rejects("current writable work cannot record a cleanup resolution") {
+      _ = try store.recordImportResolution(work, resolution: resolution)
+    }
+    _ = try store.update(id: job.id, revision: 1) { try $0.cancel(nowMs: 1060) }
+    try rejects("unpublished work cannot claim historical Isar completion") {
+      _ = try store.recordImportResolution(work,
+        resolution: LokalTransferImportResolution(mode: .committed, abandonment: nil))
+    }
+    let before = try store.snapshot()
+    let process = try custodyChild(["--resolution-worker", directory.path, job.id, boundary])
+    process.waitUntilExit()
+    try require(process.terminationStatus == (boundary == "none" ? 0 : 96),
+      "resolution child reaches the actual SQLite commit edge")
+    let reopened = try LokalTransferJournal(container: directory)
+    let after = try reopened.snapshot()
+    let committed = boundary != "beforeCommit"
+    try require(after.jobs == before.jobs && after.custodies.count == 1 &&
+      after.custodies[0].resolution == (committed ? resolution : nil) &&
+      after.generation == before.generation + (committed ? 1 : 0),
+      "cleanup resolution crash keeps complete old/new provenance and unchanged live job")
+    let recorded = try reopened.recordImportResolution(work, resolution: resolution)
+    let generation = try reopened.snapshot().generation
+    try require(reopened.recordImportResolution(work, resolution: resolution) == recorded &&
+      reopened.snapshot().generation == generation,
+      "lost resolution reply is idempotent without another observable generation")
+    try rejects("recorded resolution cannot authorize public abandonment again") {
+      try reopened.validateAbandonment(recorded)
+    }
+    try rejects("a contradictory resolution cannot rewrite the cleanup decision") {
+      _ = try reopened.recordImportResolution(work,
+        resolution: LokalTransferImportResolution(mode: .committed, abandonment: nil))
+    }
+    let document = try JSONEncoder().encode(recorded)
+    var future = try JSONSerialization.jsonObject(with: document) as! [String: Any]
+    future["resolution"] = ["mode": "abandoned", "abandonment": "missingFile", "future": true]
+    try rejects("unknown resolution fields cannot be discarded during decoding") {
+      _ = try LokalTransferImportCustody.decode(JSONSerialization.data(withJSONObject: future))
+    }
+  }
+
   let boundedRoot = try root("bounded")
   let boundedStore = try LokalTransferJournal(container: boundedRoot)
   let text = String(repeating: "a", count: 4096)

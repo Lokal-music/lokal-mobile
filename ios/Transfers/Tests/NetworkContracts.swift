@@ -485,6 +485,15 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
         clientID: clientID ?? lease.clientID, songID: songID)
     }
     var lease = try claim(owner)
+    let missingCleanupTicket = try ownership.beginCleanup(ownership.capture(owner))
+    let missingCleanup = LokalTransferProtocol.ImportCleanupClaim(id: job.id, revision: 1,
+      clientID: owner.clientID)
+    try rejects("cleanup cannot invent missing frozen native custody") {
+      let _: LokalTransferImportCleanupClaim = try native {
+        runtime.claimImportCleanup(missingCleanup, ticket: missingCleanupTicket, reply: $0)
+      }
+    }
+    lease = try claim(owner)
     try rejects("foreign client cannot borrow a known publication lease") {
       let _: LokalTransferPublishedImport = try native {
         runtime.publishImport(publication(lease, clientID: UUID().uuidString.lowercased()), owner: owner, reply: $0)
@@ -525,14 +534,50 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
         owner = try ownership.attachClient(engineID: nextEngine, clientID: UUID().uuidString.lowercased())
         // Claiming a replacement does not wait behind the blocked file queue.
         lease = try claim(owner)
+        let cleanupTicket = try ownership.beginCleanup(ownership.capture(owner))
+        try rejects("cleanup intent immediately retires a replacement publication writer") {
+          try ownership.validate(owner, jobID: job.id, revision: 1, leaseID: lease.leaseID, requiresWrite: true)
+        }
+        credentials.set(nil)
+        let cleanupRequest = LokalTransferProtocol.ImportCleanupClaim(id: job.id, revision: 1,
+          clientID: owner.clientID)
+        let cleanup = NativeResult<LokalTransferImportCleanupClaim>(), cleanupDone = DispatchSemaphore(value: 0)
+        runtime.claimImportCleanup(cleanupRequest, ticket: cleanupTicket) { cleanup.set($0); cleanupDone.signal() }
         let drained = NativeResult<Bool>(), drainDone = DispatchSemaphore(value: 0)
         let ticket = try ownership.capture(owner)
         runtime.drainImports(ticket: ticket) { drained.set($0); drainDone.signal() }
         try require(drainDone.wait(timeout: .now()) == .timedOut,
           "current-root drainage cannot pass an actual blocked retired file worker")
+        try require(cleanupDone.wait(timeout: .now()) == .timedOut,
+          "cleanup lease cannot be granted before the actual old file worker drains")
         gate.resume.signal()
         try require(drainDone.wait(timeout: .now() + 5) == .success && drained.get(),
           "replacement root independently drains prior native file work")
+        try require(cleanupDone.wait(timeout: .now() + 5) == .success, "drained cleanup claim settles")
+        let cleanupLease = try cleanup.get()
+        try require(cleanupLease.songID == 42 && cleanupLease.job.id == job.id &&
+          cleanupLease.currentRevision == 1 && cleanupLease.permission == "cleanup" &&
+          cleanupLease.publicationRecorded,
+          "cleanup retains the exact frozen native Song binding without current pairing")
+        try ownership.validateCleanup(owner, jobID: job.id, revision: 1, leaseID: cleanupLease.leaseID)
+        let cleanupJSON = String(decoding: try JSONEncoder().encode(cleanupLease), as: UTF8.self)
+        let cleanupFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
+          URL(fileURLWithPath: "test/fixtures/ios_transfer_cleanup_v1.json"))) as! [String: Any]
+        let cleanupObject = try JSONSerialization.jsonObject(with: JSONEncoder().encode(cleanupLease)) as! [String: Any]
+        let requiredKeys = Set(cleanupFixture["replyKeys"] as! [String])
+        let optionalKeys = Set(cleanupFixture["optionalReplyKeys"] as! [String])
+        try require(requiredKeys.isSubset(of: Set(cleanupObject.keys)) &&
+          Set(cleanupObject.keys).isSubset(of: requiredKeys.union(optionalKeys)) &&
+          cleanupObject["permission"] as? String == cleanupFixture["permission"] as? String,
+          "actual native cleanup encoding matches the shared Dart wire schema")
+        try require(!cleanupJSON.contains("sourcePath") && !cleanupJSON.contains(root.path) &&
+          !cleanupJSON.contains("copyNonce") && !cleanupJSON.contains("transfer-fixture-token"),
+          "cleanup claim exposes no writer source path, private marker or bearer")
+        let cleanupControl = LokalTransferProtocol.ImportLease(id: job.id, revision: 1,
+          leaseID: cleanupLease.leaseID, clientID: owner.clientID)
+        let _: Bool = try native { runtime.releaseImport(cleanupControl, owner: owner, reply: $0) }
+        credentials.set(authorization)
+        lease = try claim(owner)
       }
       try require(completed.wait(timeout: .now() + 5) == .success, "retired publication settles")
       try rejects("revoked publication cannot return an importing acknowledgement") { _ = try result.get() }

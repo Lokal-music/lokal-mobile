@@ -102,6 +102,17 @@ do {
     _ = try store.reserveImport(id: CommandLine.arguments[3], revision: 1, songID: 42)
     exit(0)
   }
+  if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--resolution-worker" {
+    let boundary = CommandLine.arguments[4]
+    let store = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
+      testingCommitBoundary: { if $0 == boundary { exit(96) } })
+    guard let work = try store.importCustody(id: CommandLine.arguments[3], revision: 1) else {
+      throw TestFailure.failed("missing cleanup resolution work")
+    }
+    _ = try store.recordImportResolution(work, resolution: LokalTransferImportResolution(
+      mode: .abandoned, abandonment: .missingFile))
+    exit(0)
+  }
   if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--migration-crash" {
     let boundary = CommandLine.arguments[3]
     _ = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
@@ -239,6 +250,18 @@ do {
   try require(LokalTransferProtocol.page(Data("{\"offset\":0,\"limit\":100}".utf8)).limit == 100,
     "bounded page request accepted")
   let contractClient = "b7d96b93-6526-4f1f-a1af-688ffb5c799d"
+  let cleanupFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
+    URL(fileURLWithPath: "test/fixtures/ios_transfer_cleanup_v1.json"))) as! [String: Any]
+  let cleanupClaim = cleanupFixture["claim"] as! [String: Any]
+  let decodedCleanup = try LokalTransferProtocol.importCleanupClaim(JSONSerialization.data(withJSONObject: cleanupClaim))
+  try require(decodedCleanup.id == cleanupClaim["id"] as? String && decodedCleanup.revision == 1 &&
+    decodedCleanup.clientID == contractClient, "Swift accepts the exact shared three-field Dart cleanup request")
+  for field in ["sourcePath", "targetRelativePath", "copyNonce", "reconcileOnly", "songID", "headers"] {
+    var injected = cleanupClaim; injected[field] = "caller"
+    try rejects("cleanup request never borrows writer flags, paths or provenance") {
+      _ = try LokalTransferProtocol.importCleanupClaim(JSONSerialization.data(withJSONObject: injected))
+    }
+  }
   let recoveryRequest: [String: Any] = ["limit": 2, "clientID": contractClient]
   try require(LokalTransferProtocol.importWorkPage(JSONSerialization.data(withJSONObject: recoveryRequest)).limit == 2,
     "bounded client-bound recovery request accepted")

@@ -142,6 +142,57 @@ func runTrackedLibraryContracts(container: URL, template: LokalTransferJob) thro
     try require(Data(contentsOf: current.target()) == payload, "fresh authority reconciles or copies the actual frozen bytes")
   }
 
+  for boundary in ["trackedCopyCheckpoint", "trackedProofCommitted", "afterTrackedPublication"] {
+    let current = try fixture("private-cleanup-" + boundary)
+    let process = try child(current, boundary: boundary)
+    process.waitUntilExit()
+    try require(process.terminationStatus == 98, "private cleanup starts after actual process exit")
+    let work = try current.work()
+    _ = try current.journal.update(id: current.job.id, revision: 1) { try $0.cancel(nowMs: 1060) }
+    try current.journal.validateAbandonment(work)
+    if boundary == "afterTrackedPublication" {
+      try Data("user edited public bytes".utf8).write(to: current.target())
+    }
+    let token = LokalTransferCopyCancellation()
+    token.cancel()
+    let before = try current.privateParts()
+    try rejects("revoked cleanup cannot remove a private copy link") {
+      try current.files.discardPrivateLibraryPart(work, cancellation: token, validateCleanupAuthority: {})
+    }
+    try require(current.privateParts() == before, "revoked cleanup preserves private recovery state")
+    try current.files.discardPrivateLibraryPart(work, cancellation: LokalTransferCopyCancellation(), validateCleanupAuthority: {})
+    try current.files.discardPrivateLibraryPart(work, cancellation: LokalTransferCopyCancellation(), validateCleanupAuthority: {})
+    try require(current.privateParts().isEmpty, "private partial/proven/two-link cleanup is idempotent")
+    if boundary == "afterTrackedPublication" {
+      try require(Data(contentsOf: current.target()) == Data("user edited public bytes".utf8),
+        "private-link retirement never deletes or rewrites edited public audio")
+    } else {
+      try require(!manager.fileExists(atPath: current.target().path), "private cleanup never publishes incomplete bytes")
+    }
+    try require(current.work() == work, "private drainage retains provenance until durable resolution")
+  }
+  for mode in ["replacement", "symlink"] {
+    let current = try fixture("private-cleanup-unsafe-" + mode)
+    let process = try child(current, boundary: "trackedProofCommitted")
+    process.waitUntilExit()
+    try require(process.terminationStatus == 98, "unsafe-part test retains an actual stamped private copy")
+    let work = try current.work()
+    let partsRoot = current.root.appendingPathComponent(LokalTransferJournal.directoryName)
+    let part = partsRoot.appendingPathComponent(try current.privateParts().first!)
+    let retained = current.root.appendingPathComponent("retained-native-original")
+    try manager.moveItem(at: part, to: retained)
+    let user = current.root.appendingPathComponent("preserved-user-file")
+    try payload.write(to: user)
+    if mode == "symlink" { try manager.createSymbolicLink(at: part, withDestinationURL: user) }
+    else { try payload.write(to: part) }
+    try rejects("private cleanup refuses a replacement inode or symlink") {
+      try current.files.discardPrivateLibraryPart(work, cancellation: LokalTransferCopyCancellation(),
+        validateCleanupAuthority: {})
+    }
+    try require(Data(contentsOf: user) == payload && Data(contentsOf: retained) == payload &&
+      manager.fileExists(atPath: part.path), "unsafe-part refusal preserves all existing bytes and names")
+  }
+
   let importing = try fixture("importing-missing")
   _ = try importing.install()
   let retired = try importing.journal.update(id: importing.job.id, revision: 1) {
@@ -173,6 +224,112 @@ func runTrackedLibraryContracts(container: URL, template: LokalTransferJob) thro
   }
   try require(completed.phase == .complete && acknowledgement.journal.snapshot().custodies == [publishedProof],
     "exact native completion and frozen publication retention share the journal transaction")
+
+  try rejects("completed/current writable custody cannot authorize abandonment") {
+    try acknowledgement.journal.validateAbandonment(publishedProof)
+  }
+  try rejects("live publication reservation is not cleanup authority") {
+    try first.journal.validateAbandonment(first.work())
+  }
+
+  let preparedRetirement = try fixture("prepared-retirement")
+  let staleRetirement = try preparedRetirement.journal.reserveImport(
+    id: preparedRetirement.job.id, revision: 1, songID: 42)
+  _ = try preparedRetirement.install()
+  let frozenRetirement = try preparedRetirement.work()
+  _ = try preparedRetirement.journal.update(id: preparedRetirement.job.id, revision: 1) {
+    try $0.transition(to: .importing, nowMs: 1040)
+  }
+  try rejects("ordinary cancel still refuses the uncertain Isar commit boundary") {
+    _ = try preparedRetirement.journal.update(id: preparedRetirement.job.id, revision: 1) { try $0.cancel(nowMs: 1050) }
+  }
+  try rejects("stale native custody cannot authorize prepared-import retirement") {
+    _ = try preparedRetirement.journal.update(id: preparedRetirement.job.id, revision: 1, retiring: staleRetirement) {
+      try $0.retirePreparedImportAfterBarrier(nowMs: 1050)
+    }
+  }
+  try rejects("private retirement cannot bypass the journal's atomic custody comparison") {
+    _ = try preparedRetirement.journal.update(id: preparedRetirement.job.id, revision: 1) {
+      try $0.retirePreparedImportAfterBarrier(nowMs: 1050)
+    }
+  }
+  // Actual Isar retirement and current cleanup authority are explicit fixtures
+  // here; this checks the real atomic native transition/provenance only.
+  let retiredPrepared = try preparedRetirement.journal.update(id: preparedRetirement.job.id,
+    revision: 1, retiring: frozenRetirement) { try $0.retirePreparedImportAfterBarrier(nowMs: 1050) }
+  try require(retiredPrepared.phase == .cancelled && retiredPrepared.revision == 2 &&
+    retiredPrepared.receivedSHA256 == frozenRetirement.job.receivedSHA256 &&
+    preparedRetirement.work() == frozenRetirement,
+    "prepared-import retirement atomically fences the old revision and preserves exact custody")
+  try preparedRetirement.journal.validateAbandonment(frozenRetirement)
+  try require(Data(contentsOf: preparedRetirement.target()) == payload,
+    "native retirement changes no public bytes before coordinated cleanup")
+
+  #if canImport(Darwin)
+  // These execute real Foundation NSFileCoordinator on macOS. Portable Linux
+  // runs deliberately do not substitute a pretend public-deletion coordinator.
+  for mode in ["owned", "missing", "modified", "replacement", "revoked", "raced-edit", "raced-replacement"] {
+    let abandoned = try fixture("abandon-" + mode)
+    _ = try abandoned.install()
+    let frozen = try abandoned.work()
+    _ = try abandoned.journal.update(id: abandoned.job.id, revision: 1) { try $0.cancel(nowMs: 1060) }
+    let destination = try abandoned.target()
+    if mode == "missing" { try manager.removeItem(at: destination) }
+    if mode == "modified" { try Data("user changed audio".utf8).write(to: destination) }
+    if mode == "replacement" {
+      try manager.removeItem(at: destination)
+      try payload.write(to: destination)
+    }
+    let token = LokalTransferCopyCancellation()
+    let library = try LokalTransferLibrary(root: abandoned.music, testingBoundary: { edge in
+      if edge == "beforeCoordinatedUnlink" {
+        if mode == "revoked" { token.cancel() }
+        if mode == "raced-edit" {
+          try! Data("late user edit".utf8).write(to: destination)
+        }
+        if mode == "raced-replacement" {
+          try! FileManager.default.removeItem(at: destination)
+          try! payload.write(to: destination)
+        }
+      }
+    })
+    if mode == "revoked" {
+      try rejects("revoked cleanup cannot unlink coordinated public bytes") {
+        _ = try library.abandonTracked(frozen, journal: abandoned.journal,
+          files: abandoned.files, cancellation: token, validateCleanupAuthority: {})
+      }
+      try require(Data(contentsOf: destination) == payload, "revoked cleanup preserves public copy")
+    } else {
+      let result = try library.abandonTracked(frozen, journal: abandoned.journal,
+        files: abandoned.files, cancellation: token, validateCleanupAuthority: {})
+      let expected: LokalTransferLibraryAbandonment = mode == "owned" ? .removedOwnedFile :
+        (mode == "missing" ? .missingFile : .preservedUserFile)
+      try require(result == expected, "actual coordinated abandonment distinguishes owned/missing/user bytes")
+      if expected == .preservedUserFile {
+        try require(manager.fileExists(atPath: destination.path), "user replacement/edit remains present")
+      } else {
+        try require(!manager.fileExists(atPath: destination.path), "owned deletion/missing never recreates bytes")
+        try require(library.abandonTracked(frozen, journal: abandoned.journal, files: abandoned.files,
+          cancellation: token, validateCleanupAuthority: {}) == .missingFile,
+          "lost unlink reply recovers idempotently without fabricating a file")
+      }
+    }
+    try require(abandoned.work() == frozen,
+      "filesystem half never removes provenance before private cleanup and Isar retirement")
+  }
+  print("Actual Foundation coordinated abandonment passed: owned/missing/modified/replaced bytes, late edit/replacement and cancellation. Runtime cleanup authority/Isar integration remain pending.")
+  #else
+  let unsupported = try fixture("abandon-unsupported")
+  _ = try unsupported.install()
+  _ = try unsupported.journal.update(id: unsupported.job.id, revision: 1) { try $0.cancel(nowMs: 1060) }
+  try rejects("portable host cannot pretend to provide Apple file coordination") {
+    _ = try LokalTransferLibrary(root: unsupported.music).abandonTracked(unsupported.work(),
+      journal: unsupported.journal, files: unsupported.files,
+      cancellation: LokalTransferCopyCancellation(), validateCleanupAuthority: {})
+  }
+  try require(Data(contentsOf: unsupported.target()) == payload,
+    "portable coordination refusal leaves real public bytes untouched")
+  #endif
 
   let concurrent = try fixture("concurrent")
   let children = try (0..<6).map { _ in try child(concurrent) }

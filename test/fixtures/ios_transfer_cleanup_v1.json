@@ -1,0 +1,13 @@
+{
+  "claim": {
+    "id": "ae97c9b1-ec57-4ede-89e7-de6213202380",
+    "revision": 1,
+    "clientID": "b7d96b93-6526-4f1f-a1af-688ffb5c799d"
+  },
+  "permission": "cleanup",
+  "replyKeys": [
+    "permission", "job", "songID", "leaseID", "clientID", "targetRelativePath",
+    "currentRevision", "currentPhase", "publicationRecorded"
+  ],
+  "optionalReplyKeys": ["resolution"]
+}

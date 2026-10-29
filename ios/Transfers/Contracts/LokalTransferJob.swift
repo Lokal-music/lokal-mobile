@@ -377,6 +377,20 @@ struct LokalTransferJob: Codable, Equatable, Sendable {
     taskID = nil
   }
 
+  /// Private cleanup driver only, after revocation/file drainage and a durable
+  /// Isar retiring decision. Journal must compare the exact frozen custody in
+  /// the same native transaction. Ordinary cancellation remains unchanged.
+  mutating func retirePreparedImportAfterBarrier(nowMs: Int64) throws {
+    guard direction == .download, [.validating, .importing].contains(phase),
+          receivedBytes != nil, receivedSHA256 != nil else {
+      throw LokalTransferError.invalidTransition
+    }
+    try touch(nowMs)
+    revision += 1
+    phase = .cancelled
+    taskID = nil
+  }
+
   mutating func retry(nowMs: Int64) throws {
     guard phase == .interrupted || phase == .failed else { throw LokalTransferError.invalidTransition }
     try touch(nowMs)

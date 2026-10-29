@@ -221,7 +221,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "publishImport", "acknowledgeImport", "validateImport", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -266,6 +266,14 @@ final class LokalTransferBridge {
           host.withRuntime({ runtime in runtime.importCandidatesPage(request, ticket: ticket) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
         }
+      } else if call.method == "claimImportCleanup" {
+        let request = try LokalTransferProtocol.importCleanupClaim(data.data)
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ownership = host.importOwnership
+        let ticket = try ownership.beginCleanup(ownership.capture(owner))
+        host.withRuntime({ runtime in runtime.claimImportCleanup(request, ticket: ticket) { reply.encode($0) } },
+                         unavailable: { ownership.abortCleanup(ticket); reply.failure($0) })
       } else if call.method == "claimImport" {
         let request = try LokalTransferProtocol.importClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
@@ -298,6 +306,10 @@ final class LokalTransferBridge {
             revision: request.revision, leaseID: request.leaseID)
           host.withRuntime({ runtime in runtime.releaseImport(request, owner: owner) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
+        } else if call.method == "validateImportCleanup" {
+          try host.importOwnership.validateCleanup(owner, jobID: request.id,
+            revision: request.revision, leaseID: request.leaseID)
+          reply.encode(.success(true))
         } else {
           // Intentionally direct. Isar's writer must not wait behind native
           // fsync, hashing, journal I/O or a Keychain read to check ownership.

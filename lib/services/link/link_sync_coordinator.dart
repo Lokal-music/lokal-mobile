@@ -96,8 +96,9 @@ class LinkSyncCoordinator {
 
   void _requireReady() {
     if (!socket.connected) throw StateError('Desktop link disconnected.');
-    if (!Database.isInitialized)
+    if (!Database.isInitialized) {
       throw StateError('The music library is not ready.');
+    }
   }
 
   Future<void> _run(Future<void> Function() action) {
@@ -189,6 +190,12 @@ class LinkSyncCoordinator {
     final prefs = await SharedPreferences.getInstance();
     final source = LokalDesktopSource.instance,
         server = await LokalDesktopSource.instance.ensureServer(credentials);
+    // A catalogue import is deliberately one-time. Subsequent explicit
+    // syncs need a lightweight, genre-only repair because desktop lookup
+    // results can predate the journal or fail to match when first received.
+    final reconcileGenres = !importCatalog &&
+        prefs.getBool('$_prefix.catalog') == true &&
+        prefs.getBool('$_prefix.owned_catalog_v2') == true;
     if (importCatalog ||
         prefs.getBool('$_prefix.catalog') != true ||
         prefs.getBool('$_prefix.owned_catalog_v2') != true) {
@@ -250,8 +257,9 @@ class LinkSyncCoordinator {
           'cursor': prefs.getInt(pullKey) ?? 0,
         });
         final items = reply.body['items'];
-        if (items is! List || reply.body['cursor'] is! int)
+        if (items is! List || reply.body['cursor'] is! int) {
           throw const FormatException('Invalid desktop sync page.');
+        }
         if (items.isNotEmpty) {
           changed = true;
           _matchCandidates ??= List<Song>.of(
@@ -264,7 +272,7 @@ class LinkSyncCoordinator {
             var song = await _match(item);
             // History is not ownership: retain the play event in the journal,
             // but never create a library song just because it was streamed.
-            if (song != null)
+            if (song != null) {
               await RecentlyPlayedRepository().recordPlay(
                 song.id,
                 eventId: item['event_id'] as String,
@@ -273,6 +281,7 @@ class LinkSyncCoordinator {
                 ),
                 listenedMs: item['ms_played'] as int,
               );
+            }
           }
         } else {
           final added = await LinkJournal.instance.mergeLibrary(items);
@@ -285,6 +294,17 @@ class LinkSyncCoordinator {
         processed += items.length;
         _report(phase, processed: processed);
         if (reply.body['hasMore'] != true) break;
+      }
+    }
+    if (!_background && reconcileGenres) {
+      _report(LinkSyncPhase.metadata);
+      final repaired = await source.reconcileMissingGenres(
+        server,
+        stillCurrent: () => socket.connected,
+      );
+      if (repaired > 0) {
+        changed = true;
+        onChanged?.call();
       }
     }
     // A cursor only returns new events. Explicit Sync Now must also rebuild
@@ -378,8 +398,9 @@ class LinkSyncCoordinator {
       case 'like':
         if (!await journal.wins(item, 'liked')) return;
         final song = await _match({...fields, 'track_key': item['entity_id']});
-        if (song != null)
+        if (song != null) {
           await favorites.setFromLink(song.id, item['op'] == 'like');
+        }
         break;
       case 'playlist':
         final id = item['entity_id'] as String;
@@ -523,9 +544,11 @@ class LinkSyncCoordinator {
           'genre',
           'year',
           'track_num',
-        ])
-          if (fields.containsKey(field) && await journal.wins(item, field))
+        ]) {
+          if (fields.containsKey(field) && await journal.wins(item, field)) {
             winning[field] = fields[field];
+        }
+          }
         // The matching snapshot identifies rows; edits earlier in this sync
         // may already have changed their metadata, so compare the current row.
         final currentRow = await Database.songs
