@@ -10,8 +10,8 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **119 reviewed merged
-mobile PRs after #172 through #332**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **121 reviewed merged
+mobile PRs after #172 through #337**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow, circular shader artwork transitions, expanded artist
 catalogues and 0.01× speed controls are included in the latest continuation.
@@ -37,19 +37,31 @@ It needs local signing before sideloading from Windows.
 Later source implements tracked native publication: private incomplete parts,
 durable native directory/file provenance before the exclusive Music link, and
 current writer ownership through the native runtime and typed Flutter channel.
-It passes three portable native rounds and 18 focused Dart channel contracts.
-It is not in build84 and has no Apple SDK/app qualification yet. Product native
-import/upload stays disabled. Later media-reader source passes actual host
-PCM24/FLAC24/AAC/MP3 and multi-track FFprobe contracts; its bundled-iOS probe
-has not run yet. The next release work is bundled-media acceptance, the root
-Isar coordinator, coordinated cleanup/deletion/CUE behavior, uploads
-and persisted progress, followed by OS suspension/relaunch acceptance. See
+The root coordinator now binds actual Isar preparation, durable media validation,
+tracked publication, atomic Song/receipt completion and native acknowledgement.
+Frozen [PR338](https://github.com/lokal-music/lokal-mobile/pull/338), tree
+`dbd5ebcd1eb5f2cffa9a289484655618df8d3db3`, passes native run10: both actual
+iOS16 SDK/Flutter bridge checks, 20 native rounds and actual macOS Isar/root
+contracts. Build85 is still in progress; installed iOS18.6/26 and bundled-reader
+acceptance remain pending. Host PCM24/FLAC24/AAC/MP3 and multi-track FFprobe
+contracts pass; the root harness explicitly uses a native-port fixture.
+
+Newer source detects Isar-only orphan reservations, protects durable retiring
+rows, and adds an unexposed Apple-coordinated abandonment helper. Its portable
+and actual Isar contracts pass; its Darwin cleanup contracts remain unexecuted.
+It also ports #336 genre reconciliation and #337 Soundtrack consolidation, with
+55 focused Link/genre checks and clean targeted analysis. These changes are
+outside frozen PR338/build85. Product native import/upload stays disabled.
+The next release work is bundled-media acceptance, integrated cleanup authority,
+clear/unpair/deletion/CUE barriers, owned uploads and persisted progress, followed
+by OS suspension/relaunch acceptance. See
 [the publication sequence](IOS_TRANSFERS.md#tracked-publication-foundation)
 for the implemented boundary and remaining gates. Home Screen widgets remain
 excluded.
 
-**This source is not a finalized release.** Build 82 is the current independently
-verified engineering package through #311, including native private import
+**This source is not a finalized release.** Build84 is the current independently
+verified engineering package, described above. Earlier build82 covers #311,
+including native private import
 ownership and metadata-cache acceptance. Both complete iOS 18.6 and 26 suites
 pass. The first iOS 26 attempt failed before installation during simulator boot;
 one fresh-host retry passed using the same compiled integration app. The IPA,
@@ -59,13 +71,13 @@ and 2,320 exported source files were independently rechecked. Source tree:
 checkpoints remain preserved. Widget runs 28/29 remain historical failures;
 Home Screen widgets are excluded, so these are no longer release gates.
 
-Build83 passed both actual iOS16 device/simulator SDK and Flutter bridge checks,
+Historically, build83 passed both actual iOS16 device/simulator SDK and Flutter bridge checks,
 then its native preflight stopped in round2 at concurrent writer-lock
 initialization. No IPA or installed-app acceptance was produced; iOS26 was
 skipped. A later source uses exclusive lock creation followed by opening an
 existing inode without creation flags, retaining every safety check and adding
-synchronized-constructor/unsafe-node tests. Portable rounds pass; Apple
-confirmation of this correction is still required.
+synchronized-constructor/unsafe-node tests. Portable rounds and all 20 Apple
+native rounds in build84 pass this correction.
 
 Native background networking is wired independently of Flutter, but product
 library import/upload capability remains disabled. Existing copy paths stay

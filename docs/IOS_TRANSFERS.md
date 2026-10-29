@@ -809,3 +809,32 @@ clear/unpair submission epochs and OS-task drainage, atomic CUE/scanner mapping,
 terminal-history retirement, owned uploads and persisted transfer UI. The
 bundled decoder and this checkpoint still require their own Apple run. Build84
 remains a separately qualified fallback, not evidence for this newer source.
+
+### Isar orphan and abandonment continuation (outside PR338)
+
+Later source also reads bounded private Isar reservation pages independently of
+native custody. Ready prepared jobs can resume normally; unmatched reservations
+and retiring candidates are reported as cleanup-required without publishing,
+deleting or inventing proof. A durable `retiring` state blocks late import and
+scanner writes until cleanup finishes. Final retirement requires that state;
+both writer transitions recheck cleanup authority before commit. Actual Isar
+contracts pass keyset deletion/insertion, reopen recovery, late guard rollback
+and four additional process exits around retiring/retired commits (twelve total
+receipt/media/retirement exit boundaries). Root contracts pass Isar-only orphan
+detection and retiring-candidate refusal with the actual database.
+
+The native filesystem half now contains an Apple `NSFileCoordinator` deletion
+accessor. It coordinates before taking its own writer lock, checks the exact
+frozen journal witness and retired live revision, verifies root/marker/inode/full
+hash, and rechecks the named descriptor and timestamps before the short
+cancelable unlink. Missing files stay missing; modified or replaced files are
+preserved. This helper neither removes provenance nor claims private staging
+drainage or Isar completion. It is not exposed through the runtime/channel.
+Separate current-root cleanup authority and integration remain required.
+
+Three portable native rounds pass, including live/completed-job refusal and an
+explicit Linux public-deletion refusal. Portable Foundation lacks Apple's file
+coordination. The Darwin-only owned/missing/edited/replaced/canceled cleanup
+contracts are written but **have not run on Apple**; they are outside PR338 and
+build85. No coordinated public cleanup acceptance or product activation is
+claimed from host execution.

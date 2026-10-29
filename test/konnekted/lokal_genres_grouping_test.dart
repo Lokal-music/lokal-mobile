@@ -27,12 +27,9 @@ Song track(
 
 void main() {
   test('desktop aliases and subgenres become one broad genre', () {
-    expect(lokalNormalizeGenreName('VGM'), 'Video Game Music');
-    expect(
-      lokalNormalizeGenreName('Video Game Soundtrack'),
-      'Video Game Music',
-    );
-    expect(lokalNormalizeGenreName('video game'), 'Video Game Music');
+    expect(lokalNormalizeGenreName('VGM'), 'Soundtrack');
+    expect(lokalNormalizeGenreName('Video Game Soundtrack'), 'Soundtrack');
+    expect(lokalNormalizeGenreName('video game'), 'Soundtrack');
     expect(lokalNormalizeGenreName('Original Soundtrack'), 'Soundtrack');
     expect(lokalNormalizeGenreName('EDM'), 'Electronic');
     expect(lokalNormalizeGenreName('Techno'), 'Electronic');
@@ -69,7 +66,7 @@ void main() {
       'Video Game Soundtrack',
       'Rock',
     ]);
-    expect(lokalTrackGenres(song), ['Video Game Music', 'Rock']);
+    expect(lokalTrackGenres(song), ['Soundtrack', 'Rock']);
     expect(song.genre, 'VGM; Video Game Soundtrack / Rock');
   });
 
@@ -93,7 +90,7 @@ void main() {
       ];
       final summary = lokalGenreSummary(items);
       final byName = {for (final g in summary.genres) g.name: g};
-      expect(byName['Video Game Music']!.songs.length, 2);
+      expect(byName['Soundtrack']!.songs.length, 2);
       expect(byName['Rock']!.songs.length, 3);
       expect(byName['Electronic']!.songs.length, 3);
       expect(byName['Other']!.songs.length, 2);
@@ -110,7 +107,7 @@ void main() {
         'Rock',
         'Jazz',
         'Other',
-        'Video Game Music',
+        'Soundtrack',
         'Classical',
       ]);
       // Each category is populated from the same recordings as the cards.
@@ -118,6 +115,42 @@ void main() {
       expect(items[0].genre, 'VGM');
     },
   );
+
+  test('game and film aliases share one card without rewriting raw tags', () {
+    for (final raw in [
+      'VGM',
+      'Video Game Music',
+      'Video Game Soundtrack',
+      'Game OST',
+      'Original Soundtrack',
+      'Film Score',
+      'Soundtrack',
+      'game music score',
+      'videogame',
+      'videogame ost',
+      'retro videogame music',
+    ]) {
+      expect(lokalNormalizeGenreName(raw), 'Soundtrack', reason: raw);
+    }
+    expect(lokalNormalizeGenreName('anime soundtrack'), 'Anime');
+    final both = track('both', 'VGM / Original Soundtrack; Video Game Music');
+    final summary = lokalGenreSummary([
+      both,
+      track('game', 'Video Game Music'),
+      track('film', 'Original Motion Picture Soundtrack'),
+      track('score', 'Film Score'),
+    ]);
+    expect(lokalTrackGenres(both), ['Soundtrack']);
+    expect(summary.genres.map((group) => group.name), ['Soundtrack']);
+    expect(summary.genres.single.songs.map((song) => song.id), [
+      'both',
+      'game',
+      'film',
+      'score',
+    ]);
+    expect(summary.noGenre, isEmpty);
+    expect(both.genre, 'VGM / Original Soundtrack; Video Game Music');
+  });
 
   test(
     'rare unknown tag becomes No genre when Other cannot reach two tracks',
@@ -268,6 +301,7 @@ void main() {
     final library = [
       track('r1', 'Rock'),
       track('r2', 'Indie Rock'),
+      track('vgm', 'Video Game Music'),
       track('x1', 'Unknown'),
     ];
     await tester.pumpWidget(
@@ -286,6 +320,16 @@ void main() {
     expect(find.text('Rock'), findsOneWidget);
     expect(find.text('Indie Rock'), findsNothing);
     expect(find.text('No genre'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'VGM');
+    await tester.pumpAndSettle();
+    expect(find.text('Soundtrack'), findsOneWidget);
+    expect(find.text('Rock'), findsNothing);
+    expect(find.text('No genre'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, 'game ost');
+    await tester.pumpAndSettle();
+    expect(find.text('Soundtrack'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, 'rock');
     await tester.pumpAndSettle();

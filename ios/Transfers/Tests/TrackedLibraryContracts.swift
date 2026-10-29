@@ -174,6 +174,79 @@ func runTrackedLibraryContracts(container: URL, template: LokalTransferJob) thro
   try require(completed.phase == .complete && acknowledgement.journal.snapshot().custodies == [publishedProof],
     "exact native completion and frozen publication retention share the journal transaction")
 
+  try rejects("completed/current writable custody cannot authorize abandonment") {
+    try acknowledgement.journal.validateAbandonment(publishedProof)
+  }
+  try rejects("live publication reservation is not cleanup authority") {
+    try first.journal.validateAbandonment(first.work())
+  }
+
+  #if canImport(Darwin)
+  // These execute real Foundation NSFileCoordinator on macOS. Portable Linux
+  // runs deliberately do not substitute a pretend public-deletion coordinator.
+  for mode in ["owned", "missing", "modified", "replacement", "revoked", "raced-edit", "raced-replacement"] {
+    let abandoned = try fixture("abandon-" + mode)
+    _ = try abandoned.install()
+    let frozen = try abandoned.work()
+    _ = try abandoned.journal.update(id: abandoned.job.id, revision: 1) { try $0.cancel(nowMs: 1060) }
+    let destination = try abandoned.target()
+    if mode == "missing" { try manager.removeItem(at: destination) }
+    if mode == "modified" { try Data("user changed audio".utf8).write(to: destination) }
+    if mode == "replacement" {
+      try manager.removeItem(at: destination)
+      try payload.write(to: destination)
+    }
+    let token = LokalTransferCopyCancellation()
+    let library = try LokalTransferLibrary(root: abandoned.music, testingBoundary: { edge in
+      if edge == "beforeCoordinatedUnlink" {
+        if mode == "revoked" { token.cancel() }
+        if mode == "raced-edit" {
+          try! Data("late user edit".utf8).write(to: destination)
+        }
+        if mode == "raced-replacement" {
+          try! FileManager.default.removeItem(at: destination)
+          try! payload.write(to: destination)
+        }
+      }
+    })
+    if mode == "revoked" {
+      try rejects("revoked cleanup cannot unlink coordinated public bytes") {
+        _ = try library.abandonTracked(frozen, journal: abandoned.journal,
+          files: abandoned.files, cancellation: token, validateCleanupAuthority: {})
+      }
+      try require(Data(contentsOf: destination) == payload, "revoked cleanup preserves public copy")
+    } else {
+      let result = try library.abandonTracked(frozen, journal: abandoned.journal,
+        files: abandoned.files, cancellation: token, validateCleanupAuthority: {})
+      let expected: LokalTransferLibraryAbandonment = mode == "owned" ? .removedOwnedFile :
+        (mode == "missing" ? .missingFile : .preservedUserFile)
+      try require(result == expected, "actual coordinated abandonment distinguishes owned/missing/user bytes")
+      if expected == .preservedUserFile {
+        try require(manager.fileExists(atPath: destination.path), "user replacement/edit remains present")
+      } else {
+        try require(!manager.fileExists(atPath: destination.path), "owned deletion/missing never recreates bytes")
+        try require(library.abandonTracked(frozen, journal: abandoned.journal, files: abandoned.files,
+          cancellation: token, validateCleanupAuthority: {}) == .missingFile,
+          "lost unlink reply recovers idempotently without fabricating a file")
+      }
+    }
+    try require(abandoned.work() == frozen,
+      "filesystem half never removes provenance before private cleanup and Isar retirement")
+  }
+  print("Actual Foundation coordinated abandonment passed: owned/missing/modified/replaced bytes, late edit/replacement and cancellation. Runtime cleanup authority/Isar integration remain pending.")
+  #else
+  let unsupported = try fixture("abandon-unsupported")
+  _ = try unsupported.install()
+  _ = try unsupported.journal.update(id: unsupported.job.id, revision: 1) { try $0.cancel(nowMs: 1060) }
+  try rejects("portable host cannot pretend to provide Apple file coordination") {
+    _ = try LokalTransferLibrary(root: unsupported.music).abandonTracked(unsupported.work(),
+      journal: unsupported.journal, files: unsupported.files,
+      cancellation: LokalTransferCopyCancellation(), validateCleanupAuthority: {})
+  }
+  try require(Data(contentsOf: unsupported.target()) == payload,
+    "portable coordination refusal leaves real public bytes untouched")
+  #endif
+
   let concurrent = try fixture("concurrent")
   let children = try (0..<6).map { _ in try child(concurrent) }
   for process in children { process.waitUntilExit() }

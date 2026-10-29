@@ -279,7 +279,7 @@ final lokalGenresProvider = Provider<AsyncValue<List<LokalGenre>>>(
 );
 
 /// Library › Genres: desktop's canonical broad categories (no custom genre
-/// cards), plus Other, No genre, and search over visible family labels.
+/// cards), plus Other, No genre, and search over family labels/known aliases.
 class LokalGenresPage extends ConsumerStatefulWidget {
   const LokalGenresPage({super.key});
 
@@ -301,11 +301,14 @@ class _LokalGenresPageState extends ConsumerState<LokalGenresPage> {
   Widget build(BuildContext context) {
     final summary = ref.watch(lokalGenreSummaryProvider).value;
     final query = _query.trim().toLowerCase();
+    final queryFamily = query.isEmpty ? null : lokalNormalizeGenreName(query);
     final shown = summary == null
         ? const <LokalGenre>[]
         : [
             for (final group in summary.genres)
-              if (query.isEmpty || group.name.toLowerCase().contains(query))
+              if (query.isEmpty ||
+                  group.name.toLowerCase().contains(query) ||
+                  (queryFamily != _other && queryFamily == group.name))
                 group,
           ];
     final noGenreLabel = lokalText('No genre');

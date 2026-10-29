@@ -1,6 +1,6 @@
 # iPhone review of mobile PRs after #172
 
-Current review: **119 merged product PRs after #172 through #332**. The newest
+Current review: **121 merged product PRs after #172 through #337**. The newest
 continuation includes on-demand large queues, provider resolution, subtitle
 alignment, smooth player expansion, per-minor release notes and direct Help
 navigation. Reviewed
@@ -1299,3 +1299,24 @@ All 11 focused genre tests pass, covering boundary/ambiguity cases, ignored tags
 known singletons, repeated unknown labels, metadata preservation and live page
 search. Strict analysis of the three changed genre files is clean. This is later
 source than build83; no Apple app acceptance is claimed for these changes yet.
+
+## Follow-up: PRs #336 and #337 genre sync and Soundtrack consolidation
+
+The rolling review includes merged main through
+`0ecd016b89de67310c62ebe929a775103c95ba9c` (121 product PRs). PR #335
+does not resolve as a pull request; #333/#334 are separate iPhone engineering
+continuations rather than merged main product changes.
+
+| PR | Merged commit | iPhone disposition |
+| --- | --- | --- |
+| #336 | `b8e36bbce8acc7b1345037a74642d75fc8778a4b` | Explicit Sync Now reconciles missing/placeholder genres from the existing authenticated desktop catalogue after journal replay. Stable remote identity wins; independently imported files need unique album/duration-compatible matches. Preserve populated phone genres, multiple real tags and ordinary background sync cost. |
+| #337 | `0ecd016b89de67310c62ebe929a775103c95ba9c` | Combine Video Game Music with Soundtrack into one card and one per-song count. Keep Anime separate and preserve raw tags. Retain compact videogame spellings from prior iPhone alias coverage; full known aliases such as VGM and Game OST also find the Soundtrack card through genre search. |
+
+The genre reconciliation rechecks the captured database, pairing credentials,
+server identity and original Song binding before writes; it skips recordings
+changed during the network snapshot. Disconnection or database replacement
+retires the operation. The port adds no endpoint, audio copy or file-tag write.
+All 55 focused Link/genre checks pass, including actual Genres page alias search;
+fatal-info analysis is clean. These changes are later than frozen PR338/build85
+and require the next batched Apple acceptance. Build84 remains qualified only
+through #332; this audit does not extend its source scope.

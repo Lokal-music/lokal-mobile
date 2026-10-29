@@ -115,6 +115,21 @@ struct LokalTransferLibraryReceipt: Codable, Equatable, Sendable {
   let sha256: String
 }
 
+enum LokalTransferLibraryAbandonment: String, Codable, Sendable {
+  case removedOwnedFile, missingFile, preservedUserFile
+}
+
+private final class LokalTransferAbandonmentResult: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value: Result<LokalTransferLibraryAbandonment, Error>?
+  func set(_ result: Result<LokalTransferLibraryAbandonment, Error>) {
+    lock.lock(); defer { lock.unlock() }; value = result
+  }
+  func get() -> Result<LokalTransferLibraryAbandonment, Error>? {
+    lock.lock(); defer { lock.unlock() }; return value
+  }
+}
+
 /// Filesystem boundary only: this does not acknowledge a playable Isar row.
 /// The app supplies its own Music root; no Flutter-supplied path is accepted.
 /// One deterministic name per frozen job/revision survives lost acknowledgments.
@@ -286,7 +301,8 @@ final class LokalTransferLibrary: @unchecked Sendable {
   }
 
   private func trackedExisting(_ work: LokalTransferImportCustody, files: LokalTransferFiles,
-                               cancellation: LokalTransferCopyCancellation) throws -> LokalTransferLibraryReceipt? {
+                               cancellation: LokalTransferCopyCancellation,
+                               onVerified: ((Int32, stat) throws -> Void)? = nil) throws -> LokalTransferLibraryReceipt? {
     try checkRoot(); try cancellation.check()
     guard work.location == (try LokalTransferLibraryLocation(parent: parent, directory: directory)) else {
       throw LokalTransferError.unsafeFile
@@ -295,7 +311,7 @@ final class LokalTransferLibrary: @unchecked Sendable {
     let fd = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
     guard fd >= 0 else {
       if errno == ENOENT { return nil }
-      throw LokalTransferError.unsafeFile
+      throw LokalTransferError.posix("open_tracked_import", errno)
     }
     defer { close(fd) }
     guard let proof = work.publication, let nonce = work.copyNonce else { throw LokalTransferError.unsafeFile }
@@ -323,8 +339,94 @@ final class LokalTransferLibrary: @unchecked Sendable {
     #endif
     guard hash == work.job.receivedSHA256 else { throw LokalTransferError.checksumMismatch }
     try checkRoot(); try cancellation.check()
+    try onVerified?(fd, after)
     return LokalTransferLibraryReceipt(relativePath: Self.directoryName + "/" + name,
       bytes: Int64(after.st_size), sha256: hash)
+  }
+
+  /// Filesystem half of abandonment only. Caller first revokes publication,
+  /// drains the file worker and marks the exact Isar receipt retiring under a
+  /// separate current-root cleanup authority. No runtime/channel exposes this
+  /// helper until that authority/barrier is implemented. Linux refuses public
+  /// deletion; its portable tests cannot qualify Apple's file coordination.
+  func abandonTracked(_ work: LokalTransferImportCustody, journal: LokalTransferJournal,
+                      files: LokalTransferFiles, cancellation: LokalTransferCopyCancellation,
+                      validateCleanupAuthority: @escaping @Sendable () throws -> Void) throws -> LokalTransferLibraryAbandonment {
+    try work.validate(); try cancellation.check(); try validateCleanupAuthority()
+    try journal.validateAbandonment(work)
+    #if canImport(Darwin)
+    try checkRoot(); try cancellation.check(); try validateCleanupAuthority()
+    try journal.validateAbandonment(work)
+    if let location = work.location {
+      guard location == (try LokalTransferLibraryLocation(parent: parent, directory: directory)) else {
+        throw LokalTransferError.unsafeFile
+      }
+    }
+    let name = try Self.fileName(work.job)
+    var visible = stat()
+    if fstatat(directory, name, &visible, AT_SYMLINK_NOFOLLOW) != 0 {
+      if errno == ENOENT { return .missingFile }
+      throw LokalTransferError.posix("stat_abandon_import", errno)
+    }
+    let target = root.appendingPathComponent(Self.directoryName).appendingPathComponent(name)
+    var coordinationError: NSError?
+    let result = LokalTransferAbandonmentResult()
+    let coordinator = NSFileCoordinator(filePresenter: nil)
+    coordinator.coordinate(writingItemAt: target, options: .forDeleting, error: &coordinationError) { url in
+      result.set(Result {
+        guard url.standardizedFileURL == target.standardizedFileURL else { throw LokalTransferError.unsafeFile }
+        // Coordinate before taking our own writer lock. Waiting for another
+        // file presenter while holding that lock would invert the lock order.
+        self.mutex.lock(); defer { self.mutex.unlock() }
+        while flock(self.writer, LOCK_EX) != 0 {
+          if errno != EINTR { throw LokalTransferError.posix("lock_abandon_copy", errno) }
+        }
+        defer { _ = flock(self.writer, LOCK_UN) }
+        try self.checkRoot(); try cancellation.check(); try validateCleanupAuthority()
+        try journal.validateAbandonment(work)
+        self.testingBoundary?("coordinatedAbandonment")
+        do {
+          let receipt = try self.trackedExisting(work, files: files, cancellation: cancellation) { fd, verified in
+            // Do not call registry/SQLite while holding the short cancellation
+            // lock. The registry revokes this cleanup token before handoff.
+            try validateCleanupAuthority(); try journal.validateAbandonment(work)
+            self.testingBoundary?("beforeCoordinatedUnlink")
+            try self.checkRoot()
+            try cancellation.whileCurrent {
+              guard let proof = work.publication else { throw LokalTransferError.unsafeFile }
+              let held = try proof.verify(fd)
+              var named = stat()
+              guard held.st_nlink == 1,
+                    held.st_ctimespec.tv_sec == verified.st_ctimespec.tv_sec,
+                    held.st_ctimespec.tv_nsec == verified.st_ctimespec.tv_nsec,
+                    fstatat(self.directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
+                    named.st_dev == held.st_dev, named.st_ino == held.st_ino,
+                    named.st_nlink == 1 else { throw LokalTransferError.unsafeFile }
+              guard unlinkat(self.directory, name, 0) == 0 else {
+                throw LokalTransferError.posix("unlink_coordinated_import", errno)
+              }
+            }
+            self.testingBoundary?("afterCoordinatedUnlink")
+            try self.syncDirectory()
+          }
+          return receipt == nil ? .missingFile : .removedOwnedFile
+        } catch LokalTransferError.unsafeFile {
+          // A proof/root failure never authorizes deletion. Recheck the root
+          // so a moved Music tree remains unresolved rather than retired.
+          try self.checkRoot(); try cancellation.check(); try validateCleanupAuthority()
+          return .preservedUserFile
+        } catch LokalTransferError.checksumMismatch {
+          try self.checkRoot(); try cancellation.check(); try validateCleanupAuthority()
+          return .preservedUserFile
+        }
+      })
+    }
+    if let coordinationError { throw coordinationError }
+    guard let outcome = result.get() else { throw LokalTransferError.invalidTransition }
+    return try outcome.get()
+    #else
+    throw LokalTransferError.invalidTransition
+    #endif
   }
 
   /// Private tracked publication. Caller supplies the actual registry writer

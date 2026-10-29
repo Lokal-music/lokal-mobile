@@ -235,6 +235,24 @@ Future<void> main(List<String> arguments) async {
 
     if (options['--worker'] == 'prepare') {
       await fixture.prepare(boundary: boundary);
+    } else if (options['--worker'] == 'retiring') {
+      await fixture
+          .store(boundary: boundary)
+          .beginRetirement(
+            fixture.job(),
+            fixture.target,
+            isCurrent: () => true,
+            validateCleanupAuthority: () async {},
+          );
+    } else if (options['--worker'] == 'retired') {
+      await fixture
+          .store(boundary: boundary)
+          .retireReservation(
+            fixture.job(),
+            fixture.target,
+            isCurrent: () => true,
+            validateOwnership: () async {},
+          );
     } else if (options['--worker'] == 'media') {
       await fixture
           .store(boundary: boundary)
@@ -608,6 +626,122 @@ Future<void> main(List<String> arguments) async {
         'Scanner cannot resurrect a deleted completed recording',
       );
     });
+    await scenario('retirement-barrier', (fixture) async {
+      await fixture.prepare();
+      await fixture.store().recordMediaValidation(
+        fixture.job(),
+        fixture.target,
+        Fixture.media,
+        isCurrent: () => true,
+        validateOwnership: () async {},
+      );
+      await rejects(
+        () => fixture.store().retireReservation(
+          fixture.job(),
+          fixture.target,
+          isCurrent: () => true,
+          validateOwnership: () async {},
+        ),
+        IosTransferImportConflict.retired,
+      );
+      var checks = 0;
+      try {
+        await fixture.store().beginRetirement(
+          fixture.job(),
+          fixture.target,
+          isCurrent: () => true,
+          validateCleanupAuthority: () async {
+            if (++checks == 2) throw StateError('cleanup authority retired');
+          },
+        );
+        throw StateError('Expected late cleanup revocation');
+      } on StateError catch (error) {
+        require(
+          error.message == 'cleanup authority retired',
+          'Late guard reached',
+        );
+      }
+      require(
+        (await fixture.store().peek(
+              fixture.job(),
+              fixture.target,
+            ))!.receipt.state ==
+            'prepared',
+        'Late cleanup revocation rolls back retiring',
+      );
+      await fixture.store().beginRetirement(
+        fixture.job(),
+        fixture.target,
+        isCurrent: () => true,
+        validateCleanupAuthority: () async {},
+      );
+      await fixture.close();
+      await fixture.open();
+      require(
+        (await fixture.store().pendingReservations()).entries.single.retiring,
+        'Retiring survives process/database replacement',
+      );
+      await rejects(() => fixture.prepare(), IosTransferImportConflict.retired);
+      await rejects(() => fixture.commit(), IosTransferImportConflict.retired);
+      final guard = IosTransferScanGuard(fixture.db);
+      require(
+        await fixture.db.writeTxn(
+              () => fixture.store().isReservedPathInTransaction(
+                fixture.store().absolutePath(fixture.target),
+              ),
+            ) &&
+            !await fixture.db.writeTxn(
+              () => guard.allowsRemovalInTransaction(42),
+            ),
+        'Retiring protects both path and Song anchor from scanner writes',
+      );
+      await fixture.store().retireReservation(
+        fixture.job(),
+        fixture.target,
+        isCurrent: () => true,
+        validateOwnership: () async {},
+      );
+      require(
+        (await fixture.store().pendingReservations()).entries.isEmpty &&
+            (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal',
+        'Retirement finalizes bookkeeping without removing remote Song',
+      );
+    });
+    await scenario('reservation-keyset-pages', (fixture) async {
+      for (var index = 1; index <= 5; index++) {
+        fixture.document['id'] =
+            '00000000-0000-4000-8000-${index.toString().padLeft(12, '0')}';
+        await fixture.prepare();
+      }
+      final store = fixture.store();
+      final first = await store.pendingReservations(limit: 2);
+      require(
+        first.entries.length == 2 && first.nextId != null,
+        'Private recovery returns bounded keyset page',
+      );
+      await fixture.db.writeTxn(
+        () =>
+            fixture.db.iosTransferReceiptEntitys.delete(first.entries.first.id),
+      );
+      fixture.document['id'] = '00000000-0000-4000-8000-000000000006';
+      await fixture.prepare();
+      final seen = first.entries.map((e) => e.operationKey).toSet();
+      int? cursor = first.nextId;
+      while (cursor != null) {
+        final page = await store.pendingReservations(afterId: cursor, limit: 2);
+        for (final entry in page.entries) {
+          require(
+            seen.add(entry.operationKey),
+            'No duplicate reservation after deletion',
+          );
+        }
+        cursor = page.nextId;
+      }
+      require(seen.length == 6, 'No offset skip after deletion and insertion');
+      await rejects(() => store.pendingReservations(limit: 0));
+      await rejects(() => store.pendingReservations(limit: 101));
+      await rejects(() => store.pendingReservations(afterId: -1));
+    });
     await scenario('prepared-deletion', (fixture) async {
       await fixture.prepare();
       await fixture.db.writeTxn(() => fixture.db.songEntitys.delete(42));
@@ -618,6 +752,12 @@ Future<void> main(List<String> arguments) async {
       await rejects(
         () => fixture.commit(),
         IosTransferImportConflict.recordingRemoved,
+      );
+      await fixture.store().beginRetirement(
+        fixture.job(),
+        fixture.target,
+        isCurrent: () => true,
+        validateCleanupAuthority: () async {},
       );
       await fixture.store().retireReservation(
         fixture.job(),
@@ -675,10 +815,11 @@ Future<void> main(List<String> arguments) async {
       await scenario('native-revoked-after-$phase-write', (fixture) async {
         var authorized = true;
         Future<void> guard() async {
-          if (!authorized)
+          if (!authorized) {
             throw const IosTransferImportException(
               IosTransferImportConflict.retired,
             );
+          }
         }
 
         Future<void> boundary(String stage) async {
@@ -884,6 +1025,40 @@ Future<void> main(List<String> arguments) async {
         'Unsafe target cannot persist intent',
       );
     });
+    for (final operation in ['retiring', 'retired']) {
+      for (final edge in ['beforeCommit', 'afterCommit']) {
+        await scenario('process-$operation-$edge', (fixture) async {
+          await fixture.prepare();
+          if (operation == 'retired') {
+            await fixture.store().beginRetirement(
+              fixture.job(),
+              fixture.target,
+              isCurrent: () => true,
+              validateCleanupAuthority: () async {},
+            );
+          }
+          await fixture.close();
+          final result = await child(fixture, operation, '$operation:$edge');
+          require(
+            result.exitCode == 95,
+            'Retirement child exits at exact commit edge',
+          );
+          await fixture.open();
+          final receipt = (await fixture.store().peek(
+            fixture.job(),
+            fixture.target,
+          ))!.receipt;
+          final expected = edge == 'afterCommit'
+              ? operation
+              : (operation == 'retiring' ? 'prepared' : 'retiring');
+          require(
+            receipt.state == expected &&
+                (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal',
+            'Retirement process exit preserves exact transaction and Song',
+          );
+        });
+      }
+    }
     for (final boundary in [
       'prepare:afterSong',
       'prepare:beforeCommit',
@@ -952,7 +1127,7 @@ Future<void> main(List<String> arguments) async {
       );
     }, existing: false);
     stdout.writeln(
-      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, eight receipt/media commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
+      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, bounded reservation keyset pages, retiring/retired guards, twelve receipt/media/retirement commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
     );
   } catch (error, stack) {
     stderr.writeln('Isar import contracts failed at $stage: $error\n$stack');

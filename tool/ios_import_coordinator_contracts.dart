@@ -328,6 +328,50 @@ Future<void> main(List<String> arguments) async {
     readMedia: reader ?? readMedia,
   );
   try {
+    await scenario('isar-only-orphan', (fixture, native) async {
+      await fixture.prepare();
+      native.phase = 'cancelled';
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        require(
+          owner.enabled &&
+              owner.issues['${native.job.id}:1'] ==
+                  IosTransferCoordinatorIssue.cleanupRequired,
+          'Isar-only reservation is found without native custody or ready job',
+        );
+        require(
+          native.publications == 0 &&
+              native.acknowledgements == 0 &&
+              (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal',
+          'Orphan detection preserves Song and never publishes or invents proof',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
+    await scenario('retiring-current-candidate', (fixture, native) async {
+      await fixture.prepare();
+      await fixture.store().beginRetirement(
+        fixture.job(),
+        fixture.target,
+        isCurrent: () => true,
+        validateCleanupAuthority: () async {},
+      );
+      native.phase = 'validating';
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        require(
+          owner.issues['${native.job.id}:1'] ==
+                  IosTransferCoordinatorIssue.cleanupRequired &&
+              native.publications == 0,
+          'Durable retiring reservation blocks a late current candidate',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
     await scenario('complete', (fixture, native) async {
       final owner = coordinator(fixture, native);
       try {
@@ -631,7 +675,7 @@ Future<void> main(List<String> arguments) async {
     });
     // ignore: avoid_print
     print(
-      'Actual root coordinator/Isar contracts passed: ordered completion, one identity, durable media, lost publication and staging after database reopen, deleted history, missing reservation refusal, blocked-reader retirement/mutation barrier, capability gating and no idle/history polling. Native RPC is a fixture; reader=${options.containsKey('--ffprobe') ? 'actual host FFprobe.' : 'generated WAV fixture.'}',
+      'Actual root coordinator/Isar contracts passed: ordered completion, one identity, durable media, lost publication and staging after database reopen, deleted history, missing reservation refusal, Isar-only orphan detection and retiring refusal, blocked-reader retirement/mutation barrier, capability gating and no idle/history polling. Native RPC is a fixture; reader=${options.containsKey('--ffprobe') ? 'actual host FFprobe.' : 'generated WAV fixture.'}',
     );
   } finally {
     await root.delete(recursive: true);

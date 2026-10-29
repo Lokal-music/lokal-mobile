@@ -45,6 +45,28 @@ class IosTransferImportResult {
   }
 }
 
+/// Private bookkeeping only: neither a file ownership proof nor a native lease.
+class IosTransferPendingReservation {
+  const IosTransferPendingReservation({
+    required this.id,
+    required this.operationKey,
+    required this.songId,
+    required this.relativePath,
+    required this.retiring,
+  });
+  final int id;
+  final String operationKey;
+  final int songId;
+  final String relativePath;
+  final bool retiring;
+}
+
+class IosTransferPendingPage {
+  const IosTransferPendingPage(this.entries, this.nextId);
+  final List<IosTransferPendingReservation> entries;
+  final int? nextId;
+}
+
 /// One app-isolate library writer. Native callbacks never open this database.
 /// Preparation reserves identity before publication; song and completed receipt
 /// commit in one actual Isar transaction. The app adapter/schema are not enabled
@@ -108,7 +130,12 @@ class IosTransferImportStore {
   ) {
     final identity = job.intent.identity;
     if (receipt.schemaVersion != 1 ||
-        !{'prepared', 'committed', 'retired'}.contains(receipt.state) ||
+        !{
+          'prepared',
+          'retiring',
+          'committed',
+          'retired',
+        }.contains(receipt.state) ||
         receipt.operationKey != keyFor(job) ||
         receipt.jobId != job.id ||
         receipt.revision != job.revision ||
@@ -159,6 +186,70 @@ class IosTransferImportStore {
   String absolutePath(IosTransferLibraryTarget target) =>
       p.joinAll([musicRoot, ...target.relativePath.split('/')]);
 
+  /// Find reservations even when the process stopped before native custody
+  /// existed. Primary-key pagination survives deletion of a previous page;
+  /// historical committed/retired rows do not enter this recovery payload.
+  Future<IosTransferPendingPage> pendingReservations({
+    int? afterId,
+    int limit = 100,
+  }) async {
+    if ((afterId != null && (afterId < 1 || afterId >= 9223372036854775807)) ||
+        limit < 1 ||
+        limit > 100) {
+      throw const FormatException('Invalid reservation page.');
+    }
+    return isar.txn(() async {
+      final rows = await isar.iosTransferReceiptEntitys
+          .where()
+          .idGreaterThan(afterId ?? 0)
+          .filter()
+          .group(
+            (q) => q.stateEqualTo('prepared').or().stateEqualTo('retiring'),
+          )
+          .limit(limit + 1)
+          .findAll();
+      final entries = <IosTransferPendingReservation>[];
+      for (final row in rows.take(limit)) {
+        final canonical = RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        ).hasMatch(row.jobId);
+        if (row.schemaVersion != 1 ||
+            !canonical ||
+            row.revision < 1 ||
+            row.operationKey != '${row.jobId}:${row.revision}' ||
+            row.id < 1 ||
+            row.localSongId < 1 ||
+            row.committedAt != null) {
+          _fail(IosTransferImportConflict.receiptMismatch);
+        }
+        // Validate the suffix/path without using the bookkeeping as file
+        // authority. No absolute path or filesystem operation is returned.
+        final path = row.relativePath;
+        if (!path.startsWith('Desktop Copies/') ||
+            path.split('/').length != 2 ||
+            path.contains('\\') ||
+            path.contains('\u0000') ||
+            !RegExp(' - ${row.jobId}-r${row.revision}\\.[a-z0-9]{1,8}\$')
+                .hasMatch(path)) {
+          _fail(IosTransferImportConflict.receiptMismatch);
+        }
+        entries.add(
+          IosTransferPendingReservation(
+            id: row.id,
+            operationKey: row.operationKey,
+            songId: row.localSongId,
+            relativePath: path,
+            retiring: row.state == 'retiring',
+          ),
+        );
+      }
+      return IosTransferPendingPage(
+        List.unmodifiable(entries),
+        rows.length > limit ? entries.last.id : null,
+      );
+    });
+  }
+
   /// Read-only recovery never creates a replacement for a deleted recording.
   Future<IosTransferImportResult?> peek(
     IosTransferJob job,
@@ -198,7 +289,7 @@ class IosTransferImportStore {
       );
       if (previous != null) {
         _matches(previous, job, target);
-        if (previous.state == 'retired') {
+        if (!{'prepared', 'committed'}.contains(previous.state)) {
           _fail(IosTransferImportConflict.retired);
         }
         final song = await isar.songEntitys.get(previous.localSongId);
@@ -328,7 +419,9 @@ class IosTransferImportStore {
       );
       if (receipt == null) _fail(IosTransferImportConflict.receiptMismatch);
       _matches(receipt, job, target);
-      if (receipt.state == 'retired') _fail(IosTransferImportConflict.retired);
+      if (!{'prepared', 'committed'}.contains(receipt.state)) {
+        _fail(IosTransferImportConflict.retired);
+      }
       final song = await isar.songEntitys.get(receipt.localSongId);
       final previous = IosTransferImportResult(receipt, song);
       if (previous.validatedMedia != null) {
@@ -373,7 +466,9 @@ class IosTransferImportStore {
       );
       if (receipt == null) _fail(IosTransferImportConflict.receiptMismatch);
       _matches(receipt, job, copy);
-      if (receipt.state == 'retired') _fail(IosTransferImportConflict.retired);
+      if (!{'prepared', 'committed'}.contains(receipt.state)) {
+        _fail(IosTransferImportConflict.retired);
+      }
       final song = await isar.songEntitys.get(receipt.localSongId);
       if (receipt.state == 'committed') {
         return IosTransferImportResult(receipt, song);
@@ -451,9 +546,45 @@ class IosTransferImportStore {
             .where()
             .relativePathEqualTo(relative)
             .filter()
-            .stateEqualTo('prepared')
+            .group(
+              (q) => q.stateEqualTo('prepared').or().stateEqualTo('retiring'),
+            )
             .findFirst() !=
         null;
+  }
+
+  /// Caller must revoke import writers and drain native file work first. Its
+  /// separate current-client cleanup authority is checked inside this writer;
+  /// a revoked publication lease cannot authorize abandonment. No public file
+  /// is touched here. Retiring is durable and blocks late prepare/commit/scan.
+  Future<IosTransferImportResult?> beginRetirement(
+    IosTransferJob job,
+    IosTransferLibraryTarget target, {
+    required bool Function() isCurrent,
+    required Future<void> Function() validateCleanupAuthority,
+  }) async {
+    _validateJob(job, target);
+    final result = await isar.writeTxn(() async {
+      _current(isCurrent);
+      final receipt = await isar.iosTransferReceiptEntitys.getByOperationKey(
+        keyFor(job),
+      );
+      if (receipt == null) return null;
+      _matches(receipt, job, target);
+      final song = await isar.songEntitys.get(receipt.localSongId);
+      if (receipt.state == 'prepared') {
+        await validateCleanupAuthority();
+        _current(isCurrent);
+        receipt.state = 'retiring';
+        await isar.iosTransferReceiptEntitys.put(receipt);
+        await _boundary('retiring:beforeCommit');
+        await validateCleanupAuthority();
+        _current(isCurrent);
+      }
+      return IosTransferImportResult(receipt, song);
+    });
+    await _boundary('retiring:afterCommit');
+    return result;
   }
 
   /// Call after native cancellation/owned-file cleanup has drained. A committed
@@ -465,7 +596,7 @@ class IosTransferImportStore {
     required Future<void> Function() validateOwnership,
   }) async {
     _validateJob(job, target);
-    return isar.writeTxn(() async {
+    final result = await isar.writeTxn(() async {
       _current(isCurrent);
       final receipt = await isar.iosTransferReceiptEntitys.getByOperationKey(
         keyFor(job),
@@ -474,13 +605,20 @@ class IosTransferImportStore {
       _matches(receipt, job, target);
       final song = await isar.songEntitys.get(receipt.localSongId);
       if (receipt.state != 'committed') {
+        if (!{'retiring', 'retired'}.contains(receipt.state)) {
+          _fail(IosTransferImportConflict.retired);
+        }
         await validateOwnership();
         _current(isCurrent);
         receipt.state = 'retired';
         await isar.iosTransferReceiptEntitys.put(receipt);
+        await _boundary('retired:beforeCommit');
+        await validateOwnership();
         _current(isCurrent);
       }
       return IosTransferImportResult(receipt, song);
     });
+    await _boundary('retired:afterCommit');
+    return result;
   }
 }

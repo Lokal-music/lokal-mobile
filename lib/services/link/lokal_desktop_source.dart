@@ -1,6 +1,7 @@
 import '../lyrics_service.dart';
 import 'desktop_music_storage.dart';
 import 'desktop_catalogue_import.dart';
+import 'desktop_genre_reconciliation.dart';
 
 import 'package:path/path.dart' as p;
 
@@ -102,8 +103,9 @@ class LokalDesktopSource extends NetworkSourceService {
           )
           .first;
       final after = await file.stat();
-      if (before.size != after.size || before.modified != after.modified)
+      if (before.size != after.size || before.modified != after.modified) {
         return null;
+      }
       return {'size': before.size, 'sha256': digest.toString()};
     } on Object {
       return null; // The actual upload reports inaccessible audio normally.
@@ -150,10 +152,11 @@ class LokalDesktopSource extends NetworkSourceService {
             body: jsonEncode({'sizes': sizes}),
           )
           .timeout(const Duration(seconds: 20));
-      if (response.statusCode != 200)
+      if (response.statusCode != 200) {
         throw StateError(
           'Desktop file-size check failed. Reconnect and retry.',
         );
+      }
       final values = (jsonDecode(response.body) as Map)['sizes'] as List;
       if (values.any((value) => value is! int || !sizes.contains(value))) {
         throw const FormatException('Invalid desktop size comparison.');
@@ -263,8 +266,9 @@ class LokalDesktopSource extends NetworkSourceService {
             headers: _headers(credentials),
           )
           .timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200)
+      if (response.statusCode != 200) {
         throw const HttpException('Desktop library is unavailable.');
+      }
       final body = jsonDecode(response.body) as Map;
       final items = (body['items'] as List)
           .map((raw) => Map<String, dynamic>.from(raw as Map))
@@ -272,10 +276,11 @@ class LokalDesktopSource extends NetworkSourceService {
       tracks.addAll(items);
       onPage?.call(tracks.length);
       if (body['hasMore'] != true) return tracks;
-      if (items.isEmpty || offset >= 100000)
+      if (items.isEmpty || offset >= 100000) {
         throw const FormatException(
           'Desktop library pagination did not advance.',
         );
+      }
       offset += items.length;
     }
   }
@@ -288,11 +293,13 @@ class LokalDesktopSource extends NetworkSourceService {
     await _musicStorage.requireFolder();
     final credentials = await _credentials(server);
     final id = track['id']?.toString();
-    if (id == null || id.isEmpty)
+    if (id == null || id.isEmpty) {
       throw const FormatException('Desktop song has no identifier.');
+    }
     final extension = track['fileType']?.toString().toLowerCase() ?? 'bin';
-    if (!RegExp(r'^[a-z0-9]{1,8}$').hasMatch(extension))
+    if (!RegExp(r'^[a-z0-9]{1,8}$').hasMatch(extension)) {
       throw const FormatException('Invalid audio format.');
+    }
     final directory = Directory(
       '${(await getTemporaryDirectory()).path}/desktop_transfers',
     );
@@ -313,8 +320,9 @@ class LokalDesktopSource extends NetworkSourceService {
       final response = await client
           .send(request)
           .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200)
+      if (response.statusCode != 200) {
         throw const HttpException('Desktop audio file is unavailable.');
+      }
       var received = 0;
       final sink = part.openWrite();
       try {
@@ -437,8 +445,9 @@ class LokalDesktopSource extends NetworkSourceService {
         if (stillCurrent?.call() == false) return;
         if (response.statusCode == 404 || response.statusCode == 403) return;
         if (response.statusCode != 200 ||
-            response.bodyBytes.length > 4 * 1024 * 1024)
+            response.bodyBytes.length > 4 * 1024 * 1024) {
           return;
+        }
         final body = jsonDecode(response.body);
         if (body['items'] is! List) return;
         for (final item in (body['items'] as List).whereType<Map>()) {
@@ -472,24 +481,13 @@ class LokalDesktopSource extends NetworkSourceService {
     if (value == null ||
         '${value.desktopId}:${value.desktopUserId ?? 'guest'}' !=
             server.username ||
-        value.origin.toString() != server.baseUrl)
+        value.origin.toString() != server.baseUrl) {
       throw StateError('Reconnect to this Lokal desktop to stream its songs.');
+    }
     return value;
   }
 
-  String? _genre(Map<String, dynamic> track) {
-    final tag = track['genre']?.toString().trim();
-    if (tag != null && tag.isNotEmpty) return tag;
-    var genres = track['genres'];
-    if (genres is String) {
-      try {
-        genres = jsonDecode(genres);
-      } catch (_) {
-        return genres;
-      }
-    }
-    return genres is List ? genres.whereType<String>().join('; ') : null;
-  }
+  String? _genre(Map<String, dynamic> track) => desktopLinkGenres(track);
 
   Map<String, String> _headers(LokalRemoteCredentials credentials) => {
     'x-remote-token': credentials.remoteToken,
@@ -554,15 +552,17 @@ class LokalDesktopSource extends NetworkSourceService {
             .send(http.Request('GET', target))
             .timeout(const Duration(seconds: 10));
       }
-      if (response.statusCode != 200)
+      if (response.statusCode != 200) {
         throw const HttpException('Desktop artwork is unavailable.');
+      }
       final bytes = <int>[];
       await for (final chunk in response.stream.timeout(
         const Duration(seconds: 10),
       )) {
         bytes.addAll(chunk);
-        if (bytes.length > 10 * 1024 * 1024)
+        if (bytes.length > 10 * 1024 * 1024) {
           throw const FormatException('Desktop artwork is too large.');
+        }
       }
       return bytes;
     } finally {
@@ -629,8 +629,9 @@ class LokalDesktopSource extends NetworkSourceService {
       final response = await client
           .send(request)
           .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200)
+      if (response.statusCode != 200) {
         throw HttpException('Desktop returned HTTP ${response.statusCode}.');
+      }
       final output = part.openWrite();
       var received = 0;
       try {
@@ -639,17 +640,19 @@ class LokalDesktopSource extends NetworkSourceService {
         )) {
           received += bytes.length;
           output.add(bytes);
-          if (response.contentLength != null && response.contentLength! > 0)
+          if (response.contentLength != null && response.contentLength! > 0) {
             onProgress?.call((received / response.contentLength!).clamp(0, 1));
+          }
         }
         await output.flush();
       } finally {
         await output.close();
       }
-      if (response.contentLength != null && received != response.contentLength)
+      if (response.contentLength != null && received != response.contentLength) {
         throw const HttpException(
           'Desktop stream ended before the file was complete.',
         );
+      }
       await part.rename(path);
       await _cache.commitDownload(path);
       onProgress?.call(1);
@@ -664,8 +667,9 @@ class LokalDesktopSource extends NetworkSourceService {
     LokalRemoteCredentials credentials, {
     String name = 'Lokal desktop',
   }) async {
-    if (credentials.desktopId == null)
+    if (credentials.desktopId == null) {
       throw StateError('Pair this desktop first.');
+    }
     var server = await Database.networkServers
         .filter()
         .protocolEqualTo('lokal')
@@ -680,8 +684,9 @@ class LokalDesktopSource extends NetworkSourceService {
     if (server != null &&
         server.baseUrl == credentials.origin.toString() &&
         server.username == username &&
-        server.token == null)
+        server.token == null) {
       return server;
+    }
     server ??= NetworkServerEntity()
       ..protocol = 'lokal'
       ..label = name;
@@ -712,7 +717,7 @@ class LokalDesktopSource extends NetworkSourceService {
         .findFirst();
     if (entity != null && isDownloadedDesktopOriginal(entity)) {
       final genre = _genre(track);
-      if (entity.genre?.trim().isNotEmpty != true &&
+      if (isUnclassifiedLinkGenre(entity.genre) &&
           genre?.isNotEmpty == true) {
         entity.genre = genre;
         final localRow = entity;
@@ -729,7 +734,7 @@ class LokalDesktopSource extends NetworkSourceService {
       final row = await Database.songs.get(int.parse(local.id));
       final genre = _genre(track);
       if (row != null &&
-          row.genre?.trim().isNotEmpty != true &&
+          isUnclassifiedLinkGenre(row.genre) &&
           genre?.isNotEmpty == true) {
         row.genre = genre;
         await Database.instance.writeTxn(() => Database.songs.put(row));
@@ -825,8 +830,9 @@ class LokalDesktopSource extends NetworkSourceService {
               'uri': uri,
               'extension': extension,
             });
-        if (staged == null || staged.isEmpty)
+        if (staged == null || staged.isEmpty) {
           throw StateError('The audio document could not be read.');
+        }
         temporary = true;
         return staged;
       } on PlatformException {
@@ -858,8 +864,9 @@ class LokalDesktopSource extends NetworkSourceService {
     }
     final file = File(path);
     try {
-      if (!await file.exists())
+      if (!await file.exists()) {
         throw StateError('This song is not stored as a readable local file.');
+      }
       final digest = await sha256.bind(file.openRead()).first;
       final request = http.StreamedRequest(
         'POST',
@@ -875,7 +882,7 @@ class LokalDesktopSource extends NetworkSourceService {
               'artist': song.artist,
               'album': song.album,
               'extension': extension,
-              if (originalFilename != null) 'originalFilename': originalFilename,
+              'originalFilename': ?originalFilename,
               'sha256': digest.toString(),
             }),
           ),
@@ -904,10 +911,11 @@ class LokalDesktopSource extends NetworkSourceService {
           final bytes = <int>[];
           await for (final chunk in response.stream) {
             bytes.addAll(chunk);
-            if (bytes.length > 64 * 1024)
+            if (bytes.length > 64 * 1024) {
               throw StateError(
                 'The desktop returned an invalid upload response.',
               );
+            }
           }
           Map? body;
           try {
@@ -920,8 +928,9 @@ class LokalDesktopSource extends NetworkSourceService {
               'The desktop rejected this pairing. Reconnect and retry.',
             );
           }
-          if (response.statusCode == 413)
+          if (response.statusCode == 413) {
             throw StateError('The file exceeds the desktop upload size limit.');
+          }
           if (response.statusCode != 200 ||
               body?['ok'] != true ||
               body?['trackId'] is! String) {
@@ -988,8 +997,9 @@ class LokalDesktopSource extends NetworkSourceService {
     final path = song.filePath;
     if (path == null ||
         !path.contains('/desktop_music/') ||
-        Uri.tryParse(path)?.hasScheme == true)
+        Uri.tryParse(path)?.hasScheme == true) {
       return false;
+    }
     final root = await (_legacyDirectory ??= getApplicationDocumentsDirectory()
         .then((directory) => p.join(directory.path, 'desktop_music')));
     return p.isWithin(root, path);
@@ -1000,14 +1010,132 @@ class LokalDesktopSource extends NetworkSourceService {
   Future<void> recoverPrivateCopy(Song song) async {
     if (!await isPrivateDesktopCopy(song)) return;
     final entity = await Database.songs.get(int.parse(song.id));
-    if (entity == null)
+    if (entity == null) {
       throw StateError('The library song is no longer available.');
+    }
     await _musicStorage.saveEntity(
       entity,
       persist: (row) async {
         await Database.instance.writeTxn(() => Database.songs.put(row));
       },
     );
+  }
+
+  /// Repair genres missed by the one-time catalogue import or journal replay.
+  /// Sync Now reads desktop's current tags using the existing authenticated
+  /// catalogue API; no audio files are downloaded or rewritten. Only missing
+  /// or placeholder phone genres are filled, preserving real local edits.
+  Future<int> reconcileMissingGenres(
+    NetworkServerEntity server, {
+    bool Function()? stillCurrent,
+  }) async {
+    final database = Database.instance;
+    void checkCurrent() {
+      if (!Database.isInitialized || !identical(Database.instance, database) ||
+          !(stillCurrent?.call() ?? true)) {
+        throw StateError('Desktop genre sync was retired.');
+      }
+    }
+    checkCurrent();
+    final credentials = await _credentials(server);
+    checkCurrent();
+    final rows = await database.songEntitys.where().findAll();
+    checkCurrent();
+    final matcher = DesktopGenreMatcher([
+      for (final row in rows)
+        DesktopGenreIdentity(
+          id: row.id,
+          title: row.title,
+          artist: row.artist,
+          album: row.album,
+          durationMs: row.durationMs ?? 0,
+          remoteServerId: row.remoteServerId,
+          remoteId: row.remoteId,
+          isLocalFile: row.sourceType == null &&
+              !row.filePath.startsWith('ghost://') &&
+              !row.filePath.startsWith('lokal://'),
+        ),
+    ]);
+    final existing = {for (final row in rows) row.id: row};
+    final changes = <int, String>{};
+    var offset = 0;
+    // Desktop caps this endpoint at 50 records/page, regardless of requested
+    // limit. Progress by the actual number received, never by the hint.
+    while (true) {
+      checkCurrent();
+      final response = await http
+          .get(
+            credentials.origin.replace(
+              path: '/api/remote/library/tracks',
+              queryParameters: {'offset': '$offset', 'limit': '50'},
+            ),
+            headers: _headers(credentials),
+          )
+          .timeout(const Duration(seconds: 10));
+      checkCurrent();
+      if (response.statusCode != 200) {
+        throw const HttpException('Desktop genres are unavailable.');
+      }
+      final body = jsonDecode(response.body) as Map;
+      final items = body['items'] as List;
+      for (final raw in items) {
+        final track = Map<String, dynamic>.from(raw as Map);
+        final genre = desktopLinkGenres(track);
+        if (genre == null) continue;
+        for (final id in matcher.matchingIds(server.id, track)) {
+          final local = existing[id];
+          if (local != null && isUnclassifiedLinkGenre(local.genre)) {
+            changes[id] = genre;
+          }
+        }
+      }
+      offset += items.length;
+      if (body['hasMore'] != true || items.isEmpty) break;
+    }
+    if (changes.isEmpty) return 0;
+    final currentCredentials = await _credentials(server);
+    checkCurrent();
+    if (currentCredentials.origin != credentials.origin ||
+        currentCredentials.desktopId != credentials.desktopId ||
+        currentCredentials.desktopUserId != credentials.desktopUserId ||
+        currentCredentials.pairingID != credentials.pairingID ||
+        currentCredentials.remoteToken != credentials.remoteToken ||
+        currentCredentials.apiKey != credentials.apiKey) {
+      throw StateError('Desktop genre sync was retired.');
+    }
+    var updated = 0;
+    // Re-read under the write transaction: user edits or scanning may have
+    // filled a genre while the paginated desktop snapshot was being fetched.
+    await database.writeTxn(() async {
+      checkCurrent();
+      final currentServer = await database.networkServerEntitys.get(server.id);
+      if (currentServer == null || currentServer.protocol != server.protocol ||
+          currentServer.baseUrl != server.baseUrl ||
+          currentServer.username != server.username) {
+        throw StateError('Desktop genre sync was retired.');
+      }
+      for (final update in changes.entries) {
+        final row = await database.songEntitys.get(update.key);
+        if (row == null || !isUnclassifiedLinkGenre(row.genre)) continue;
+        // A numeric ID alone is insufficient after a clear, rescan or rebind
+        // during the network snapshot. Retry changed recordings next Sync Now.
+        final original = existing[update.key]!;
+        if (row.filePath != original.filePath ||
+            row.sourceType != original.sourceType ||
+            row.remoteServerId != original.remoteServerId ||
+            row.remoteId != original.remoteId ||
+            row.title != original.title || row.artist != original.artist ||
+            row.album != original.album || row.durationMs != original.durationMs ||
+            row.dateAdded != original.dateAdded) {
+          continue;
+        }
+        row.genre = update.value;
+        await database.songEntitys.put(row);
+        updated++;
+      }
+      checkCurrent();
+    });
+    return updated;
   }
 
   @override
@@ -1025,8 +1153,9 @@ class LokalDesktopSource extends NetworkSourceService {
             headers: _headers(credentials),
           )
           .timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200)
+      if (response.statusCode != 200) {
         throw const HttpException('Desktop library is unavailable.');
+      }
       final body = jsonDecode(response.body) as Map,
           items = body['items'] as List;
       total = (body['total'] as num? ?? 0).toInt();

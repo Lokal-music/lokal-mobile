@@ -641,6 +641,36 @@ final class LokalTransferJournal: @unchecked Sendable {
     }
   }
 
+  /// Read-only cleanup preflight, separate from publication authority. A caller
+  /// must also own the current root cleanup token and an Isar retiring receipt.
+  /// Missing/changed custody and completed/current writable jobs are refused.
+  func validateAbandonment(_ expected: LokalTransferImportCustody) throws {
+    try expected.validate()
+    try locked {
+      try preflight()
+      try execute("BEGIN")
+      do {
+        guard let (stored, _) = try selectCustody(id: expected.job.id, revision: expected.job.revision),
+              stored == expected else { throw LokalTransferError.staleRevision }
+        let query = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
+        defer { sqlite3_finalize(query) }
+        try bind(expected.job.id, at: 1, to: query)
+        guard sqlite3_step(query) == SQLITE_ROW else { throw LokalTransferError.missingJob }
+        let (current, _) = try decoded(query)
+        guard current.phase != .complete, current.revision > expected.job.revision,
+              current.direction == expected.job.direction,
+              current.identity == expected.job.identity,
+              current.metadata == expected.job.metadata,
+              current.createdMs == expected.job.createdMs,
+              current.expectedBytes == expected.job.expectedBytes,
+              current.expectedSHA256 == expected.job.expectedSHA256 else {
+          throw LokalTransferError.invalidTransition
+        }
+        try execute("COMMIT")
+      } catch { try? execute("ROLLBACK"); throw error }
+    }
+  }
+
   /// Caller must first drain native file work and serialize behind the Isar
   /// writer to decide whether an owned copy committed. This removes bookkeeping
   /// only, never a file or Song; a revoked UI lease is neither needed nor enough.

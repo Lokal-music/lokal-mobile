@@ -38,6 +38,7 @@ class IosTransferImportCoordinator {
   final _issues = <String, IosTransferCoordinatorIssue>{};
   final _frozen = <String, IosTransferImportWork>{};
   final _completed = <String>{};
+  final _pendingReservations = <String, bool>{};
   IosTransferImportStore? _store;
   StreamSubscription<void>? _observation;
   Future<void>? _starting, _running;
@@ -176,6 +177,10 @@ class IosTransferImportCoordinator {
             }
             for (final job in page.entries) {
               _check(epoch);
+              final key = _key(job);
+              if (_pendingReservations.remove(key) == true) {
+                _issues[key] = IosTransferCoordinatorIssue.cleanupRequired;
+              }
               if (!_issues.containsKey(_key(job)) &&
                   !_completed.contains(_key(job))) {
                 await _import(job, epoch);
@@ -184,6 +189,10 @@ class IosTransferImportCoordinator {
             }
             cursor = page.nextCursor;
           } while (cursor != null);
+          for (final key in _pendingReservations.keys) {
+            _issues[key] = IosTransferCoordinatorIssue.cleanupRequired;
+          }
+          _pendingReservations.clear();
         }
       } catch (_) {
         if (_current(epoch)) {
@@ -216,6 +225,25 @@ class IosTransferImportCoordinator {
 
   Future<void> _recoverWork(int epoch) async {
     _frozen.clear();
+    _pendingReservations.clear();
+    int? afterId;
+    var pendingCount = 0;
+    do {
+      _check(epoch);
+      final page = await _store!.pendingReservations(afterId: afterId);
+      _check(epoch);
+      pendingCount += page.entries.length;
+      if (pendingCount > iosTransferMaximumJobs) {
+        throw const FormatException('Import reservation budget exceeded.');
+      }
+      for (final entry in page.entries) {
+        _pendingReservations[entry.operationKey] = entry.retiring;
+      }
+      if (page.nextId != null && page.nextId! <= (afterId ?? 0)) {
+        throw const FormatException('Invalid import reservation cursor.');
+      }
+      afterId = page.nextId;
+    } while (afterId != null);
     IosTransferWorkCursor? cursor;
     var pages = 0;
     do {
@@ -238,6 +266,7 @@ class IosTransferImportCoordinator {
         if (work.isCurrentRevision &&
             work.currentPhase == IosTransferPhase.complete) {
           await _finishHistorical(work, epoch);
+          _pendingReservations.remove(_key(work.job));
         } else {
           // Native cancellation is not proof that its older Isar/file work
           // never committed. Public abandonment needs its separate barrier.

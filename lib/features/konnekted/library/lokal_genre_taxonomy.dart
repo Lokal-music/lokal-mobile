@@ -1,11 +1,32 @@
 // Generated from desktop lokal-music/lokal/electron/genreTaxonomy.json
-// Desktop source blob: 05aa4f0a3d786d2d1dcdf676f9786d67e408e571
+// Desktop source blob: 3c444a7dd07c622d4e7aea49ada17a36616ee07a
 // Broad genre families and whole-phrase hints are shared by both platforms.
 // Classification never modifies stored audio metadata.
 const lokalDesktopGenreGroups = <(String, List<String>)>[
   (
-    "Video Game Music",
+    "Soundtrack",
     <String>[
+      "soundtrack",
+      "soundtracks",
+      "ost",
+      "original soundtrack",
+      "original motion picture soundtrack",
+      "motion picture soundtrack",
+      "film soundtrack",
+      "movie soundtrack",
+      "film score",
+      "movie score",
+      "score",
+      "tv soundtrack",
+      "television soundtrack",
+      "soundtrack music",
+      "film music",
+      "stage and screen",
+      "musical theatre",
+      "саундтрек",
+      "movie music",
+      "television score",
+      "cinematic score",
       "vgm",
       "video game",
       "video games",
@@ -34,32 +55,6 @@ const lokalDesktopGenreGroups = <(String, List<String>)>[
       "game soundtracks",
       "vgm remix",
       "video game themes",
-    ],
-  ),
-  (
-    "Soundtrack",
-    <String>[
-      "soundtrack",
-      "soundtracks",
-      "ost",
-      "original soundtrack",
-      "original motion picture soundtrack",
-      "motion picture soundtrack",
-      "film soundtrack",
-      "movie soundtrack",
-      "film score",
-      "movie score",
-      "score",
-      "tv soundtrack",
-      "television soundtrack",
-      "soundtrack music",
-      "film music",
-      "stage and screen",
-      "musical theatre",
-      "саундтрек",
-      "movie music",
-      "television score",
-      "cinematic score",
     ],
   ),
   (
@@ -626,19 +621,6 @@ const lokalDesktopGenreGroups = <(String, List<String>)>[
 
 const lokalDesktopGenreHints = <(String, List<String>)>[
   (
-    "Video Game Music",
-    <String>[
-      "video game",
-      "videogame",
-      "game soundtrack",
-      "game music",
-      "game score",
-      "game ost",
-      "gaming music",
-      "vgm",
-    ],
-  ),
-  (
     "Soundtrack",
     <String>[
       "soundtrack",
@@ -648,6 +630,14 @@ const lokalDesktopGenreHints = <(String, List<String>)>[
       "cinematic score",
       "motion picture score",
       "original score",
+      "video game",
+      "videogame",
+      "game soundtrack",
+      "game music",
+      "game score",
+      "game ost",
+      "gaming music",
+      "vgm",
     ],
   ),
   ("Anime", <String>["anime", "anisong", "anison"]),
