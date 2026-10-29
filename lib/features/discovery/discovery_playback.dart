@@ -232,7 +232,9 @@ class DiscoveryPlaybackCache {
           .fold<List<int>>([], (all, chunk) => all..addAll(chunk));
       String format;
       try {
-        format = atmosEncoded ? 'm4a' : sniffAudioContainer(prefix);
+        format = atmosEncoded
+            ? (sourceInfo?['codec'] == 'ac4' ? 'mp4' : 'm4a')
+            : sniffAudioContainer(prefix);
       } on DiscoveryException {
         // Containers only the add-on's own probe knows: it named the file.
         format = p.extension(source.path).replaceFirst('.', '').toLowerCase();
@@ -250,7 +252,7 @@ class DiscoveryPlaybackCache {
         ready = await source.copy(target);
       }
       final song = atmosEncoded
-          ? await _verifiedAtmos(track, ready, hash)
+          ? await _verifiedAtmos(track, ready, hash, sourceInfo: sourceInfo)
           : await _verified(track, ready, format, hash,
               sourceInfo: sourceInfo, fastPlayback: fastPlayback);
       ready = null; // Ownership passes to bounded cache / PlayerService.
@@ -267,7 +269,7 @@ class DiscoveryPlaybackCache {
   /// An Android MediaExtractor-confirmed E-AC-3 JOC stream. Do not use
   /// Symphonia or a PCM metadata decoder: Atmos objects must reach Android's
   /// licensed E-AC-3 JOC implementation unchanged.
-  Future<Song> _verifiedAtmos(DiscoveryTrack track, File ready, String hash) async {
+  Future<Song> _verifiedAtmos(DiscoveryTrack track, File ready, String hash, {Map? sourceInfo}) async {
     final artwork = await _cover(track, ready, embed: false);
     return Song(
       id: 'discovery:$hash',
@@ -276,7 +278,7 @@ class DiscoveryPlaybackCache {
       album: track.album,
       albumArt: artwork,
       duration: track.duration ?? Duration.zero,
-      fileType: 'E-AC-3 JOC',
+      fileType: sourceInfo?['codec'] == 'ac4' ? 'AC-4' : 'E-AC-3 JOC',
       filePath: ready.path,
       sourcePackage: 'konnekted.discovery',
       sourceDisplayName: track.sourceName ??
