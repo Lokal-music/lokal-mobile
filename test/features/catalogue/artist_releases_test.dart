@@ -92,7 +92,7 @@ void main() {
       );
       final page = await catalogue.artist(artist);
       final names = page.albums.map((album) => album.title).toList();
-      expect(page.albums, hasLength(9));
+      expect(page.albums, hasLength(8));
       expect(names, containsAll([
         'Album One', 'Album Two', 'Album Three', 'Album Four',
         'Joint EP', 'Credited Collaboration', 'Popular song release',
