@@ -890,7 +890,7 @@ class _KonnektedDiscoveryViewState
                   onTap: () => _play(track, history),
                   onMore: () => unawaited(_actions(track, history)),
                   onQueue: () => _enqueue(track),
-            onNext: () => _enqueue(track, next: true),
+                  onNext: () => _enqueue(track, next: true),
                 ),
               ),
             ],
