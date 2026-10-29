@@ -607,7 +607,6 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
                               onAtmos: () => _play(source, result, atmos: true, results: results),
                               onMore: () => _actions(source, result, results),
                               onQueue: () => _enqueue(source, result, next: false),
-                            onNext: () => _enqueue(source, result, next: true),
                               onNext: () => _enqueue(source, result, next: true),
                             ),
                           )
@@ -621,6 +620,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
                             onAtmos: () => _play(source, result, atmos: true, results: results),
                             onMore: () => _actions(source, result, results),
                             onQueue: () => _enqueue(source, result, next: false),
+                            onNext: () => _enqueue(source, result, next: true),
                           ),
                     ],
                   );
