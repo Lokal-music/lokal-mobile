@@ -38,6 +38,49 @@ void main() {
     ), 'DOLBY_ATMOS');
   });
 
+  test('Amazon Search shows the selected normal tier, never a universal AC-4 badge', () {
+    const amazonOptions = [
+      {'id': 'best', 'label': 'FLAC Best Available', 'kind': 'lossless'},
+      {'id': 'opus', 'label': 'Opus 320kbps', 'kind': 'lossy'},
+      {'id': 'eac3', 'label': 'Dolby Digital Plus', 'kind': 'spatial'},
+      {'id': 'ac4', 'label': 'Dolby Atmos (AC-4)', 'kind': 'spatial'},
+    ];
+    expect(amazonRequestedPlaybackQualityLabel(
+      configured: null, options: amazonOptions,
+    ), 'FLAC best (requested)');
+    expect(amazonRequestedPlaybackQualityLabel(
+      configured: 'best', options: amazonOptions,
+    ), 'FLAC best (requested)');
+    expect(amazonRequestedPlaybackQualityLabel(
+      configured: 'opus', options: amazonOptions,
+    ), 'Opus 320kbps (requested)');
+    for (final spatial in ['ac4', 'eac3']) {
+      expect(amazonRequestedPlaybackQualityLabel(
+        configured: spatial, options: amazonOptions,
+      ), 'FLAC best (requested)',
+          reason: 'A spatial download preference must not change normal playback');
+    }
+    expect(amazonRequestedPlaybackQualityLabel(
+      configured: null, options: const [],
+    ), isNull);
+    const ordinary = DiscoveryTrack(
+      id: 'amazon-search', title: 'Test Me', artist: 'Artist',
+      source: DiscoverySource.morneye,
+      atmosAvailable: false, atmosRequestable: true,
+      requestedQuality: 'FLAC best (requested)',
+    );
+    expect(ordinary.atmosAvailable, isFalse,
+        reason: 'Addon-wide AC-4 support is not per-track Atmos catalogue metadata');
+    expect(ordinary.atmosRequestable, isTrue);
+    expect(ordinary.requestAtmos().atmosRequested, isTrue);
+    final badge = onlineSearchAudioBadge(
+      requestedQuality: ordinary.requestedQuality,
+    );
+    expect(badge.label, 'FLAC best (requested)');
+    expect(badge.tooltip, contains('requested'));
+    expect(badge.label, isNot(contains('AC-4')));
+  });
+
   test('WEBM/M4A containers are never treated as playback quality codecs', () {
     expect(verifiedAudioCodec('m4a'), isNull);
     expect(verifiedAudioCodec('webm'), isNull);
