@@ -191,7 +191,7 @@ class LokalQualityPill extends ConsumerWidget {
     return Semantics(
     label: lokalText(
       "{arg0} quality. {arg1}",
-      args: {'arg0': tier.label, 'arg1': tier.hint},
+      args: {'arg0': display, 'arg1': tier.hint},
     ),
     excludeSemantics: true,
     child: Container(
