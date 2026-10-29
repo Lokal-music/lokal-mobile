@@ -8,7 +8,12 @@ bool tidalAtmosAvailable(Map<dynamic, dynamic> track) {
     // AC-4 alone is a codec, not proof that the track advertises Atmos.
     return value.split(RegExp(r'[,;|]')).any((part) {
       final mode = part.trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
-      return mode == 'DOLBY_ATMOS' || mode == 'ATMOS';
+      // Explicit Atmos presentations, not bare E-AC-3 or AC-4 codecs.
+      return const {
+        'DOLBY_ATMOS', 'ATMOS',
+        'EAC3_JOC', 'E_AC_3_JOC',
+        'AC4_ATMOS', 'AC_4_ATMOS',
+      }.contains(mode);
     });
   }
 
