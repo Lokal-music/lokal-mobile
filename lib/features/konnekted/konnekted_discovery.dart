@@ -1600,6 +1600,7 @@ Future<Song> playOnlineTrack(
   }
   final owned = client == null;
   final transport = client ?? GracefulHttpClient();
+  final acquisitionTimer = Stopwatch()..start();
   try {
     final web = DiscoveryHttp(transport);
     final canonicalId = _canonicalOnlineSourceId(sourceId, track);
@@ -1622,6 +1623,9 @@ Future<Song> playOnlineTrack(
       );
     }
     final resolved = await source.play(track);
+    AppLog.instance.add('[OnlineSource] acquisition source=$canonicalId '
+        'mode=${forDownload ? 'download' : 'playback'} '
+        'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
     final song = resolved.copyWith(sourceDisplayName: source.name);
     if (!forDownload && sourceId.startsWith('a-')) {
       _rememberOnlineAddon(song, sourceId.substring(2), track);
@@ -1636,7 +1640,9 @@ Future<Song> playOnlineTrack(
   } catch (error) {
     AppLog.instance.add(
       '[OnlineSource] playback failed source=$sourceId '
-      'stage=prepare reason=${_onlineFailureKind(error)}',
+      'stage=prepare mode=${forDownload ? 'download' : 'playback'} '
+      'elapsedMs=${acquisitionTimer.elapsedMilliseconds} '
+      'reason=${_onlineFailureKind(error)}',
     );
     rethrow;
   } finally {
@@ -1899,7 +1905,10 @@ Future<Song?> findDiscoverySong(
       onStatus?.call('Getting ${track.title} from ${source.name}…');
       try {
         final selected = found.withArtwork(_artworkOf(track));
+        final acquisitionTimer = Stopwatch()..start();
         final resolved = await source.play(selected);
+        AppLog.instance.add('[OnlineSource] discovery acquired source=${source.id} '
+            'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
         final song = resolved.copyWith(sourceDisplayName: source.name);
         if (source.id.startsWith('a-')) {
           _rememberOnlineAddon(song, source.id.substring(2), selected);
