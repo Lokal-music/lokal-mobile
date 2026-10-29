@@ -11,6 +11,7 @@ import 'package:flick/services/global_catalogue_search.dart';
 import 'package:flick/services/online_playlist_reference.dart';
 import 'package:flick/features/konnekted/library/lokal_music_detail_page.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
+import 'package:flick/features/discovery/discovery_artwork.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
 import 'artist_search_portrait.dart';
 
@@ -168,7 +169,15 @@ class _GlobalCatalogueSearchSectionState
                           dimension: 48,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: CachedImageWidget(imagePath: song.artworkUrl),
+                            child: DiscoveryArtwork(
+                              kind: DiscoveryArtworkKind.track,
+                              title: song.title,
+                              artist: song.artist,
+                              url: song.artworkUrl,
+                              width: 48,
+                              height: 48,
+                              placeholder: CachedImageWidget.defaultPlaceholder(),
+                            ),
                           ),
                         ),
                         title: Text(song.title, maxLines: 1,
@@ -195,7 +204,15 @@ class _GlobalCatalogueSearchSectionState
                         leading: SizedBox.square(
                           dimension: 48,
                           child: ClipRRect(borderRadius: BorderRadius.circular(8),
-                            child: CachedImageWidget(imagePath: album.artworkUrl)),
+                            child: DiscoveryArtwork(
+                              kind: DiscoveryArtworkKind.album,
+                              title: album.name,
+                              artist: album.artist,
+                              url: album.artworkUrl,
+                              width: 48,
+                              height: 48,
+                              placeholder: CachedImageWidget.defaultPlaceholder(),
+                            )),
                         ),
                         title: Text(album.name, maxLines: 1,
                           overflow: TextOverflow.ellipsis),
