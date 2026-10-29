@@ -330,7 +330,7 @@ class DiscoveryPlaybackCache {
       }
     }
     final sampleRate = trustedInfo
-        ? measuredRate.toInt() : metadata!.sampleRate;
+        ? measuredRate!.toInt() : metadata!.sampleRate;
     final verifiedBits = trustedInfo
         ? (sourceInfo?['bit_depth'] as num?)?.toInt()
         : metadata!.bitsPerSample;
