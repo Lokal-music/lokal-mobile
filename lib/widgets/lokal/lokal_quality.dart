@@ -1,7 +1,10 @@
 import 'package:flick/l10n/l10n.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/theme/lokal_appearance.dart';
+import 'package:flick/services/catalogue_quality.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/models/song.dart';
 
@@ -107,17 +110,85 @@ enum LokalQualityTier {
   }
 }
 
+/// Explicit source resolution for labels, not a claim about the current
+/// output path. Absent measurements stay absent: a codec, catalogue tier or
+/// lossy decoder PCM width does not establish bit depth/sample rate.
+String? lokalSongResolutionLabel(Song song) {
+  if (song.isPending) return null;
+  if (song.isDsd) return song.dsdRateLabel;
+
+  final codec = song.fileType.trim().toUpperCase();
+  const lossless = {
+    'FLAC', 'WAV', 'WAVE', 'ALAC', 'AIFF', 'AIF', 'APE', 'WV', 'WAVPACK',
+  };
+  final raw = song.resolution ?? '';
+  final pair = compactAudioResolution(raw);
+  final bitMatch = RegExp(
+    r'(?<!\d)(\d{1,2})\s*-?\s*bits?\b', caseSensitive: false,
+  ).firstMatch(raw);
+  final rateMatch = RegExp(
+    r'(?<![\d.])(\d{2,3}(?:\.\d+)?)\s*k(?:hz)?\b',
+    caseSensitive: false,
+  ).firstMatch(raw);
+  final bitrateMatch = RegExp(
+    r'(?<!\d)(\d{2,4}(?:\.\d+)?)\s*(?:kbps|kb/s|kbit/s)\b',
+    caseSensitive: false,
+  ).firstMatch(raw);
+
+  final depth = lossless.contains(codec)
+      ? (song.bitDepth ?? pair?.bitDepth ?? int.tryParse(bitMatch?.group(1) ?? ''))
+      : pair?.bitDepth ?? int.tryParse(bitMatch?.group(1) ?? '');
+  final rate = song.sampleRate ?? pair?.sampleRate ??
+      ((double.tryParse(rateMatch?.group(1) ?? '') ?? 0) * 1000).round();
+  final parts = <String>[];
+  // Lossy decoded PCM precision is not the source's encoded bit depth.
+  if (depth != null && depth >= 8 && depth <= 64 &&
+      (lossless.contains(codec) || bitMatch != null || pair != null)) {
+    parts.add('$depth-bit');
+  }
+  if (rate >= 8000 && rate <= 768000) {
+    final khz = rate / 1000;
+    parts.add(
+      '${khz == khz.roundToDouble() ? khz.toStringAsFixed(0) : khz.toStringAsFixed(1)} kHz',
+    );
+  }
+  if (!lossless.contains(codec) && bitrateMatch != null) {
+    parts.insert(0, '${bitrateMatch.group(1)} kbps');
+  }
+  if (parts.isEmpty) return null;
+  const unknown = {'', 'UNKNOWN', 'ONLINE', 'N/A', 'OTHER'};
+  final format = unknown.contains(codec) ? '' : codec;
+  return [if (format.isNotEmpty) format, parts.join(' / ')].join(' · ');
+}
+
 /// Desktop's quality pill: Hi-res, Lossless, High or Low.
-class LokalQualityPill extends StatelessWidget {
-  const LokalQualityPill({super.key, required this.tier, this.icon});
+class LokalQualityPill extends ConsumerWidget {
+  const LokalQualityPill({
+    super.key,
+    required this.tier,
+    this.icon,
+    this.song,
+    this.fullPlayer = false,
+  });
 
   final LokalQualityTier tier;
+  final Song? song;
+  final bool fullPlayer;
 
   /// An extra mark before the label, e.g. verified bit-perfect output.
   final IconData? icon;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showResolution = ref.watch(lokalAppearanceProvider.select(
+      (look) => fullPlayer
+          ? look.resolutionTagsInFullPlayer
+          : look.resolutionTagsInLists,
+    ));
+    final resolution = showResolution && song != null
+        ? lokalSongResolutionLabel(song!) : null;
+    final display = resolution ?? tier.label;
+    return Semantics(
     label: lokalText(
       "{arg0} quality. {arg1}",
       args: {'arg0': tier.label, 'arg1': tier.hint},
@@ -138,7 +209,7 @@ class LokalQualityPill extends StatelessWidget {
             const SizedBox(width: 3),
           ],
           Text(
-            tier.label,
+            display,
             style: LokalTheme.label(
               context.lokal,
               size: 10,
@@ -149,6 +220,7 @@ class LokalQualityPill extends StatelessWidget {
       ),
     ),
   );
+  }
 }
 
 
