@@ -3071,7 +3071,7 @@ fn open_android_output_stream(
                         .set_usage(Usage::Media)
                         .set_content_type(ContentType::Music)
                         .set_channel_conversion_allowed(false)
-                        .set_format_conversion_allowed(precision == 0)
+                        .set_format_conversion_allowed(bit_perfect_route || precision == 0)
                         .set_sample_rate_conversion_quality(if bit_perfect_route {
                             SampleRateConversionQuality::None
                         } else {
