@@ -122,6 +122,7 @@ flutter:
   shaders:
     - shaders/lokal_glass_lens.frag
     - shaders/lokal_glass_rim.frag
+    - shaders/cover_cloud_dissolve.frag
 
   assets:
     - assets/spotify/session_hook.js
