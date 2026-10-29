@@ -5855,10 +5855,10 @@ class PlayerService {
     );
     if (song.atmosEncoded) {
       AtmosDiagnostics.record('engine_routing', {
-        'codec': 'eac3_joc',
+        'codec': song.fileType.toUpperCase() == 'AC-4' ? 'ac4' : 'eac3_joc',
         'desiredEngine': desiredEngine.name,
         'engine': routed.name,
-        'reason': routed != desiredEngine ? 'joc_requires_system' : 'native_system',
+        'reason': routed != desiredEngine ? 'dolby_requires_system' : 'native_system',
       });
     } else if (routed != desiredEngine) {
       _debugLog(
