@@ -334,21 +334,24 @@ class _HomeModeSelectorState extends State<_HomeModeSelector> {
         thickness: LokalGlassThickness.thin,
         shadow: false,
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        // The capsule and all three labels stay visible at every width.
-        // Each tab shares the available width instead of scrolling the glass
-        // boundary off-screen on compact phones.
-        child: Row(
-          children: [
-            for (final tab in KonnektedHomeTab.values)
-              Expanded(
-                child: _ShelfChip(
+        // Keep each label at its natural width rather than assigning
+        // one third of the capsule to every tab (which wraps DISCOVERY).
+        // Scale down only on exceptionally narrow layouts.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final tab in KonnektedHomeTab.values)
+                _ShelfChip(
                   label: lokalText(tab.label),
                   selected: tab == widget.selectedTab,
                   compact: true,
                   onTap: () => widget.onTabChanged?.call(tab),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     ),
@@ -446,7 +449,7 @@ class _ShelfChip extends StatelessWidget {
           curve: Curves.easeOutCubic,
           constraints: BoxConstraints(minHeight: 44, minWidth: compact ? 0 : 56),
           alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 2 : 10, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10, vertical: 8),
           decoration: BoxDecoration(
             color: selected
                 ? (t.isLight
@@ -457,6 +460,9 @@ class _ShelfChip extends StatelessWidget {
           ),
           child: Text(
             label.toUpperCase(),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
             style: LokalTheme.label(
               t,
               size: compact ? 9 : 10,
