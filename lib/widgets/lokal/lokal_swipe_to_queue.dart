@@ -119,7 +119,6 @@ class _LokalSwipeToQueueState extends ConsumerState<LokalSwipeToQueue> {
     final reversed = ref.watch(appPreferencesProvider.select(
         (prefs) => prefs.swipeQueueDirectionsReversed));
     final rightMeansNext = reversed;
-    final directionNext = _drag > 0 ? rightMeansNext : !rightMeansNext;
 
     return Semantics(
       customSemanticsActions: widget.enabled
@@ -145,7 +144,12 @@ class _LokalSwipeToQueueState extends ConsumerState<LokalSwipeToQueue> {
                 ? Duration.zero
                 : const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
-            builder: (context, offset, child) => Stack(
+            builder: (context, offset, child) {
+              // Use the animated position, not the reset drag target, so the
+              // action icon does not flip while the row springs back.
+              final directionNext =
+                  offset > 0 ? rightMeansNext : !rightMeansNext;
+              return Stack(
               children: [
                 if (offset != 0)
                   Positioned(
@@ -180,7 +184,8 @@ class _LokalSwipeToQueueState extends ConsumerState<LokalSwipeToQueue> {
                   child: child,
                 ),
               ],
-            ),
+              );
+            },
             child: widget.child,
           ),
         ),
