@@ -138,6 +138,31 @@ void main() {
       },
     );
   }
+  testWidgets('Global song long press exposes the same queue and download menu', (
+    tester,
+  ) async {
+    final c = ProviderContainer(overrides: [
+      ..._quietArtwork,
+      globalCatalogueSearchServiceProvider.overrideWithValue(
+        _Catalogue('apple'),
+      ),
+    ]);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(_app(
+      c,
+      const SingleChildScrollView(
+        child: GlobalCatalogueSearchSection(query: 'Wanted', songsOnly: true),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Wanted song'));
+    await tester.pumpAndSettle();
+    expect(find.text('Play next'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
+    expect(find.text('Download to library'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Songs empty state ignores album/artist-only matches', (
     tester,
   ) async {
