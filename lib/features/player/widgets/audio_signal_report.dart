@@ -172,7 +172,7 @@ _ReportData _sourceReport(Song song) {
     fields: [
       _ReportField(l10n.signalFileFormat, format),
       if (song.atmosEncoded)
-        _ReportField('Encoded Atmos source',
+        _ReportField('Encoded Dolby source',
             '${song.fileType} encoded source; final spatial output depends on the device'),
       _ReportField(
         song.isDsd ? l10n.signalDsdBitRate : l10n.sampleRate,
