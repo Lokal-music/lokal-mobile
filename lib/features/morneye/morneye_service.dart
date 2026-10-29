@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -34,6 +36,31 @@ class MorneyeService extends ChangeNotifier {
         storage: MorneyeStorage(root, sealer: native),
       );
       await packages.load();
+      // Ship an independent Amazon (New) extension alongside the original
+      // Amazon addon. It has its own settings/session namespace and does not
+      // replace or silently migrate a user's existing provider.
+      // A newer installed version is never overwritten.
+      try {
+        final installed = packages.addons
+            .where((addon) => addon.name == 'amazon-new')
+            .firstOrNull;
+        if (installed == null ||
+            morneyeCompareVersions(installed.version, '2.3.15') < 0) {
+          final data = await rootBundle.load('assets/morneye/amazon-new.sflx');
+          final bytes = data.buffer.asUint8List(
+            data.offsetInBytes, data.lengthInBytes,
+          );
+          const expected = 'ae1ac4dbeb9028939e39bda1a58fabaedf41e8adc37b9b3fc61ee10c9a5bdca7';
+          if (sha256.convert(bytes).toString() != expected) {
+            throw StateError('Bundled Amazon (New) archive checksum mismatch');
+          }
+          await packages.install(bytes: bytes);
+        }
+      } catch (error) {
+        // Bundled provider installation must not disable other add-ons
+        // or prevent the user's existing library and sources from loading.
+        debugPrint('[Mornye] Amazon (New) setup failed: ${error.runtimeType}');
+      }
       return packages;
     } catch (_) {
       _packages = null; // Try again next time.
