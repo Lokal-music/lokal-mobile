@@ -650,7 +650,8 @@ class AppleMusicMetadataService {
     bool refresh = false,
   }) async {
     final artist = await resolveArtist(name, storefront: storefront, refresh: refresh);
-    if (artist == null || artist.artistId.isEmpty) return const [];
+    if (artist == null || artist.artistId.isEmpty ||
+        _normalize(artist.name) != _normalize(name)) return const [];
     final sf = _primaryStorefront(storefront);
     return await _cache.fetch<List<AppleMusicAlbumMatch>>(
           key: _key('artist-releases-v2', '${artist.artistId}|$sf'),
