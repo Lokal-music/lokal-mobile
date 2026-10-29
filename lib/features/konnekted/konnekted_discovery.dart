@@ -931,7 +931,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
           // host's growing media file. DASH segments, encrypted Amazon
           // containers and conversions are not exposed as live sources.
           // Explicit Save/Atmos still require full-file validation.
-          final live = !forDownload && !tryAtmos && !found.atmosDownload
+          final live = !forDownload && !tryAtmos &&
+                  !found.atmosDownload &&
+                  morneyeCanPlayWhileDownloading(addon.name)
               ? MorneyeLiveSession()
               : null;
           if (tryAtmos && !found.atmosDownload && !await AtmosPlaybackSupport.available) {
@@ -959,7 +961,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       'initializing' => 'Starting',
                       'metadata' => 'Checking metadata on',
                       'availability' => 'Verifying recording on',
-                      'preparing_media' => 'Resolving audio from',
+                      'cross_provider_enrichment' => 'Matching recording on',
+                      'availability_retry' => 'Checking matched recording on',
+                      'preparing_media' => 'Fetching audio from',
                       _ => 'Preparing',
                     };
                     onStatus?.call('${detail} ${addon.displayName}…');
@@ -1002,10 +1006,10 @@ Future<List<_PlaybackSource>> _morneyeSources(
                         // callbacks so there is only one stable toast.
                         final text = progress.update(
                           message: qobuz
-                              ? 'Resolving Qobuz stream…'
+                              ? 'Connecting to Qobuz audio…'
                               : tidal
-                                  ? 'Resolving Tidal stream…'
-                                  : 'Resolving Deezer stream…',
+                                  ? 'Downloading Tidal audio…'
+                                  : 'Downloading Deezer audio…',
                         );
                         if (text != null) onStatus?.call(text);
                       }
