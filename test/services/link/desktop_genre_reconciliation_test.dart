@@ -84,6 +84,26 @@ void main() {
     );
   });
 
+  test('fills the physical original alongside a desktop catalogue placeholder', () {
+    final matcher = DesktopGenreMatcher([
+      const DesktopGenreIdentity(
+        id: 10, remoteServerId: 22, remoteId: 'track-10',
+        isLocalFile: false,
+        title: 'My Song', artist: 'Band', album: 'Record',
+        durationMs: 200000,
+      ),
+      const DesktopGenreIdentity(
+        id: 11, isLocalFile: true,
+        title: 'My Song', artist: 'Band', album: 'Record',
+        durationMs: 200200,
+      ),
+    ]);
+    expect(matcher.matchingIds(22, {
+      'id': 'track-10', 'title': 'My Song',
+      'artist': 'Band', 'album': 'Record', 'duration': 200,
+    }), [10, 11]);
+  });
+
   test('disambiguates album editions and refuses unsafe matches', () {
     final matcher = DesktopGenreMatcher(records);
     expect(
