@@ -134,6 +134,14 @@ Use `flutter build apk --debug --flavor full` for the fastest local smoke build.
 Release signing reads `android/key.properties`; no key or password belongs in
 this repository.
 
+For a Google Play Android Auto installation, run the signed release workflow
+with `flavor: play` (or `both`). The Actions build artifact then includes
+the signed `Lokal-<version>-Play.aab` and its SHA-256 digest; the normal
+GitHub release continues to publish APKs only. The Play App Bundle must be
+uploaded to a Google Play test/production track to count as a trusted install.
+A GitHub-installed `play` APK **still** requires Android Auto's **Unknown
+sources** setting. See [ANDROID_AUTO_DISTRIBUTION.md](ANDROID_AUTO_DISTRIBUTION.md).
+
 ## Spotify setup
 
 Spotify uses Authorization Code + PKCE and does not embed a client secret. The
