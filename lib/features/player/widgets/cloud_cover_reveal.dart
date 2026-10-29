@@ -61,26 +61,31 @@ double _easeInOut(double t) =>
 double cloudCoverBlur(double progress) =>
     16 * (1 - _easeOut(_clamp(progress / .88)));
 
-/// CPU reference for the fragment shader and desktop gradient math, used only
-/// for geometry/feathering regression tests (the UI mask runs on the GPU).
+/// CPU reference for the fragment shader's circular, feathered gradients,
+/// used only for geometry/feathering regression tests (UI runs on the GPU).
 @visibleForTesting
 double cloudCoverAlphaAt(
   List<CloudCoverBlob> blobs,
   double progress,
   double x,
-  double y,
-) {
+  double y, {
+  Size size = const Size(1, 1),
+}) {
   final p = _clamp(progress);
+  // Both axes are measured in physical pixel space. In particular, a
+  // portrait fullscreen cover cannot stretch the mask into tall ovals.
+  final width = math.max(1.0, size.width);
+  final height = math.max(1.0, size.height);
+  final shortestSide = math.min(width, height);
   var alpha = 0.0;
   for (final blob in blobs) {
     final t = _clamp((p - blob.delay) / (1 - blob.delay));
     final grown = .65 * _easeOut(t) + .35 * _easeInOut(t);
     final radius = blob.size * grown;
     if (radius <= 0) continue;
-    final dist = math.sqrt(
-      math.pow((x - blob.x) / radius, 2).toDouble() +
-      math.pow((y - blob.y) / radius, 2).toDouble(),
-    );
+    final dx = (x - blob.x) * width;
+    final dy = (y - blob.y) * height;
+    final dist = math.sqrt(dx * dx + dy * dy) / (radius * shortestSide);
     final double layer;
     if (dist <= .45) {
       layer = 1;

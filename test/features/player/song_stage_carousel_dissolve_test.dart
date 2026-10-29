@@ -48,6 +48,45 @@ void main() {
     expect(cloudCoverAlphaAt(a, 1, 1, 1), 1);
   });
 
+  test('cloud blobs are circles in portrait, landscape and square covers', () {
+    const single = [CloudCoverBlob(.5, .5, 0, .4)];
+    const progress = .5;
+    const distancePx = 80.0;
+    final sizes = [
+      const Size(350, 350), // Regular cover
+      const Size(350, 740), // Fullscreen portrait cover
+      const Size(740, 350), // Landscape artwork
+    ];
+    double? squareAlpha;
+    for (final size in sizes) {
+      final horizontal = cloudCoverAlphaAt(
+        single, progress, .5 + distancePx / size.width, .5, size: size,
+      );
+      final vertical = cloudCoverAlphaAt(
+        single, progress, .5, .5 + distancePx / size.height, size: size,
+      );
+      expect(horizontal, greaterThan(0));
+      expect(horizontal, lessThan(1));
+      expect(vertical, closeTo(horizontal, 0.000001),
+          reason: 'A physical circle has the same alpha at equal pixel distances, '
+              'regardless of artwork aspect ratio: $size');
+      squareAlpha ??= horizontal;
+      expect(horizontal, closeTo(squareAlpha, 0.000001),
+          reason: 'The radius is based on the shortest side, not stretched');
+    }
+
+    // A normalized Y offset represents more pixels than the same normalized
+    // X offset on a tall canvas. This would be equal for the old oval mask.
+    const portrait = Size(350, 740);
+    final sameUvX = cloudCoverAlphaAt(
+      single, progress, .6, .5, size: portrait,
+    );
+    final sameUvY = cloudCoverAlphaAt(
+      single, progress, .5, .6, size: portrait,
+    );
+    expect(sameUvY, lessThan(sameUvX));
+  });
+
   Future<GlobalKey<SongStageCarouselState>> mount(
     WidgetTester tester, {
     required void Function(int) changed,
