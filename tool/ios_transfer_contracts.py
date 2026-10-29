@@ -21,6 +21,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCES = [
     ROOT / 'ios/Transfers/Contracts/LokalTransferJob.swift',
     ROOT / 'ios/Transfers/Contracts/LokalTransferProtocol.swift',
+    ROOT / 'ios/Transfers/Contracts/LokalTransferImportOwnership.swift',
     ROOT / 'ios/Transfers/Storage/LokalTransferJournal.swift',
     ROOT / 'ios/Transfers/Files/LokalTransferFiles.swift',
     ROOT / 'ios/Transfers/Files/LokalTransferLibrary.swift',
@@ -98,6 +99,7 @@ def main() -> None:
         subprocess.run([*command, *map(str, SOURCES),
                         str(ROOT / 'ios/Transfers/Tests/NetworkContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/LibraryContracts.swift'),
+                        str(ROOT / 'ios/Transfers/Tests/ImportOwnershipContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/main.swift'),
                         '-o', str(binary)], check=True, timeout=180)
         for round_index in range(args.repeat_native):

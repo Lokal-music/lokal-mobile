@@ -117,6 +117,7 @@ private func runHostContracts() throws {
 
 func runNetworkContracts(origin: String, length: Int64, checksum: String) throws {
   try runHostContracts()
+  try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   let manager = FileManager.default
   let root = manager.temporaryDirectory.resolvingSymlinksInPath()
     .appendingPathComponent("lokal-native-network-" + UUID().uuidString)
@@ -228,4 +229,157 @@ func runNetworkContracts(origin: String, length: Int64, checksum: String) throws
   let reopenedComplete = try awaitJob(reopened, id: complete.id, phase: [.staged])
   try require(reopenedComplete.receivedSHA256 == checksum, "verified actual bytes and receipt survive runtime reconstruction")
   print("Native URLSession HTTP contracts passed: real WAV bytes, idempotent submission, redirect refusal, truncation, checksum verification, cancellation and persisted pairing pause. Not iOS daemon/suspension acceptance.")
+}
+
+/// Real runtime queue, journal, HTTP staging and independent lock guard. The
+/// blocked credential read stands at the native I/O boundary; no queue or job
+/// implementation is replaced. This does not qualify iOS/Isar product import.
+private final class ImportAuthorizationFixture: @unchecked Sendable {
+  private let lock = NSLock()
+  private var authorization: LokalTransferAuthorization?
+  private var nextBarrier: (DispatchSemaphore, DispatchSemaphore)?
+  init(_ authorization: LokalTransferAuthorization) { self.authorization = authorization }
+  func set(_ authorization: LokalTransferAuthorization?) {
+    lock.lock(); defer { lock.unlock() }; self.authorization = authorization
+  }
+  func blockNextRead(entered: DispatchSemaphore, resume: DispatchSemaphore) {
+    lock.lock(); defer { lock.unlock() }; nextBarrier = (entered, resume)
+  }
+  func read() throws -> LokalTransferAuthorization? {
+    lock.lock()
+    let barrier = nextBarrier
+    nextBarrier = nil
+    lock.unlock()
+    if let barrier {
+      barrier.0.signal()
+      guard barrier.1.wait(timeout: .now() + 10) == .success else {
+        throw TestFailure.failed("Import credential boundary was not released")
+      }
+    }
+    lock.lock(); defer { lock.unlock() }; return authorization
+  }
+}
+
+private func runRuntimeImportContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-runtime-import-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: false)
+  defer { try? manager.removeItem(at: root) }
+  let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token")
+  let credentials = ImportAuthorizationFixture(authorization)
+  let ownership = LokalTransferImportOwnership()
+  let runtime = try LokalTransferRuntime(container: root, importOwnership: ownership,
+    credentials: { try credentials.read() })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }
+    _ = done.wait(timeout: .now() + 10)
+  }
+  let job = try LokalTransferJob(direction: .download,
+    identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: "import-fixture",
+      localSongID: nil, origin: origin),
+    metadata: LokalTransferMetadata(title: "Import fixture", artist: "Native fixture", album: nil,
+      fileExtension: "wav"), nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  let _: LokalTransferSummary = try native { runtime.enqueue([job], reply: $0) }
+  _ = try awaitJob(runtime, id: job.id, phase: [.downloaded])
+  let staged: LokalTransferJob = try native { runtime.verify(id: job.id, revision: 1, reply: $0) }
+  let engine = ownership.attachEngine()
+  let owner = try ownership.attachClient(engineID: engine, clientID: UUID().uuidString.lowercased())
+  let write = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1, reconcileOnly: false)
+  let recovery = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1, reconcileOnly: true)
+  func claim(_ request: LokalTransferProtocol.ImportClaim,
+             _ owner: LokalTransferImportOwnership.Owner) throws -> LokalTransferImportClaim {
+    let ticket = try ownership.capture(owner)
+    return try native { runtime.claimImport(request, ticket: ticket, reply: $0) }
+  }
+  func control(_ claim: LokalTransferImportClaim) -> LokalTransferProtocol.ImportLease {
+    LokalTransferProtocol.ImportLease(id: claim.job.id, revision: claim.job.revision, leaseID: claim.leaseID)
+  }
+  try rejects("read-only recovery cannot move a staged job into validation") { _ = try claim(recovery, owner) }
+  let queuedEntered = DispatchSemaphore(value: 0), queuedResume = DispatchSemaphore(value: 0)
+  let queuedDone = DispatchSemaphore(value: 0)
+  let queuedResult = NativeResult<LokalTransferImportClaim>()
+  credentials.blockNextRead(entered: queuedEntered, resume: queuedResume)
+  let beforeClaim = try ownership.capture(owner)
+  runtime.claimImport(write, ticket: beforeClaim) { queuedResult.set($0); queuedDone.signal() }
+  try require(queuedEntered.wait(timeout: .now() + 5) == .success,
+    "unclaimed runtime work reached its real credential boundary")
+  ownership.revokeAll()
+  queuedResume.signal()
+  try require(queuedDone.wait(timeout: .now() + 5) == .success, "revoked queued claim settles")
+  try rejects("revocation before any lease exists fences the queued runtime claim") { _ = try queuedResult.get() }
+  let stillStaged = try awaitJob(runtime, id: job.id, phase: [.staged])
+  try require(stillStaged.revision == 1, "revoked queued claim never advances durable validation")
+  let first = try claim(write, owner)
+  try require(first.job.phase == .validating && first.job.receivedSHA256 == checksum &&
+    !first.reconcileOnly && first.sourcePath == LokalTransferFiles(container: root).importURL(first.job).path &&
+    first.targetRelativePath == LokalTransferLibrary.directoryName + "/" + LokalTransferLibrary.fileName(staged),
+    "actual staged bytes acquire a native-derived, revision-bound import target")
+  try require(claim(write, owner).leaseID == first.leaseID, "lost runtime claim reply coalesces to the same lease")
+  try rejects("a read-only claim cannot silently reuse a writer lease") { _ = try claim(recovery, owner) }
+
+  let entered = DispatchSemaphore(value: 0), resume = DispatchSemaphore(value: 0)
+  let duplicateDone = DispatchSemaphore(value: 0), releaseDone = DispatchSemaphore(value: 0)
+  let duplicate = NativeResult<LokalTransferImportClaim>(), release = NativeResult<Bool>()
+  credentials.blockNextRead(entered: entered, resume: resume)
+  let queued = try ownership.capture(owner)
+  runtime.claimImport(write, ticket: queued) { duplicate.set($0); duplicateDone.signal() }
+  try require(entered.wait(timeout: .now() + 5) == .success, "real runtime entered its blocked credential read")
+  // Direct guard must return before the native queue is released.
+  try ownership.validate(owner, jobID: job.id, revision: 1, leaseID: first.leaseID, requiresWrite: true)
+  runtime.releaseImport(control(first), owner: owner) { release.set($0); releaseDone.signal() }
+  try rejects("runtime release cancels publication immediately, before queue drainage") {
+    try ownership.validate(owner, jobID: job.id, revision: 1, leaseID: first.leaseID, requiresWrite: true)
+  }
+  try require(releaseDone.wait(timeout: .now()) == .timedOut,
+    "release cannot acknowledge while earlier native work is still blocked")
+  resume.signal()
+  try require(duplicateDone.wait(timeout: .now() + 5) == .success &&
+    releaseDone.wait(timeout: .now() + 5) == .success && release.get(), "release drains the actual runtime barrier")
+  try rejects("the blocked duplicate cannot restore cancelled publication") { _ = try duplicate.get() }
+  try rejects("a pre-release ticket cannot acquire a replacement lease") {
+    let _: LokalTransferImportClaim = try native { runtime.claimImport(write, ticket: queued, reply: $0) }
+  }
+  let second = try claim(write, owner)
+  let newEngine = ownership.attachEngine()
+  let replacement = try ownership.attachClient(engineID: newEngine, clientID: UUID().uuidString.lowercased())
+  let current = try claim(write, replacement)
+  ownership.detachEngine(engine)
+  try rejects("old runtime client cannot release the new engine's import") {
+    let _: Bool = try native { runtime.releaseImport(control(second), owner: owner, reply: $0) }
+  }
+  try ownership.validate(replacement, jobID: job.id, revision: 1, leaseID: current.leaseID, requiresWrite: true)
+  let _: Bool = try native { runtime.releaseImport(control(current), owner: replacement, reply: $0) }
+  credentials.set(nil)
+  let historical = try claim(recovery, replacement)
+  try require(historical.reconcileOnly && historical.sourcePath == nil,
+    "receipt-only reconciliation needs no current bearer and exposes no source path")
+  try ownership.validate(replacement, jobID: job.id, revision: 1, leaseID: historical.leaseID, requiresWrite: false)
+  try rejects("receipt-only recovery never authorizes database or file publication") {
+    try ownership.validate(replacement, jobID: job.id, revision: 1, leaseID: historical.leaseID, requiresWrite: true)
+  }
+  try rejects("a missing current pairing cannot acquire writer authority") { _ = try claim(write, replacement) }
+  credentials.set(authorization)
+  let beforeRecovery = try claim(write, replacement)
+  let oldTicket = try ownership.capture(replacement)
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  try rejects("durable recovery retires the previous writer") {
+    try ownership.validate(replacement, jobID: job.id, revision: 1,
+      leaseID: beforeRecovery.leaseID, requiresWrite: true)
+  }
+  try rejects("durable recovery rejects an earlier queued claim") {
+    let _: LokalTransferImportClaim = try native { runtime.claimImport(write, ticket: oldTicket, reply: $0) }
+  }
+  let beforeCancel = try claim(write, replacement)
+  let cancelled: LokalTransferJob = try native { runtime.cancel(id: job.id, revision: 1, reply: $0) }
+  try require(cancelled.phase == .cancelled && cancelled.revision == 2, "actual import cancellation advances durable revision")
+  try rejects("cancelled import cannot pass the direct Isar guard") {
+    try ownership.validate(replacement, jobID: job.id, revision: 1,
+      leaseID: beforeCancel.leaseID, requiresWrite: true)
+  }
+  try rejects("cancelled durable jobs cannot be reclaimed using their old revision") { _ = try claim(write, replacement) }
+  print("Native runtime import contracts passed: real HTTP staging, durable validation phase, coalesced claims, independent guard during blocked native I/O, drained release, engine replacement, pairing refusal, read-only recovery and durable cancellation. Product Isar import remains disabled.")
 }

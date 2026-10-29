@@ -7,7 +7,6 @@ import 'package:flick/features/classipod/classipod_screen.dart';
 import 'package:flick/features/internet_radio/internet_radio_page.dart';
 import 'package:flick/features/music_videos/music_videos_page.dart';
 import 'package:flick/features/settings/library_scan/library_scan_flow.dart';
-import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
 import 'package:flick/providers/songs_provider.dart';
 import 'package:flick/widgets/lokal/lokal_glass.dart';
 import 'package:flutter/material.dart';
@@ -20,16 +19,9 @@ import 'konnekted_style.dart';
 import 'library/lokal_library_add_sheet.dart';
 import 'library/lokal_library_kit.dart';
 import 'library/lokal_playlists.dart';
-import 'library/lokal_song_browser.dart';
 
-/// Settings › Data › Accounts, where Spotify is.
-const _accounts = KonnektedDestination.settingsAt(
-  LokalSettingsGroup.data,
-  section: LokalDataSections.accounts,
-);
-
-/// The Library tab, as Apple Music's: six tiles, Recently added, compact
-/// rows for the rest, then every song with a search that stays pinned.
+/// Library overview: navigation tiles, recently added and compact shortcuts.
+/// The full song browser remains available through dedicated song routes.
 class KonnektedLibrary extends ConsumerWidget {
   const KonnektedLibrary({
     super.key,
@@ -169,19 +161,7 @@ class KonnektedLibrary extends ConsumerWidget {
               child: KonnektedLoading(
                 label: lokalText('Opening your collection'),
               ),
-            )
-          else if (songs.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: LokalSectionTitle(
-                title: lokalText('Songs'),
-                onSeeAll: () => onNavigate(KonnektedDestination.songs),
-              ),
             ),
-            LokalSongBrowser(
-              songs: songs,
-              preferencesKey: 'lokal.library.songs.song_browser_view.v1',
-            ),
-          ],
           SliverToBoxAdapter(
             child: SizedBox(height: 150 + MediaQuery.paddingOf(context).bottom),
           ),
@@ -204,7 +184,7 @@ class _Tiles extends ConsumerWidget {
       ('Albums', Icons.album_rounded, KonnektedDestination.albums),
       ('Artists', Icons.mic_external_on_rounded, KonnektedDestination.artists),
       ('Genres', Icons.category_rounded, KonnektedDestination.genres),
-      ('Downloads', Icons.download_rounded, KonnektedDestination.downloads),
+      ('Videos', Icons.smart_display_rounded, null),
     ];
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
     return Padding(
@@ -224,7 +204,9 @@ class _Tiles extends ConsumerWidget {
                   child: _Tile(
                     label: lokalText(label),
                     icon: icon,
-                    onTap: () => onNavigate(destination),
+                    onTap: destination == null
+                        ? () => pushLokal(context, const MusicVideosPage())
+                        : () => onNavigate(destination),
                   ),
                 ),
             ],
@@ -293,6 +275,16 @@ class _MoreRows extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       LokalNavRow(
+        icon: Icons.music_note_rounded,
+        label: lokalText('Songs'),
+        onTap: () => onNavigate(KonnektedDestination.songs),
+      ),
+      LokalNavRow(
+        icon: Icons.download_rounded,
+        label: lokalText('Downloads'),
+        onTap: () => onNavigate(KonnektedDestination.downloads),
+      ),
+      LokalNavRow(
         icon: Icons.history_rounded,
         label: lokalText('Recently played'),
         onTap: () => onNavigate(KonnektedDestination.recentlyPlayed),
@@ -316,16 +308,6 @@ class _MoreRows extends StatelessWidget {
         icon: Icons.radio_rounded,
         label: lokalText('Radio'),
         onTap: () => pushLokal(context, const InternetRadioPage()),
-      ),
-      LokalNavRow(
-        icon: Icons.smart_display_rounded,
-        label: lokalText('Videos'),
-        onTap: () => pushLokal(context, const MusicVideosPage()),
-      ),
-      LokalNavRow(
-        icon: Icons.circle,
-        label: lokalText('Spotify library'),
-        onTap: () => onNavigate(_accounts),
       ),
     ],
   );

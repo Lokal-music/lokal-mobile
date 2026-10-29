@@ -6,6 +6,7 @@ import FoundationNetworking
 /// AppDelegate owns this object, independently of any Flutter engine. Opening
 /// storage and reconnecting the OS session never block the main/UI queue.
 final class LokalTransferHost: @unchecked Sendable {
+  let importOwnership = LokalTransferImportOwnership()
   private let queue = DispatchQueue(label: "app.lokal.mobile.transfer-host", qos: .utility)
   private let container: @Sendable () throws -> URL
   private let credentials: @Sendable () throws -> LokalTransferAuthorization?
@@ -53,7 +54,8 @@ final class LokalTransferHost: @unchecked Sendable {
     dispatchPrecondition(condition: .onQueue(queue))
     guard !stopped else { throw LokalTransferError.invalidTransition }
     if let runtime { return runtime }
-    let value = try LokalTransferRuntime(container: container(), configuration: configuration(), credentials: credentials)
+    let value = try LokalTransferRuntime(container: container(), configuration: configuration(),
+      importOwnership: importOwnership, credentials: credentials)
     runtime = value
     let pending = pendingBackgroundReplies
     pendingBackgroundReplies.removeAll()
@@ -90,6 +92,7 @@ final class LokalTransferHost: @unchecked Sendable {
   /// Tests and explicit teardown only; normal engine detachment leaves the app's
   /// native owner and OS transfers alive. Runtime teardown is itself idempotent.
   func shutdown(_ reply: @escaping @Sendable () -> Void) {
+    importOwnership.revokeAll()
     queue.async {
       self.stopped = true
       if let runtime = self.runtime { runtime.shutdown(reply) }

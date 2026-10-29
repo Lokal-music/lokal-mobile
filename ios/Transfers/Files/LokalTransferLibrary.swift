@@ -13,32 +13,6 @@ struct LokalTransferLibraryReceipt: Codable, Equatable, Sendable {
   let sha256: String
 }
 
-/// Immediate cancellation is independent of the utility/file queues. Publication
-/// and revocation share this short lock; long copying/hashing never holds it.
-/// A published file still needs the reservation/cleanup barrier before retiring
-/// its database intent. This token alone does not implement that app barrier.
-final class LokalTransferCopyCancellation: @unchecked Sendable {
-  private let lock = NSLock()
-  private var cancelled = false
-
-  func cancel() {
-    lock.lock()
-    cancelled = true
-    lock.unlock()
-  }
-
-  func check() throws {
-    try whileCurrent {}
-  }
-
-  func whileCurrent<T>(_ operation: () throws -> T) throws -> T {
-    lock.lock()
-    defer { lock.unlock() }
-    guard !cancelled else { throw LokalTransferError.invalidTransition }
-    return try operation()
-  }
-}
-
 /// Filesystem boundary only: this does not acknowledge a playable Isar row.
 /// The app supplies its own Music root; no Flutter-supplied path is accepted.
 /// One deterministic name per frozen job/revision survives lost acknowledgments.

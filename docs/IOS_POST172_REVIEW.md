@@ -1,6 +1,6 @@
 # iPhone review of mobile PRs after #172
 
-Current review: **101 merged product PRs after #172 through #310**. The newest
+Current review: **102 merged product PRs after #172 through #311**. The newest
 continuation includes on-demand large queues, provider resolution, subtitle
 alignment, smooth player expansion, per-minor release notes and direct Help
 navigation. Reviewed
@@ -1156,3 +1156,42 @@ directories, keeps the requested OS, and propagates a second failure. Nine boot,
 five control and eleven widget-render coordinator tests pass; these are mock
 orchestration tests, not proof that the hosted boot correction works. Application
 runtime gates and their timeouts are unchanged.
+
+### Local follow-up through #311
+
+Merged commit `4153904a613adb4f8dac0fea42359fb9ed481337` adds account-scoped
+Discovery snapshots, a compact Library overview, the normal-cover 20 px artwork
+endpoint and independent resolution-tag preferences. This follow-up is outside
+the frozen PR #312 / build-80 source and is being batched with later import work.
+
+The iPhone adaptation keeps metadata in Application Support, outside Files
+sharing, with 4 MiB entries and 20 MiB managed storage, including interrupted
+temporary files. A serialized cache writer prevents sign-out invalidation being
+overtaken by pending writes; Spotify captures session revision and request
+generation across every asynchronous boundary. Stale startup/refresh responses
+cannot repopulate another account. Failed or empty refreshes preserve usable
+same-account shelves. Raw provider error text is not persisted. Actual filesystem
+tests cover reopening, source/account isolation, malformed/future records,
+oversized entries, overlapping writers, invalidation and orphan-part pruning.
+
+Library's Videos tile replaces Downloads and duplicate Videos/Spotify rows are
+removed. Compact Songs and Downloads rows retain access to their existing routes
+without restoring the removed full song browser. The artwork endpoint matches
+20 px while retaining the iPhone embedded-video exclusions. Resolution toggles
+default off, persist independently, preserve list-tier colors and full-player
+text color, and use explicit source measurements without claiming output fidelity.
+All four new preference phrases are translated in the ten non-English locales.
+
+The focused follow-up passes **85 checks** for cache/ownership, presentation,
+preferences, source isolation, Space and artwork transitions; the eleven-locale
+quality/preference selection passes separately. New cache/probe files pass strict
+analysis and workspace analysis has zero errors. A new native path-provider/
+filesystem probe uses its own fresh test directory and never touches user cache
+data. It is compile-checked but awaiting the next native app batch; live-provider
+or iPhone process-suspension acceptance is not claimed.
+
+The full updated CI Flutter selection passes **1,011 checks** (6m17s) on the
+through-#311 application/test source, local commit
+`ee85631`. The native ownership continuation changes only Swift/tooling/docs
+after that checkpoint. This result still does not qualify a new IPA; build 80
+continues testing its frozen through-#310 source separately.

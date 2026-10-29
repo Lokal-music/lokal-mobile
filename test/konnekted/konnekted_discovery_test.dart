@@ -7,6 +7,7 @@ import 'package:flick/features/discovery/lastfm_discovery.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_destination.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
+import 'package:flick/features/konnekted/discovery_snapshot_cache.dart';
 import 'package:flick/features/konnekted/konnekted_discovery_view.dart';
 import 'package:flick/features/konnekted/konnekted_home.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
@@ -109,8 +110,19 @@ Future<Map<String, dynamic>> _lastfm(
   };
 }
 
+// Presentation runs under the widget test's fake clock. Disk persistence has
+// its own actual-filesystem suite and must not block that clock's pump loop.
+class _NoDiskSnapshots extends DiscoverySnapshotCache {
+  const _NoDiskSnapshots();
+  @override
+  Future<DiscoveryCached<LokalDiscovery>?> readLokal(String source, String account) async => null;
+  @override
+  Future<void> writeLokal(String source, String account, LokalDiscovery data) async {}
+}
+
 Widget _app(Widget child, {String? account = 'me', double scale = 1}) => ProviderScope(
   overrides: [
+    konnektedDiscoverySnapshotCacheProvider.overrideWithValue(const _NoDiskSnapshots()),
     konnektedLibraryProvider.overrideWithValue(AsyncData(_library)),
     konnektedFavoritesProvider.overrideWithValue(const AsyncData([])),
     konnektedRecentSongsProvider.overrideWith((ref) => Stream.value([])),
@@ -160,6 +172,33 @@ class _HiddenOnlyLastfm extends KonnektedDiscoveryNotifier {
   );
   @override
   Future<void> load({bool refresh = false}) async {}
+}
+
+class _ReadySpotifySnapshot extends KonnektedSpotifyDiscoveryNotifier {
+  @override
+  Future<SpotifyDiscoverySnapshot> build() async =>
+      const SpotifyDiscoverySnapshot(
+        enabled: true,
+        connected: true,
+        data: SpotifyDiscoveryData(
+          account: 'Spotify',
+          quickPicks: [],
+          recentlyPlayed: [
+            LokalDiscoveryTrack(title: 'Spotify history track', artist: 'Artist'),
+          ],
+          likedSongs: [LokalDiscoveryTrack(title: 'Like', artist: 'Artist')],
+          artists: [],
+          albums: [],
+          freshFinds: [],
+          mixes: [
+            LokalDiscoveryMix(
+              id: '37i9dQZF1E000000000001',
+              title: 'Daily Mix 1',
+              author: 'Spotify',
+            ),
+          ],
+        ),
+      );
 }
 
 class _ReadySpotify extends KonnektedDiscoveryNotifier {
@@ -227,33 +266,7 @@ void main() {
         ProviderScope(
           overrides: [
             konnektedDiscoveryProvider.overrideWith(_ReadySpotify.new),
-            konnektedSpotifyDiscoveryProvider.overrideWith(
-              (ref) async => const SpotifyDiscoverySnapshot(
-                enabled: true,
-                connected: true,
-                data: SpotifyDiscoveryData(
-                  account: 'Spotify',
-                  quickPicks: [],
-                  recentlyPlayed: [
-                    LokalDiscoveryTrack(title: 'Spotify history track',
-                        artist: 'Artist'),
-                  ],
-                  likedSongs: [
-                    LokalDiscoveryTrack(title: 'Like', artist: 'Artist'),
-                  ],
-                  artists: [],
-                  albums: [],
-                  freshFinds: [],
-                  mixes: [
-                    LokalDiscoveryMix(
-                      id: '37i9dQZF1E000000000001',
-                      title: 'Daily Mix 1',
-                      author: 'Spotify',
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            konnektedSpotifyDiscoveryProvider.overrideWith(_ReadySpotifySnapshot.new),
             konnektedSpotifyMixLoaderProvider.overrideWithValue((id) async {
               loaded.add(id);
               return const [

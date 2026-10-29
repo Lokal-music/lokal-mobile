@@ -5,29 +5,35 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **101 reviewed merged
-mobile PRs after #172 through #310**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **102 reviewed merged
+mobile PRs after #172 through #311**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
 and platform adaptations.
 
-**This source is not a finalized release.** Build 78 is the current independently
-verified engineering package through #302 plus the embedded native transfer
-protocol and per-account Keychain preparation. Both complete iOS 18.6 and 26
+**This source is not a finalized release.** Build 80 is the current independently
+verified engineering package through #310, including the corrected large-queue
+mutation scope, embedded native transfer protocol and per-account Keychain
+preparation. Both complete iOS 18.6 and 26
 suites pass. The actual native channel rejects injected state/headers without
 mutation and survives observer replacement; legacy Keychain migration passes.
 The package's 34 iPhone binaries, 26 matching native symbol bundles, Dart AOT
-symbols, notices and 2,298 exported source files are independently rechecked.
-Source tree: `3bd499d1c86c5de010a05ff7d1f7cd681338c47c`.
+symbols, notices and 2,314 exported source files are independently rechecked.
+Source tree: `8628d317596f78edf622bdfa5c37d89487840938`.
 
 Native background networking is wired independently of Flutter, but library
 import/upload capability remains disabled. Existing product copy paths remain
 active. OS transfer suspension/relaunch, deterministic Isar import/receipt
 recovery, physical Windows signing/iPhone installation, live providers/receivers
-and installed WidgetKit still need their own acceptance. Later source reviewed
-through #310 and deterministic file promotion are outside the build-78 package.
-Builds 74 and 67 remain preserved older checkpoints.
+and installed WidgetKit still need their own acceptance. Through-#311 UI changes
+and the native import-ownership continuation are outside the build-80 package.
+Builds 78, 74 and 67 remain preserved older checkpoints. Separate widget run 28
+failed when `simctl launch --console` exceeded 150 seconds. Failure collection
+subsequently recovered all 90 English renders and nine OCR cases; service logs
+record a late process bootstrap and voluntary exit about nine seconds later.
+This does not establish a console hang. No other locales or compositor checks
+ran in that job; the earlier complete widget evidence is not a pass for run 28.
 
 The later local import continuation now passes actual native Isar contracts:
 private identity reservations, atomic song/receipt commits, deletion without
@@ -65,7 +71,9 @@ records the next integration gates and the limits of this evidence.
 
 | [Build 78](https://github.com/lokal-music/lokal-mobile/actions/runs/40755702150) / PR #307 | Both complete native app suites pass on iOS 18.6 and 26 through #302 plus the embedded transfer protocol and per-account Keychain preparation. The actual Swift/Flutter channel and Keychain migration pass. Independently reverified IPA/source/notices/34 binaries/26 native symbol bundles; tree `3bd499d1c86c5de010a05ff7d1f7cd681338c47c`. Import/upload capability is false; later through-#306 changes are excluded. |
 
-| [Build 79](https://github.com/lokal-music/lokal-mobile/actions/runs/40786437699) / PR #308 | Release packaging and first launch pass. iOS 18.6 finds a real missing request scope during paused shuffle of the 2,654-entry on-demand queue; iOS 26 times out during simulator boot before app installation. No package promotion. The later source captures queue-mutation scope and adds one strictly pre-installation fresh-device boot recovery; native acceptance remains pending. |
+| [Build 79](https://github.com/lokal-music/lokal-mobile/actions/runs/40786437699) / PR #308 | Release packaging and first launch pass. iOS 18.6 finds a real missing request scope during paused shuffle of the 2,654-entry on-demand queue; iOS 26 times out during simulator boot before app installation. No package promotion. |
+
+| [Build 80](https://github.com/lokal-music/lokal-mobile/actions/runs/40795645413) / PR #312 | Both complete app suites pass through #310, including actual playback, paused shuffle, manual queue and tail insertion with 2,654 logical entries and one native source. Independently verified IPA/source/notices/34 binaries/26 symbol bundles; tree `8628d317596f78edf622bdfa5c37d89487840938`. Separate native run 5 passes both iOS 16 SDK/Flutter bridge checks, five actual host contract rounds and actual macOS Isar contracts. Product import/upload remains disabled. Widget run 28 has three passing jobs and one failed render job; no aggregate widget acceptance for that run. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See

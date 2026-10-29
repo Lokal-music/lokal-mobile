@@ -23,24 +23,25 @@ is required to perform these installation and acceptance steps.
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
 The current independently verified engineering checkpoint is
-[build 78](https://github.com/lokal-music/lokal-mobile/actions/runs/40755702150),
-through reviewed #302 plus the embedded native transfer protocol and per-account
+[build 80](https://github.com/lokal-music/lokal-mobile/actions/runs/40795645413),
+through reviewed #310 plus the embedded native transfer protocol and per-account
 Keychain preparation. Both complete iOS 18.6 and 26.0 suites pass.
-The artifact is `Lokal-iPhone-engineering-unsigned-78-attempt1`.
+The artifact is `Lokal-iPhone-engineering-unsigned-80-attempt1`.
 Its IPA SHA-256 is
-`bbcb84efc0253959318119b5a624d018dcf6e8fbcb70053a23c36e7c9e661311`.
+`ec61ca758281dac569ce930cc461d352774142e918fba535fddc82122edec122`.
 All 34 arm64 iOS binaries, 26 matching native symbol bundles, Dart AOT symbols,
-notices and 2,298 exported source files are independently rechecked. Source tree:
-`3bd499d1c86c5de010a05ff7d1f7cd681338c47c`.
+notices and 2,314 exported source files are independently rechecked. Source tree:
+`8628d317596f78edf622bdfa5c37d89487840938`.
 
-Build 78 passes actual legacy Keychain migration and the registered native
+Build 80 passes actual legacy Keychain migration and the registered native
 transfer-channel/observer replacement checks. Native library import and upload
 capability are disabled; existing product copying remains active. Later
-#303/#305/#306 adaptations and deterministic library-file promotion are excluded.
+#311 UI and native import-ownership changes are excluded. Separate widget run 28
+failed at the English launch process; it has no complete render acceptance.
 Actual iOS 16 runtime, physical Windows signing/iPhone installation, live
 providers/receivers, installed widgets and OS background-transfer suspension/
 relaunch remain separate gates. This is an engineering checkpoint, not a
-qualified public release. Builds 74 and 67 remain preserved older checkpoints.
+qualified public release. Builds 78, 74 and 67 remain preserved older checkpoints.
 
 Builds with a `Symbols` directory include Dart AOT symbols and matching native
 dSYMs, identified by binary UUID in the package metadata. Keep these with the

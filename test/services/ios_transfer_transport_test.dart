@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flick/models/ios_transfer_models.dart';
+import 'package:flick/models/ios_transfer_import.dart';
 import 'package:flick/services/ios_transfer_transport.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +39,19 @@ Map<String, Object?> job({String phase = 'queued', int revision = 1}) => {
   if (phase == 'staged') ...{'receivedBytes': 12, 'receivedSHA256': 'a' * 64},
 };
 
+Map<String, Object?> importLease({bool reconcileOnly = false}) {
+  final document = job(phase: 'staged');
+  document['phase'] = 'validating';
+  return {
+    'job': document,
+    'leaseID': 'a7d96b93-6526-4f1f-a1af-688ffb5c799d',
+    'reconcileOnly': reconcileOnly,
+    'targetRelativePath': 'Desktop Copies/Fixture - ${document['id']}-r1.flac',
+    if (!reconcileOnly)
+      'sourcePath': '/private/fixture/${document['id']}-r1.download',
+  };
+}
+
 Future<void> incomingChange(MethodChannel channel) {
   final done = Completer<void>();
   ServicesBinding.instance.channelBuffers.push(
@@ -52,6 +66,219 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+  test(
+    'native import leases bind verified revision, target and recovery role',
+    () {
+      final writer = IosTransferImportLease.fromJson(importLease());
+      expect(writer.job.phase, IosTransferPhase.validating);
+      expect(writer.sourcePath, startsWith('/private/'));
+      final historical = IosTransferImportLease.fromJson(
+        importLease(reconcileOnly: true),
+      );
+      expect(historical.sourcePath, isNull);
+      for (final patch in [
+        {'reconcileOnly': 1},
+        {'leaseID': 'caller'},
+        {'leaseID': 'A7D96B93-6526-4F1F-A1AF-688FFB5C799D'},
+        {'targetRelativePath': 'Desktop Copies/other.flac'},
+        {'sourcePath': 'file:///private/fixture.wav'},
+        {'sourcePath': '/private/../outside.wav'},
+        {'sourcePath': '/private/fixture\u0000.wav'},
+        {'sourcePath': 7},
+        {'headers': <String, Object>{}},
+        {'reconcileOnly': true, 'sourcePath': '/private/fixture.wav'},
+        {'job': job(phase: 'staged')},
+      ]) {
+        expect(
+          () => IosTransferImportLease.fromJson({...importLease(), ...patch}),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  test('import waits for root observation and sends no caller paths or account credentials', () async {
+    const channel = MethodChannel('test/ios-import-root');
+    final observing = Completer<void>();
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'observe') {
+        await observing.future;
+        return null;
+      }
+      if (call.method == 'stopObserving') return null;
+      if (call.method == 'claimImport') {
+        expect(request(call), {
+          'id': job()['id'],
+          'revision': 1,
+          'reconcileOnly': false,
+        });
+        return encoded(importLease());
+      }
+      expect(
+        request(call),
+        IosTransferImportLease.fromJson(importLease()).control,
+      );
+      return encoded(true);
+    });
+    final transport = IosTransferTransport(channel: channel, supported: true);
+    final subscription = transport.changes.listen((_) {});
+    try {
+      final pending = transport.claimImport(
+        IosTransferJob.fromJson(job(phase: 'staged')),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.map((call) => call.method), ['observe']);
+      observing.complete();
+      final lease = await pending;
+      await transport.validateImport(lease);
+      await transport.validateImport(lease, requiresWrite: false);
+      await transport.releaseImport(lease);
+      expect(calls.map((call) => call.method), [
+        'observe',
+        'claimImport',
+        'validateImport',
+        'validateImportReconciliation',
+        'releaseImport',
+      ]);
+    } finally {
+      if (!observing.isCompleted) observing.complete();
+      await subscription.cancel();
+      await transport.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
+
+  test(
+    'no-listener and replaced clients cannot acquire or use an import lease',
+    () async {
+      const channel = MethodChannel('test/ios-import-replacement');
+      final claimReply = Completer<void>();
+      final claimEntered = Completer<void>();
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        if (call.method == 'claimImport') {
+          claimEntered.complete();
+          await claimReply.future;
+          return encoded(importLease());
+        }
+        return null;
+      });
+      final old = IosTransferTransport(channel: channel, supported: true);
+      final next = IosTransferTransport(channel: channel, supported: true);
+      final staged = IosTransferJob.fromJson(job(phase: 'staged'));
+      await expectLater(old.claimImport(staged), throwsStateError);
+      expect(calls, isEmpty);
+      final oldListener = old.changes.listen((_) {});
+      StreamSubscription<void>? nextListener;
+      try {
+        final pending = old.claimImport(staged);
+        final rejected = expectLater(pending, throwsStateError);
+        await claimEntered.future;
+        nextListener = next.changes.listen((_) {});
+        await Future<void>.delayed(Duration.zero);
+        claimReply.complete();
+        await rejected;
+        final lease = IosTransferImportLease.fromJson(importLease());
+        await expectLater(old.validateImport(lease), throwsStateError);
+        await expectLater(old.releaseImport(lease), throwsStateError);
+        expect(calls, isNot(contains('validateImport')));
+        expect(calls, isNot(contains('releaseImport')));
+      } finally {
+        if (!claimReply.isCompleted) claimReply.complete();
+        await oldListener.cancel();
+        await nextListener?.cancel();
+        await old.dispose();
+        await next.dispose();
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+  );
+
+  test(
+    'import rejects changed frozen intent and recovery role in native replies',
+    () async {
+      const channel = MethodChannel('test/ios-import-frozen-intent');
+      Object? response = importLease();
+      messenger.setMockMethodCallHandler(
+        channel,
+        (call) async => call.method == 'claimImport' ? encoded(response) : null,
+      );
+      final transport = IosTransferTransport(channel: channel, supported: true);
+      final subscription = transport.changes.listen((_) {});
+      try {
+        final staged = IosTransferJob.fromJson(job(phase: 'staged'));
+        final altered = importLease();
+        final alteredJob = Map<String, Object?>.from(altered['job'] as Map);
+        final metadata = Map<String, Object?>.from(
+          alteredJob['metadata'] as Map,
+        );
+        alteredJob['metadata'] = {
+          ...metadata,
+          'title': 'Different frozen recording',
+        };
+        response = {...altered, 'job': alteredJob};
+        await expectLater(transport.claimImport(staged), throwsFormatException);
+        response = importLease();
+        await expectLater(
+          transport.claimImport(staged, reconcileOnly: true),
+          throwsFormatException,
+        );
+        final noDeclaredProof = job(phase: 'staged')
+          ..remove('expectedBytes')
+          ..remove('expectedSHA256');
+        final nativeChangedProof = Map<String, Object?>.from(noDeclaredProof)
+          ..['phase'] = 'validating'
+          ..['receivedBytes'] = 13
+          ..['receivedSHA256'] = 'b' * 64;
+        response = {...importLease(), 'job': nativeChangedProof};
+        await expectLater(
+          transport.claimImport(IosTransferJob.fromJson(noDeclaredProof)),
+          throwsFormatException,
+        );
+      } finally {
+        await subscription.cancel();
+        await transport.dispose();
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+  );
+
+  test('read-only reconciliation cannot call writer guard; native false acknowledgements fail', () async {
+    const channel = MethodChannel('test/ios-import-readonly');
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'observe' || call.method == 'stopObserving') {
+        return null;
+      }
+      return encoded(false);
+    });
+    final transport = IosTransferTransport(channel: channel, supported: true);
+    final subscription = transport.changes.listen((_) {});
+    try {
+      final historical = IosTransferImportLease.fromJson(
+        importLease(reconcileOnly: true),
+      );
+      await expectLater(transport.validateImport(historical), throwsStateError);
+      expect(calls, isNot(contains('validateImport')));
+      await expectLater(
+        transport.validateImport(historical, requiresWrite: false),
+        throwsFormatException,
+      );
+      await expectLater(
+        transport.releaseImport(historical),
+        throwsFormatException,
+      );
+    } finally {
+      await subscription.cancel();
+      await transport.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
 
   test('Dart user intent round-trips the exact shared Swift fixture', () {
     final json = intentDocument();

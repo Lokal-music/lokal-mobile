@@ -57,6 +57,56 @@ Future<void> probeIosTransferTransport(
     await tester.pump(const Duration(milliseconds: 100));
     currentListener = current.changes.listen((_) => currentEvents++);
     await tester.pump(const Duration(milliseconds: 100));
+    final beforeImportGuards = await current.recover().timeout(
+      const Duration(seconds: 10),
+    );
+    const missingJobId = '62dcde21-562f-4417-b660-cd1385ea44ca';
+    const missingLeaseId = '72dcde21-562f-4417-b660-cd1385ea44ca';
+    Future<void> rejectedControl(
+      String method,
+      Map<String, Object> payload,
+      String code,
+    ) async {
+      await expectLater(
+        const MethodChannel('lokal/transfers')
+            .invokeMethod<Object?>(
+              method,
+              Uint8List.fromList(utf8.encode(jsonEncode(payload))),
+            )
+            .timeout(const Duration(seconds: 10)),
+        throwsA(
+          isA<PlatformException>().having((error) => error.code, 'code', code),
+        ),
+      );
+    }
+
+    await rejectedControl('claimImport', {
+      'id': missingJobId,
+      'revision': 1,
+      'reconcileOnly': false,
+      'sourcePath': '/caller/injected.wav',
+    }, 'INVALID_TRANSFER_REQUEST');
+    await rejectedControl('claimImport', {
+      'id': missingJobId,
+      'revision': 1,
+      'reconcileOnly': false,
+    }, 'TRANSFER_MISSING');
+    for (final method in [
+      'validateImport',
+      'validateImportReconciliation',
+      'releaseImport',
+    ]) {
+      await rejectedControl(method, {
+        'id': missingJobId,
+        'revision': 1,
+        'leaseID': missingLeaseId,
+      }, 'TRANSFER_CHANGED');
+    }
+    final afterImportGuards = await current.summary().timeout(
+      const Duration(seconds: 10),
+    );
+    expect(afterImportGuards.generation, beforeImportGuards.generation);
+    expect(afterImportGuards.total, beforeImportGuards.total);
     await oldListener.cancel();
     oldListener = null;
     await old.dispose();
@@ -75,6 +125,8 @@ Future<void> probeIosTransferTransport(
       'upload_api': capability.upload,
       'invalid_intent_rejected_without_commit': true,
       'replacement_observer_survives_old_disposal': true,
+      'private_import_control_rejects_injection': true,
+      'unclaimed_import_guard_rejected_without_commit': true,
       'background_daemon_or_library_import_acceptance': false,
     };
   } finally {

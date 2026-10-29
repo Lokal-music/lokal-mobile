@@ -125,6 +125,18 @@ private final class LokalTransferObservationLease: @unchecked Sendable {
   deinit { stop() }
 }
 
+/// Independent of foreground observation: inactive scenes retain their root
+/// client, while releasing/replacing an engine immediately cancels its import.
+private final class LokalTransferImportEngineLease: @unchecked Sendable {
+  let id: String
+  private let ownership: LokalTransferImportOwnership
+  init(_ ownership: LokalTransferImportOwnership) {
+    self.ownership = ownership
+    id = ownership.attachEngine()
+  }
+  deinit { ownership.detachEngine(id) }
+}
+
 private final class LokalTransferNotifications: @unchecked Sendable {
   // Registration occurs once during main-actor initialization. Afterwards the
   // immutable tokens are only removed when their owner is released.
@@ -140,6 +152,8 @@ final class LokalTransferBridge {
   private let channel: FlutterMethodChannel
   private let host: LokalTransferHost
   private let lease: LokalTransferObservationLease
+  private let importEngine: LokalTransferImportEngineLease
+  private var importOwner: LokalTransferImportOwnership.Owner?
   private let notifications = LokalTransferNotifications()
   private var clientID: String?
   private var wantsObservation = false
@@ -149,6 +163,7 @@ final class LokalTransferBridge {
     self.host = host
     channel = FlutterMethodChannel(name: "lokal/transfers", binaryMessenger: messenger)
     lease = LokalTransferObservationLease(host)
+    importEngine = LokalTransferImportEngineLease(host.importOwnership)
     active = UIApplication.shared.applicationState == .active
     channel.setMethodCallHandler { [weak self] call, result in
       let reply = LokalTransferReply(result)
@@ -168,17 +183,19 @@ final class LokalTransferBridge {
   private func setActive(_ value: Bool) { active = value; updateObservation() }
 
   private func updateObservation() {
-    guard active, wantsObservation else { lease.stop(); return }
+    guard active, wantsObservation, let owner = importOwner else { lease.stop(); return }
     let ownerID = lease.id
+    let ownership = host.importOwnership
     host.withRuntime({ [weak self] runtime in
-      runtime.observe(id: ownerID) { [weak self] in
+      runtime.observe(id: ownerID, when: { (try? ownership.capture(owner)) != nil }) { [weak self] in
         DispatchQueue.main.async { self?.changed() }
       }
     }, unavailable: { _ in })
   }
 
   private func changed() {
-    guard active, wantsObservation else { return }
+    guard active, wantsObservation, let owner = importOwner,
+          (try? host.importOwnership.capture(owner)) != nil else { return }
     channel.invokeMethod("changed", arguments: nil)
   }
 
@@ -190,15 +207,22 @@ final class LokalTransferBridge {
         }
         let client = try LokalTransferProtocol.client(data.data)
         if call.method == "observe" {
+          importOwner = try host.importOwnership.attachClient(engineID: importEngine.id, clientID: client.clientID)
           clientID = client.clientID
           wantsObservation = true
           updateObservation()
         } else if clientID == client.clientID {
+          if let owner = importOwner { host.importOwnership.stopClient(owner) }
+          importOwner = nil
           wantsObservation = false
           lease.stop()
         }
         reply.empty()
       } catch { reply.failure(error) }
+      return
+    }
+    if ["claimImport", "validateImport", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+      handleImport(call, reply: reply)
       return
     }
     guard let operation = LokalTransferOperation(rawValue: call.method) else { reply.unsupported(); return }
@@ -217,5 +241,37 @@ final class LokalTransferBridge {
     host.withRuntime({ runtime in
       executeTransfer(operation, payload: bytes, runtime: runtime, reply: reply)
     }, unavailable: { reply.failure($0) })
+  }
+
+  private func handleImport(_ call: FlutterMethodCall, reply: LokalTransferReply) {
+    do {
+      guard let data = call.arguments as? FlutterStandardTypedData,
+            !data.data.isEmpty, data.data.count <= 8192 else { throw LokalTransferError.invalidRecord }
+      if call.method == "claimImport" {
+        let request = try LokalTransferProtocol.importClaim(data.data)
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        // Capture before host/runtime dispatch, so a queued claim cannot cross
+        // clear, revocation, client replacement or engine disposal barriers.
+        let ticket = try host.importOwnership.capture(owner)
+        host.withRuntime({ runtime in runtime.claimImport(request, ticket: ticket) { reply.encode($0) } },
+                         unavailable: { reply.failure($0) })
+      } else {
+        let request = try LokalTransferProtocol.importLease(data.data)
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        if call.method == "releaseImport" {
+          // Stop publication before entering a potentially busy host queue.
+          try host.importOwnership.cancel(owner, jobID: request.id,
+            revision: request.revision, leaseID: request.leaseID)
+          host.withRuntime({ runtime in runtime.releaseImport(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        } else {
+          // Intentionally direct. Isar's writer must not wait behind native
+          // fsync, hashing, journal I/O or a Keychain read to check ownership.
+          try host.importOwnership.validate(owner, jobID: request.id, revision: request.revision,
+            leaseID: request.leaseID, requiresWrite: call.method == "validateImport")
+          reply.encode(.success(true))
+        }
+      }
+    } catch { reply.failure(error) }
   }
 }

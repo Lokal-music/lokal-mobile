@@ -19,6 +19,8 @@ void main() {
       textScale: 1.2,
       performanceMode: true,
       fullscreenCover: true,
+      resolutionTagsInLists: true,
+      resolutionTagsInFullPlayer: true,
     );
     expect(LokalAppearance.fromJson(look.toJson()), look);
     expect(
@@ -26,6 +28,19 @@ void main() {
       LokalAppearance.maxTextScale,
     );
     expect(LokalAppearance.fromJson(const {}), const LokalAppearance());
+    expect(
+      LokalAppearance.fromJson(const {'resolutionTagsInLists': 'yes'})
+          .resolutionTagsInLists,
+      isFalse,
+    );
+    expect(
+      const LokalAppearance().copyWith(resolutionTagsInLists: true),
+      isNot(const LokalAppearance()),
+    );
+    expect(
+      const LokalAppearance().copyWith(resolutionTagsInFullPlayer: true),
+      isNot(const LokalAppearance()),
+    );
   });
 
   test('picking a theme drops a custom accent but keeps the rest', () async {
@@ -37,12 +52,16 @@ void main() {
     await notifier.setAccent(LokalAccent.orange);
     await notifier.setTextScale(1.3);
     await notifier.setFullscreenCover(true);
+    await notifier.setResolutionTagsInLists(true);
+    await notifier.setResolutionTagsInFullPlayer(false);
     await notifier.selectTheme(LokalThemeId.forest);
     final look = container.read(lokalAppearanceProvider);
     expect(look.theme, LokalThemeId.forest);
     expect(look.accent, isNull);
     expect(look.textScale, 1.3);
     expect(look.fullscreenCover, isTrue);
+    expect(look.resolutionTagsInLists, isTrue);
+    expect(look.resolutionTagsInFullPlayer, isFalse);
   });
 
   test('the look is saved and restored', () async {
@@ -56,6 +75,12 @@ void main() {
         .read(lokalAppearanceProvider.notifier)
         .setAccent(LokalAccent.cyan);
     await first.read(lokalAppearanceProvider.notifier).setFullscreenCover(true);
+    await first
+        .read(lokalAppearanceProvider.notifier)
+        .setResolutionTagsInLists(true);
+    await first
+        .read(lokalAppearanceProvider.notifier)
+        .setResolutionTagsInFullPlayer(true);
     first.dispose();
 
     final prefs = await SharedPreferences.getInstance();
@@ -70,6 +95,8 @@ void main() {
     expect(look.theme, LokalThemeId.rosegold);
     expect(look.accent, LokalAccent.cyan);
     expect(look.fullscreenCover, isTrue);
+    expect(look.resolutionTagsInLists, isTrue);
+    expect(look.resolutionTagsInFullPlayer, isTrue);
   });
 
   test('a damaged saved value falls back to the defaults', () async {

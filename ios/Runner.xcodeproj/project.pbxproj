@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A85000000000000000000001 /* LokalTransferLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85000000000000000000002 /* LokalTransferLibrary.swift */; };
+		A84000000000000000000001 /* LokalTransferImportOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = A84000000000000000000002 /* LokalTransferImportOwnership.swift */; };
 		A83000000000000000000001 /* LokalTransferHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83000000000000000000002 /* LokalTransferHost.swift */; };
 		A82000000000000000000001 /* LokalTransferRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82000000000000000000002 /* LokalTransferRuntime.swift */; };
 		A81000000000000000000001 /* LokalTransferRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81000000000000000000002 /* LokalTransferRequest.swift */; };
@@ -61,6 +63,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A85000000000000000000002 /* LokalTransferLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Files/LokalTransferLibrary.swift"; sourceTree = "<group>"; };
+		A84000000000000000000002 /* LokalTransferImportOwnership.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Contracts/LokalTransferImportOwnership.swift"; sourceTree = "<group>"; };
 		A83000000000000000000002 /* LokalTransferHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Networking/LokalTransferHost.swift"; sourceTree = "<group>"; };
 		A82000000000000000000002 /* LokalTransferRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Networking/LokalTransferRuntime.swift"; sourceTree = "<group>"; };
 		A81000000000000000000002 /* LokalTransferRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../Transfers/Networking/LokalTransferRequest.swift"; sourceTree = "<group>"; };
@@ -162,6 +166,8 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				A10000000000000000000002 /* LokalPlatform.swift */,
 				A74000000000000000000002 /* LokalWidgetBridge.swift */,
+				A84000000000000000000002 /* LokalTransferImportOwnership.swift */,
+				A85000000000000000000002 /* LokalTransferLibrary.swift */,
 				A83000000000000000000002 /* LokalTransferHost.swift */,
 				A82000000000000000000002 /* LokalTransferRuntime.swift */,
 				A81000000000000000000002 /* LokalTransferRequest.swift */,
@@ -341,6 +347,8 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				A10000000000000000000001 /* LokalPlatform.swift in Sources */,
 				A74000000000000000000001 /* LokalWidgetBridge.swift in Sources */,
+				A84000000000000000000001 /* LokalTransferImportOwnership.swift in Sources */,
+				A85000000000000000000001 /* LokalTransferLibrary.swift in Sources */,
 				A83000000000000000000001 /* LokalTransferHost.swift in Sources */,
 				A82000000000000000000001 /* LokalTransferRuntime.swift in Sources */,
 				A81000000000000000000001 /* LokalTransferRequest.swift in Sources */,

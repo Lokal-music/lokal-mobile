@@ -854,7 +854,7 @@ class _KonnektedDiscoveryViewState
           onCustomize: (provider) => unawaited(_customize(provider)),
           onRefresh: () {
             HapticFeedback.selectionClick();
-            ref.invalidate(konnektedSpotifyDiscoveryProvider);
+            unawaited(ref.read(konnektedSpotifyDiscoveryProvider.notifier).refresh());
           },
         ),
         if (snapshot.hasError)
@@ -871,7 +871,7 @@ class _KonnektedDiscoveryViewState
           )
         else if (snapshot.isLoading && value == null)
           KonnektedLoading(label: lokalText('Building your Spotify shelves…'))
-        else if (value?.error case final error?)
+        else if (value?.error case final error? when data == null)
           Padding(
             padding: const EdgeInsets.all(20),
             child: Text(

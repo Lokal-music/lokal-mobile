@@ -1554,6 +1554,32 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
     );
   }
 
+  String _fullPlayerAudioLabel(Song song, LokalQualityTier tier) {
+    final preferResolution = ref.watch(lokalAppearanceProvider.select(
+      (appearance) => appearance.resolutionTagsInFullPlayer,
+    ));
+    if (preferResolution) {
+      final resolution = lokalSongResolutionLabel(song);
+      if (resolution != null) return resolution;
+    }
+    return switch (tier) {
+      LokalQualityTier.hiRes => 'HI-RES LOSSLESS',
+      LokalQualityTier.lossless => 'LOSSLESS',
+      LokalQualityTier.high => 'HIGH',
+      LokalQualityTier.low => 'LOW',
+      LokalQualityTier.unknown =>
+        (song.sourcePackage == 'konnekted.progressive' ||
+         song.sourcePackage == 'konnekted.morneye-live')
+          ? (catalogueStreamTierLabel(
+              quality: song.resolution,
+              codec: song.fileType,
+              bitDepth: song.bitDepth,
+              sampleRate: song.sampleRate,
+            ) ?? 'UNKNOWN')
+          : 'UNKNOWN',
+    };
+  }
+
   Widget _panelStage(Song song, bool compact, {bool fullCover = false}) {
     final titleSize = compact ? 25.0 : 29.0;
     return LayoutBuilder(
@@ -1708,29 +1734,25 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                         ),
                         borderRadius: BorderRadius.circular(5),
                       ),
-                      child: Text(
-                        switch (tier) {
-                          LokalQualityTier.hiRes => 'HI-RES LOSSLESS',
-                          LokalQualityTier.lossless => 'LOSSLESS',
-                          LokalQualityTier.high => 'HIGH',
-                          LokalQualityTier.low => 'LOW',
-                          LokalQualityTier.unknown =>
-                              (song.sourcePackage == 'konnekted.progressive' ||
-                               song.sourcePackage == 'konnekted.morneye-live')
-                                  ? (catalogueStreamTierLabel(
-                                        quality: song.resolution,
-                                        codec: song.fileType,
-                                        bitDepth: song.bitDepth,
-                                        sampleRate: song.sampleRate,
-                                      ) ?? 'UNKNOWN')
-                                  : 'UNKNOWN',
-                        },
-                        style: const TextStyle(
-                          fontFamily: _font,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .6,
-                          color: FullPlayerVisuals.primaryText,
+                      child: Tooltip(
+                        message: _fullPlayerAudioLabel(song, tier),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: (MediaQuery.sizeOf(context).width * .52)
+                                .clamp(110.0, 210.0).toDouble(),
+                          ),
+                          child: Text(
+                            _fullPlayerAudioLabel(song, tier),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: _font,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: .6,
+                              color: FullPlayerVisuals.primaryText,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -1808,6 +1830,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       onDoubleTap: current && progress == 0 && !_usesEmbeddedVideo ? _likeFromArtwork : null,
       child: LokalPlayerArtwork(
         enabled: current && !_usesEmbeddedVideo,
+        expandedRadius: lerpDouble(20, 12, progress)!,
         child: SizedBox(
           width: side,
           height: side,
@@ -1834,7 +1857,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                             borderRadius: _usesEmbeddedVideo ? BorderRadius.zero : BorderRadius.circular(
                               lerpDouble(
                                 21,
-                                28,
+                                20,
                                 Curves.easeInOutCubic.transform(
                                   animation.value,
                                 ),
