@@ -26,14 +26,17 @@ final class LokalTransferLibrary: @unchecked Sendable {
   private let testingBoundary: (@Sendable (String) -> Void)?
 
   init(root: URL, testingBoundary: (@Sendable (String) -> Void)? = nil) throws {
+    testingBoundary?("initializeRoot")
     guard root.isFileURL else { throw LokalTransferError.unsafeFile }
     let parent = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard parent >= 0 else { throw LokalTransferError.posix("open_music_root", errno) }
     if mkdirat(parent, Self.directoryName, 0o700) != 0 && errno != EEXIST {
       close(parent); throw LokalTransferError.posix("create_copy_directory", errno)
     }
+    testingBoundary?("initializeDirectory")
     let directory = openat(parent, Self.directoryName, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard directory >= 0 else { close(parent); throw LokalTransferError.unsafeFile }
+    testingBoundary?("initializeWriter")
     let writer = openat(directory, ".lokal-import.lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
     var info = stat()
     guard writer >= 0, fstat(writer, &info) == 0,
@@ -71,12 +74,15 @@ final class LokalTransferLibrary: @unchecked Sendable {
   }
 
   private func checkRoot() throws {
+    testingBoundary?("visibleRoot")
     let visibleParent = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard visibleParent >= 0 else { throw LokalTransferError.unsafeFile }
     defer { close(visibleParent) }
+    testingBoundary?("visibleDirectory")
     let visibleDirectory = openat(visibleParent, Self.directoryName, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard visibleDirectory >= 0 else { throw LokalTransferError.unsafeFile }
     defer { close(visibleDirectory) }
+    testingBoundary?("rootAndWriterIdentity")
     var held = stat(), visible = stat(), heldParent = stat(), currentParent = stat(), lockInfo = stat(), lockPath = stat()
     guard fstat(directory, &held) == 0, fstat(visibleDirectory, &visible) == 0,
           fstat(parent, &heldParent) == 0, fstat(visibleParent, &currentParent) == 0,
@@ -96,12 +102,14 @@ final class LokalTransferLibrary: @unchecked Sendable {
   private func existing(_ job: LokalTransferJob, name: String, part: String,
                         cancellation: LokalTransferCopyCancellation) throws -> LokalTransferLibraryReceipt? {
     try cancellation.check()
+    testingBoundary?("existingOpen")
     let file = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
     guard file >= 0 else {
       if errno == ENOENT { return nil }
       throw LokalTransferError.unsafeFile
     }
     defer { close(file) }
+    testingBoundary?("existingStat")
     var before = stat()
     guard fstat(file, &before) == 0, before.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else {
       throw LokalTransferError.unsafeFile
@@ -110,6 +118,7 @@ final class LokalTransferLibrary: @unchecked Sendable {
     // between publication and unlinking its own part; recover only that exact
     // same-inode pair. Unrelated hard links remain refused.
     if before.st_nlink == 2 {
+      testingBoundary?("recoverPublishedLink")
       var partial = stat()
       guard fstatat(directory, part, &partial, AT_SYMLINK_NOFOLLOW) == 0,
             partial.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), partial.st_nlink == 2,
@@ -122,11 +131,14 @@ final class LokalTransferLibrary: @unchecked Sendable {
           Int64(before.st_size) == job.receivedBytes, before.st_size <= LokalTransferFiles.maximumBytes else {
       throw LokalTransferError.checksumMismatch
     }
+    testingBoundary?("existingHash")
     let digest = try LokalTransferFiles.digest(file, checkCancellation: cancellation.check)
+    testingBoundary?("existingAfterHash")
     var after = stat(), named = stat()
     guard fstat(file, &after) == 0, after.st_nlink == 1, after.st_size == before.st_size,
           fstatat(directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
           named.st_ino == after.st_ino, named.st_dev == after.st_dev else { throw LokalTransferError.unsafeFile }
+    testingBoundary?("existingTimestamp")
     #if canImport(Darwin)
     guard before.st_mtimespec.tv_sec == after.st_mtimespec.tv_sec, before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec,
           before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec, before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else {
@@ -153,6 +165,7 @@ final class LokalTransferLibrary: @unchecked Sendable {
     let name = try Self.fileName(job), part = "." + name + ".part"
     mutex.lock()
     defer { mutex.unlock() }
+    testingBoundary?("writerLock")
     while flock(writer, LOCK_EX) != 0 {
       if errno != EINTR { throw LokalTransferError.posix("lock_library_copy", errno) }
     }
@@ -160,11 +173,13 @@ final class LokalTransferLibrary: @unchecked Sendable {
     try cancellation.check()
     try checkRoot()
     if let receipt = try existing(job, name: name, part: part, cancellation: cancellation) { return receipt }
+    testingBoundary?("discardInterruptedPart")
     var oldPart = stat()
     if fstatat(directory, part, &oldPart, AT_SYMLINK_NOFOLLOW) == 0 {
       guard oldPart.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), oldPart.st_nlink == 1,
             unlinkat(directory, part, 0) == 0 else { throw LokalTransferError.unsafeFile }
     } else if errno != ENOENT { throw LokalTransferError.unsafeFile }
+    testingBoundary?("createExclusivePart")
     let output = openat(directory, part, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
     guard output >= 0 else { throw LokalTransferError.posix("create_library_part", errno) }
     defer {
@@ -178,6 +193,7 @@ final class LokalTransferLibrary: @unchecked Sendable {
       [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
       ofItemAtPath: root.appendingPathComponent(Self.directoryName).appendingPathComponent(part).path)
     #endif
+    testingBoundary?("copyOwnedBytes")
     _ = try files.copyForLibrary(job, to: output, checkCancellation: {
       try cancellation.check()
       self.testingBoundary?("copyCheckpoint")
@@ -189,6 +205,7 @@ final class LokalTransferLibrary: @unchecked Sendable {
       guard linkat(directory, part, directory, name, 0) == 0 else { throw LokalTransferError.unsafeFile }
     }
     testingBoundary?("afterPublication")
+    testingBoundary?("retirePublishedPart")
     guard unlinkat(directory, part, 0) == 0 else { throw LokalTransferError.posix("retire_library_part", errno) }
     try syncDirectory()
     testingBoundary?("afterPromotion")

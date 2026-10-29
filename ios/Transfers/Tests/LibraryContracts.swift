@@ -1,5 +1,17 @@
 import Foundation
 
+/// Finite implementation boundary names only: no paths, music or credentials.
+final class LibraryChildTrace: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stage = "start"
+  func record(_ value: String) {
+    lock.lock(); defer { lock.unlock() }; stage = value
+  }
+  var last: String {
+    lock.lock(); defer { lock.unlock() }; return stage
+  }
+}
+
 private final class CopyCheckpoint: @unchecked Sendable {
   private let lock = NSLock()
   private var checks = 0
@@ -141,10 +153,14 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
 
   let concurrentRoot = try music("concurrent")
   let children = try (0..<6).map { _ in try child(concurrentRoot) }
+  var statuses: [Int32] = []
   for process in children {
     process.waitUntilExit()
-    try require(process.terminationStatus == 0, "concurrent promotion succeeds")
+    statuses.append(process.terminationStatus)
   }
+  // Drain every child before reporting failure. Otherwise parent cleanup can
+  // remove the fixture beneath the other writers and mask the original error.
+  try require(statuses.allSatisfy { $0 == 0 }, "six concurrent promotions succeed; statuses \(statuses)")
   let concurrent = try LokalTransferLibrary(root: concurrentRoot).install(job, from: files)
   let names = try manager.contentsOfDirectory(atPath: concurrentRoot.appendingPathComponent(LokalTransferLibrary.directoryName).path)
   try require(names.filter { !$0.hasPrefix(".") } == [URL(fileURLWithPath: concurrent.relativePath).lastPathComponent],

@@ -82,8 +82,18 @@ do {
     let root = URL(fileURLWithPath: CommandLine.arguments[3])
     let job = try LokalTransferJob.decodeDocument(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[4])))
     let boundary = CommandLine.arguments[5]
-    let library = try LokalTransferLibrary(root: root, testingBoundary: { if $0 == boundary { exit(96) } })
-    _ = try library.install(job, from: LokalTransferFiles(container: container))
+    let trace = LibraryChildTrace()
+    do {
+      let library = try LokalTransferLibrary(root: root, testingBoundary: {
+        trace.record($0)
+        if $0 == boundary { exit(96) }
+      })
+      let files = try LokalTransferFiles(container: container)
+      _ = try library.install(job, from: files)
+    } catch {
+      FileHandle.standardError.write(Data("Native library child failed at \(trace.last): \(error)\n".utf8))
+      throw error
+    }
     exit(0)
   }
   if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--probe-write-lock" {
