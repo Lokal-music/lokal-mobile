@@ -54,7 +54,7 @@ class DiscoveryTrack {
 
   /// Explicit mobile 'Play Atmos' request; never inferred from a catalogue flag.
   final bool atmosRequested;
-  /// A verified JOC download can be saved without an Atmos playback device.
+  /// A verified JOC or AC-4 download can be saved without a native decoder.
   final bool atmosDownload;
 
   /// Provider-reported quality, not a verified active audio output.
