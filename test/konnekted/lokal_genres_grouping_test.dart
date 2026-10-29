@@ -22,9 +22,9 @@ Song track(String id, String? genre, {String? path, DateTime? added,
 
 void main() {
   test('desktop aliases and subgenres become one broad genre', () {
-    expect(lokalNormalizeGenreName('VGM'), 'Video Game Music');
-    expect(lokalNormalizeGenreName('Video Game Soundtrack'), 'Video Game Music');
-    expect(lokalNormalizeGenreName('video game'), 'Video Game Music');
+    expect(lokalNormalizeGenreName('VGM'), 'Soundtrack');
+    expect(lokalNormalizeGenreName('Video Game Soundtrack'), 'Soundtrack');
+    expect(lokalNormalizeGenreName('video game'), 'Soundtrack');
     expect(lokalNormalizeGenreName('Original Soundtrack'), 'Soundtrack');
     expect(lokalNormalizeGenreName('EDM'), 'Electronic');
     expect(lokalNormalizeGenreName('Techno'), 'Electronic');
@@ -51,7 +51,7 @@ void main() {
     final song = track('raw', 'VGM; Video Game Soundtrack / Rock');
     expect(lokalSplitGenres(song.genre),
         ['VGM', 'Video Game Soundtrack', 'Rock']);
-    expect(lokalTrackGenres(song), ['Video Game Music', 'Rock']);
+    expect(lokalTrackGenres(song), ['Soundtrack', 'Rock']);
     expect(song.genre, 'VGM; Video Game Soundtrack / Rock');
   });
 
@@ -73,7 +73,7 @@ void main() {
     ];
     final summary = lokalGenreSummary(items);
     final byName = {for (final g in summary.genres) g.name: g};
-    expect(byName['Video Game Music']!.songs.length, 2);
+    expect(byName['Soundtrack']!.songs.length, 2);
     expect(byName['Rock']!.songs.length, 3);
     expect(byName['Electronic']!.songs.length, 3);
     expect(byName['Other']!.songs.length, 2);
@@ -85,10 +85,43 @@ void main() {
         ['Classical']);
     expect(summary.genres.map((g) => g.name).toList(),
         ['Electronic', 'Rock', 'Jazz', 'Other',
-         'Video Game Music', 'Classical']);
+         'Soundtrack', 'Classical']);
     // Each category is populated from the same recordings as the cards.
     expect(byName['Rock']!.songs.map((s) => s.id), ['3', '4', '5']);
     expect(items[0].genre, 'VGM');
+  });
+
+  test('VGM and every soundtrack alias share one canonical group', () {
+    for (final raw in [
+      'VGM',
+      'Video Game Music',
+      'Video Game Soundtrack',
+      'Game OST',
+      'Original Soundtrack',
+      'Film Score',
+      'Soundtrack',
+      'game music score',
+    ]) {
+      expect(lokalNormalizeGenreName(raw), 'Soundtrack', reason: raw);
+    }
+    expect(lokalNormalizeGenreName('anime soundtrack'), 'Anime');
+
+    final both = track('both', 'VGM / Original Soundtrack; Video Game Music');
+    expect(lokalTrackGenres(both), ['Soundtrack'],
+        reason: 'A multi-tagged track must not be counted three times');
+    final library = [
+      both,
+      track('game', 'Video Game Music'),
+      track('film', 'Original Motion Picture Soundtrack'),
+      track('score', 'Film Score'),
+    ];
+    final summary = lokalGenreSummary(library);
+    expect(summary.genres.map((genre) => genre.name), ['Soundtrack']);
+    expect(summary.genres.single.songs.map((song) => song.id),
+        ['both', 'game', 'film', 'score']);
+    expect(summary.noGenre, isEmpty);
+    expect(both.genre, 'VGM / Original Soundtrack; Video Game Music',
+        reason: 'Browsing must never rewrite the file metadata');
   });
 
   test('rare unknown tag becomes No genre when Other cannot reach two tracks', () {
