@@ -234,13 +234,13 @@ class LokalQualityPill extends ConsumerWidget {
 }
 
 
-/// Dolby Atmos is a Tidal catalogue mode, NOT a PCM quality tier.
+/// Dolby Atmos is a catalogue mode, NOT a PCM quality tier.
 /// In particular, this never asserts that the current output is Atmos.
 class LokalAtmosPill extends StatelessWidget {
   const LokalAtmosPill({super.key});
 
   static const String description =
-      "Tidal offers an Atmos version. Lokal requests the original E-AC-3 JOC stream when Android's native decoder or passthrough route supports it.";
+      "An original Dolby encoded source may be available. Tidal uses E-AC-3 JOC; Amazon offers AC-4. Availability and spatial output depend on the source and native decoder.";
 
   @override
   Widget build(BuildContext context) => Tooltip(
