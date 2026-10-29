@@ -172,7 +172,7 @@ List<LokalCatalogueAlbum> parseYoutubeArtistChannelReleases(
     releases.add(LokalCatalogueAlbum(
       title: album,
       artist: song.artist,
-      artwork: song.artwork ?? '',
+      artwork: song.artworkUrl,
       releaseKind: !cataloguePrimaryArtist(song.artist, artist)
           ? LokalReleaseKind.feature : null,
     ));

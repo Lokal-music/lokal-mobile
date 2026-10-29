@@ -77,6 +77,67 @@ void main() {
     expect(albums.first.url, contains('MPREfirst'));
   });
 
+  test('album inferred from a YouTube song preserves the track artwork URL', () {
+    final releases = parseYoutubeArtistChannelReleases({
+      'contents': [
+        {
+          'musicResponsiveListItemRenderer': {
+            'flexColumns': [
+              {
+                'musicResponsiveListItemFlexColumnRenderer': {
+                  'text': {
+                    'runs': [
+                      {
+                        'text': 'Bonus track',
+                        'navigationEndpoint': {
+                          'watchEndpoint': {'videoId': 'AbCdEfGhI12'},
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+              {
+                'musicResponsiveListItemFlexColumnRenderer': {
+                  'text': {
+                    'runs': [
+                      {
+                        'text': 'Asake',
+                        'navigationEndpoint': {
+                          'browseEndpoint': {'browseId': 'UCabcdefghijklmnop'},
+                        },
+                      },
+                      {'text': ' • '},
+                      {
+                        'text': 'Bonus EP',
+                        'navigationEndpoint': {
+                          'browseEndpoint': {'browseId': 'MPREbonus'},
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            'thumbnail': {
+              'musicThumbnailRenderer': {
+                'thumbnail': {
+                  'thumbnails': [
+                    {'url': 'https://example.com/bonus-cover.jpg'},
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ],
+    }, 'Asake');
+
+    expect(releases, hasLength(1));
+    expect(releases.single.title, 'Bonus EP');
+    expect(releases.single.artwork, 'https://example.com/bonus-cover.jpg');
+  });
+
   test('guest artist channel follows its releases shelf without login', () async {
     final seen = <String>[];
     final client = MockClient((request) async {
