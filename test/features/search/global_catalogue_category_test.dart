@@ -1,3 +1,7 @@
+import 'package:flick/features/discovery/discovery_artwork.dart';
+import 'package:flick/features/discovery/discovery_http.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/search/models/search_category.dart';
@@ -49,6 +53,19 @@ class _Catalogue extends GlobalCatalogueSearchService {
   }
 }
 
+// Keep artwork fallbacks deterministic: tests must not depend on public CDNs.
+final _quietArtwork = [
+  discoveryLocalArtworkProvider.overrideWithValue(DiscoveryLocalArtwork.empty),
+  discoveryArtworkResolverProvider.overrideWithValue(
+    DiscoveryArtworkResolver(
+      DiscoveryHttp(MockClient((_) async => http.Response(
+        '{"data":[],"results":[]}', 200,
+        headers: {'content-type': 'application/json'},
+      ))),
+    ),
+  ),
+];
+
 Widget _app(ProviderContainer container, Widget child) =>
     UncontrolledProviderScope(
       container: container,
@@ -67,6 +84,7 @@ void main() {
         final api = _Catalogue(catalogue);
         final c = ProviderContainer(
           overrides: [
+            ..._quietArtwork,
             globalCatalogueSearchServiceProvider.overrideWithValue(api),
           ],
         );
@@ -83,6 +101,14 @@ void main() {
         await tester.pumpWidget(section(true));
         await tester.pumpAndSettle();
         expect(find.text('Wanted song'), findsOneWidget);
+        final songArtwork = tester.widget<DiscoveryArtwork>(
+          find.byType(DiscoveryArtwork).first,
+        );
+        expect(songArtwork.kind, DiscoveryArtworkKind.track);
+        expect(songArtwork.title, 'Wanted song');
+        expect(songArtwork.artist, 'Singer');
+        expect(songArtwork.url, isEmpty);
+
         expect(find.text('Online songs'), findsOneWidget);
         expect(find.text('$catalogue'), findsNothing);
         expect(find.text('${catalogue == 'spotify' ? 'Spotify' : 'Apple Music'} catalogue · plays through your configured sources'), findsOneWidget);
@@ -103,6 +129,13 @@ void main() {
         expect(find.text('Global'), findsOneWidget);
         expect(find.text('Online songs'), findsNothing);
         expect(find.text('Unrelated album'), findsOneWidget);
+        final albumArtwork = tester.widgetList<DiscoveryArtwork>(
+          find.byType(DiscoveryArtwork),
+        ).where((artwork) => artwork.kind == DiscoveryArtworkKind.album);
+        expect(albumArtwork, hasLength(1));
+        expect(albumArtwork.single.title, 'Unrelated album');
+        expect(albumArtwork.single.artist, 'Other');
+
         expect(find.text('Unrelated artist'), findsOneWidget);
         await tester.pumpWidget(section(true));
         await tester.pumpAndSettle();
@@ -116,6 +149,7 @@ void main() {
   ) async {
     final c = ProviderContainer(
       overrides: [
+        ..._quietArtwork,
         globalCatalogueSearchServiceProvider.overrideWithValue(
           _Catalogue('apple', emptySongs: true),
         ),
@@ -139,6 +173,7 @@ void main() {
       final api = _Catalogue('apple');
       final c = ProviderContainer(
         overrides: [
+          ..._quietArtwork,
           globalCatalogueSearchServiceProvider.overrideWithValue(api),
         ],
       );
@@ -169,6 +204,7 @@ void main() {
   );
 testWidgets('Online artists and albums use selected catalogue subtitles and artist portrait widgets', (tester) async {
   final c = ProviderContainer(overrides: [
+    ..._quietArtwork,
     globalCatalogueSearchServiceProvider.overrideWithValue(_Catalogue('spotify')),
   ]);
   addTearDown(c.dispose);
