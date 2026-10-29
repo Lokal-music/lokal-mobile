@@ -222,6 +222,7 @@ void main() {
 
     test('a download that goes quiet is dropped and tried again', () async {
       stallRequests = 0;
+      final receivedBytes = <int>[];
       final host = MorneyeHost(
         addon: MorneyeAddonInfo(
           key: namespace,
@@ -238,6 +239,7 @@ void main() {
         native: native,
         root: p.join(dir.path, 'files'),
         stallTimeout: const Duration(milliseconds: 300),
+        onByteProgress: receivedBytes.add,
       );
       final result = await host.call('file.download', [
         '$base/stall',
@@ -246,6 +248,8 @@ void main() {
       ], (descriptor, args, {strict = false}) async {});
       expect(result, containsPair('success', true));
       expect(result, containsPair('attempts', 2));
+      expect(receivedBytes.reduce((sum, bytes) => sum + bytes), 12,
+          reason: 'watchdog activity must count bytes before a retry, not only a final percent');
       expect(File(p.join(dir.path, 'files', 'song.flac')).readAsBytesSync(), [
         1,
         2,
