@@ -326,6 +326,7 @@ class MorneyeHost {
     this.isrcLookup,
     this.onProgress,
     this.onTransfer,
+    this.onByteProgress,
     this.appVersion = '1.0.0',
     this.stallTimeout = const Duration(seconds: 30),
   }) : root = p.normalize(p.absolute(root)),
@@ -345,6 +346,9 @@ class MorneyeHost {
   /// Download progress: a percent and/or a status message.
   final void Function({double? percent, String? message})? onProgress;
   final void Function(MorneyeTransfer transfer)? onTransfer;
+  /// Host-observed bytes, including unfinished segments and retries.
+  /// Independent of UI percent, live playback or post-processing hooks.
+  final void Function(int bytes)? onByteProgress;
   final String appVersion;
 
   /// How long a download may go without a byte before its connection is
@@ -528,6 +532,7 @@ class MorneyeHost {
           if (written > _maxAudio) {
             throw StateError('Addon audio exceeds the file size limit');
           }
+          if (chunk.isNotEmpty) onByteProgress?.call(chunk.length);
           live?.call(
             MorneyeTransfer(
               part: part,
