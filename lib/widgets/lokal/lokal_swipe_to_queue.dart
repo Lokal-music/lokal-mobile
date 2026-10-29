@@ -4,40 +4,40 @@ import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/core/utils/app_haptics.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/models/song.dart';
+import 'package:flick/providers/app_preferences_provider.dart';
 import 'package:flick/providers/player_provider.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Spotify-style swipe to the right on a track row to append it to the queue.
-///
-/// Keeps the row in place: a drag reveals the queue icon, crossing the
-/// threshold gives one selection haptic, and releasing animates the row back.
-/// Horizontal gestures compete normally with vertical list scrolling and do
-/// not replace the row's tap or long-press actions.
-class LokalSwipeToQueue extends StatefulWidget {
+/// Shared non-dismissive song-row gestures: right appends to queue, left
+/// schedules Play next. A persistent setting reverses both directions.
+/// The gesture preserves normal taps, long presses, and vertical scrolling.
+class LokalSwipeToQueue extends ConsumerStatefulWidget {
   const LokalSwipeToQueue({
     super.key,
     required this.child,
     this.song,
     this.onQueue,
+    this.onNext,
     this.enabled = true,
-  }) : assert(song != null || onQueue != null);
+  }) : assert(song != null || onQueue != null || onNext != null);
 
   final Widget child;
   final Song? song;
 
-  /// For online search, whose pending tracks require source verification.
-  /// Otherwise [song] is appended using the normal player provider.
+  /// Online sources supply their own queue operations so pending tracks keep
+  /// source verification and correct playback context.
   final FutureOr<void> Function()? onQueue;
+  final FutureOr<void> Function()? onNext;
   final bool enabled;
 
   @override
-  State<LokalSwipeToQueue> createState() => _LokalSwipeToQueueState();
+  ConsumerState<LokalSwipeToQueue> createState() => _LokalSwipeToQueueState();
 }
 
-class _LokalSwipeToQueueState extends State<LokalSwipeToQueue> {
+class _LokalSwipeToQueueState extends ConsumerState<LokalSwipeToQueue> {
   static const double _threshold = 72;
   static const double _maxTravel = 104;
 
@@ -46,19 +46,23 @@ class _LokalSwipeToQueueState extends State<LokalSwipeToQueue> {
   bool _thresholdReached = false;
   bool _queueing = false;
 
+  bool _canPerform(bool next) =>
+      next ? widget.onNext != null || widget.song != null
+           : widget.onQueue != null || widget.song != null;
+
   void _start(DragStartDetails details) {
     setState(() => _dragging = true);
   }
 
   void _update(DragUpdateDetails details) {
-    final next = (_drag + details.delta.dx).clamp(0.0, _maxTravel);
-    if (next == _drag) return;
-    if (next >= _threshold && !_thresholdReached) {
+    final travel = (_drag + details.delta.dx).clamp(-_maxTravel, _maxTravel);
+    if (travel == _drag) return;
+    if (travel.abs() >= _threshold && !_thresholdReached) {
       AppHaptics.selection();
     }
     setState(() {
-      _drag = next;
-      _thresholdReached = next >= _threshold;
+      _drag = travel;
+      _thresholdReached = travel.abs() >= _threshold;
     });
   }
 
@@ -72,38 +76,37 @@ class _LokalSwipeToQueueState extends State<LokalSwipeToQueue> {
   }
 
   void _end(DragEndDetails details) {
-    final shouldQueue =
-        _drag >= _threshold ||
-        (_drag >= 36 && details.primaryVelocity != null &&
-            details.primaryVelocity! > 900);
+    final velocity = details.primaryVelocity ?? 0;
+    final right = _drag > 0;
+    final commit = _drag.abs() >= _threshold ||
+        (_drag.abs() >= 36 && velocity.abs() > 900 && velocity * _drag > 0);
+    final reversed = ref.read(appPreferencesProvider).swipeQueueDirectionsReversed;
     _reset();
-    if (shouldQueue) unawaited(_queue());
+    if (commit) unawaited(_perform(next: right == reversed));
   }
 
-  Future<void> _queue() async {
-    if (!widget.enabled || _queueing) return;
+  Future<void> _perform({required bool next}) async {
+    if (!widget.enabled || _queueing || !_canPerform(next)) return;
     _queueing = true;
     try {
-      if (widget.onQueue case final callback?) {
+      final callback = next ? widget.onNext : widget.onQueue;
+      if (callback != null) {
         await callback();
       } else if (widget.song case final song?) {
-        await ProviderScope.containerOf(
-          context,
-          listen: false,
-        ).read(playerProvider.notifier).addToQueue(song);
+        final player = ref.read(playerProvider.notifier);
+        final index = await player.addToQueue(song);
+        if (next && index > 0) await player.moveQueueItemToNext(index);
         if (mounted) {
-          LokalToast.show(
-            context,
-            lokalText(
-              'Added “{arg0}” to the queue',
-              args: {'arg0': song.title},
-            ),
-          );
+          LokalToast.show(context, next
+              ? lokalText('“{arg0}” plays next', args: {'arg0': song.title})
+              : lokalText('Added “{arg0}” to the queue', args: {'arg0': song.title}));
         }
       }
     } catch (_) {
       if (mounted) {
-        LokalToast.show(context, lokalText('Couldn’t add this song to the queue.'));
+        LokalToast.show(context, next
+            ? lokalText('Couldn’t play this song next.')
+            : lokalText('Couldn’t add this song to the queue.'));
       }
     } finally {
       _queueing = false;
@@ -113,9 +116,20 @@ class _LokalSwipeToQueueState extends State<LokalSwipeToQueue> {
   @override
   Widget build(BuildContext context) {
     final accent = context.lokal.accent;
+    final reversed = ref.watch(appPreferencesProvider.select(
+        (prefs) => prefs.swipeQueueDirectionsReversed));
+    final rightMeansNext = reversed;
+
     return Semantics(
       customSemanticsActions: widget.enabled
-          ? {CustomSemanticsAction(label: l10n.addToQueue2): () => unawaited(_queue())}
+          ? {
+              if (_canPerform(false))
+                CustomSemanticsAction(label: l10n.addToQueue2):
+                    () => unawaited(_perform(next: false)),
+              if (_canPerform(true))
+                CustomSemanticsAction(label: l10n.playNext):
+                    () => unawaited(_perform(next: true)),
+            }
           : const {},
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -130,36 +144,48 @@ class _LokalSwipeToQueueState extends State<LokalSwipeToQueue> {
                 ? Duration.zero
                 : const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
-            builder: (context, offset, child) => Stack(
-              children: [
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: offset,
-                  child: ClipRect(
-                    child: ColoredBox(
-                      color: accent.withValues(alpha: 0.16),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 23),
-                          child: Icon(
-                            Icons.queue_music_rounded,
-                            size: 27,
-                            color: accent,
+            builder: (context, offset, child) {
+              // Use the animated position, not the reset drag target, so the
+              // action icon does not flip while the row springs back.
+              final directionNext =
+                  offset > 0 ? rightMeansNext : !rightMeansNext;
+              return Stack(
+                children: [
+                  if (offset != 0)
+                    Positioned(
+                      left: offset > 0 ? 0 : null,
+                      right: offset < 0 ? 0 : null,
+                      top: 0,
+                      bottom: 0,
+                      width: offset.abs(),
+                      child: ClipRect(
+                        child: ColoredBox(
+                          color: accent.withValues(alpha: 0.16),
+                          child: Align(
+                            alignment: offset > 0
+                                ? Alignment.centerLeft
+                                : Alignment.centerRight,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 23),
+                              child: Icon(
+                                directionNext
+                                    ? Icons.queue_play_next_rounded
+                                    : Icons.queue_music_rounded,
+                                size: 27,
+                                color: accent,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
+                  Transform.translate(
+                    offset: Offset(offset, 0),
+                    child: child,
                   ),
-                ),
-                Transform.translate(
-                  offset: Offset(offset, 0),
-                  child: child,
-                ),
-              ],
-            ),
+                ],
+              );
+            },
             child: widget.child,
           ),
         ),

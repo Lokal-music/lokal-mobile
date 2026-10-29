@@ -111,7 +111,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Toutes les sources'), findsNothing);
       expect(find.text('En ligne'), findsOneWidget);
-      expect(find.text('Albums en ligne'), findsOneWidget);
+      expect(find.text('Albums en ligne'), findsNothing);
+      expect(find.text('Search online catalogues and playback sources'), findsNothing);
       await tester.tap(find.text('Recherche impossible. Réessayer'));
       await tester.pumpAndSettle();
       expect(api.refreshes, [false, true]);

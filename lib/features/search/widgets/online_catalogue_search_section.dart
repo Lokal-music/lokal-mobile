@@ -85,18 +85,6 @@ class _OnlineCatalogueSearchSectionState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            lokalText(
-              widget.category == SearchCategory.albums
-                  ? 'Online albums'
-                  : 'Online artists',
-            ),
-            style: TextStyle(
-              color: t.text,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
           FutureBuilder<GlobalCatalogueMatches>(
             future: _results,
             builder: (context, snapshot) {
@@ -119,15 +107,10 @@ class _OnlineCatalogueSearchSectionState
                   const GlobalCatalogueMatches(catalogue: 'apple');
               final rows = widget.category == SearchCategory.albums
                   ? data.albums : data.artists;
-              final subtitle = (data.catalogue == 'spotify'
-                  ? 'Spotify' : 'Apple Music') +
-                  ' catalogue · plays through your configured sources';
               if (rows.isEmpty) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(subtitle, style: TextStyle(color: t.muted, fontSize: 11)),
-                    const SizedBox(height: 8),
                     if (data.notice != null)
                       Text(data.notice!, style: TextStyle(color: t.muted, fontSize: 11)),
                     Text(lokalText(widget.category == SearchCategory.albums
@@ -139,7 +122,6 @@ class _OnlineCatalogueSearchSectionState
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(subtitle, style: TextStyle(color: t.muted, fontSize: 11)),
                   if (data.notice != null)
                     Text(data.notice!, style: TextStyle(color: t.muted, fontSize: 11)),
                   const SizedBox(height: 8),

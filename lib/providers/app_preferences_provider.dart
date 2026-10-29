@@ -179,6 +179,12 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
     await ref.read(appPreferencesServiceProvider).setSwipeActionsEnabled(value);
   }
 
+  Future<void> setSwipeQueueDirectionsReversed(bool value) async {
+    if (state.swipeQueueDirectionsReversed == value) return;
+    state = state.copyWith(swipeQueueDirectionsReversed: value);
+    await ref.read(appPreferencesServiceProvider).setSwipeQueueDirectionsReversed(value);
+  }
+
   Future<void> setFavoriteRemovalMode(String value) async {
     if (state.favoriteRemovalMode == value) return;
     state = state.copyWith(favoriteRemovalMode: value);

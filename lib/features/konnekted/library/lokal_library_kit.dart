@@ -467,6 +467,17 @@ class LokalTrackRow extends ConsumerWidget {
     return LokalSwipeToQueue(
       song: song,
       enabled: available,
+      onNext: needsStreamReResolution(song)
+          ? () async {
+              final player = ref.read(playerProvider.notifier);
+              final index = await player.addToQueue(replayableStreamSong(song));
+              if (index > 0) await player.moveQueueItemToNext(index);
+              if (context.mounted) {
+                LokalToast.show(context, lokalText('“{arg0}” plays next',
+                    args: {'arg0': song.title}));
+              }
+            }
+          : null,
       onQueue: needsStreamReResolution(song)
           ? () async {
               await ref.read(playerProvider.notifier)

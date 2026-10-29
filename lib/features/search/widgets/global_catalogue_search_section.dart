@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/l10n/l10n.dart';
@@ -12,6 +13,13 @@ import 'package:flick/services/online_playlist_reference.dart';
 import 'package:flick/features/konnekted/library/lokal_music_detail_page.dart';
 import 'package:flick/widgets/common/cached_image_widget.dart';
 import 'package:flick/features/discovery/discovery_artwork.dart';
+import 'package:flick/features/discovery/discovery_models.dart';
+import 'package:flick/features/discovery/lastfm_discovery.dart';
+import 'package:flick/features/konnekted/konnekted_discovery.dart';
+import 'package:flick/features/search/widgets/online_result_actions.dart';
+import 'package:flick/features/search/online_song_save.dart';
+import 'package:flick/features/search/library_download.dart';
+import 'package:flick/widgets/lokal/lokal_swipe_to_queue.dart';
 import 'package:flick/widgets/lokal/lokal_toast.dart';
 import 'artist_search_portrait.dart';
 
@@ -36,6 +44,7 @@ class _GlobalCatalogueSearchSectionState
   late Future<GlobalCatalogueMatches> _results;
   bool _expanded = false;
   bool _starting = false;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -104,6 +113,97 @@ class _GlobalCatalogueSearchSectionState
     }
   }
 
+  /// Global catalogue entries carry metadata only. Enqueue the same pending
+  /// song used for direct playback; source priority resolves it when needed.
+  Future<void> _enqueue(GlobalCatalogueSong match, {required bool next}) async {
+    if (ref.read(playerProvider).currentSong == null) {
+      await _play(match, [match]);
+      return;
+    }
+    try {
+      final player = ref.read(playerProvider.notifier);
+      final index = await player.addToQueue(_pending(match));
+      if (next && index > 0) await player.moveQueueItemToNext(index);
+      if (mounted) {
+        LokalToast.show(context, next
+            ? '${match.title} plays next'
+            : 'Added ${match.title} to the queue');
+      }
+    } catch (_) {
+      if (mounted) LokalToast.show(context, 'Could not queue ${match.title}.');
+    }
+  }
+
+  /// Download metadata-only global results through the configured playable
+  /// sources, never by treating an Apple/Spotify catalogue URL as audio.
+  Future<void> _download(GlobalCatalogueSong match) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final info = LokalDiscoveryTrack(
+        title: match.title,
+        artist: match.artist,
+        album: match.album,
+        artworkUrl: match.artworkUrl,
+        duration: match.duration,
+      );
+      final found = await findDiscoverySong(info);
+      if (found == null) throw StateError('No playable source');
+      if (OnlineSongSaveRegistry.instance.canSave(found)) {
+        await OnlineSongSaveRegistry.instance.save(found);
+      } else {
+        await LibraryDownloader().save(found, artwork: match.artworkUrl);
+      }
+      if (mounted) LokalToast.show(context, 'Saved ${match.title} to your library.');
+    } catch (_) {
+      if (mounted) {
+        LokalToast.show(context,
+            'Could not download ${match.title} from the configured sources.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _actions(
+    GlobalCatalogueSong match,
+    List<GlobalCatalogueSong> songs,
+    String catalogue,
+  ) async {
+    HapticFeedback.mediumImpact();
+    // The shared sheet only uses this model for artwork/text and actions.
+    // Playback always uses _pending() and the global source-priority resolver.
+    final display = OnlineResult(DiscoveryTrack(
+      id: match.catalogueId,
+      title: match.title,
+      artist: match.artist,
+      album: match.album,
+      duration: match.duration,
+      artwork: match.artworkUrl,
+      source: DiscoverySource.youtubeMusic,
+    ));
+    final action = await showOnlineResultActions(
+      context,
+      result: display,
+      sourceName: catalogue == 'spotify' ? 'Spotify' : 'Apple Music',
+      saving: _saving,
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case OnlineResultAction.play:
+        await _play(match, songs);
+      case OnlineResultAction.playNext:
+        await _enqueue(match, next: true);
+      case OnlineResultAction.addToQueue:
+        await _enqueue(match, next: false);
+      case OnlineResultAction.download:
+        await _download(match);
+      case OnlineResultAction.playAtmos:
+      case OnlineResultAction.downloadAtmos:
+        break; // A global catalogue match has no verified Atmos source.
+    }
+  }
+
   Future<void> _open(Widget page) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => page),
@@ -118,9 +218,6 @@ class _GlobalCatalogueSearchSectionState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(lokalText(widget.songsOnly ? 'Online songs' : 'Global'), style: TextStyle(
-            color: t.text, fontSize: 17, fontWeight: FontWeight.w600,
-          )),
           FutureBuilder<GlobalCatalogueMatches>(
             future: _results,
             builder: (context, snapshot) {
@@ -146,23 +243,19 @@ class _GlobalCatalogueSearchSectionState
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    (data.catalogue == 'spotify' ? 'Spotify' : 'Apple Music') +
-                        ' catalogue · plays through your configured sources',
-                    style: TextStyle(color: t.muted, fontSize: 11),
-                  ),
                   if (data.notice != null) ...[
                     const SizedBox(height: 4),
                     Text(data.notice!, style: TextStyle(color: t.muted, fontSize: 11)),
                   ],
-                  const SizedBox(height: 8),
                   if (songs.isEmpty && albums.isEmpty && artists.isEmpty)
                     Text('No global results found.', style: TextStyle(color: t.muted)),
                   if (songs.isNotEmpty) ...[
-                    if (!widget.songsOnly)
-                      Text(lokalText('Songs'), style: TextStyle(color: t.muted, fontSize: 12)),
                     for (final song in shown)
-                      ListTile(
+                      LokalSwipeToQueue(
+                        onQueue: () => _enqueue(song, next: false),
+                        onNext: () => _enqueue(song, next: true),
+                        enabled: !_starting,
+                        child: ListTile(
                         contentPadding: EdgeInsets.zero, dense: true,
                         enabled: !_starting,
                         leading: SizedBox.square(
@@ -187,6 +280,9 @@ class _GlobalCatalogueSearchSectionState
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                         trailing: const Icon(Icons.play_arrow_rounded),
                         onTap: () => unawaited(_play(song, songs)),
+                        onLongPress: () =>
+                            unawaited(_actions(song, songs, data.catalogue)),
+                        ),
                       ),
                     if (songs.length > 8)
                       TextButton(
