@@ -285,7 +285,8 @@ class DiscoveryPlaybackCache {
           (track.source == DiscoverySource.youtubeMusic ? 'YouTube Music' : null),
       fileSizeBytes: await ready.length(),
       isExternal: true,
-      atmosAvailable: true,
+      atmosAvailable: sourceInfo?['codec'] == 'ac4'
+          ? track.atmosAvailable : true,
       atmosEncoded: true,
       remoteId: track.id,
     );
