@@ -179,7 +179,10 @@ class KonnektedLibrary extends ConsumerWidget {
           // The shell provides the floating dock clearance via MediaQuery.
           // Avoid stacking an extra 150px spacer beneath the final shelf.
           SliverToBoxAdapter(
-            child: SizedBox(height: 12 + MediaQuery.paddingOf(context).bottom),
+            child: SizedBox(
+              key: const Key('library-bottom-clearance'),
+              height: 12 + MediaQuery.paddingOf(context).bottom,
+            ),
           ),
         ],
       ),
