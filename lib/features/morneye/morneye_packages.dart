@@ -1497,20 +1497,33 @@ class MorneyePackages {
     } else {
       tracks = const [];
     }
-    // Amazon search may repeat the same recording in multiple widgets.
-    // Collapse only identical provider track IDs, not different releases
-    // sharing a title/artist (which can have distinct Atmos editions).
-    final seenAmazonTrackIds = <String>{};
-    final songs = [
-      for (final t in tracks)
-        if (t is Map &&
-            t['id'] != null &&
-            (t['name'] ?? t['title']) != null &&
-            (t['item_type'] == null || t['item_type'] == 'track') &&
-            (!addon.name.toLowerCase().startsWith('amazon') ||
-                seenAmazonTrackIds.add('${t['id']}')))
-          t,
-    ];
+    // Amazon search can repeat the exact ASIN in multiple widgets. Keep
+    // distinct release ASINs, and retain confirmed Atmos metadata if it
+    // appears only on a later duplicate of the same recording.
+    final amazon = addon.name.toLowerCase().startsWith('amazon');
+    final amazonIndex = <String, int>{};
+    final songs = <Map>[];
+    for (final entry in tracks) {
+      if (entry is! Map ||
+          entry['id'] == null ||
+          (entry['name'] ?? entry['title']) == null ||
+          (entry['item_type'] != null && entry['item_type'] != 'track')) {
+        continue;
+      }
+      if (amazon) {
+        final id = '${entry['id']}';
+        final previous = amazonIndex[id];
+        if (previous != null) {
+          if (tidalAtmosAvailable(entry) &&
+              !tidalAtmosAvailable(songs[previous])) {
+            songs[previous] = {...songs[previous], ...entry};
+          }
+          continue;
+        }
+        amazonIndex[id] = songs.length;
+      }
+      songs.add(entry);
+    }
     _remember(key, songs);
     return [for (final t in songs.take(limit)) MorneyeTrack.of(t, 'a-$key')];
   }
