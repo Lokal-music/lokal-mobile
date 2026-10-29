@@ -45,7 +45,7 @@ jobs:
       - name: Prepare the real Flutter Apple framework
         run: flutter precache --ios
       - name: Exercise actual files, processes and iOS 16 journal APIs
-        run: python3 tool/ios_transfer_contracts.py --check-ios-sdks --check-flutter-bridge --repeat-native 5
+        run: python3 tool/ios_transfer_contracts.py --check-ios-sdks --check-flutter-bridge --repeat-native 20
       - name: Resolve the locked native database package
         run: flutter pub get --enforce-lockfile
       - name: Exercise actual Isar import transactions and process recovery
