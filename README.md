@@ -94,6 +94,15 @@ Optional integrations include Last.fm and ListenBrainz scrobbling, network music
 
 **Requires Android 8.0 or newer and a 64-bit ARM device.** Android 14 is **not** required. The `play` flavor is an alternative distribution variant; most people sideloading from GitHub should use `full`.
 
+**Android Auto:** APKs downloaded from GitHub require enabling Android Auto's
+**Developer settings → Unknown sources** on the phone. This is enforced by
+Android Auto for sideloaded media apps and is **not** removed by using the
+`play` APK flavor. To avoid the setting, Lokal must be **installed through a
+trusted Google Play track**. The signed Play App Bundle is available in Actions
+artifacts when maintainers build the `play` flavor; the Play Console setup,
+testing and review are separate steps. See the
+[Android Auto distribution guide](docs/ANDROID_AUTO_DISTRIBUTION.md).
+
 Stable and nightly APKs use the same package and permanent signing key, so they can update in place when the new APK has a higher versionCode. They share app data and cannot be installed side by side. Returning from a newer nightly may require waiting for a newer stable build. Very old debug-signed betas need a one-time migration; [read the update notes before uninstalling](docs/RELEASING.md#beta-updates).
 
 ## Stable releases and nightlies
