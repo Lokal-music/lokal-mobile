@@ -37,12 +37,39 @@ final class LokalTransferLibrary: @unchecked Sendable {
     let directory = openat(parent, Self.directoryName, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard directory >= 0 else { close(parent); throw LokalTransferError.unsafeFile }
     testingBoundary?("initializeWriter")
-    let writer = openat(directory, ".lokal-import.lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
-    var info = stat()
-    guard writer >= 0, fstat(writer, &info) == 0,
-          info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), info.st_nlink == 1 else {
-      if writer >= 0 { close(writer) }
-      close(directory); close(parent); throw LokalTransferError.unsafeFile
+    // Exactly one constructor creates the lock inode. Other constructors open
+    // that existing name without creation semantics; never unlink/recreate a
+    // lock that another process might already hold.
+    let flags = O_RDWR | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC
+    var writer = openat(directory, ".lokal-import.lock", flags | O_CREAT | O_EXCL, 0o600)
+    if writer < 0 {
+      let creationError = errno
+      guard creationError == EEXIST else {
+        close(directory); close(parent)
+        throw LokalTransferError.posix("create_library_lock", creationError)
+      }
+      testingBoundary?("openExistingWriter")
+      writer = openat(directory, ".lokal-import.lock", flags)
+    }
+    guard writer >= 0 else {
+      let openError = errno
+      close(directory); close(parent)
+      throw LokalTransferError.posix("open_library_lock", openError)
+    }
+    testingBoundary?("writerOpened")
+    var info = stat(), named = stat()
+    guard fstat(writer, &info) == 0 else {
+      let statError = errno
+      close(writer); close(directory); close(parent)
+      throw LokalTransferError.posix("stat_library_lock", statError)
+    }
+    guard info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), info.st_nlink == 1,
+          fstatat(directory, ".lokal-import.lock", &named, AT_SYMLINK_NOFOLLOW) == 0,
+          named.st_dev == info.st_dev, named.st_ino == info.st_ino,
+          named.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), named.st_nlink == 1 else {
+      testingBoundary?("unsafeWriter:type=\(info.st_mode & mode_t(S_IFMT)):links=\(info.st_nlink)")
+      close(writer); close(directory); close(parent)
+      throw LokalTransferError.unsafeFile
     }
     guard fsync(parent) == 0, fsync(directory) == 0 else {
       close(writer); close(directory); close(parent)

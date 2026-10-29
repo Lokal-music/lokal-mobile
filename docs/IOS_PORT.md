@@ -10,8 +10,8 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **118 reviewed merged
-mobile PRs after #172 through #331**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **119 reviewed merged
+mobile PRs after #172 through #332**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow, circular shader artwork transitions, expanded artist
 catalogues and 0.01× speed controls are included in the latest continuation.
@@ -28,6 +28,14 @@ and 2,320 exported source files were independently rechecked. Source tree:
 `3e7b2f84078778b14d1dba13a313d1f1114cc1e8`. Build 80 and earlier qualified
 checkpoints remain preserved. Widget runs 28/29 remain historical failures;
 Home Screen widgets are excluded, so these are no longer release gates.
+
+Build83 passed both actual iOS16 device/simulator SDK and Flutter bridge checks,
+then its native preflight stopped in round2 at concurrent writer-lock
+initialization. No IPA or installed-app acceptance was produced; iOS26 was
+skipped. A later source uses exclusive lock creation followed by opening an
+existing inode without creation flags, retaining every safety check and adding
+synchronized-constructor/unsafe-node tests. Portable rounds pass; Apple
+confirmation of this correction is still required.
 
 Native background networking is wired independently of Flutter, but product
 library import/upload capability remains disabled. Existing copy paths stay
