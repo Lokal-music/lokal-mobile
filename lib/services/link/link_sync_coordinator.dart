@@ -189,6 +189,12 @@ class LinkSyncCoordinator {
     final prefs = await SharedPreferences.getInstance();
     final source = LokalDesktopSource.instance,
         server = await LokalDesktopSource.instance.ensureServer(credentials);
+    // A catalogue import is deliberately one-time. Subsequent explicit
+    // syncs need a lightweight, genre-only repair because desktop lookup
+    // results can predate the journal or fail to match when first received.
+    final reconcileGenres = !importCatalog &&
+        prefs.getBool('$_prefix.catalog') == true &&
+        prefs.getBool('$_prefix.owned_catalog_v2') == true;
     if (importCatalog ||
         prefs.getBool('$_prefix.catalog') != true ||
         prefs.getBool('$_prefix.owned_catalog_v2') != true) {
@@ -285,6 +291,14 @@ class LinkSyncCoordinator {
         processed += items.length;
         _report(phase, processed: processed);
         if (reply.body['hasMore'] != true) break;
+      }
+    }
+    if (!_background && reconcileGenres) {
+      _report(LinkSyncPhase.metadata);
+      final repaired = await source.reconcileMissingGenres(server);
+      if (repaired > 0) {
+        changed = true;
+        onChanged?.call();
       }
     }
     // A cursor only returns new events. Explicit Sync Now must also rebuild
