@@ -1,13 +1,15 @@
 # iPhone transfer architecture
 
-Status: native transport, app owner and typed Flutter bridge accepted through build
-82; product library adapter pending, 29 October 2026. Both real iOS 16 SDK checks
-and both complete iOS 18.6/26 app suites pass, including native channel ownership
-and Keychain migration. Build 82's iOS 26 first attempt failed before app
-installation during simulator boot; one fresh-host retry passed the full suite
-using the same compiled integration app. Standalone native host contracts pass
-20 rounds in native run 7. Later explicit caller-client binding, product schema
-and through-#320 UI source still await batched Apple acceptance.
+Status: native transport, app owner and typed Flutter bridge accepted through
+build84; product library adapter pending, 29 October 2026. Both real iOS16 SDK
+checks, 20 complete Apple native rounds in run9, actual Isar process contracts,
+1,130 Flutter regression checks and both complete installed iOS18.6/26 app
+suites pass. Build84 includes through-#332 UI, explicit caller-client binding,
+the private product schema and scanner writer guards. Both runtime jobs pass
+on their first attempts using the same compiled integration app. The unsigned
+IPA, 34 native binaries, 26 matching dSYM bundles and all 2,340 exported source
+files are independently verified. Later tracked publication, bounded media
+reader and completion acknowledgement source has no Apple acceptance yet.
 This qualifies the integrated protocol, not OS suspension/daemon delivery.
 Deterministic file promotion and private Isar receipts are later isolated
 foundations; their product adapter, uploads and persisted progress are unfinished. Product capability keeps
@@ -615,5 +617,195 @@ All root, inode, hash, timestamp, no-overwrite and cancellation checks remain.
 Three full portable Swift rounds pass with six real constructors released
 together at the creation boundary, six promotions, all existing crash/copy/HTTP
 contracts, and refusal of symlink, unrelated hard-link, FIFO, directory and
-replaced-inode lock nodes. This is a construction correction awaiting Apple
-confirmation, not a claim that the previous failure's exact errno is known.
+replaced-inode lock nodes. Native run9 subsequently passes all 20 Apple rounds,
+both actual iOS16 SDK/Flutter bridge checks and actual Isar contracts. Build84
+also passes native preflight and the full inherited Flutter selection, and has
+produced its independently verified unsigned IPA. Both complete installed
+iOS18.6/26 suites subsequently pass on their first attempts using the same
+compiled integration app. The previous failure's exact errno remains unknown.
+
+### Tracked publication foundation
+
+Later source adds a private `publishImport` contract. The app cannot supply a
+source/destination path or ownership marker. It supplies only the active native
+lease and prepared positive Song identity. The native runtime rechecks pairing,
+uses the existing Documents/Music root, copies/hashes outside the ownership lock
+and Isar writer, and advances only to `importing`. A physical copy is not a
+completed Song. Product capability remains false, and this source is not in
+build84.
+
+```mermaid
+sequenceDiagram
+  participant A as Root app coordinator
+  participant I as Isar writer
+  participant N as Native ownership/runtime
+  participant P as Private app-support part
+  participant J as Native SQLite custody
+  participant M as Documents/Music
+  Note over A,I: Product preparation/media adapter still pending
+  A-->>I: Prepare exact Song and receipt identity
+  A->>N: Current lease and prepared Song ID
+  N->>J: Reserve frozen revision; bind directory identities and native nonce
+  N->>P: Exclusive copy; hash actual bytes; stamp native marker; fsync
+  N->>J: Commit file inode, generation/birth/mtime and marker proof
+  N->>N: Recheck current writer and immediate cancellation
+  N->>M: Exclusive no-overwrite link; sync directory
+  N->>P: Retire only the exact private/public inode pair
+  N->>M: Reverify native proof, full hash and named inode
+  N->>J: Persist importing
+  N->>A: Verified relative receipt, frozen job and Song ID
+  A-->>I: Commit actual media + Song + completed receipt atomically
+  A-->>N: Acknowledge/drain after writer barrier (pending)
+```
+
+Incomplete copies stay in private app support. Recovery never adopts an
+unmarked matching-byte Music file. It requires the persisted native root binding,
+file identity and random marker, then verifies all actual bytes and timestamps.
+A two-link crash state is repaired only when both names identify that proven
+inode. A replaced/modified file, unrelated hard link, unsafe node or changed root
+is preserved and refused. Cross-volume publication fails without overwriting
+anything. Missing staging after successful publication is recoverable; missing
+public bytes in `importing` cannot be recreated across an uncertain Isar commit.
+
+Three complete portable Swift6 warnings-as-errors rounds pass. New actual file
+contracts cover five process-exit boundaries, six process writers, lost staging
+and acknowledgement, pre-existing equal bytes, replaced/modified files and
+cancellation. Actual native-runtime HTTP WAV contracts cover current pairing,
+exact Song binding, foreign/read-only refusal, cancellation while the real file
+worker is blocked, release drainage and engine replacement after the public link.
+All 18 focused Dart channel contracts pass; the new publication codec checks
+frozen intent, exact target and byte proof, and rejects a delayed old-client
+reply. These are filesystem/transport proofs, not decoder, installed-iOS,
+Isar-completion, OS suspension or power-loss qualification.
+
+Public Music deletion is deliberately unfinished. Cleanup must use durable
+frozen custody after immediate revocation and file-worker drainage, cross the
+Isar writer barrier, and coordinate Apple Files edits. A check followed by a
+bare unlink cannot establish that a concurrently edited user file is safe to
+delete. The next coordinator work also needs actual staged-byte media probing,
+clear/unpair mutation epochs, completed-anchor CUE mapping and scan progress
+that excludes protected rows. Enable the product adapter only after those
+boundaries, owned uploads/progress and OS lifecycle acceptance are complete.
+
+### Staged media reader foundation
+
+Later source uses the bundled FFprobe session API with an argument list, never
+a shell command. It sniffs retained `.download` bytes, restricts protocols to
+local files and demuxers to known audio containers, disables MOV external
+references, caps probe bytes/analysis/stream count, and decodes a bounded first
+interval. A positive decoded-frame count, actual file size, duration, rate and
+channel count are required. Audio selection prefers the default stream then
+the lowest actual stream index. Source bit depth comes only from recognized
+lossless/PCM/DSD encoding information; AAC/MP3 decoder sample width never
+becomes a source-quality label. This is a short decode sample, not a guarantee
+that every frame of a long recording is valid or every playback route supports
+the codec.
+
+The adapter checks the actual writer before/after reading, retires delayed
+results, and bounds execution to 15 seconds. Cancellation targets only its own
+positive native session ID; a missing ID never enters the plugin's cancel-all
+API. It changes no global log policy and requests no tags, filenames or private
+metadata in output. Fixed failures distinguish invalid media, lost authority,
+timeout and reader unavailability. A missing/truncated plugin result is not
+reported as proof that the download is corrupt.
+
+`dart run tool/ios_transfer_media_contracts.dart` executes actual host
+FFmpeg/FFprobe over generated PCM24, FLAC24, AAC, MP3 and a two-audio-track M4A.
+Those contracts pass, including deterministic default-track selection,
+Unicode/quoted `.download` paths, corrupt/header-only/empty input, changed byte
+length and a retained network playlist making zero actual HTTP requests.
+Targeted analysis is clean and the integration entry point compiles. A new
+installed-app probe exercises the actual bundled native reader with generated
+WAV/FLAC/AAC and invalid bytes; its lease callback is explicitly a fixture.
+That probe and all later publication/media source are outside build84 and still
+need Apple execution. No integrated product-import or OS lifecycle acceptance
+is claimed. The next product work remains the root coordinator and its
+Isar/cleanup/scanner/deletion barriers.
+
+### Completion acknowledgement foundation
+
+Later source adds private `acknowledgeImport` after the root has proved its
+durable committed Isar receipt and exact prepared Song ID. Native cannot
+independently inspect Isar: this API is the app's attestation, and normal
+product import remains disabled until the actual root coordinator is accepted.
+The native writer checks the exact frozen publication witness and importing
+job in one SQLite transaction before recording completion. It then drains only
+its private retained staging. It never edits, deletes, rehashes or recreates a
+public Music file at this historical boundary.
+
+Frozen provenance remains available after completion for lost-reply recovery.
+A completed job can acquire only a receipt-only claim, without current pairing
+credentials or a staged-source path. It cannot acquire a new publication
+writer. Repeated acknowledgement leaves the job and observable generation
+unchanged, preventing an event-driven recovery loop. The future coordinator
+must bound recovery pages and retire terminal history deliberately; retaining
+provenance is not a license for unbounded startup scanning or journal growth.
+
+Actual native runtime contracts cover wrong-Song refusal, private staging
+drainage, acknowledgement without a current pairing, lost completion replies
+and complete read-only recovery. Deleted public copies stay deleted; edited
+public bytes and untouched inodes remain preserved. The actual SQLite contract
+also refuses a stale/unpublished custody witness without changing importing
+state. All 19 focused Dart transport contracts pass and targeted analysis is
+clean. These tests use an explicit app-commit attestation fixture, not a real
+Isar commit. The coordinator checkpoint below supersedes that fixture-only
+completion status; public-file abandonment, clear/unpair/CUE barriers and Apple
+acceptance of this later source remain pending.
+
+### Root coordinator checkpoint (after build84)
+
+The app root now owns one capability-gated coordinator. It listens while
+disabled, recovers the native owner, drains prior file work, then accepts
+events. Foreground retries are explicit; no timer polls paused transfers.
+Native recovery uses bounded keyset pages and keeps frozen revision/Song
+bindings separate from current job state. Completed staging retirement is
+durable, so ordinary progress does not repeatedly rehash completed history.
+Normal native import/upload capabilities remain false: this checkpoint does
+not activate background transfers or replace the existing foreground flow.
+
+```mermaid
+sequenceDiagram
+  participant R as App root
+  participant N as Native owner and journal
+  participant I as Actual Isar writer
+  participant M as Bounded media reader
+  participant F as Tracked private/public files
+  R->>N: Recover current client and drain previous file work
+  R->>N: Read bounded ready/frozen pages
+  R->>I: Prepare stable Song identity
+  R->>M: Decode staged bytes outside Isar
+  R->>I: Persist validated media under current native authority
+  R->>N: Publish with frozen Song identity
+  N->>F: Verify custody and publish exclusively
+  R->>I: Commit Song plus completed receipt atomically
+  R->>N: Acknowledge actual committed receipt
+  N->>F: Drain only private staging
+  N->>N: Persist staging retirement
+```
+
+Validated quality is stored before publication in a nullable private receipt
+field. A lost publication reply can therefore recover without inventing media
+quality or requiring staging that native already retired. Codec and container
+are distinct: PCM in a WAV retains a WAV file label. Native authority is checked
+at both ends of actual Isar prepare/media/commit transactions. Committed
+historical receipts acknowledge completion without recreating deleted Songs.
+
+Host acceptance includes the actual coordinator and locked Isar engine, real
+FFprobe WAV decoding, lost-reply/reopen recovery, missing-reservation refusal,
+interrupted-reader retirement, capability-off inactivity and startup file-worker
+barriers. The actual store suite upgrades a database written by the prior
+schema in a separate process, exercises eight receipt/media process-exit
+boundaries and rolls back writes after late native revocation. Three complete
+portable native rounds and 23 focused Dart transport checks pass; targeted
+analysis, workflow lint and the full integration entry compile pass locally.
+The native port in the host coordinator harness is explicitly a fixture; this
+does not qualify an installed end-to-end product import or OS relaunch.
+
+Remaining recovery must also page Isar-only prepared reservations: a process
+can stop before native custody is created. Old or canceled frozen work is
+currently blocked as cleanup-required, preserving public files. Before product
+activation, add retiring-state bookkeeping, Apple-coordinated abandonment,
+clear/unpair submission epochs and OS-task drainage, atomic CUE/scanner mapping,
+terminal-history retirement, owned uploads and persisted transfer UI. The
+bundled decoder and this checkpoint still require their own Apple run. Build84
+remains a separately qualified fallback, not evidence for this newer source.

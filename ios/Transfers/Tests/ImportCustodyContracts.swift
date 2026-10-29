@@ -114,6 +114,34 @@ func runImportCustodyContracts(container: URL) throws {
 
   let directory = try root("identity")
   let store = try LokalTransferJournal(container: directory)
+  let pages = try LokalTransferJournal(container: root("pages"))
+  var pagedReservations: [LokalTransferImportCustody] = []
+  for _ in 0..<5 {
+    let pending = try validating(pages)
+    pagedReservations.append(try pages.reserveImport(id: pending.id, revision: 1, songID: 42))
+  }
+  pagedReservations.sort { $0.job.id < $1.job.id }
+  let firstPage = try pages.custodyPage(after: nil, limit: 2)
+  try require(firstPage.values == Array(pagedReservations.prefix(2)) && firstPage.nextCursor != nil,
+    "actual SQLite keyset page is bounded and ordered")
+  try pages.removeImportCustody(pagedReservations[0])
+  let inserted = try validating(pages)
+  _ = try pages.reserveImport(id: inserted.id, revision: 1, songID: 42)
+  var cursor = firstPage.nextCursor, seen = Set<String>()
+  while let after = cursor {
+    let next = try pages.custodyPage(after: after, limit: 2)
+    try require(next.values.count <= 2, "each page keeps its hard row bound")
+    for work in next.values {
+      try require(seen.insert(work.job.id).inserted, "keyset pages do not repeat frozen work")
+    }
+    cursor = next.nextCursor
+  }
+  try require(Set(pagedReservations.dropFirst(2).map { $0.job.id }).isSubset(of: seen),
+    "removing/inserting earlier work cannot offset-skip original later reservations")
+  for limit in [0, 101] {
+    try rejects("unbounded native recovery pages are refused") { _ = try pages.custodyPage(after: nil, limit: limit) }
+  }
+  try rejects("noncanonical native cursors are refused") { _ = try pages.custodyPage(after: pagedReservations[0].job.id + ":01", limit: 1) }
   let job = try validating(store)
   let reservation = try store.reserveImport(id: job.id, revision: 1, songID: 42)
   try require(reservation.job == job && reservation.songID == 42, "reserve full immutable import identity")

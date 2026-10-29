@@ -20,6 +20,11 @@ enum LokalTransferProtocol {
   struct Client: Decodable, Sendable {
     let clientID: String
   }
+  struct ImportWorkPage: Decodable, Sendable {
+    let after: String?
+    let limit: Int
+    let clientID: String
+  }
   struct ImportClaim: Decodable, Sendable {
     let id: String
     let revision: Int
@@ -31,6 +36,17 @@ enum LokalTransferProtocol {
     let revision: Int
     let leaseID: String
     let clientID: String
+  }
+  struct ImportPublication: Decodable, Sendable {
+    let id: String
+    let revision: Int
+    let leaseID: String
+    let clientID: String
+    let songID: Int64
+
+    var lease: ImportLease {
+      ImportLease(id: id, revision: revision, leaseID: leaseID, clientID: clientID)
+    }
   }
 
   private static func object<T: Decodable>(_ type: T.Type, _ data: Data,
@@ -65,13 +81,35 @@ enum LokalTransferProtocol {
     return value
   }
 
+  static func importWorkPage(_ data: Data) throws -> ImportWorkPage {
+    let value = try object(ImportWorkPage.self, data, keys: ["after", "limit", "clientID"])
+    guard (1...100).contains(value.limit),
+          value.after == nil || LokalTransferTaskBinding(value.after!) != nil,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
+      throw LokalTransferError.invalidRecord
+    }
+    return value
+  }
+
   static func importLease(_ data: Data) throws -> ImportLease {
     let value = try object(ImportLease.self, data, keys: ["id", "revision", "leaseID", "clientID"])
+    try validateImportLease(value)
+    return value
+  }
+
+  private static func validateImportLease(_ value: ImportLease) throws {
     guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil,
           UUID(uuidString: value.leaseID)?.uuidString.lowercased() == value.leaseID,
           UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
       throw LokalTransferError.invalidRecord
     }
+  }
+
+  static func importPublication(_ data: Data) throws -> ImportPublication {
+    let value = try object(ImportPublication.self, data,
+      keys: ["id", "revision", "leaseID", "clientID", "songID"])
+    try validateImportLease(value.lease)
+    guard value.songID > 0 else { throw LokalTransferError.invalidRecord }
     return value
   }
 

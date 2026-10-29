@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:isar_community/isar.dart';
 import 'package:path/path.dart' as p;
 
@@ -29,6 +31,18 @@ class IosTransferImportResult {
   bool get committed => receipt.state == 'committed';
   // A previously committed receipt remains historical proof after deletion.
   bool get removedAfterCommit => committed && song == null;
+  IosTransferMediaInfo? get validatedMedia {
+    final encoded = receipt.validatedMediaJson;
+    if (encoded == null) return null;
+    if (encoded.length > 1024 || utf8.encode(encoded).length > 1024) {
+      throw const FormatException('Invalid saved iPhone media validation.');
+    }
+    try {
+      return IosTransferMediaInfo.fromJson(jsonDecode(encoded));
+    } on FormatException {
+      throw const FormatException('Invalid saved iPhone media validation.');
+    }
+  }
 }
 
 /// One app-isolate library writer. Native callbacks never open this database.
@@ -277,10 +291,67 @@ class IosTransferImportStore {
         ..preparedAt = _now();
       await isar.iosTransferReceiptEntitys.put(receipt);
       await _boundary('prepare:beforeCommit');
+      await validateOwnership();
       _current(isCurrent);
       return IosTransferImportResult(receipt, song);
     });
     await _boundary('prepare:afterCommit');
+    return result;
+  }
+
+  /// Save the real reader result before native publication. Its receipt already
+  /// binds the immutable byte count/hash, so a later engine can finish without
+  /// requiring staging or inventing quality from the desktop/filename.
+  Future<IosTransferImportResult> recordMediaValidation(
+    IosTransferJob job,
+    IosTransferLibraryTarget target,
+    IosTransferMediaInfo media, {
+    required bool Function() isCurrent,
+    required Future<void> Function() validateOwnership,
+  }) async {
+    _validateJob(job, target);
+    media.validate();
+    if (!{
+      IosTransferPhase.validating,
+      IosTransferPhase.importing,
+    }.contains(job.phase)) {
+      _fail(IosTransferImportConflict.retired);
+    }
+    final encoded = jsonEncode(media.toJson());
+    if (utf8.encode(encoded).length > 1024) {
+      _fail(IosTransferImportConflict.receiptMismatch);
+    }
+    final result = await isar.writeTxn(() async {
+      _current(isCurrent);
+      final receipt = await isar.iosTransferReceiptEntitys.getByOperationKey(
+        keyFor(job),
+      );
+      if (receipt == null) _fail(IosTransferImportConflict.receiptMismatch);
+      _matches(receipt, job, target);
+      if (receipt.state == 'retired') _fail(IosTransferImportConflict.retired);
+      final song = await isar.songEntitys.get(receipt.localSongId);
+      final previous = IosTransferImportResult(receipt, song);
+      if (previous.validatedMedia != null) {
+        if (jsonEncode(previous.validatedMedia!.toJson()) != encoded) {
+          _fail(IosTransferImportConflict.receiptMismatch);
+        }
+        return previous;
+      }
+      if (receipt.state != 'prepared' || song == null) {
+        _fail(IosTransferImportConflict.recordingRemoved);
+      }
+      await _server(job);
+      _binding(song, job);
+      await validateOwnership();
+      _current(isCurrent);
+      receipt.validatedMediaJson = encoded;
+      await isar.iosTransferReceiptEntitys.put(receipt);
+      await _boundary('media:beforeCommit');
+      await validateOwnership();
+      _current(isCurrent);
+      return IosTransferImportResult(receipt, song);
+    });
+    await _boundary('media:afterCommit');
     return result;
   }
 
@@ -311,6 +382,11 @@ class IosTransferImportStore {
       await _server(job);
       _binding(song, job);
       media.validate();
+      final savedMedia = IosTransferImportResult(receipt, song).validatedMedia;
+      if (savedMedia == null ||
+          jsonEncode(savedMedia.toJson()) != jsonEncode(media.toJson())) {
+        _fail(IosTransferImportConflict.receiptMismatch);
+      }
       _current(isCurrent);
       if (song.sourceType != 'lokal') {
         _fail(IosTransferImportConflict.destinationConflict);
@@ -333,7 +409,9 @@ class IosTransferImportStore {
         ..sourceType = null
         ..fileSize = copy.bytes
         ..fileType =
-            media.codec ?? job.intent.metadata.fileExtension.toUpperCase()
+            media.format ??
+            media.codec ??
+            job.intent.metadata.fileExtension.toUpperCase()
         ..sampleRate = media.sampleRate
         ..bitDepth = media.bitDepth
         ..bitrate = media.bitrate
@@ -352,6 +430,7 @@ class IosTransferImportStore {
         ..committedAt = _now();
       await isar.iosTransferReceiptEntitys.put(receipt);
       await _boundary('commit:beforeCommit');
+      await validateOwnership();
       _current(isCurrent);
       return IosTransferImportResult(receipt, song);
     });

@@ -7,6 +7,108 @@ import Glibc
 private func flock(_ descriptor: Int32, _ operation: Int32) -> Int32
 #endif
 
+// The marker is written only to our newly created private copy, never to a
+// caller/user file. Its random value is native bookkeeping, not a credential.
+#if os(Linux)
+@_silgen_name("fsetxattr")
+private func importSetXattr(_ fd: Int32, _ name: UnsafePointer<CChar>, _ value: UnsafeRawPointer?, _ size: Int, _ flags: Int32) -> Int32
+@_silgen_name("fgetxattr")
+private func importGetXattr(_ fd: Int32, _ name: UnsafePointer<CChar>, _ value: UnsafeMutableRawPointer?, _ size: Int) -> Int
+#endif
+
+struct LokalTransferLibraryLocation: Codable, Equatable, Sendable {
+  static let keys: Set<String> = ["rootDevice", "rootInode", "directoryDevice", "directoryInode"]
+  let rootDevice, rootInode, directoryDevice, directoryInode: UInt64
+
+  init(parent: Int32, directory: Int32) throws {
+    var root = stat(), owned = stat()
+    guard fstat(parent, &root) == 0, fstat(directory, &owned) == 0,
+          root.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR),
+          owned.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else { throw LokalTransferError.unsafeFile }
+    rootDevice = UInt64(truncatingIfNeeded: root.st_dev); rootInode = UInt64(root.st_ino)
+    directoryDevice = UInt64(truncatingIfNeeded: owned.st_dev); directoryInode = UInt64(owned.st_ino)
+    try validate()
+  }
+  func validate() throws {
+    guard rootInode > 0, directoryInode > 0 else { throw LokalTransferError.invalidRecord }
+  }
+}
+
+/// Native descriptor provenance, saved before linking a private copy into Music.
+/// ctime is intentionally not durable identity: link/unlink updates it. Existing
+/// content is still fully hashed and its ctime checked across the actual read.
+struct LokalTransferLibraryPublication: Codable, Equatable, Sendable {
+  static let keys: Set<String> = ["device", "inode", "generation", "modifiedSeconds", "modifiedNanos", "birthSeconds", "birthNanos", "nonce"]
+  private static let marker = "user.app.lokal.import-owner"
+  let device, inode, generation: UInt64
+  let modifiedSeconds, modifiedNanos: Int64
+  let birthSeconds, birthNanos: Int64?
+  let nonce: String
+
+  private init(info: stat, nonce: String) {
+    device = UInt64(truncatingIfNeeded: info.st_dev); inode = UInt64(info.st_ino)
+    self.nonce = nonce
+    #if canImport(Darwin)
+    generation = UInt64(info.st_gen)
+    modifiedSeconds = Int64(info.st_mtimespec.tv_sec); modifiedNanos = Int64(info.st_mtimespec.tv_nsec)
+    birthSeconds = Int64(info.st_birthtimespec.tv_sec); birthNanos = Int64(info.st_birthtimespec.tv_nsec)
+    #else
+    generation = 0
+    modifiedSeconds = Int64(info.st_mtim.tv_sec); modifiedNanos = Int64(info.st_mtim.tv_nsec)
+    birthSeconds = nil; birthNanos = nil
+    #endif
+  }
+
+  func validate() throws {
+    guard inode > 0, UUID(uuidString: nonce)?.uuidString.lowercased() == nonce,
+          (0..<1_000_000_000).contains(modifiedNanos),
+          (birthSeconds == nil) == (birthNanos == nil),
+          birthNanos == nil || (0..<1_000_000_000).contains(birthNanos!) else {
+      throw LokalTransferError.invalidRecord
+    }
+  }
+
+  static func stamp(_ fd: Int32, nonce: String) throws -> Self {
+    guard UUID(uuidString: nonce)?.uuidString.lowercased() == nonce else { throw LokalTransferError.invalidRecord }
+    var info = stat()
+    guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+          info.st_nlink == 1, info.st_size > 0 else { throw LokalTransferError.unsafeFile }
+    let bytes = Array(nonce.utf8)
+    let code = marker.withCString { name in bytes.withUnsafeBytes { value in
+      #if canImport(Darwin)
+      return fsetxattr(fd, name, value.baseAddress, value.count, 0, XATTR_CREATE)
+      #else
+      return importSetXattr(fd, name, value.baseAddress, value.count, 1)
+      #endif
+    } }
+    guard code == 0 else { throw LokalTransferError.posix("mark_import_copy", errno) }
+    guard fsync(fd) == 0, fstat(fd, &info) == 0 else { throw LokalTransferError.posix("sync_import_marker", errno) }
+    let value = Self(info: info, nonce: nonce)
+    try value.validate()
+    return value
+  }
+
+  func verify(_ fd: Int32) throws -> stat {
+    try validate()
+    var info = stat()
+    guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+          info.st_nlink == 1 || info.st_nlink == 2,
+          Self(info: info, nonce: nonce) == self else { throw LokalTransferError.unsafeFile }
+    var bytes = [UInt8](repeating: 0, count: 37)
+    let count = Self.marker.withCString { name in bytes.withUnsafeMutableBytes { value in
+      #if canImport(Darwin)
+      return fgetxattr(fd, name, value.baseAddress, value.count, 0, 0)
+      #else
+      return importGetXattr(fd, name, value.baseAddress, value.count)
+      #endif
+    } }
+    guard count == 36, String(decoding: bytes.prefix(36), as: UTF8.self) == nonce else {
+      throw LokalTransferError.unsafeFile
+    }
+    return info
+  }
+}
+
 struct LokalTransferLibraryReceipt: Codable, Equatable, Sendable {
   let relativePath: String
   let bytes: Int64
@@ -181,6 +283,100 @@ final class LokalTransferLibrary: @unchecked Sendable {
     try checkRoot()
     return LokalTransferLibraryReceipt(relativePath: Self.directoryName + "/" + name,
       bytes: Int64(after.st_size), sha256: digest)
+  }
+
+  private func trackedExisting(_ work: LokalTransferImportCustody, files: LokalTransferFiles,
+                               cancellation: LokalTransferCopyCancellation) throws -> LokalTransferLibraryReceipt? {
+    try checkRoot(); try cancellation.check()
+    guard work.location == (try LokalTransferLibraryLocation(parent: parent, directory: directory)) else {
+      throw LokalTransferError.unsafeFile
+    }
+    let name = try Self.fileName(work.job)
+    let fd = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+    guard fd >= 0 else {
+      if errno == ENOENT { return nil }
+      throw LokalTransferError.unsafeFile
+    }
+    defer { close(fd) }
+    guard let proof = work.publication, let nonce = work.copyNonce else { throw LokalTransferError.unsafeFile }
+    var before = try proof.verify(fd)
+    guard let expectedBytes = work.job.receivedBytes, Int64(before.st_size) == expectedBytes else {
+      throw LokalTransferError.checksumMismatch
+    }
+    if before.st_nlink == 2 {
+      try files.retirePublishedLibraryPart(work.job, nonce: nonce, publicDescriptor: fd)
+      before = try proof.verify(fd)
+    }
+    guard before.st_nlink == 1 else { throw LokalTransferError.unsafeFile }
+    let hash = try LokalTransferFiles.digest(fd, checkCancellation: cancellation.check)
+    let after = try proof.verify(fd)
+    var named = stat()
+    guard after.st_nlink == 1, fstatat(directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
+          named.st_dev == after.st_dev, named.st_ino == after.st_ino,
+          named.st_nlink == 1 else { throw LokalTransferError.unsafeFile }
+    #if canImport(Darwin)
+    guard before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec,
+          before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else { throw LokalTransferError.unsafeFile }
+    #else
+    guard before.st_ctim.tv_sec == after.st_ctim.tv_sec,
+          before.st_ctim.tv_nsec == after.st_ctim.tv_nsec else { throw LokalTransferError.unsafeFile }
+    #endif
+    guard hash == work.job.receivedSHA256 else { throw LokalTransferError.checksumMismatch }
+    try checkRoot(); try cancellation.check()
+    return LokalTransferLibraryReceipt(relativePath: Self.directoryName + "/" + name,
+      bytes: Int64(after.st_size), sha256: hash)
+  }
+
+  /// Private tracked publication. Caller supplies the actual registry writer
+  /// validation; no bridge/product capability exposes this helper yet. Long
+  /// copy/hash and journal I/O happen outside Isar and the cancellation lock.
+  func installTracked(_ job: LokalTransferJob, songID: Int64, journal: LokalTransferJournal,
+                      files: LokalTransferFiles, cancellation: LokalTransferCopyCancellation,
+                      validateOwnership: () throws -> Void) throws -> LokalTransferLibraryReceipt {
+    try job.validate(); try validateOwnership(); try cancellation.check()
+    mutex.lock(); defer { mutex.unlock() }
+    while flock(writer, LOCK_EX) != 0 {
+      if errno != EINTR { throw LokalTransferError.posix("lock_tracked_copy", errno) }
+    }
+    defer { _ = flock(writer, LOCK_UN) }
+    try checkRoot(); try validateOwnership(); try cancellation.check()
+    var work = try journal.reserveImport(id: job.id, revision: job.revision, songID: songID)
+    let location = try LokalTransferLibraryLocation(parent: parent, directory: directory)
+    if work.location == nil {
+      guard job.phase == .validating else { throw LokalTransferError.invalidTransition }
+      work = try journal.bindImportLocation(work, location: location)
+    }
+    guard work.location == location else { throw LokalTransferError.unsafeFile }
+    if let receipt = try trackedExisting(work, files: files, cancellation: cancellation) {
+      try validateOwnership()
+      return receipt
+    }
+    // Importing is a commit/reconciliation boundary. Missing public bytes may
+    // not be recreated while an Isar commit could already have succeeded.
+    guard job.phase == .validating, let nonce = work.copyNonce else { throw LokalTransferError.invalidTransition }
+    return try files.withPrivateLibraryPart(job, nonce: nonce) { descriptor in
+      _ = try files.copyForLibrary(job, to: descriptor, checkCancellation: {
+        try cancellation.check()
+        self.testingBoundary?("trackedCopyCheckpoint")
+      })
+      try checkRoot(); try validateOwnership(); try cancellation.check()
+      let proof = try LokalTransferLibraryPublication.stamp(descriptor, nonce: nonce)
+      work = try journal.recordImportPublication(work, proof: proof)
+      testingBoundary?("trackedProofCommitted")
+      try validateOwnership(); try cancellation.check(); try checkRoot()
+      testingBoundary?("beforeTrackedPublication")
+      try files.publishPrivateLibraryPart(job, nonce: nonce, descriptor: descriptor,
+        to: directory, cancellation: cancellation)
+      testingBoundary?("afterTrackedPublication")
+      try syncDirectory()
+      testingBoundary?("afterTrackedDirectorySync")
+      guard let receipt = try trackedExisting(work, files: files, cancellation: cancellation) else {
+        throw LokalTransferError.unsafeFile
+      }
+      testingBoundary?("afterTrackedVerification")
+      try validateOwnership()
+      return receipt
+    }
   }
 
   func install(_ job: LokalTransferJob, from files: LokalTransferFiles,

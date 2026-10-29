@@ -60,7 +60,9 @@ class IosTransferImportLease {
         !{
           IosTransferPhase.validating,
           IosTransferPhase.importing,
+          IosTransferPhase.complete,
         }.contains(job.phase) ||
+        (job.phase == IosTransferPhase.complete && !reconcileOnly) ||
         (reconcileOnly && source != null) ||
         (source != null &&
             (!source.startsWith('/') ||
@@ -88,6 +90,49 @@ class IosTransferImportLease {
     'leaseID': leaseId,
     'clientID': clientId,
   };
+}
+
+/// A verified physical copy at the native importing boundary. This document is
+/// not acknowledgement that a Song or a completed Isar receipt exists.
+class IosTransferPublishedImport {
+  const IosTransferPublishedImport._(this.job, this.songId, this.receipt);
+  final IosTransferJob job;
+  final int songId;
+  final IosTransferLibraryReceipt receipt;
+
+  factory IosTransferPublishedImport.fromJson(Object? value) {
+    if (value is! Map ||
+        value.keys.any((key) => !{'job', 'songID', 'receipt'}.contains(key)) ||
+        value['songID'] is! int ||
+        (value['songID'] as int) < 1) {
+      _invalidImport();
+    }
+    final job = IosTransferJob.fromJson(value['job']);
+    final songId = value['songID'] as int;
+    final receipt = IosTransferLibraryReceipt.fromJson(value['receipt']);
+    if (job.direction != 'download' ||
+        job.phase != IosTransferPhase.importing ||
+        (job.intent.identity.localSongId != null &&
+            job.intent.identity.localSongId != songId.toString())) {
+      _invalidImport();
+    }
+    receipt.validateFor(job);
+    return IosTransferPublishedImport._(job, songId, receipt);
+  }
+
+  void validateFor(IosTransferImportLease lease, {required int songId}) {
+    if (lease.reconcileOnly ||
+        this.songId != songId ||
+        job.id != lease.job.id ||
+        job.revision != lease.job.revision ||
+        job.receivedBytes != lease.job.receivedBytes ||
+        job.receivedSha256 != lease.job.receivedSha256 ||
+        receipt.relativePath != lease.target.relativePath ||
+        jsonEncode(job.intent.toJson()) !=
+            jsonEncode(lease.job.intent.toJson())) {
+      _invalidImport();
+    }
+  }
 }
 
 /// A native-derived target is relative to the current app's Music directory.
@@ -165,6 +210,7 @@ class IosTransferMediaInfo {
   const IosTransferMediaInfo({
     required this.recognized,
     this.codec,
+    this.format,
     this.durationMs,
     this.sampleRate,
     this.bitDepth,
@@ -173,13 +219,73 @@ class IosTransferMediaInfo {
   });
   final bool recognized;
   final String? codec;
+
+  /// Actual container/playback label (WAV, M4A, FLAC...), separate from codec.
+  final String? format;
   final int? durationMs, sampleRate, bitDepth, bitrate, channels;
+
+  Map<String, Object> toJson() {
+    validate();
+    return {
+      'recognized': recognized,
+      'codec': ?codec,
+      'format': ?format,
+      'durationMs': ?durationMs,
+      'sampleRate': ?sampleRate,
+      'bitDepth': ?bitDepth,
+      'bitrate': ?bitrate,
+      'channels': ?channels,
+    };
+  }
+
+  factory IosTransferMediaInfo.fromJson(Object? value) {
+    if (value is! Map ||
+        value.keys.any(
+          (key) => !{
+            'recognized',
+            'codec',
+            'format',
+            'durationMs',
+            'sampleRate',
+            'bitDepth',
+            'bitrate',
+            'channels',
+          }.contains(key),
+        ) ||
+        value['recognized'] is! bool ||
+        (value['codec'] != null && value['codec'] is! String) ||
+        (value['format'] != null && value['format'] is! String)) {
+      _invalidImport();
+    }
+    for (final key in [
+      'durationMs',
+      'sampleRate',
+      'bitDepth',
+      'bitrate',
+      'channels',
+    ]) {
+      if (value[key] != null && value[key] is! int) _invalidImport();
+    }
+    final media = IosTransferMediaInfo(
+      recognized: value['recognized'] as bool,
+      codec: value['codec'] as String?,
+      format: value['format'] as String?,
+      durationMs: value['durationMs'] as int?,
+      sampleRate: value['sampleRate'] as int?,
+      bitDepth: value['bitDepth'] as int?,
+      bitrate: value['bitrate'] as int?,
+      channels: value['channels'] as int?,
+    );
+    media.validate();
+    return media;
+  }
 
   void validate() {
     bool outside(int? value, int minimum, int maximum) =>
         value != null && (value < minimum || value > maximum);
     if (!recognized ||
         (codec != null && !RegExp(r'^[A-Z0-9_]{1,16}$').hasMatch(codec!)) ||
+        (format != null && !RegExp(r'^[A-Z0-9_]{1,16}$').hasMatch(format!)) ||
         outside(durationMs, 0, 365 * 24 * 60 * 60 * 1000) ||
         outside(sampleRate, 1, 1536000) ||
         outside(bitDepth, 1, 64) ||

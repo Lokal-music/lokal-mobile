@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_import.dart';
+import '../models/ios_transfer_recovery.dart';
 import 'link/link_protocol.dart' show linkUuid;
+import 'ios_transfer_coordinator_port.dart';
 
 Uint8List _prepareIntents(List<IosTransferIntent> intents) {
   if (intents.isEmpty ||
@@ -33,7 +35,7 @@ Uint8List _prepareIntents(List<IosTransferIntent> intents) {
 /// One application coordinator owns this transport. Native storage/networking
 /// survives Dart/engine replacement; this class owns only typed calls and the
 /// foreground change subscription. No credentials or durable Dart journal.
-class IosTransferTransport {
+class IosTransferTransport implements IosTransferCoordinatorPort {
   IosTransferTransport({
     this.channel = const MethodChannel('lokal/transfers'),
     bool? supported,
@@ -57,6 +59,7 @@ class IosTransferTransport {
   String? _observedClient;
   Future<void>? _observationReady;
   (BinaryMessenger, String) get _key => (channel.binaryMessenger, channel.name);
+  @override
   Stream<void> get changes => _changes.stream;
 
   Future<Object?> _call(String method, [Object? payload]) async {
@@ -94,6 +97,7 @@ class IosTransferTransport {
     }
   }
 
+  @override
   Future<IosTransferCapability> capability() async {
     if (!supported) return const IosTransferCapability(available: false);
     try {
@@ -110,6 +114,7 @@ class IosTransferTransport {
 
   Future<IosTransferSummary> summary() async =>
       IosTransferSummary.fromJson(await _call('summary'));
+  @override
   Future<IosTransferSummary> recover() async =>
       IosTransferSummary.fromJson(await _call('recover'));
 
@@ -146,6 +151,7 @@ class IosTransferTransport {
 
   Future<IosTransferJob> cancel(IosTransferJob job) => _control('cancel', job);
   Future<IosTransferJob> retry(IosTransferJob job) => _control('retry', job);
+  @override
   Future<IosTransferJob> verify(IosTransferJob job) => _control('verify', job);
 
   Future<Object?> _importCall(
@@ -178,7 +184,52 @@ class IosTransferTransport {
   }
 
   /// Private integration boundary; capability.libraryImport stays false until
+  @override
+  Future<IosTransferImportWorkPage> importWorkPage({
+    IosTransferWorkCursor? after,
+    int limit = 100,
+  }) async {
+    if (limit < 1 || limit > 100) {
+      throw const FormatException('Invalid import recovery page size.');
+    }
+    return IosTransferImportWorkPage.fromJson(
+      await _importCall('importWorkPage', {
+        if (after != null) 'after': after.value,
+        'limit': limit,
+      }),
+      limit: limit,
+      after: after,
+    );
+  }
+
+  @override
+  Future<IosTransferImportCandidatePage> importCandidatesPage({
+    IosTransferWorkCursor? after,
+    int limit = 100,
+  }) async {
+    if (limit < 1 || limit > 100) {
+      throw const FormatException('Invalid import candidate page size.');
+    }
+    return IosTransferImportCandidatePage.fromJson(
+      await _importCall('importCandidatesPage', {
+        if (after != null) 'after': after.value,
+        'limit': limit,
+      }),
+      limit: limit,
+      after: after,
+    );
+  }
+
+  @override
+  Future<void> drainImports() async {
+    if (await _importCall('drainImports', {}) != true) {
+      throw const FormatException('Invalid native import drainage response.');
+    }
+  }
+
+  /// Private integration boundary; capability.libraryImport stays false until
   /// the media/database/scanner/clear/unpair coordinator is accepted.
+  @override
   Future<IosTransferImportLease> claimImport(
     IosTransferJob job, {
     bool reconcileOnly = false,
@@ -211,6 +262,54 @@ class IosTransferTransport {
     return lease;
   }
 
+  /// Private publication only; the root coordinator must still prove media and
+  /// atomically commit its prepared Song plus Isar receipt before completion.
+  @override
+  Future<IosTransferPublishedImport> publishImport(
+    IosTransferImportLease lease, {
+    required int songId,
+  }) async {
+    if (lease.reconcileOnly || songId < 1) {
+      throw StateError(
+        'Publication requires a writer and prepared Song identity.',
+      );
+    }
+    final result = IosTransferPublishedImport.fromJson(
+      await _importCall('publishImport', {...lease.control, 'songID': songId}),
+    );
+    result.validateFor(lease, songId: songId);
+    return result;
+  }
+
+  /// The root must first prove its durable committed Isar receipt. This call
+  /// only acknowledges native job history and drains private retained staging.
+  @override
+  Future<IosTransferJob> acknowledgeImport(
+    IosTransferImportLease lease, {
+    required int songId,
+  }) async {
+    if (songId < 1) {
+      throw const FormatException('Invalid completed Song identity.');
+    }
+    final result = IosTransferJob.fromJson(
+      await _importCall('acknowledgeImport', {
+        ...lease.control,
+        'songID': songId,
+      }),
+    );
+    if (result.phase != IosTransferPhase.complete ||
+        result.id != lease.job.id ||
+        result.revision != lease.job.revision ||
+        result.receivedBytes != lease.job.receivedBytes ||
+        result.receivedSha256 != lease.job.receivedSha256 ||
+        jsonEncode(result.intent.toJson()) !=
+            jsonEncode(lease.job.intent.toJson())) {
+      throw const FormatException('Invalid native import completion.');
+    }
+    return result;
+  }
+
+  @override
   Future<void> validateImport(
     IosTransferImportLease lease, {
     bool requiresWrite = true,
@@ -229,6 +328,7 @@ class IosTransferTransport {
     }
   }
 
+  @override
   Future<void> releaseImport(IosTransferImportLease lease) async {
     final result = await _importCall('releaseImport', lease.control);
     if (result != true) {

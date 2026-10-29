@@ -239,6 +239,96 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
+  private func libraryPartName(_ job: LokalTransferJob, nonce: String) throws -> String {
+    try job.validate()
+    guard job.direction == .download,
+          UUID(uuidString: nonce)?.uuidString.lowercased() == nonce else { throw LokalTransferError.invalidRecord }
+    return job.id + "-" + String(job.revision) + "-" + nonce + ".import-part"
+  }
+
+  /// Called only while holding the Music writer lock and its persisted root
+  /// binding. These parts live in private app support, not the user Music tree.
+  /// A single-link interrupted part is disposable operation state, just like
+  /// the retained download; symlinks and unrelated hard links remain refused.
+  func withPrivateLibraryPart<T>(_ job: LokalTransferJob, nonce: String,
+                                 _ operation: (Int32) throws -> T) throws -> T {
+    guard job.phase == .validating else { throw LokalTransferError.invalidTransition }
+    let name = try libraryPartName(job, nonce: nonce)
+    let fd = try locked { () throws -> Int32 in
+      try checkRoot()
+      let previous = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+      if previous >= 0 {
+        defer { close(previous) }
+        var info = stat(), named = stat()
+        guard fstat(previous, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              info.st_nlink == 1, fstatat(directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
+              named.st_dev == info.st_dev, named.st_ino == info.st_ino,
+              unlinkat(directory, name, 0) == 0, fsync(directory) == 0 else { throw LokalTransferError.unsafeFile }
+      } else if errno != ENOENT { throw LokalTransferError.unsafeFile }
+      let created = openat(directory, name, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+      guard created >= 0 else { throw LokalTransferError.posix("create_private_import_part", errno) }
+      return created
+    }
+    defer {
+      // Retire only our still-named descriptor. A published copy may have its
+      // second link here; never touch a replacement or an unrelated link set.
+      try? locked {
+        try checkRoot()
+        var held = stat(), named = stat()
+        if fstat(fd, &held) == 0, (held.st_nlink == 1 || held.st_nlink == 2),
+           fstatat(directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
+           named.st_dev == held.st_dev, named.st_ino == held.st_ino {
+          guard unlinkat(directory, name, 0) == 0, fsync(directory) == 0 else {
+            throw LokalTransferError.posix("retire_private_import_part", errno)
+          }
+        }
+      }
+      close(fd)
+    }
+    #if os(iOS) && !targetEnvironment(simulator)
+    try FileManager.default.setAttributes(
+      [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+      ofItemAtPath: root.appendingPathComponent(name).path)
+    #endif
+    return try operation(fd)
+  }
+
+  func publishPrivateLibraryPart(_ job: LokalTransferJob, nonce: String, descriptor: Int32,
+                                 to destination: Int32, cancellation: LokalTransferCopyCancellation) throws {
+    let name = try libraryPartName(job, nonce: nonce)
+    let target = try LokalTransferLibrary.fileName(job)
+    try locked {
+      try checkRoot()
+      var held = stat(), named = stat()
+      guard let expectedBytes = job.receivedBytes,
+            fstat(descriptor, &held) == 0, held.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+            held.st_nlink == 1, Int64(held.st_size) == expectedBytes,
+            fstatat(directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
+            named.st_dev == held.st_dev, named.st_ino == held.st_ino,
+            fsync(directory) == 0 else { throw LokalTransferError.unsafeFile }
+      try cancellation.whileCurrent {
+        guard linkat(directory, name, destination, target, 0) == 0 else {
+          throw LokalTransferError.posix("publish_private_import", errno)
+        }
+      }
+    }
+  }
+
+  /// Recover only the exact private/public two-link pair, after the caller has
+  /// checked durable publication provenance against the public descriptor.
+  func retirePublishedLibraryPart(_ job: LokalTransferJob, nonce: String, publicDescriptor: Int32) throws {
+    let name = try libraryPartName(job, nonce: nonce)
+    try locked {
+      try checkRoot()
+      var published = stat(), partial = stat()
+      guard fstat(publicDescriptor, &published) == 0, published.st_nlink == 2,
+            fstatat(directory, name, &partial, AT_SYMLINK_NOFOLLOW) == 0,
+            partial.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), partial.st_nlink == 2,
+            partial.st_dev == published.st_dev, partial.st_ino == published.st_ino,
+            unlinkat(directory, name, 0) == 0, fsync(directory) == 0 else { throw LokalTransferError.unsafeFile }
+    }
+  }
+
   static func digest(_ fd: Int32, checkCancellation: () throws -> Void = {}) throws -> String {
     try checkCancellation()
     #if canImport(CryptoKit)

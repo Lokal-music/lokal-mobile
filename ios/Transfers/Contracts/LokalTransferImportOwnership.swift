@@ -120,7 +120,9 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func claim(_ ticket: Ticket, job: LokalTransferJob,
              permission: Permission) throws -> Lease {
     try job.validate()
-    guard job.direction == .download, [.validating, .importing].contains(job.phase) else {
+    guard job.direction == .download,
+          [.validating, .importing].contains(job.phase) ||
+            (job.phase == .complete && permission == .reconcileOnly) else {
       throw LokalTransferError.invalidTransition
     }
     let scope = try normalized(LokalTransferScope(desktopID: job.identity.desktopID,
@@ -162,6 +164,18 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
         throw LokalTransferError.invalidTransition
       }
       try lease.cancellation.check()
+    }
+  }
+
+  /// Capture the existing writer's cancellation token without opening storage
+  /// or entering the file queue. Returning it cannot upgrade a read-only lease.
+  func writerCancellation(_ owner: Owner, jobID: String, revision: Int,
+                          leaseID: String) throws -> LokalTransferCopyCancellation {
+    try locked {
+      let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
+      guard lease.permission == .write else { throw LokalTransferError.invalidTransition }
+      try lease.cancellation.check()
+      return lease.cancellation
     }
   }
 
