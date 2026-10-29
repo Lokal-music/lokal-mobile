@@ -408,13 +408,21 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                 (b.songs.first.year ?? 0).compareTo(a.songs.first.year ?? 0),
           );
     final albums = <LokalCatalogueAlbum>[];
-    final albumKeys = <String>{};
-    if (_online)
+    final albumIds = <String>{};
+    final onlineTitles = <String>{};
+    if (_online) {
       for (final album in _page?.albums ?? <LokalCatalogueAlbum>[]) {
-        if (albumKeys.add(recommendationKey(album.title))) albums.add(album);
+        final title = recommendationKey(album.title);
+        // Do not collapse distinct official editions solely because they
+        // share a title. Artist lookup can return several release IDs.
+        if (album.id?.isNotEmpty == true && !albumIds.add(album.id!)) continue;
+        if (album.id?.isNotEmpty != true && !onlineTitles.add(title)) continue;
+        onlineTitles.add(title);
+        albums.add(album);
       }
+    }
     for (final group in groups) {
-      if (albumKeys.add(recommendationKey(group.albumName)))
+      if (onlineTitles.add(recommendationKey(group.albumName)))
         albums.add(
           LokalCatalogueAlbum(
             title: group.albumName,
