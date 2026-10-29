@@ -118,9 +118,6 @@ class _GlobalCatalogueSearchSectionState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(lokalText(widget.songsOnly ? 'Online songs' : 'Global'), style: TextStyle(
-            color: t.text, fontSize: 17, fontWeight: FontWeight.w600,
-          )),
           FutureBuilder<GlobalCatalogueMatches>(
             future: _results,
             builder: (context, snapshot) {
@@ -146,21 +143,13 @@ class _GlobalCatalogueSearchSectionState
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    (data.catalogue == 'spotify' ? 'Spotify' : 'Apple Music') +
-                        ' catalogue · plays through your configured sources',
-                    style: TextStyle(color: t.muted, fontSize: 11),
-                  ),
                   if (data.notice != null) ...[
                     const SizedBox(height: 4),
                     Text(data.notice!, style: TextStyle(color: t.muted, fontSize: 11)),
                   ],
-                  const SizedBox(height: 8),
                   if (songs.isEmpty && albums.isEmpty && artists.isEmpty)
                     Text('No global results found.', style: TextStyle(color: t.muted)),
                   if (songs.isNotEmpty) ...[
-                    if (!widget.songsOnly)
-                      Text(lokalText('Songs'), style: TextStyle(color: t.muted, fontSize: 12)),
                     for (final song in shown)
                       ListTile(
                         contentPadding: EdgeInsets.zero, dense: true,
