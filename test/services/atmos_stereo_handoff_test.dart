@@ -41,6 +41,20 @@ void main() {
       expect(shouldReplaceQueuedAudioSource(stereo, fresh), isTrue);
     });
 
+    test('AC-4 and JOC use independent native decoder lifecycles', () {
+      final ac4 = version('/cache/amazon.mp4', atmos: true)
+          .copyWith(fileType: 'AC-4');
+      expect(androidDolbyCodec(atmos), 'eac3_joc');
+      expect(androidDolbyCodec(ac4), 'ac4');
+      expect(androidDolbyCodec(stereo), 'normal');
+      expect(shouldResetAndroidAtmosDecoder(atmos, ac4), isTrue);
+      expect(shouldResetAndroidAtmosDecoder(ac4, atmos), isTrue);
+      expect(shouldResetAndroidAtmosDecoder(ac4, stereo), isTrue);
+      expect(shouldResetAndroidAtmosDecoder(stereo, ac4), isTrue);
+      expect(shouldResetAndroidAtmosDecoder(ac4, ac4), isFalse);
+      expect(androidAudioSourceIdentity(ac4), isNot(androidAudioSourceIdentity(atmos)));
+    });
+
     test('Android decoder is reset for both JOC<->stereo directions', () {
       expect(shouldResetAndroidAtmosDecoder(atmos, stereo), isTrue);
       expect(shouldResetAndroidAtmosDecoder(stereo, atmos), isTrue);
@@ -56,6 +70,34 @@ void main() {
       {'id': 'LOSSLESS', 'kind': 'lossless'},
       {'id': 'HI_RES_LOSSLESS', 'kind': 'lossless'},
     ];
+
+    test('Amazon AC-4 and E-AC-3 cannot become implicit playback tiers', () {
+      const amazon = <dynamic>[
+        {'id': 'ac4', 'kind': 'spatial', 'label': 'Dolby Atmos (AC-4)'},
+        {'id': 'eac3', 'kind': 'spatial', 'label': 'Dolby Digital Plus'},
+        {'id': 'best', 'kind': 'lossless', 'label': 'FLAC'},
+        {'id': 'opus', 'kind': 'lossy', 'label': 'Opus'},
+      ];
+      expect(isMorneyeAtmosQuality('ac4'), isTrue);
+      expect(isMorneyeAtmosQuality('AC-4'), isTrue);
+      expect(isMorneyeAtmosQuality('eac3'), isFalse,
+          reason: 'Plain E-AC-3 is not Dolby Atmos');
+      expect(morneyeSpatialOption(amazon[1] as Map), isTrue);
+      for (final configured in ['ac4', 'eac3']) {
+        expect(chooseMorneyeDownloadQuality(
+          requested: null, configured: configured,
+          options: amazon, provider: 'amazon',
+        ), 'best');
+      }
+      expect(chooseMorneyeDownloadQuality(
+        requested: 'ac4', configured: 'best',
+        options: amazon, provider: 'amazon',
+      ), 'ac4');
+      expect(resolveMorneyeRequestQuality(
+        forPlayback: false, requested: null, configured: 'ac4',
+        options: amazon, provider: 'amazon',
+      ), 'ac4', reason: 'Explicit addon download setting is preserved');
+    });
 
     test('normal Tidal streams cannot inherit an Atmos default', () {
       expect(chooseMorneyeDownloadQuality(
