@@ -25,6 +25,17 @@ List<int> mp4Box(String kind, List<int> data) {
 }
 
 void main() {
+  test('only Qobuz Morneye transfers are exposed before completion', () {
+    expect(morneyeCanPlayWhileDownloading('qobuz'), isTrue);
+    expect(morneyeCanPlayWhileDownloading('qobuz-web'), isTrue);
+    for (final provider in [
+      'tidal', 'tidal-web', 'deezer', 'amazon', 'spotify',
+    ]) {
+      expect(morneyeCanPlayWhileDownloading(provider), isFalse,
+          reason: provider);
+    }
+  });
+
   late Directory directory;
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('morneye-live-test-');
