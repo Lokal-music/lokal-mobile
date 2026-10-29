@@ -13,9 +13,9 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Media3/just_audio can decode or pass through E-AC-3 JOC using Android's
- * licensed codecs/output stack. Do not decode with ffmpeg: that loses the
- * Atmos object metadata. Never infer JOC from an "ec-3" extension alone.
+ * Media3/just_audio handles E-AC-3 JOC or AC-4 using Android's native
+ * codecs/output stack. Do not transcode the original compressed stream.
+ * AC-4 encoding is not proof of an Atmos presentation.
  */
 internal object LokalAtmos {
     private const val CHANNEL = "lokal/atmos"
@@ -46,7 +46,8 @@ internal object LokalAtmos {
         if (Build.VERSION.SDK_INT < 28) {
             Log.i(TAG, "event=capability sdk=${Build.VERSION.SDK_INT} available=false reason=sdk_unsupported")
             return mapOf("available" to false, "jocDecoder" to false,
-                "passthrough" to false, "sdk" to Build.VERSION.SDK_INT)
+                "passthrough" to false, "ac4Decoder" to false,
+                "ac4Passthrough" to false, "sdk" to Build.VERSION.SDK_INT)
         }
 
         // Only explicitly supported JOC decoders count. A generic E-AC-3
@@ -118,7 +119,7 @@ internal object LokalAtmos {
                 format.getString(MediaFormat.KEY_MIME)?.equals(expectedMime, true) == true
             }
             // No file path, filename, URL, or provider response is logged.
-            Log.i(TAG, "event=source_probe tracks=${extractor.trackCount} joc=$found")
+            Log.i(TAG, "event=source_probe tracks=${extractor.trackCount} codec=${if (expectedMime == AC4) "ac4" else "eac3_joc"} encoded=$found")
             found
         } catch (error: Exception) {
             Log.w(TAG, "event=source_probe_error type=${error.javaClass.simpleName}")

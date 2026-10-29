@@ -105,6 +105,14 @@ class MorneyePackageError implements Exception {
   String toString() => message;
 }
 
+/// The downloaded bytes did not match the requested encoded source.
+/// Distinct from an addon's tier, authorization or transport failure.
+class MorneyeSourceVerificationError extends MorneyePackageError {
+  const MorneyeSourceVerificationError(String codec)
+      : super('The requested $codec source could not be verified. '
+            'No stereo substitute was used.');
+}
+
 Map<String, Object?> morneyeValidateManifest(Object? json) {
   if (json is! Map ||
       !RegExp(r'^[a-z0-9][a-z0-9_-]{0,99}$')
@@ -661,7 +669,8 @@ class MorneyeDownload {
   final Map<String, Object?> metadata;
   final Map<String, Object?> info;
   final Directory _staging;
-  /// True only after Android MediaExtractor identified an E-AC-3 JOC stream.
+  /// True only after native/FFprobe identified an original AC-4 or JOC stream.
+  /// This does not imply that AC-4's immersive presentation was verified.
   final bool atmosEncoded;
   final String? atmosCodec; // Verified encoded source, AC-4 or E-AC-3 JOC.
 
@@ -1863,15 +1872,22 @@ class MorneyePackages {
         provider: provider,
       );
       if (forPlayback && !isMorneyeAtmosQuality(quality) &&
-          addon.qualityOptions.any((o) => o is Map && o['id'] == chosen && morneyeSpatialOption(o))) {
+          (morneyeSpatialOption({'id': chosen}, provider: provider) ||
+              addon.qualityOptions.any((o) => o is Map && o['id'] == chosen &&
+                  morneyeSpatialOption(o, provider: provider)))) {
         throw const MorneyePackageError(
           'Normal playback unexpectedly selected a Dolby Atmos download tier.',
         );
       }
-      final explicitAtmos = isMorneyeAtmosQuality(quality);
+      // Saves retain the user's Amazon AC-4 setting even without an explicit
+      // per-track tier. Playback's resolved tier has already excluded it.
+      final amazonAc4 = provider == 'amazon' &&
+          chosen.trim().toLowerCase() == 'ac4';
+      final explicitAtmos = isMorneyeAtmosQuality(quality) ||
+          (!forPlayback && amazonAc4);
       if (explicitAtmos) AtmosDiagnostics.record('addon_download_start', {
         'source': provider == 'tidal' ? 'tidal' : 'other',
-        'quality': 'DOLBY_ATMOS',
+        'quality': chosen,
       });
       phase('preparing_media');
       monitoringTransfer = true;
@@ -1916,7 +1932,7 @@ class MorneyePackages {
             .trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
         final extension = p.extension(file).toLowerCase();
         AtmosDiagnostics.record('addon_response', {
-          'quality': 'DOLBY_ATMOS',
+          'quality': chosen,
           'reason': claimed == 'DOLBY_ATMOS'
               ? 'provider_claimed_atmos'
               : claimed == 'HI_RES_LOSSLESS' || claimed == 'LOSSLESS' || claimed == 'HIGH'
@@ -1988,7 +2004,6 @@ class MorneyePackages {
       // Preserve the original compressed stream, including Atmos objects.
       // Amazon exposes 'ac4'; Tidal exposes 'DOLBY_ATMOS' (E-AC-3 JOC).
       // AC-4 verifies the codec, not independently its immersive presentation.
-      final amazonAc4 = quality?.toLowerCase() == 'ac4';
       final verifiedAtmos = explicitAtmos && (amazonAc4
           ? await AtmosPlaybackSupport.isAc4File(file)
           : await AtmosPlaybackSupport.isJocFile(file));
@@ -1998,10 +2013,7 @@ class MorneyePackages {
         'outcome': verifiedAtmos ? 'confirmed' : 'rejected',
       });
       if (explicitAtmos && !verifiedAtmos) {
-        throw MorneyePackageError(
-          'The requested ${amazonAc4 ? 'AC-4' : 'E-AC-3 JOC'} source '
-          'could not be verified. No stereo substitute was used.',
-        );
+        throw MorneyeSourceVerificationError(amazonAc4 ? 'AC-4' : 'E-AC-3 JOC');
       }
       if (verifiedAtmos) {
         // Media3, not Rust/FFmpeg PCM, retains the original encoded data.

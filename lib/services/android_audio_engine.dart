@@ -22,8 +22,14 @@ String androidAudioSourceIdentity(Song song) =>
     jsonEncode([song.id, song.filePath, song.atmosEncoded, song.fileType]);
 
 @visibleForTesting
+String androidDolbyCodec(Song song) =>
+    song.atmosEncoded
+        ? (song.fileType.toUpperCase() == 'AC-4' ? 'ac4' : 'eac3_joc')
+        : 'normal';
+
+@visibleForTesting
 bool shouldResetAndroidAtmosDecoder(Song? previous, Song next) =>
-    previous != null && previous.atmosEncoded != next.atmosEncoded;
+    previous != null && androidDolbyCodec(previous) != androidDolbyCodec(next);
 
 typedef AndroidAudioSourcesBuilder = Future<just_audio.AudioSource> Function();
 typedef AndroidAudioSourceBuilder = Future<just_audio.AudioSource> Function(
@@ -626,7 +632,7 @@ class AndroidAudioEngine implements AudioEngine {
             AtmosDiagnostics.record('playback_state', {
               'stage': state.processingState.name,
               'outcome': state.playing ? 'playing' : 'paused_or_buffering',
-              'codec': 'eac3_joc',
+              'codec': androidDolbyCodec(song!),
             });
           }
         }
@@ -710,7 +716,7 @@ class AndroidAudioEngine implements AudioEngine {
           )) return; // A preview is not a completed track.
           if (_loadedTrack?.atmosEncoded == true) {
             AtmosDiagnostics.record('playback_end', {
-              'codec': 'eac3_joc', 'outcome': 'completed',
+              'codec': androidDolbyCodec(_loadedTrack!), 'outcome': 'completed',
             });
           }
           onTrackEnded?.call();
@@ -728,7 +734,7 @@ class AndroidAudioEngine implements AudioEngine {
             'errorCode': error.code,
             'errorClass': error.runtimeType.toString(),
             'reason': 'android_player_error',
-            'codec': 'eac3_joc',
+            'codec': androidDolbyCodec(_loadedTrack!),
           });
         } else {
           devLog(
@@ -982,11 +988,11 @@ class AndroidAudioEngine implements AudioEngine {
     final outputModeChanged = shouldResetAndroidAtmosDecoder(priorTrack, track);
     if (outputModeChanged) {
       // Stop Media3's old codec / audio sink before reloading a different
-      // audio format. A JOC decoder may still own the output when stereo
+      // audio format. An AC-4 or JOC decoder may still own the output when stereo
       // starts; a seek into the previous playlist cannot release it.
       AtmosDiagnostics.record('playback_handoff', {
-        'from': priorTrack!.atmosEncoded ? 'atmos' : 'normal',
-        'to': track.atmosEncoded ? 'atmos' : 'normal',
+        'from': androidDolbyCodec(priorTrack!),
+        'to': androidDolbyCodec(track),
         'outcome': 'releasing_previous_decoder',
       });
       await player.stop().timeout(const Duration(seconds: 5));
@@ -1010,7 +1016,7 @@ class AndroidAudioEngine implements AudioEngine {
     _lastAtmosPlaybackState = null;
     if (track.atmosEncoded) {
       AtmosDiagnostics.record('native_load_start', {
-        'codec': 'eac3_joc',
+        'codec': androidDolbyCodec(track),
         'engine': 'normalAndroid',
         'crossfadeDisabled': true,
       });
@@ -1018,7 +1024,7 @@ class AndroidAudioEngine implements AudioEngine {
     await _configurePlayer(player);
 
     // Passthrough and object-based Atmos rendering cannot be crossfaded as
-    // PCM. Preserve the original JOC frames and use a single player.
+    // PCM. Preserve the original compressed frames and use a single player.
     final cfg = track.atmosEncoded
         ? AndroidCrossfadeConfig.disabled
         : _crossfadeConfigProvider();

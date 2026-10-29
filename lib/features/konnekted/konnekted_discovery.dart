@@ -894,7 +894,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
           var finished = false;
           MorneyeDownload download;
           // Normal Play stays on the provider's configured stereo/lossless
-          // tier. Only an explicit user request opts in to E-AC-3 JOC.
+          // tier. Only an explicit request opts into E-AC-3 JOC or AC-4.
           if (found.atmosAvailable || found.atmosRequested) {
             AtmosDiagnostics.record('request', {
               'source': 'morneye',
@@ -1031,7 +1031,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
             );
             try {
               if (tryAtmos) AtmosDiagnostics.record('download_start', {
-                'quality': 'DOLBY_ATMOS',
+                'quality': explicitTier,
                 'downloadOnly': found.atmosDownload,
               });
               final transfer = fetch(
@@ -1174,8 +1174,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
               }
               if (tryAtmos) {
                 if (error is DiscoveryException) rethrow;
-                final rejectedProbe = error is MorneyePackageError &&
-                    error.message.startsWith('The requested Atmos source');
+                final rejectedProbe = error is MorneyeSourceVerificationError;
                 throw DiscoveryException(
                   rejectedProbe
                       ? 'The requested spatial stream was not verified. Check Atmos diagnostics. No stereo track was substituted.'

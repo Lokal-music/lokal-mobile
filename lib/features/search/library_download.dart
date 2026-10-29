@@ -191,7 +191,7 @@ class LibraryDownloader {
   /// Copies [prepared] into the library. [artwork] is the cover to give it.
   Future<LibraryDownloadResult> save(Song prepared, {String? artwork}) async {
     if (prepared.atmosEncoded) AtmosDiagnostics.record('library_save_start', {
-      'codec': 'eac3_joc',
+      'codec': prepared.fileType.toUpperCase() == 'AC-4' ? 'ac4' : 'eac3_joc',
       'stage': 'copy',
     });
     final source = prepared.filePath;
@@ -201,7 +201,7 @@ class LibraryDownloader {
     final extension = p.extension(source).toLowerCase();
     // Mark saved Atmos files in the filename as well as the DB. A later
     // filesystem scan may replace the codec field with the MP4 container
-    // extension; the suffix keeps the original JOC routing identifiable.
+    // extension; the suffix keeps the original Dolby codec identifiable.
     final savedExtension = prepared.atmosEncoded
         ? (prepared.fileType.toUpperCase() == 'AC-4'
           ? '.ac4.atmos$extension' : '.atmos$extension') : extension;
@@ -255,7 +255,7 @@ class LibraryDownloader {
 
       if (target.fallback) await _registerFolder(target.root, folderName);
       // Rust tag editors may rewrite the MP4 audio sample description;
-      // preserve E-AC-3 JOC bitstream metadata byte for byte.
+      // preserve AC-4/E-AC-3 JOC bitstream metadata byte for byte.
       LyricsData? lyrics;
       if (!prepared.atmosEncoded) {
         try {
@@ -319,7 +319,7 @@ class LibraryDownloader {
       }
       unawaited(LinkDownloadOutbox.enqueue(copy.path));
       if (prepared.atmosEncoded) AtmosDiagnostics.record('library_save_complete', {
-        'codec': 'eac3_joc',
+        'codec': prepared.fileType.toUpperCase() == 'AC-4' ? 'ac4' : 'eac3_joc',
         'outcome': 'saved',
         'reason': target.fallback ? 'fallback_folder' : 'chosen_folder',
       });
