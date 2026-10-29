@@ -24,6 +24,77 @@ DEVICES = json.dumps({'devices': {
 
 
 class SimulatorCoordinatorTest(unittest.TestCase):
+    def test_preinstall_recovery_preserves_first_evidence_and_only_stops_owned_phone(self):
+        def run(args, **kwargs):
+            if args == ['xcrun', 'simctl', 'bootstatus', 'owned-udid', '-b']:
+                raise subprocess.TimeoutExpired(args, 300)
+            return subprocess.CompletedProcess(args, 0)
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, self.environment(directory), clear=True), \
+             patch.object(ios_simulator, 'command', side_effect=[
+                 DEVICES, RUNTIMES, 'owned-udid\n', DEVICES, RUNTIMES, 'recovery-udid\n']), \
+             patch.object(ios_simulator.subprocess, 'run', side_effect=run) as commands:
+            ios_simulator.boot_before_install()
+            original = Path(directory) / 'ios-simulator-boot-18.6'
+            recovered = Path(directory) / 'ios-simulator-boot-18.6-boot-recovery-owned-ud'
+            self.assertTrue((original / 'failure.txt').exists())
+            self.assertTrue((original / 'selected.json').exists())
+            self.assertTrue((recovered / 'selected.json').exists())
+            self.assertEqual(os.environ['IOS_SIMULATOR_UDID'], 'recovery-udid')
+            self.assertEqual(os.environ['IOS_SIMULATOR_RUNTIME'], RUNTIME)
+            calls = [call.args[0] for call in commands.call_args_list]
+            self.assertEqual([c for c in calls if 'shutdown' in c],
+                             [['xcrun', 'simctl', 'shutdown', 'owned-udid']])
+            self.assertFalse(any('erase' in c or 'delete' in c or 'install' in c for c in calls))
+
+    def test_preinstall_recovery_never_retries_boot_of_an_existing_phone(self):
+        devices = json.dumps({'devices': {RUNTIME: [{
+            'name': 'Lokal iPhone iOS 18.6', 'udid': 'existing-udid',
+            'state': 'Shutdown', 'isAvailable': True, 'deviceTypeIdentifier': DEVICE,
+        }]}})
+
+        def run(args, **kwargs):
+            if 'bootstatus' in args:
+                raise subprocess.TimeoutExpired(args, 300)
+            return subprocess.CompletedProcess(args, 0)
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, self.environment(directory), clear=True), \
+             patch.object(ios_simulator, 'command', side_effect=[devices, RUNTIMES]) as inventory, \
+             patch.object(ios_simulator.subprocess, 'run', side_effect=run) as commands:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                ios_simulator.boot_before_install()
+            self.assertEqual(inventory.call_count, 2)
+            self.assertFalse(any('shutdown' in c.args[0] for c in commands.call_args_list))
+
+    def test_second_preinstall_boot_failure_propagates_without_a_third_attempt(self):
+        def run(args, **kwargs):
+            if 'bootstatus' in args:
+                raise subprocess.TimeoutExpired(args, 300)
+            return subprocess.CompletedProcess(args, 0)
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, self.environment(directory), clear=True), \
+             patch.object(ios_simulator, 'command', side_effect=[
+                 DEVICES, RUNTIMES, 'owned-udid\n', DEVICES, RUNTIMES, 'recovery-udid\n']), \
+             patch.object(ios_simulator.subprocess, 'run', side_effect=run) as commands:
+            with self.assertRaises(subprocess.TimeoutExpired) as failure:
+                ios_simulator.boot_before_install()
+            self.assertIn('recovery-udid', failure.exception.cmd)
+            self.assertEqual(sum('bootstatus' in c.args[0] for c in commands.call_args_list), 2)
+
+    def test_preinstall_inventory_timeout_does_not_enter_device_recovery(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, self.environment(directory), clear=True), \
+             patch.object(ios_simulator, 'command', side_effect=subprocess.TimeoutExpired(
+                 ['xcrun', 'simctl', 'list', 'devices'], 90)) as inventory, \
+             patch.object(ios_simulator.subprocess, 'run') as commands:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                ios_simulator.boot_before_install()
+            self.assertEqual(inventory.call_count, 1)
+            commands.assert_not_called()
+
     def test_inventory_timeout_preserves_partial_output_without_a_false_ready(self):
         with tempfile.TemporaryDirectory() as directory, \
              patch.dict(os.environ, self.environment(directory), clear=True), \

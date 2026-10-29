@@ -59,6 +59,11 @@ abstract final class LokalPlayerMotion {
   /// (the mini player's top) to the top of the screen.
   static double travel(double startTop) => math.max(startTop, 200);
 
+  /// A continuous corner radius through the settling frame and its endpoint.
+  /// Clipping remains active at zero to avoid a one-frame repaint of the sheet.
+  static double sheetCornerRadius(double progress) =>
+      36 * (1 - progress.clamp(0.0, 1.0));
+
   /// The sheet at [progress]: its top edge between [startTop] and the top
   /// of the screen, rounded while it travels, fading in out of the mini
   /// player, over what's behind dimmed to match.
@@ -68,7 +73,10 @@ abstract final class LokalPlayerMotion {
     required Widget child,
   }) {
     final p = progress.clamp(0.0, 1.0);
-    final radius = 36 * ((1 - p) * 8).clamp(0.0, 1.0);
+    // Ease the four corners all the way down to zero, rather than
+    // retaining a large clip until the last few frames and then dropping
+    // ClipRRect entirely at the spring's completion.
+    final radius = sheetCornerRadius(p);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -80,8 +88,8 @@ abstract final class LokalPlayerMotion {
           child: Opacity(
             opacity: (p / .12).clamp(0.0, 1.0),
             child: ClipRRect(
-              clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
+              clipBehavior: Clip.antiAlias,
+              borderRadius: BorderRadius.circular(radius),
               child: RepaintBoundary(child: child),
             ),
           ),

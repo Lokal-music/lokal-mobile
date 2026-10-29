@@ -1,4 +1,3 @@
-import 'package:flick/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -114,7 +113,7 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
               titleBaseSp: tab.preview.$1,
               artistBaseSp: tab.preview.$2,
               manualScale: scale,
-              accentColor: _resolveAccentColor(tab.accent(prefs)),
+              accentColor: _resolveAccentColor(tab.accent(prefs), context.lokal.accent),
               centered: tab.centered,
             ),
           ),
@@ -219,8 +218,8 @@ final _tabs = <_WidgetTab>[
 ];
 
 /// The widget accents, as the home screen widgets draw them.
-List<(String, String, Color)> _accents() => [
-  ('theme', l10n.linkFollowAccent, AppColors.accent),
+List<(String, String, Color)> _accents(Color themeAccent) => [
+  ('theme', l10n.linkFollowAccent, themeAccent),
   ('white', l10n.white, Colors.white),
   ('amber', l10n.amber, const Color(0xFFFFB300)),
   ('blue', l10n.blue, const Color(0xFF64B5F6)),
@@ -228,9 +227,9 @@ List<(String, String, Color)> _accents() => [
   ('purple', l10n.purple, const Color(0xFFCE93D8)),
 ];
 
-Color _resolveAccentColor(String name) {
+Color _resolveAccentColor(String name, Color themeAccent) {
   return switch (name) {
-    'theme' => AppColors.accent,
+    'theme' => themeAccent,
     'amber' => const Color(0xFFFFB300),
     'blue' => const Color(0xFF64B5F6),
     'green' => const Color(0xFF81C784),
@@ -276,7 +275,7 @@ class _AccentPicker extends StatelessWidget {
         spacing: 14,
         runSpacing: 12,
         children: [
-          for (final (id, label, color) in _accents())
+          for (final (id, label, color) in _accents(t.accent))
             Semantics(
               button: true,
               selected: id == value,

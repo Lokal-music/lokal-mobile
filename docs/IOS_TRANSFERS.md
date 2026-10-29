@@ -5,8 +5,8 @@ Status: native transport, app owner and typed Flutter bridge accepted in build
 and both complete iOS 18.6/26 app suites pass, including native channel ownership
 and Keychain migration. Standalone native host contracts also pass five rounds.
 This qualifies the integrated protocol, not OS suspension/daemon delivery.
-Deterministic file promotion is a later local filesystem foundation; Isar import,
-uploads and persisted product progress are unfinished. Product capability keeps
+Deterministic file promotion and private Isar receipts are later isolated
+foundations; their product adapter, uploads and persisted progress are unfinished. Product capability keeps
 native import/upload disabled and existing Dart copying remains active.
 
 ```mermaid
@@ -26,7 +26,7 @@ flowchart LR
 
 Solid connections are implemented in source. Core storage/network connections
 have portable acceptance; the Flutter bridge has typed codec/ownership tests and
-an actual registered-channel integration probe awaiting Apple execution. Dashed
+an actual registered-channel integration probe accepted in build 78. Dashed
 connections are remaining product work. OS background execution still needs
 separate iOS suspension/relaunch acceptance.
 
@@ -355,3 +355,85 @@ These are process/filesystem checks, not power-loss, playable-media or Isar
 acceptance. The next boundary still needs native import ownership, media probing,
 an identity-preserving database transaction and acknowledged row receipt. Product
 capability remains disabled until those boundaries and clear/unpair ordering pass.
+
+### Private receipt store and cancellation continuation (29 October)
+
+The isolated `IosTransferImportStore` uses the locked Isar 3.3.2 native core,
+with a separate private receipt collection. The collection is deliberately not
+registered in the product database yet. `LibraryOpEntity` is unsuitable: those
+records are exported to paired peers, whose library protocol does not accept
+private transfer receipts. No account secret or absolute sandbox path is stored
+in a receipt. The stable key is the native job ID plus its revision.
+
+```mermaid
+sequenceDiagram
+  participant C as Future app coordinator
+  participant N as Native import owner
+  participant D as Single Isar writer
+  participant F as Owned Music files
+  C->>D: Prepare identity + private receipt atomically
+  D->>N: Check current native lease while holding writer
+  Note over D: Prepared target is reserved from scanning
+  C->>N: Publish verified owned copy
+  N->>F: Exclusive part, actual hash, no-overwrite publication
+  C->>D: Commit same song ID + completed receipt atomically
+  D->>N: Check current native lease while holding writer
+  C->>N: Acknowledge completed local row
+  Note over C,N: Coordinator, native lease RPC and scanner integration remain pending
+```
+
+Preparation reserves the existing remote recording's ID, or allocates one ghost
+row when the explicit copy plan has no local identity. Publication happens only
+after that reservation. The final write changes the same song into a local copy
+and commits the completed receipt in one transaction. Current descriptive/user
+metadata, cover art, date added, history references and CUE ranges are preserved;
+actual probed codec/quality replaces remote quality guesses. A deleted prepared
+row is refused. A committed receipt remains historical evidence after deletion
+and never recreates its song. Future/corrupt receipts are rejected and preserved.
+
+Actual native Isar contracts pass locally, including all eight existing product
+collections with every serialized field unchanged after schema addition; private
+preparation does not enter the peer library journal. The same suite covers
+metadata/history, CUE identity, changed accounts, destination conflicts, revoked
+fixture ownership, transaction rollback, a clear waiting behind an existing
+writer, six exact process-exit boundaries and six independent process writers
+reserving one identity. The focused Apple workflow now runs this pure Dart tool
+against the locked native macOS library too. This continuation is not yet hosted
+acceptance. The native ownership callback and media result are fixture boundaries;
+these checks do not prove an integrated decoder, native lease RPC or app import.
+
+File promotion now also accepts an immediate cancellation token. It checks
+between bounded copy/hash chunks; publication and revocation share a short lock.
+Long copying and hashing never hold that lock. Actual filesystem tests interrupt
+a 1 MiB copy after its first 256 KiB has been written, verify part cleanup and no
+visible destination, then verify a fresh attempt's entire hash. Boundary checks
+also cancel before and after publication. Cancellation after publication leaves
+the complete file recoverable; its database reservation must remain until native
+cleanup has drained. This is not yet connected to runtime cancellation.
+Three complete updated portable Swift rounds pass, retaining the journal,
+cross-process lock, real HTTP, pairing, crash-recovery and host-owner checks.
+
+| Next integration gate | Required evidence before product enablement |
+| --- | --- |
+| Native ownership | A replacement engine and revoked pairing cannot validate an old import lease, including while a long file operation occupies the worker. |
+| Library coordination | Scanner and import share one writer; reserved copies do not acquire a second song ID. Clear/delete/unpair win over delayed old imports. |
+| Product adapter | Actual media reader, same recording ID, reopened receipts, truthful progress and explicit retry/cancel work through the real Flutter channel. |
+| OS background transport | Actual suspended-app download and background-session callback reconciliation, separate from portable HTTP or fake lifecycle tests. |
+| Release candidate | One batched complete app package passes both simulator suites and independent source/binary/symbol verification, then Windows signing and physical iPhone acceptance. |
+
+Remaining integration gates are explicit: register the private schema safely;
+native import claims, engine-owned leases and fast revocation; real media probing;
+scanner exclusion inside its writer transaction; cancellation/cleanup before
+reservation retirement; clear/unpair barriers; a root app coordinator and honest
+localized progress. Exact pathname spelling alone must not be assumed to identify
+a file on Apple's case-insensitive/Unicode-normalizing filesystem. The adapter
+must also handle existing target-directory spelling before enabling scanning.
+The receipt's reserved-path query and original-source lookup use their actual
+Isar indexes rather than scanning every receipt/song for each imported file.
+The complete actual native Isar contracts pass again after that query change.
+The isolated database contracts use `relaxedDurability: false`. Product
+`Database.init` currently inherits Isar's relaxed default; its iOS open must use
+full durability before an import may acknowledge its database receipt or retire
+the only staging copy. Process-exit tests do not establish power-loss durability.
+Actual OS suspension/relaunch acceptance remains separate. Neither the native
+library helper nor the receipt adapter is exposed as an enabled product import API.

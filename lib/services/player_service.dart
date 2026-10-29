@@ -7388,16 +7388,20 @@ class PlayerService {
     if (engine == null) return;
     final selection = _selectionGeneration;
     final playback = _pendingPlaybackGeneration;
-    final collapsed = await IosLocalAudioRequests.wait(
-      engine.enterOnDemandQueueMode(
-        concatenated: _audioSourceSequence,
-        isCurrent: () => selection == _selectionGeneration && identical(engine, _androidEngine),
-        mayResume: () => playback == _pendingPlaybackGeneration,
-      ),
-    );
-    if (!identical(engine, _androidEngine)) return;
-    if (collapsed) _audioSourceSequence = null;
-    await _updateLoopMode();
+    // Shuffle and queue edits enter here directly from UI actions, outside a
+    // play request. Capture their own scope before any fenced native await.
+    await IosLocalAudioRequests.run(() async {
+      final collapsed = await IosLocalAudioRequests.wait(
+        engine.enterOnDemandQueueMode(
+          concatenated: _audioSourceSequence,
+          isCurrent: () => selection == _selectionGeneration && identical(engine, _androidEngine),
+          mayResume: () => playback == _pendingPlaybackGeneration,
+        ),
+      );
+      if (selection != _selectionGeneration || !identical(engine, _androidEngine)) return;
+      if (collapsed) _audioSourceSequence = null;
+      await IosLocalAudioRequests.wait(_updateLoopMode());
+    });
   }
 
   Future<void> _syncPlaylistAfterShuffle({required int oldCurrentIndex}) async {

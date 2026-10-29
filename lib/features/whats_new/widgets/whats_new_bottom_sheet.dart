@@ -23,27 +23,6 @@ class WhatsNewBottomSheet extends ConsumerWidget {
       title: l10n.whatSNew,
       maxHeightRatio: 0.85,
       content: WhatsNewBottomSheet(entry: entry),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.textPrimary,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.spacingLg,
-              vertical: 1,
-            ),
-            minimumSize: const Size(0, 16),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(
-            l10n.gotIt,
-            style: TextStyle(
-              fontFamily: 'GoogleSansFlex',
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
     );
   }
 

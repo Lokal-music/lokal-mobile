@@ -106,6 +106,12 @@ Future<void> probeIosQueueReorder(
   expect(player.currentIndex, 1730);
   expect(player.playlist.map((song) => song.id), large.map((song) => song.id));
   expect(player.debugNativeSequenceLength, 1);
+  binding.reportData!['large_library_on_demand_playback'] = {
+    'logical_entries': large.length,
+    'selected_index': 1730,
+    'native_sources': player.debugNativeSequenceLength,
+    'progress_ms': (player.positionNotifier.value - baseline).inMilliseconds,
+  };
   await player.pause();
   await player.seek(Duration.zero);
   await player.previousBySwipe();
@@ -120,6 +126,16 @@ Future<void> probeIosQueueReorder(
   expect(player.isPlayingNotifier.value, false);
   expect((player.positionNotifier.value - pausedAt).abs(), lessThan(const Duration(milliseconds: 250)));
   await player.setShuffleMode(ShuffleMode.off);
+  await player.addToQueue(source.copyWith(id: 'ios-large-manual'));
+  expect(player.queueNotifier.value.single.id, 'ios-large-manual');
+  expect(player.debugNativeSequenceLength, 1);
+  expect(player.isPlayingNotifier.value, false);
+  await player.clearQueue();
+  final tail = source.copyWith(id: 'ios-large-tail');
+  await player.appendToPlaylistTail(tail);
+  expect(player.playlist.last.id, tail.id);
+  expect(player.debugNativeSequenceLength, 1);
+  expect(player.isPlayingNotifier.value, false);
   binding.reportData!['large_library_on_demand_native'] = {
     'scope': '2,654 logical entries sharing generated audio; actual native sequence, not scanner/device performance',
     'logical_entries': large.length,
@@ -127,6 +143,7 @@ Future<void> probeIosQueueReorder(
     'native_sources': player.debugNativeSequenceLength,
     'previous_index': 1729,
     'paused_shuffle_preserves_recording_position': true,
+    'manual_queue_and_tail_capture_native_scope': true,
   };
   await player.play(source, playlist: [source]);
   await player.pause();

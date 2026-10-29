@@ -1,5 +1,16 @@
 import Foundation
 
+private final class CopyCheckpoint: @unchecked Sendable {
+  private let lock = NSLock()
+  private var checks = 0
+  func next() -> Int {
+    lock.lock()
+    defer { lock.unlock() }
+    checks += 1
+    return checks
+  }
+}
+
 /// Actual filesystem/process tests. Three-byte fixtures establish byte custody
 /// and crash recovery only, never media decoding or committed library identity.
 func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTransferFiles) throws {
@@ -39,6 +50,76 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
   stagedDocument["phase"] = "staged"
   let notClaimed = try LokalTransferJob.decodeDocument(JSONSerialization.data(withJSONObject: stagedDocument))
   try rejects("unclaimed staged bytes cannot become a library file") { _ = try library.install(notClaimed, from: files) }
+
+  let cancelled = LokalTransferCopyCancellation()
+  cancelled.cancel()
+  try rejects("a revoked token cannot reuse or publish a receipt") {
+    _ = try library.install(job, from: files, cancellation: cancelled)
+  }
+  for boundary in ["beforePublication", "afterPublication"] {
+    let cancelledRoot = try music("cancel-" + boundary)
+    let cancellation = LokalTransferCopyCancellation()
+    let copying = try LokalTransferLibrary(root: cancelledRoot, testingBoundary: { stage in
+      if stage == boundary { cancellation.cancel() }
+    })
+    try rejects("cancel at publication boundary cannot acknowledge import") {
+      _ = try copying.install(job, from: files, cancellation: cancellation)
+    }
+    let names = try manager.contentsOfDirectory(atPath: cancelledRoot.appendingPathComponent(LokalTransferLibrary.directoryName).path)
+    try require(!names.contains { $0.hasSuffix(".part") }, "cancel drains its exclusive part")
+    let visible = names.filter { !$0.hasPrefix(".") }
+    try require(visible.count == (boundary == "afterPublication" ? 1 : 0),
+      "only cancellation that wins before publication prevents a visible file")
+    if boundary == "afterPublication" {
+      let recovered = try copying.install(job, from: files)
+      try require(recovered.bytes == job.receivedBytes,
+        "published bytes remain recoverable while their prepared reservation is retained")
+    }
+  }
+
+  // Interrupt an actual 1 MiB copy after the first 256 KiB write. The boundary
+  // observes real part bytes; this is not a timing-dependent cancellation race.
+  let bigPayload = Data(repeating: 97, count: 1024 * 1024)
+  let bigHash = "9bc1b2a288b26af7257a36277ae3816a7d4f16e89c1e7e77d0a5c48bad62b360"
+  var bigDocument = try JSONSerialization.jsonObject(with: JSONEncoder().encode(job)) as! [String: Any]
+  bigDocument["expectedBytes"] = bigPayload.count
+  bigDocument["receivedBytes"] = bigPayload.count
+  bigDocument["expectedSHA256"] = bigHash
+  bigDocument["receivedSHA256"] = bigHash
+  if bigDocument["responseBytes"] != nil { bigDocument["responseBytes"] = bigPayload.count }
+  if bigDocument["responseSHA256"] != nil { bigDocument["responseSHA256"] = bigHash }
+  let bigJob = try LokalTransferJob.decodeDocument(JSONSerialization.data(withJSONObject: bigDocument))
+  try bigPayload.write(to: source)
+  let midRoot = try music("cancel-mid-copy")
+  let cancellation = LokalTransferCopyCancellation(), checkpoint = CopyCheckpoint()
+  let midPart = midRoot.appendingPathComponent(LokalTransferLibrary.directoryName)
+    .appendingPathComponent("." + (try LokalTransferLibrary.fileName(bigJob)) + ".part")
+  let midLibrary = try LokalTransferLibrary(root: midRoot, testingBoundary: { stage in
+    if stage == "copyCheckpoint", checkpoint.next() == 4,
+       (try? Data(contentsOf: midPart)) == bigPayload.prefix(256 * 1024) {
+      cancellation.cancel()
+    }
+  })
+  try rejects("cancellation stops an actual partially written large copy") {
+    _ = try midLibrary.install(bigJob, from: files, cancellation: cancellation)
+  }
+  let midNames = try manager.contentsOfDirectory(atPath: midRoot.appendingPathComponent(LokalTransferLibrary.directoryName).path)
+  try require(midNames == [".lokal-import.lock"], "cancelled copy leaves neither a visible recording nor an owned part")
+  let bigReceipt = try midLibrary.install(bigJob, from: files)
+  try require(bigReceipt.sha256 == bigHash && bigReceipt.bytes == bigPayload.count,
+    "a fresh uncancelled attempt publishes all actual bytes")
+  let hashInput = try FileHandle(forReadingFrom: source)
+  defer { try? hashInput.close() }
+  var hashChecks = 0
+  try rejects("cancellation stops actual hash input between bounded chunks") {
+    _ = try LokalTransferFiles.digest(hashInput.fileDescriptor, checkCancellation: {
+      hashChecks += 1
+      if hashChecks == 3 { throw LokalTransferError.invalidTransition }
+    })
+  }
+  try require(hashInput.offset() == 256 * 1024,
+    "cancelled hash reads only its first actual 256 KiB chunk")
+  try sourceBytes.write(to: source)
 
   // A user's changed file is retained even when its new length still matches.
   try Data("def".utf8).write(to: destination)
@@ -97,5 +178,5 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
   try manager.createDirectory(at: unsafeRoot, withIntermediateDirectories: false)
   try rejects("replaced Music root cannot redirect an owned promotion") { _ = try unsafeLibrary.install(job, from: files) }
   try require(manager.contentsOfDirectory(atPath: unsafeRoot.path).isEmpty, "replacement root remains untouched")
-  print("Native library-file contracts passed: actual hashes, idempotent no-overwrite promotion, three crash boundaries, six process writers and unsafe-file refusal. No media/Isar/import acceptance claim.")
+  print("Native library-file contracts passed: actual hashes, idempotent no-overwrite promotion, cancellation during actual copy and around publication, three crash boundaries, six process writers and unsafe-file refusal. No media/Isar/import acceptance claim.")
 }

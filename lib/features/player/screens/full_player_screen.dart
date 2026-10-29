@@ -155,6 +155,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
   bool _carouselDragging = false;
   final _carouselKey = GlobalKey<SongStageCarouselState>();
   final _playerBoundsKey = GlobalKey();
+  final LayerLink _seekbarSubtitleLink = LayerLink();
   final _posterAnchorKey = GlobalKey();
   final _infoAnchorKey = GlobalKey();
   double? _posterBottom;
@@ -928,7 +929,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
           if (_immersiveLyrics)
             Positioned(
               left: 12, right: 12,
-              bottom: MediaQuery.paddingOf(context).bottom + 52,
+              bottom: math.max(
+                MediaQuery.paddingOf(context).bottom + 52,
+                MediaQuery.sizeOf(context).height * .28,
+              ),
               child: IgnorePointer(
                 child: ValueListenableBuilder<bool>(
                   valueListenable: _videoController.timingAvailableNotifier,
@@ -1158,7 +1162,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                           fullCover: fullCover,
                                         ),
                                       ),
-                                      _spaceHidden(_seekRow()),
+                                      CompositedTransformTarget(
+                                        link: _seekbarSubtitleLink,
+                                        child: _spaceHidden(_seekRow()),
+                                      ),
                                       // The timeline sits above the transport pads,
                                       // rather than being visually glued to them.
                                       SizedBox(height: compact ? 12 : 24),
@@ -1215,12 +1222,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                     ),
                   ),
                 if (_immersiveLyrics)
-                  Positioned(
-                    left: 10,
-                    right: 10,
-                    bottom: MediaQuery.paddingOf(context).bottom + 55,
-                    child: IgnorePointer(
-                      child: _videoActive
+                  SeekbarAlignedSpaceSubtitle(
+                    seekbarLink: _seekbarSubtitleLink,
+                    subtitle: _videoActive
                           ? ValueListenableBuilder<bool>(
                               valueListenable: _videoController.timingAvailableNotifier,
                               builder: (context, native, _) => native
@@ -1234,7 +1238,6 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                                     ),
                             )
                           : _spaceSubtitle(song),
-                    ),
                   ),
               ],
             ),

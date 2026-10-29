@@ -9,6 +9,12 @@ on:
       - 'ios/Runner.xcodeproj/project.pbxproj'
       - 'tool/ios_transfer_contracts.py'
       - 'tool/ios_transfer_fixture.py'
+      - 'tool/ios_import_store_contracts.*'
+      - 'lib/data/entities/**'
+      - 'lib/models/ios_transfer_import.dart'
+      - 'lib/models/ios_transfer_models.dart'
+      - 'lib/services/ios_transfer_import_store.dart'
+      - 'pubspec.*'
       - 'test/fixtures/ios_transfer_credentials_v2.json'
       - 'test/fixtures/ios_transfer_intents_v1.json'
       - '.github/workflows/ios-transfer-contracts.yml'
@@ -40,3 +46,7 @@ jobs:
         run: flutter precache --ios
       - name: Exercise actual files, processes and iOS 16 journal APIs
         run: python3 tool/ios_transfer_contracts.py --check-ios-sdks --check-flutter-bridge --repeat-native 5
+      - name: Resolve the locked native database package
+        run: flutter pub get --enforce-lockfile
+      - name: Exercise actual Isar import transactions and process recovery
+        run: python3 tool/ios_import_store_contracts.py
