@@ -838,3 +838,38 @@ coordination. The Darwin-only owned/missing/edited/replaced/canceled cleanup
 contracts are written but **have not run on Apple**; they are outside PR338 and
 build85. No coordinated public cleanup acceptance or product activation is
 claimed from host execution.
+
+### Durable cleanup resolution continuation
+
+The native journal now has a bounded optional resolution record, retained with
+the frozen custody until the app confirms durable Isar retirement. It separates
+an abandoned copy's owned/missing/preserved result from committed Isar history,
+which must preserve public Music. Recording either decision requires a newer
+matching native revision; an unpublished operation cannot claim committed
+history. A recorded resolution cannot authorize public deletion again.
+
+```mermaid
+flowchart TD
+  Revoke[Revoke publication and drain old file work] --> Inspect[Cross actual Isar writer barrier]
+  Inspect -->|Committed history| Preserve[Preserve public Music]
+  Inspect -->|Prepared reservation| Retiring[Persist retiring under cleanup authority]
+  Retiring --> Coordinate[Coordinate and verify public handling]
+  Preserve --> Private[Drain private staging and copy parts]
+  Coordinate --> Private
+  Private --> Resolution[Persist native cleanup result and retain custody]
+  Resolution --> Finalize[Finalize Isar retirement or retain committed history]
+  Finalize --> Forget[Acknowledge and retire only native bookkeeping]
+  Resolution -->|Lost reply or process exit| Recover[Recover saved result without another deletion]
+  Recover --> Finalize
+```
+
+Only the journal resolution boundary is implemented in this continuation; the
+full sequence above remains an integration requirement. Three complete portable
+native rounds pass real SQLite resolution process exits before/after commit,
+reopen preservation, unchanged live jobs, conflicting-decision refusal and
+idempotent lost replies without another observable generation. File-cleanup
+completion in those journal contracts is explicitly a caller fixture. Separate
+cleanup leases, private-part drainage, channel/root integration and actual Apple
+coordinated deletion remain pending. Ordinary cancellation still refuses the
+uncertain importing boundary: cancellation there needs the Isar decision first,
+then a separately authorized retired revision; weakening `cancel` is unsafe.

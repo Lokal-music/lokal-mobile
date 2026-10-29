@@ -102,6 +102,17 @@ do {
     _ = try store.reserveImport(id: CommandLine.arguments[3], revision: 1, songID: 42)
     exit(0)
   }
+  if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--resolution-worker" {
+    let boundary = CommandLine.arguments[4]
+    let store = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
+      testingCommitBoundary: { if $0 == boundary { exit(96) } })
+    guard let work = try store.importCustody(id: CommandLine.arguments[3], revision: 1) else {
+      throw TestFailure.failed("missing cleanup resolution work")
+    }
+    _ = try store.recordImportResolution(work, resolution: LokalTransferImportResolution(
+      mode: .abandoned, abandonment: .missingFile))
+    exit(0)
+  }
   if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--migration-crash" {
     let boundary = CommandLine.arguments[3]
     _ = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),

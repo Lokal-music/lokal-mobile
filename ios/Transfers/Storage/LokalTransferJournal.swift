@@ -6,6 +6,19 @@ import Darwin
 import Glibc
 #endif
 
+/// Records completed native cleanup while keeping provenance until the app
+/// acknowledges its durable Isar retirement. It is not an Isar attestation.
+struct LokalTransferImportResolution: Codable, Equatable, Sendable {
+  enum Mode: String, Codable, Sendable { case abandoned, committed }
+  let mode: Mode
+  let abandonment: LokalTransferLibraryAbandonment?
+  func validate() throws {
+    guard (mode == .abandoned) == (abandonment != nil) else {
+      throw LokalTransferError.invalidRecord
+    }
+  }
+}
+
 /// Immutable work identity retained independently from a cancellable job's
 /// current revision. This is not proof that a file or library row exists.
 struct LokalTransferImportCustody: Codable, Equatable, Sendable {
@@ -17,6 +30,7 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
   var copyNonce: String?
   var publication: LokalTransferLibraryPublication?
   var stagingRetired: Bool?
+  var resolution: LokalTransferImportResolution?
 
   init(job: LokalTransferJob, songID: Int64) throws {
     schemaVersion = 1; self.job = job; self.songID = songID
@@ -35,6 +49,10 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
       throw LokalTransferError.invalidRecord
     }
     try location?.validate()
+    try resolution?.validate()
+    if resolution?.mode == .committed, publication == nil {
+      throw LokalTransferError.invalidRecord
+    }
     if let copyNonce {
       guard UUID(uuidString: copyNonce)?.uuidString.lowercased() == copyNonce else { throw LokalTransferError.invalidRecord }
     }
@@ -50,11 +68,12 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
   static func decode(_ data: Data) throws -> Self {
     guard !data.isEmpty, data.count <= maximumJSONBytes,
           let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-          Set(row.keys).isSubset(of: ["schemaVersion", "job", "songID", "location", "copyNonce", "publication", "stagingRetired"]),
+          Set(row.keys).isSubset(of: ["schemaVersion", "job", "songID", "location", "copyNonce", "publication", "stagingRetired", "resolution"]),
           Set(["schemaVersion", "job", "songID"]).isSubset(of: Set(row.keys)),
           let job = row["job"] as? [String: Any] else { throw LokalTransferError.invalidRecord }
     for (key, allowed) in [("location", LokalTransferLibraryLocation.keys),
-                           ("publication", LokalTransferLibraryPublication.keys)] {
+                           ("publication", LokalTransferLibraryPublication.keys),
+                           ("resolution", Set(["mode", "abandonment"]))] {
       if let nested = row[key], !(nested is NSNull) {
         guard let fields = nested as? [String: Any], Set(fields.keys).isSubset(of: allowed) else {
           throw LokalTransferError.invalidRecord
@@ -297,13 +316,20 @@ final class LokalTransferJournal: @unchecked Sendable {
     return try operation()
   }
 
-  private func transaction<T>(_ operation: (inout Usage) throws -> T) throws -> T {
+  private func transaction<T>(advancesGeneration: ((T) -> Bool)? = nil,
+                              _ operation: (inout Usage) throws -> T) throws -> T {
     try locked {
       try preflight()
       try execute("BEGIN IMMEDIATE")
       do {
         var current = try usage()
         let result = try operation(&current)
+        if advancesGeneration?(result) == false {
+          // Only read-only idempotent results may take this path. No SQL
+          // mutation or usage accounting has happened in those operations.
+          try execute("COMMIT")
+          return result
+        }
         guard current.count <= Self.maximumJobs, current.custodyCount <= Self.maximumJobs,
               current.bytes + current.custodyBytes <= Self.maximumBytes else {
           throw LokalTransferError.limitExceeded
@@ -616,21 +642,66 @@ final class LokalTransferJournal: @unchecked Sendable {
       guard previous.matches(job), job.phase == phase else { throw LokalTransferError.staleRevision }
       var next = previous
       try operation(&next)
-      try next.validate()
-      let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-      let data = try encoder.encode(next)
-      guard data.count <= LokalTransferImportCustody.maximumJSONBytes else { throw LokalTransferError.limitExceeded }
-      let change = try statement("UPDATE import_custody SET document=? WHERE id=? AND revision=?")
-      defer { sqlite3_finalize(change) }
-      try bind(data, at: 1, to: change)
-      try bind(expected.job.id, at: 2, to: change)
-      try check(sqlite3_bind_int64(change, 3, Int64(expected.job.revision)))
-      guard sqlite3_step(change) == SQLITE_DONE, sqlite3_changes(database) == 1 else {
-        throw LokalTransferError.database(sqlite3_errcode(database))
-      }
-      current.custodyBytes += Int64(data.count - oldSize)
+      try writeCustody(next, oldSize: oldSize, usage: &current)
       return next
     }
+  }
+
+  private func writeCustody(_ value: LokalTransferImportCustody, oldSize: Int,
+                            usage: inout Usage) throws {
+    try value.validate()
+    let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+    let data = try encoder.encode(value)
+    guard data.count <= LokalTransferImportCustody.maximumJSONBytes else { throw LokalTransferError.limitExceeded }
+    let change = try statement("UPDATE import_custody SET document=? WHERE id=? AND revision=?")
+    defer { sqlite3_finalize(change) }
+    try bind(data, at: 1, to: change)
+    try bind(value.job.id, at: 2, to: change)
+    try check(sqlite3_bind_int64(change, 3, Int64(value.job.revision)))
+    guard sqlite3_step(change) == SQLITE_DONE, sqlite3_changes(database) == 1 else {
+      throw LokalTransferError.database(sqlite3_errcode(database))
+    }
+    usage.custodyBytes += Int64(data.count - oldSize)
+  }
+
+  private func retiredLiveJob(_ expected: LokalTransferImportCustody) throws {
+    let query = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
+    defer { sqlite3_finalize(query) }
+    try bind(expected.job.id, at: 1, to: query)
+    guard sqlite3_step(query) == SQLITE_ROW else { throw LokalTransferError.missingJob }
+    let (current, _) = try decoded(query)
+    guard current.phase != .complete, current.revision > expected.job.revision,
+          current.direction == expected.job.direction, current.identity == expected.job.identity,
+          current.metadata == expected.job.metadata, current.createdMs == expected.job.createdMs,
+          current.expectedBytes == expected.job.expectedBytes,
+          current.expectedSHA256 == expected.job.expectedSHA256 else {
+      throw LokalTransferError.invalidTransition
+    }
+  }
+
+  /// Caller proves current cleanup authority, actual file-worker drainage and
+  /// the Isar committed/retiring decision before invoking this. Resolution is
+  /// saved only after both public handling and private staging cleanup finish.
+  /// Keep this work until the app finalizes Isar and acknowledges retirement.
+  func recordImportResolution(_ expected: LokalTransferImportCustody,
+                              resolution: LokalTransferImportResolution) throws -> LokalTransferImportCustody {
+    try expected.validate(); try resolution.validate()
+    let result: (LokalTransferImportCustody, Bool) = try transaction(advancesGeneration: { $0.1 }) { current in
+      guard let (previous, oldSize) = try selectCustody(id: expected.job.id, revision: expected.job.revision) else {
+        throw LokalTransferError.staleRevision
+      }
+      var original = previous; original.resolution = expected.resolution
+      guard original == expected else { throw LokalTransferError.staleRevision }
+      if let recorded = previous.resolution {
+        guard recorded == resolution else { throw LokalTransferError.invalidTransition }
+        return (previous, false)
+      }
+      try retiredLiveJob(previous)
+      var next = previous; next.resolution = resolution
+      try writeCustody(next, oldSize: oldSize, usage: &current)
+      return (next, true)
+    }
+    return result.0
   }
 
   func importCustody(id: String, revision: Int) throws -> LokalTransferImportCustody? {
@@ -646,26 +717,14 @@ final class LokalTransferJournal: @unchecked Sendable {
   /// Missing/changed custody and completed/current writable jobs are refused.
   func validateAbandonment(_ expected: LokalTransferImportCustody) throws {
     try expected.validate()
+    guard expected.resolution == nil else { throw LokalTransferError.invalidTransition }
     try locked {
       try preflight()
       try execute("BEGIN")
       do {
         guard let (stored, _) = try selectCustody(id: expected.job.id, revision: expected.job.revision),
               stored == expected else { throw LokalTransferError.staleRevision }
-        let query = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
-        defer { sqlite3_finalize(query) }
-        try bind(expected.job.id, at: 1, to: query)
-        guard sqlite3_step(query) == SQLITE_ROW else { throw LokalTransferError.missingJob }
-        let (current, _) = try decoded(query)
-        guard current.phase != .complete, current.revision > expected.job.revision,
-              current.direction == expected.job.direction,
-              current.identity == expected.job.identity,
-              current.metadata == expected.job.metadata,
-              current.createdMs == expected.job.createdMs,
-              current.expectedBytes == expected.job.expectedBytes,
-              current.expectedSHA256 == expected.job.expectedSHA256 else {
-          throw LokalTransferError.invalidTransition
-        }
+        try retiredLiveJob(expected)
         try execute("COMMIT")
       } catch { try? execute("ROLLBACK"); throw error }
     }
