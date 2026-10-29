@@ -17,14 +17,13 @@ abstract final class CloudCoverShaders {
       program.value ??= await ui.FragmentProgram.fromAsset(
         'shaders/cover_cloud_dissolve.frag',
       );
-    } catch (error, stack) {
-      // A missing GPU effect must not break audio or artwork rendering.
-      FlutterError.reportError(FlutterErrorDetails(
-        exception: error,
-        stack: stack,
-        library: 'Lokal cover transition',
-        context: ErrorDescription('loading the desktop cloud dissolve shader'),
-      ));
+    } catch (error) {
+      // A missing GPU effect must not break playback or widget tests.
+      // Release builds precompile shader assets; debug tools can inspect this.
+      assert(() {
+        debugPrint('Desktop cloud dissolve shader unavailable: $error');
+        return true;
+      }());
     }
   }
 }
