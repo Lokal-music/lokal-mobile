@@ -71,6 +71,7 @@ void main() {
                   'b' => Colors.green,
                   _ => Colors.blue,
                 },
+                child: const SizedBox.expand(),
               ),
             ),
           ),
