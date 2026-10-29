@@ -343,25 +343,22 @@ class _HomeModeSelectorState extends State<_HomeModeSelector> {
         thickness: LokalGlassThickness.thin,
         shadow: false,
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        // Keep each label at its natural width rather than assigning
-        // one third of the capsule to every tab (which wraps DISCOVERY).
-        // Scale down only on exceptionally narrow layouts.
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final tab in KonnektedHomeTab.values)
-                _ShelfChip(
+        // Spread the tabs across the whole capsule so neither end has
+        // a large unused gap. Each label is kept on one line and scales down
+        // only if its own slot is too narrow.
+        child: Row(
+          children: [
+            for (final tab in KonnektedHomeTab.values)
+              Expanded(
+                child: _ShelfChip(
                   label: lokalText(tab.label),
                   selected: tab == widget.selectedTab,
                   compact: true,
                   fontSize: _modeTabFontSize(constraints.maxWidth),
                   onTap: () => widget.onTabChanged?.call(tab),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     ),
@@ -461,7 +458,7 @@ class _ShelfChip extends StatelessWidget {
           curve: Curves.easeOutCubic,
           constraints: BoxConstraints(minHeight: 44, minWidth: compact ? 0 : 56),
           alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 10, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 1 : 10, vertical: 8),
           decoration: BoxDecoration(
             color: selected
                 ? (t.isLight
@@ -470,15 +467,17 @@ class _ShelfChip extends StatelessWidget {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Text(
-            label.toUpperCase(),
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.visible,
-            style: LokalTheme.label(
-              t,
-              size: fontSize ?? (compact ? 9 : 10),
-              color: selected ? t.text : t.muted,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              softWrap: false,
+              style: LokalTheme.label(
+                t,
+                size: fontSize ?? (compact ? 9 : 10),
+                color: selected ? t.text : t.muted,
+              ),
             ),
           ),
         ),
