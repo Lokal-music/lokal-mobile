@@ -122,16 +122,23 @@ List<String> _visibleGenres(List<String> genres, Set<String> rare) {
 ///  * keep order newest-first for cover art and count-desc for the grid.
 /// Ghost/pending catalogue placeholders are not real library recordings.
 LokalGenreSummary lokalGenreSummary(Iterable<Song> library) {
-  final tracks = [
-    for (final song in library)
-      if (!song.isPending && !(song.filePath?.startsWith('ghost://') ?? false))
-        song,
-  ];
-  tracks.sort((a, b) {
-    final aDate = a.dateAdded?.millisecondsSinceEpoch ?? 0;
-    final bDate = b.dateAdded?.millisecondsSinceEpoch ?? 0;
-    return bDate.compareTo(aDate);
+  final ordered = <(int, Song)>[];
+  var inputIndex = 0;
+  for (final song in library) {
+    if (!song.isPending && !(song.filePath?.startsWith('ghost://') ?? false)) {
+      ordered.add((inputIndex, song));
+    }
+    inputIndex++;
+  }
+  // Match the desktop's newest-first art order while retaining the original
+  // source order for songs with identical or missing import timestamps.
+  ordered.sort((a, b) {
+    final aDate = a.$2.dateAdded?.millisecondsSinceEpoch ?? 0;
+    final bDate = b.$2.dateAdded?.millisecondsSinceEpoch ?? 0;
+    final byDate = bDate.compareTo(aDate);
+    return byDate != 0 ? byDate : a.$1.compareTo(b.$1);
   });
+  final tracks = [for (final entry in ordered) entry.$2];
 
   final categorized = [for (final song in tracks) lokalTrackGenres(song)];
   final counts = <String, int>{};
