@@ -70,27 +70,20 @@ Map<String, Object?>? morneyeSelectedTrackHint({
   };
 }
 
-/// An addon-owned native Search row already has its canonical provider ID.
-/// For direct playback, checkAvailability still validates the recording and
-/// returns fresh authorization/metadata. This skips only a *second metadata
-/// enrichment request*, never availability checks, and never for a different
-/// provider's cross-catalogue match or explicit download/save.
-bool morneyeMaySkipDuplicateEnrichment({
+/// Only an unresolved cross-provider lookup may need metadata enrichment
+/// after the authoritative availability check fails. Play and Save run
+/// exactly the same acquisition path; provider names do not select fast paths.
+bool morneyeNeedsCrossProviderEnrichment({
   required String addonName,
   required Map track,
-  required bool forPlayback,
-  required bool nativeSearchResult,
-  required bool hasAvailabilityCheck,
 }) {
-  if (!forPlayback || !nativeSearchResult || !hasAvailabilityCheck) {
-    return false;
-  }
-  final provider = '${track['provider_id'] ?? ''}'.trim().toLowerCase();
-  final addon = addonName.trim().toLowerCase();
+  final owner = '${track['provider_id'] ?? ''}'.trim().toLowerCase()
+      .replaceFirst(RegExp(r'-web$'), '');
+  final addon = addonName.trim().toLowerCase()
+      .replaceFirst(RegExp(r'-web$'), '');
   final id = '${track['id'] ?? ''}'.trim();
-  final title = '${track['name'] ?? ''}'.trim();
-  return provider.isNotEmpty && id.isNotEmpty && title.isNotEmpty &&
-      (provider == addon || provider == addon.replaceFirst(RegExp(r'-web$'), ''));
+  final name = '${track['name'] ?? ''}'.trim();
+  return owner != addon || id.isEmpty || name.isEmpty;
 }
 
 /// The installed package's stable key (also its storage namespace).
@@ -1708,6 +1701,7 @@ class MorneyePackages {
                 const [])
             .any((h) => h is Map && h['defaultEnabled'] == true);
     final preparation = Stopwatch()..start();
+    var sawFirstByte = false;
     void phase(String stage) {
       onResolutionStage?.call(stage);
       // Private IDs, signed URLs, tokens and track names are never logged.
@@ -1720,7 +1714,13 @@ class MorneyePackages {
       _code(key),
       grants: [staged.path],
       onProgress: onProgress,
-      onTransfer: hooks ? null : onTransfer,
+      onTransfer: hooks ? null : (transfer) {
+        if (!sawFirstByte && transfer.written > 0) {
+          sawFirstByte = true;
+          phase('first_byte');
+        }
+        onTransfer?.call(transfer);
+      },
       // Isolated download workers need headroom for segments/decryption.
       // Browsing stays at 64 MiB. Native code caps this at 256 MiB.
       heapMb: 256,
@@ -1758,93 +1758,59 @@ class MorneyePackages {
         };
       }
       track = Map.of(track);
-      // Some providers (notably Qobuz) explicitly advertise that search
-      // results already carry the canonical metadata. Their enrichment does
-      // another remote lookup before checkAvailability performs verification;
-      // don't serialize two expensive requests before playback can start.
-      // Other providers, including Amazon, still require enrichment.
-      final nativeSearchResult = _tracks.containsKey('$key:$id') &&
-          (track['id']?.toString().isNotEmpty ?? false) &&
-          (track['name']?.toString().isNotEmpty ?? false);
-      final hasCanonicalIdentity =
-          (track['id']?.toString().isNotEmpty ?? false) &&
-          (track['name']?.toString().isNotEmpty ?? false);
-      final amazonNativeTrack = forPlayback &&
-          providerIdentityIsAmazon(addon.name, track) &&
-          nativeSearchResult;
-      final deezerNativeTrack = forPlayback &&
-          nativeSearchResult && providerIdentityIsDeezer(addon.name, track);
-      final skipEnrichment =
-          morneyeMaySkipDuplicateEnrichment(
-            addonName: addon.name,
-            track: track,
-            forPlayback: forPlayback,
-            nativeSearchResult: nativeSearchResult,
-            hasAvailabilityCheck: runtime.methods.contains('checkAvailability'),
-          ) ||
-          // Only the remembered native Deezer Search row avoids enrichTrack;
-          // cross-provider matches, saving and noncanonical IDs still verify.
-          deezerNativeTrack ||
-          // A native Amazon Search result already has its canonical ASIN.
-          // enrichTrack() performs unnecessary network requests before
-          // checkAvailability can hand back the same ASIN. Keep enrichment
-          // for non-native/fallback matches where an ID must be resolved.
-          amazonNativeTrack ||
-          // Respect the extension manifest even if this by-ID track came
-          // from getTrack rather than a remembered Search result.
-          (addon.manifest['skipMetadataEnrichment'] == true &&
-              hasCanonicalIdentity) ||
-          // Tidal's enrichTrack fetches the same remote track record that
-          // checkAvailability fetches again to validate the direct Tidal ID.
-          // Only skip this extra request for its own remembered Search row.
-          (addon.name.toLowerCase().startsWith('tidal') &&
-              nativeSearchResult);
-      if (!skipEnrichment && runtime.methods.contains('enrichTrack')) {
-        try {
-          final enriched = await runtime.invoke('enrichTrack', [
-            track,
-          ], const Duration(seconds: 60));
-          if (enriched is Map) {
-            enriched.forEach((field, value) {
-              if (value != null &&
-                  value != '' &&
-                  value != 0 &&
-                  !(value is String && value.trim().isEmpty) &&
-                  !(value is List && value.isEmpty)) {
-                track[field] = value;
-              }
-            });
-          }
-        } catch (error) {
-          if (runtime.closed) rethrow;
-        }
-      }
       final provider = addon.name.replaceFirst(RegExp(r'-web$'), '');
-      final options = <String, Object?>{
-        'track': track,
-        'duration_ms': track['duration_ms'] ?? 0,
-      };
-      const directFields = {
-        'qobuz': 'qobuz_id',
-        'tidal': 'tidal_id',
-        'deezer': 'deezer_id',
-        'soundcloud': 'spotify_id',
-        'amazon': 'spotify_id',
-      };
-      final directField = directFields[provider];
-      if (directField != null) {
-        options[directField] =
-            '${track[directField] ?? (provider == 'amazon' || provider == 'soundcloud' ? track['id'] : id)}';
+      // First request is always the provider's own availability/download
+      // ticket, regardless of Play vs Save or Tidal/Deezer/Qobuz identity.
+      // This removes redundant enrichment before a source can transfer bytes.
+      Future<dynamic> checkAvailability() {
+        final options = <String, Object?>{
+          'track': track,
+          'duration_ms': track['duration_ms'] ?? 0,
+        };
+        const directFields = {
+          'qobuz': 'qobuz_id',
+          'tidal': 'tidal_id',
+          'deezer': 'deezer_id',
+          'soundcloud': 'spotify_id',
+          'amazon': 'spotify_id',
+        };
+        final directField = directFields[provider];
+        if (directField != null) {
+          options[directField] =
+              '${track[directField] ?? (provider == 'amazon' || provider == 'soundcloud' ? track['id'] : id)}';
+        }
+        return runtime.methods.contains('checkAvailability')
+            ? runtime.invoke('checkAvailability', [
+                track['isrc'] ?? '',
+                track['name'] ?? '',
+                track['artists'] ?? '',
+                options,
+              ], const Duration(seconds: 25))
+            : Future.value({'available': true, 'track_id': id});
       }
       phase('availability');
-      final available = runtime.methods.contains('checkAvailability')
-          ? await runtime.invoke('checkAvailability', [
-              track['isrc'] ?? '',
-              track['name'] ?? '',
-              track['artists'] ?? '',
-              options,
-            ])
-          : {'available': true, 'track_id': id};
+      var available = await checkAvailability();
+      if ((available is! Map || available['available'] != true) &&
+          runtime.methods.contains('enrichTrack') &&
+          morneyeNeedsCrossProviderEnrichment(
+            addonName: addon.name, track: track,
+          )) {
+        phase('cross_provider_enrichment');
+        final enriched = await runtime.invoke('enrichTrack', [
+          track,
+        ], const Duration(seconds: 20));
+        if (enriched is Map) {
+          enriched.forEach((field, value) {
+            if (value != null && value != '' && value != 0 &&
+                !(value is String && value.trim().isEmpty) &&
+                !(value is List && value.isEmpty)) {
+              track[field] = value;
+            }
+          });
+        }
+        phase('availability_retry');
+        available = await checkAvailability();
+      }
       if (available is! Map || available['available'] != true) {
         throw MorneyePackageError(
           available is Map && available['reason'] != null
@@ -1887,6 +1853,7 @@ class MorneyePackages {
         p.join(staged.path, 'audio.flac'),
         {'preparedContext': prepared, 'resolutionTimeoutMs': 60000},
       ], const Duration(hours: 24));
+      phase('download_complete');
       if (result is! Map || result['success'] != true) {
         if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('addon_download_failed', {
           'reason': 'addon_returned_failure',
