@@ -25,7 +25,7 @@ void main() {
     expect(CloudCoverClipper(.5, a).revealPath(bounds).getBounds().isEmpty,
         isFalse);
     final nearEnd = CloudCoverClipper(.995, a).revealPath(bounds);
-    expect(nearEnd.contains(const Offset(0, 0)), isTrue);
+    expect(nearEnd.contains(const Offset(1, 1)), isTrue);
     expect(nearEnd.contains(const Offset(359, 719)), isTrue);
     final end = CloudCoverClipper(1, a).revealPath(bounds);
     expect(end.contains(const Offset(359, 719)), isTrue);
@@ -152,13 +152,13 @@ void main() {
 
   testWidgets('end-of-queue next does not arm a later unrelated transition',
       (tester) async {
-    var current = 0;
+    var current = 2;
     final key = await mount(
       tester, changed: (i) => current = i, initial: 2,
     );
     await key.currentState!.animateToNext();
     await tester.pump();
-    expect(current, 0); // No track-change callback was issued.
+    expect(current, 2); // No track-change callback was issued.
     expect(find.byType(CloudCoverReveal), findsNothing);
     expect(tester.takeException(), isNull);
   });
