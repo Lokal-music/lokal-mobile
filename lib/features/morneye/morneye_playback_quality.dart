@@ -106,6 +106,33 @@ String? explicitMorneyePlaybackTier({
           ? 'ac4'
           : 'DOLBY_ATMOS');
 
+/// Amazon's search rows usually omit per-track codec and available audio
+/// modes. Show the *normal playback tier we will request*, never a fabricated
+/// per-track FLAC/AC-4 guarantee. A configured spatial download tier cannot
+/// silently become the regular playback tier.
+String? amazonRequestedPlaybackQualityLabel({
+  required String? configured,
+  required List<dynamic> options,
+}) {
+  if (options.isEmpty) return null;
+  final selected = chooseMorneyeDownloadQuality(
+    requested: null,
+    configured: configured,
+    options: options,
+    provider: 'amazon',
+  );
+  for (final option in options) {
+    if (option is! Map ||
+        option['id']?.toString().toLowerCase() != selected.toLowerCase() ||
+        morneyeSpatialOption(option, provider: 'amazon')) continue;
+    final label = option['label']?.toString().trim() ?? '';
+    if (selected.toLowerCase() == 'best') return 'FLAC best (requested)';
+    if (label.isNotEmpty) return '$label (requested)';
+    return '$selected (requested)';
+  }
+  return null;
+}
+
 /// The catalogue can advertise a different maximum tier from the requested
 /// stereo playback quality. Do not misrepresent either as verified audio.
 String? tidalRequestedQualityLabel({
