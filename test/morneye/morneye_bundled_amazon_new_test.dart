@@ -12,11 +12,11 @@ void main() {
       data.offsetInBytes, data.lengthInBytes,
     );
     expect(sha256.convert(bytes).toString(),
-        'ae1ac4dbeb9028939e39bda1a58fabaedf41e8adc37b9b3fc61ee10c9a5bdca7');
+        '967bc8cf940cf39029ef7e33f55bf37c5f686028332570ef484579ebc75c5543');
     final archive = morneyeReadArchive(bytes);
     expect(archive.manifest['name'], 'amazon-new');
     expect(archive.manifest['displayName'], 'Amazon (New)');
-    expect(archive.manifest['version'], '2.3.15');
+    expect(archive.manifest['version'], '2.3.16');
     expect(archive.code, contains('amazonTrackAudioModes'));
     expect(archive.code, contains('DOLBY_ATMOS'));
     expect(morneyeKeyOf('amazon-new'), isNot(morneyeKeyOf('amazon')),
