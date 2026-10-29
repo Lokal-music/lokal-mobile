@@ -21,6 +21,7 @@ class SongStageCarousel extends StatefulWidget {
     required this.onPrevious,
     this.enabled = true,
     this.buttonDissolve = false,
+    this.animateButtonDissolve = true,
     this.onDragStateChanged,
   });
   final Song currentSong;
@@ -30,6 +31,8 @@ class SongStageCarousel extends StatefulWidget {
   final bool enabled;
   /// Transport buttons dissolve; horizontal drags keep the original slide.
   final bool buttonDissolve;
+  /// Disabling animations makes buttons switch immediately, not slide.
+  final bool animateButtonDissolve;
   final ValueChanged<bool>? onDragStateChanged;
 
   @override
@@ -75,7 +78,8 @@ class SongStageCarouselState extends State<SongStageCarousel>
   void didUpdateWidget(SongStageCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentSong.id != widget.currentSong.id) {
-      final reveal = _buttonChangePending && widget.buttonDissolve;
+      final reveal = _buttonChangePending && widget.buttonDissolve &&
+          widget.animateButtonDissolve;
       _buttonChangePending = false;
       _controller.stop();
       _animating = false;
@@ -96,6 +100,10 @@ class SongStageCarouselState extends State<SongStageCarousel>
       // Queue notifications can arrive before the current-song notification.
       // Never swap the visible incoming neighbour during a pending commit.
       _syncSongs();
+    }
+    if (!widget.animateButtonDissolve && _dissolveFrom != null) {
+      _dissolve.stop();
+      _dissolveFrom = null;
     }
   }
 
@@ -149,17 +157,15 @@ class SongStageCarouselState extends State<SongStageCarousel>
       return;
     }
 
-    final animate = widget.enabled && !MediaQuery.disableAnimationsOf(context);
+    final animate = widget.enabled && widget.animateButtonDissolve &&
+        !MediaQuery.disableAnimationsOf(context);
     if (animate) {
       _buttonChangePending = true;
       // Rapid consecutive skips settle to the last incoming cover, like
       // desktop. Audio is never held back for the visual transition.
       _dissolve.stop();
       if (_dissolveFrom != null) {
-        setState(() {
-          _dissolveFrom = null;
-          _dissolve.value = 1;
-        });
+        setState(() => _dissolveFrom = null);
       }
     }
     try {
@@ -214,10 +220,7 @@ class SongStageCarouselState extends State<SongStageCarousel>
     if (_dissolveFrom != null) {
       // The finger always owns the stage: cancel only the visual overlay.
       _dissolve.stop();
-      setState(() {
-        _dissolveFrom = null;
-        _dissolve.value = 1;
-      });
+      setState(() => _dissolveFrom = null);
     }
     _controller.stop();
     _animating = false;
