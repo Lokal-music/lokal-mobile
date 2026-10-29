@@ -5,6 +5,10 @@ iPhone before installation. The build pipeline uses hosted macOS/Xcode; you can
 develop, download and install from Windows without owning a Mac. A real iPhone
 is required to perform these installation and acceptance steps.
 
+iOS Home Screen widgets are excluded from this release. Standard lock-screen
+and Control Center playback controls remain available; no WidgetKit/App Group
+setup is required for the sideloaded app.
+
 ## Get the artifact
 
 1. Open the **iPhone build and sideload package** run in the
@@ -39,7 +43,7 @@ capability are disabled; existing product copying remains active. Later
 #311 UI and native import-ownership changes are excluded. Separate widget run 28
 failed at the English launch process; it has no complete render acceptance.
 Actual iOS 16 runtime, physical Windows signing/iPhone installation, live
-providers/receivers, installed widgets and OS background-transfer suspension/
+providers/receivers and OS background-transfer suspension/
 relaunch remain separate gates. This is an engineering checkpoint, not a
 qualified public release. Builds 78, 74 and 67 remain preserved older checkpoints.
 

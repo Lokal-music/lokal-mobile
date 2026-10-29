@@ -1,49 +1,48 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
 Status: implementation and hosted native validation, 29 October 2026 (UTC).
+Release scope updated 29 October 2026 (Europe/Paris): **iOS Home Screen widgets
+are excluded at the user's request.** WidgetKit rendering, App Group delivery
+and widget actions are no longer release gates. The archived research workflow
+runs only when manually requested. Android widgets and standard iPhone
+lock-screen/Control Center playback controls retain their existing behavior.
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **102 reviewed merged
-mobile PRs after #172 through #311**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **118 reviewed merged
+mobile PRs after #172 through #331**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
-transparent Cover Flow are included in the latest continuation.
+transparent Cover Flow, circular shader artwork transitions, expanded artist
+catalogues and 0.01× speed controls are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
 and platform adaptations.
 
-**This source is not a finalized release.** Build 80 is the current independently
-verified engineering package through #310, including the corrected large-queue
-mutation scope, embedded native transfer protocol and per-account Keychain
-preparation. Both complete iOS 18.6 and 26
-suites pass. The actual native channel rejects injected state/headers without
-mutation and survives observer replacement; legacy Keychain migration passes.
-The package's 34 iPhone binaries, 26 matching native symbol bundles, Dart AOT
-symbols, notices and 2,314 exported source files are independently rechecked.
-Source tree: `8628d317596f78edf622bdfa5c37d89487840938`.
+**This source is not a finalized release.** Build 82 is the current independently
+verified engineering package through #311, including native private import
+ownership and metadata-cache acceptance. Both complete iOS 18.6 and 26 suites
+pass. The first iOS 26 attempt failed before installation during simulator boot;
+one fresh-host retry passed using the same compiled integration app. The IPA,
+34 iPhone binaries, 26 matching native symbol bundles, Dart AOT symbols, notices
+and 2,320 exported source files were independently rechecked. Source tree:
+`3e7b2f84078778b14d1dba13a313d1f1114cc1e8`. Build 80 and earlier qualified
+checkpoints remain preserved. Widget runs 28/29 remain historical failures;
+Home Screen widgets are excluded, so these are no longer release gates.
 
-Native background networking is wired independently of Flutter, but library
-import/upload capability remains disabled. Existing product copy paths remain
-active. OS transfer suspension/relaunch, deterministic Isar import/receipt
-recovery, physical Windows signing/iPhone installation, live providers/receivers
-and installed WidgetKit still need their own acceptance. Through-#311 UI changes
-and the native import-ownership continuation are outside the build-80 package.
-Builds 78, 74 and 67 remain preserved older checkpoints. Separate widget run 28
-failed when `simctl launch --console` exceeded 150 seconds. Failure collection
-subsequently recovered all 90 English renders and nine OCR cases; service logs
-record a late process bootstrap and voluntary exit about nine seconds later.
-This does not establish a console hang. No other locales or compositor checks
-ran in that job; the earlier complete widget evidence is not a pass for run 28.
-
-The later local import continuation now passes actual native Isar contracts:
-private identity reservations, atomic song/receipt commits, deletion without
-resurrection, eight-collection schema preservation, six process-exit boundaries
-and six concurrent process writers. Native copy cancellation also passes three
-complete portable rounds, including interruption after an actual 256 KiB write.
-These are isolated foundations, outside the verified IPA. The product database
-does not yet register receipts, and native import capability stays disabled.
-The [transfer plan](IOS_TRANSFERS.md#private-receipt-store-and-cancellation-continuation-29-october)
-records the next integration gates and the limits of this evidence.
+Native background networking is wired independently of Flutter, but product
+library import/upload capability remains disabled. Existing copy paths stay
+active. Later source registers the private receipt collection with full Isar
+durability on iOS, binds import RPCs to the acknowledged root client, preserves
+frozen import work through a transactional SQLite v1→v2 migration, and checks
+scanner reservations inside the actual library writer. Local native process/crash,
+actual Isar and focused Flutter checks pass; this later wiring and through-#331
+UI/provider changes are outside build 82 and require their own Apple acceptance.
+OS transfer suspension/relaunch, native file provenance/promotion/cleanup,
+coordinated Isar completion, clear/unpair/deletion, imported-file CUE restructuring,
+accurate persistent progress and uploads remain development/acceptance gates.
+Physical Windows signing/iPhone installation and live providers/receivers remain
+separate. The [transfer plan](IOS_TRANSFERS.md) records implemented boundaries
+and the remaining work.
 
 | Checkpoint | Accepted scope and limit |
 | --- | --- |
@@ -78,7 +77,7 @@ records the next integration gates and the limits of this evidence.
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See
 [Windows installation and acceptance](IOS_SIDELOADING.md), the
-[widget implementation gates](IOS_WIDGETKIT.md), and
+[archived widget research](IOS_WIDGETKIT.md), and
 [current integration feasibility findings](IOS_FOLLOWUP_FEASIBILITY.md).
 The [transfer architecture](IOS_TRANSFERS.md) now has a locally tested native
 SQLite/URLSession core. Continuation source now wires AppDelegate and a typed,
@@ -131,11 +130,11 @@ flowchart LR
 The [Cast sender transport](IOS_CAST_TRANSPORT.md) now has a pinned real SDK,
 native channel adapter, confirmed commands and a guarded local/remote handoff.
 Its standalone native device/simulator linkage and integrated application tests
-pass; actual receiver acceptance remains pending. WidgetKit extension delivery, Discord feasibility and resumable
-background transfers remain open work. The [widget metadata foundation](IOS_WIDGETKIT.md)
-now implements the canonical-state writer, bounded JSON, tolerant native reader,
-atomic store, artwork publication and actual Flutter channel. Runtime sampling,
-provisioned App Group publication, widget UI/actions and Windows signing remain pending. Native desktop Bonjour discovery
+pass; actual receiver acceptance remains pending. Discord feasibility and resumable
+background transfers remain open work. The [widget research](IOS_WIDGETKIT.md)
+is archived and excluded from this release; the app no longer starts its iOS
+publisher, sampler or widget-intent listener. Windows signing still needs device
+acceptance. Native desktop Bonjour discovery
 passes its controlled service/HTTP checks on build 18 / iOS 18.6. Live add-on stream handles currently
 retain the system streaming adapter and explicitly report Rust DSP bypass;
 DSP support for those sources remains open rather than attempting to open an
@@ -397,7 +396,7 @@ registration are not evidence that an iOS feature works.
 | Casting | Existing Chromecast native channel and DLNA route integration; no AirPlay backend was found in the audited casting directory. | Add system AirPlay route UI; investigate Chromecast iOS sender integration and DLNA discovery/control. Test actual receivers; handle multicast restrictions without promising unverified parity. |
 | Bluetooth/USB | Android Bluetooth, volume and direct UAC2 controls. | Normal iOS output routes, system volume and diagnostics. Defer raw USB, codec forcing and Android-specific direct audio. A USB DAC can still be an ordinary iOS system route. |
 | Discord | Local `mornye_discord` plugin declares Android only. | Investigate an officially supported iOS integration. Do not present a no-op as working presence; document unsupported account/device behavior if necessary. |
-| Widgets/icons | `home_widget` declares iOS; app-side widget implementation is Android-specific. | Plan WidgetKit and declared alternate icons. Prove entitlements/re-signing before enabling widgets; avoid an extension dependency for basic playback. |
+| Widgets/icons | iOS Home Screen widgets excluded by user request; Android widgets unchanged. | WidgetKit research archived, automatic checks disabled, no widget runtime started. Alternate app icons remain separate. |
 | Car/overlay integrations | Android Auto and draw-over-other-app player are Android services. | Evaluate CarPlay separately: appropriate entitlement is a prerequisite. Use in-app mini-player and system controls on iPhone; arbitrary floating overlays have no equivalent public iOS API. |
 | Updates/build identity | APK updater, Play updates and custom build-info channels. | iOS bundle metadata adapter and Windows sideload update instructions. No in-app APK installer. Preserve library and Keychain behavior across re-signing tests. |
 
@@ -493,7 +492,7 @@ scope remains the destination; an engineering milestone is not a public release.
 | 1 — Prove the build | Hosted Mac builds actual Rust for device and simulator; clean Flutter iOS runner links locked plugins, FFI and database. | Both native targets compile without raw USB; scanner and QuickJS execute in a simulator smoke test; no Android channel blocks startup. Pin observed Xcode/CocoaPods/native SDK versions. |
 | 2 — Prove playback/storage | iOS session/media adapters, transaction-based import, native/system codec experiments. | Import -> scan -> play -> lock screen -> interrupt -> resume -> relaunch passes. Real iPhone tester recruited; sample-rate/route and unsupported codecs are measured. |
 | 3 — Restore product parity | All ordinary features in the matrix: online services/add-ons, downloads, desktop link, lyrics/artwork, network libraries, share/export, presentation. | Each applicable row has contract tests plus simulator/device evidence. Each exception names the actual platform restriction or failed experiment, and receives a product decision. |
-| 4 — Integrations/polish | Casting, widgets/icons, Discord feasibility, accessible iPhone UX, diagnostics, migration/update robustness. | Actual receiver/accessory tests where relevant; optional entitlement-dependent features cannot block base-app signing. No silent no-ops or Android-only settings. |
+| 4 — Integrations/polish | Casting, app icons, Discord feasibility, accessible iPhone UX, diagnostics, migration/update robustness. Home Screen widgets excluded. | Actual receiver/accessory tests where relevant; no widget release gate. No silent no-ops or Android-only settings. |
 | 5 — Package and qualify | Versioned unsigned IPA, checksum/source/notices, Windows signing/refresh/update guide. | Cold install, second-build upgrade and refresh tested from Windows; release/AOT works without debugger; library preserved; no unresolved critical data-loss/playback issue. |
 
 For feedback, show the first simulator recording after Phase 1, the playback/import

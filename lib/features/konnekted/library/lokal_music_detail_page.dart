@@ -408,13 +408,21 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                 (b.songs.first.year ?? 0).compareTo(a.songs.first.year ?? 0),
           );
     final albums = <LokalCatalogueAlbum>[];
-    final albumKeys = <String>{};
-    if (_online)
+    final albumIds = <String>{};
+    final onlineTitles = <String>{};
+    if (_online) {
       for (final album in _page?.albums ?? <LokalCatalogueAlbum>[]) {
-        if (albumKeys.add(recommendationKey(album.title))) albums.add(album);
+        final title = recommendationKey(album.title);
+        // Do not collapse distinct official editions solely because they
+        // share a title. Artist lookup can return several release IDs.
+        if (album.id?.isNotEmpty == true && !albumIds.add(album.id!)) continue;
+        if (album.id?.isNotEmpty != true && !onlineTitles.add(title)) continue;
+        onlineTitles.add(title);
+        albums.add(album);
       }
+    }
     for (final group in groups) {
-      if (albumKeys.add(recommendationKey(group.albumName)))
+      if (onlineTitles.add(recommendationKey(group.albumName)))
         albums.add(
           LokalCatalogueAlbum(
             title: group.albumName,
@@ -749,7 +757,7 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                       ),
                     if (rows.any((row) => row.owned == null))
                       Align(
-                        alignment: Alignment.centerRight,
+                        alignment: Alignment.center,
                         child: TextButton.icon(
                           onPressed: _busy ? null : () => _download(rows),
                           icon: const Icon(Icons.download_rounded, size: 18),
@@ -1250,21 +1258,32 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
           borderRadius: BorderRadius.circular(9),
           child: SizedBox.square(
             dimension: 48,
-            child: CachedImageWidget(
-              imagePath:
-                  row.owned?.albumArt ??
-                  (track.artworkUrl.isEmpty ? null : track.artworkUrl),
-              audioSourcePath: row.owned?.filePath,
-              fit: BoxFit.cover,
-              placeholder: ColoredBox(
-                color: t.surface2,
-                child: Icon(Icons.music_note_rounded, color: t.muted),
-              ),
-              errorWidget: ColoredBox(
-                color: t.surface2,
-                child: Icon(Icons.music_note_rounded, color: t.muted),
-              ),
-            ),
+            child: row.owned == null
+                ? DiscoveryArtwork(
+                    kind: DiscoveryArtworkKind.track,
+                    title: track.title,
+                    artist: track.artist,
+                    url: track.artworkUrl,
+                    width: 48,
+                    height: 48,
+                    placeholder: ColoredBox(
+                      color: t.surface2,
+                      child: Icon(Icons.music_note_rounded, color: t.muted),
+                    ),
+                  )
+                : CachedImageWidget(
+                    imagePath: row.owned?.albumArt,
+                    audioSourcePath: row.owned?.filePath,
+                    fit: BoxFit.cover,
+                    placeholder: ColoredBox(
+                      color: t.surface2,
+                      child: Icon(Icons.music_note_rounded, color: t.muted),
+                    ),
+                    errorWidget: ColoredBox(
+                      color: t.surface2,
+                      child: Icon(Icons.music_note_rounded, color: t.muted),
+                    ),
+                  ),
           ),
         ),
         title: Text(

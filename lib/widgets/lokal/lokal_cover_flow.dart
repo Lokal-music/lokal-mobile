@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/utils/responsive.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/models/song.dart';
@@ -352,7 +353,13 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
     final coverSong = album.coverSong;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = math.min(250.0, constraints.maxWidth * .60);
+        final size = math.min(
+          250.0,
+          math.min(
+            constraints.maxWidth * .60,
+            MediaQuery.sizeOf(context).height * .30,
+          ),
+        );
         _albumWidth = size * .55;
         _stageWidth = constraints.maxWidth;
         return Column(
@@ -411,7 +418,7 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: LokalTheme.sans,
-                      fontSize: 17,
+                      fontSize: context.responsiveText(17),
                       fontWeight: FontWeight.w600,
                       color: t.text,
                     ),
@@ -422,7 +429,7 @@ class _LokalCoverFlowState extends State<LokalCoverFlow>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: t.muted),
+                    style: TextStyle(fontSize: context.responsiveText(14), color: t.muted),
                   ),
                 ],
               ),

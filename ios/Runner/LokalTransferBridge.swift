@@ -250,6 +250,7 @@ final class LokalTransferBridge {
       if call.method == "claimImport" {
         let request = try LokalTransferProtocol.importClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
         // Capture before host/runtime dispatch, so a queued claim cannot cross
         // clear, revocation, client replacement or engine disposal barriers.
         let ticket = try host.importOwnership.capture(owner)
@@ -258,6 +259,7 @@ final class LokalTransferBridge {
       } else {
         let request = try LokalTransferProtocol.importLease(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
         if call.method == "releaseImport" {
           // Stop publication before entering a potentially busy host queue.
           try host.importOwnership.cancel(owner, jobID: request.id,

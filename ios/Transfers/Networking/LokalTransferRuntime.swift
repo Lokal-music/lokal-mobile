@@ -30,6 +30,7 @@ struct LokalTransferImportClaim: Encodable, Sendable {
   let reconcileOnly: Bool
   let targetRelativePath: String
   let sourcePath: String?
+  let clientID: String
 }
 
 /// One serial native owner survives Flutter lifecycle changes. Networking can
@@ -554,6 +555,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
                    reply: @escaping LokalTransferCompletion<LokalTransferImportClaim>) {
     queue.async {
       do {
+        guard request.clientID == ticket.owner.clientID else { throw LokalTransferError.staleRevision }
         try self.importOwnership.validateTicket(ticket)
         guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
           throw LokalTransferError.invalidTransition
@@ -596,7 +598,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           try lease.cancellation.check()
           let target = LokalTransferLibrary.directoryName + "/" + (try LokalTransferLibrary.fileName(job))
           reply(.success(LokalTransferImportClaim(job: job, leaseID: lease.id,
-            reconcileOnly: request.reconcileOnly, targetRelativePath: target, sourcePath: path)))
+            reconcileOnly: request.reconcileOnly, targetRelativePath: target, sourcePath: path,
+            clientID: request.clientID)))
         } catch {
           // No import file work is submitted by claim. Release only this exact
           // lease; a simultaneous engine handoff must keep its replacement.
@@ -614,6 +617,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
                      owner: LokalTransferImportOwnership.Owner,
                      reply: @escaping LokalTransferCompletion<Bool>) {
     do {
+      guard request.clientID == owner.clientID else { throw LokalTransferError.staleRevision }
       try importOwnership.cancel(owner, jobID: request.id, revision: request.revision, leaseID: request.leaseID)
     } catch { reply(.failure(error)); return }
     queue.async {

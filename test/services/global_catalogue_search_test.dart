@@ -63,6 +63,47 @@ void main() {
     expect(results.songs.single.duration, const Duration(seconds: 80));
   });
 
+
+  test('Spotify REST skips invalid artwork and uses the largest valid cover', () {
+    final results = parseSpotifyGlobal({
+      'tracks': {'items': [
+        {'id': 'track-1', 'name': 'Top song',
+         'artists': [{'name': 'Artist'}],
+         'album': {'name': 'Record', 'images': [
+           {'url': '', 'width': 640, 'height': 640},
+           {'url': 'http://example.com/unsafe.jpg', 'width': 1200, 'height': 1200},
+           {'url': 'https://example.com/small.jpg', 'width': 64, 'height': 64},
+           {'url': 'https://example.com/full.jpg', 'width': 640, 'height': 640},
+         ]}},
+      ]},
+      'albums': {'items': [
+        {'name': 'Record', 'artists': [{'name': 'Artist'}], 'images': [
+          {'url': 'not-a-url'},
+          {'url': 'https://example.com/album.jpg', 'width': 300, 'height': 300},
+        ]},
+      ]},
+    });
+    expect(results.songs.single.artworkUrl, 'https://example.com/full.jpg');
+    expect(results.albums.single.artworkUrl, 'https://example.com/album.jpg');
+  });
+
+  test('Spotify Pathfinder selects a valid cover even if the first source is empty', () {
+    final results = parseSpotifyPathfinder({
+      'searchV2': {'tracksV2': {'items': [
+        {'item': {'data': {
+          'uri': 'spotify:track:song-1', 'name': 'Top song',
+          'artists': {'items': [{'profile': {'name': 'Artist'}}]},
+          'albumOfTrack': {'name': 'Record', 'coverArt': {'sources': [
+            {'url': null, 'width': 640, 'height': 640},
+            {'url': 'https://example.com/160.jpg', 'width': 160, 'height': 160},
+            {'url': 'https://example.com/640.jpg', 'width': 640, 'height': 640},
+          ]}},
+        }}},
+      ]}},
+    });
+    expect(results.songs.single.artworkUrl, 'https://example.com/640.jpg');
+  });
+
   test('Global choice persists independently from playback source priorities', () async {
     SharedPreferences.setMockInitialValues({});
     expect(await GlobalCatalogueSource.load(), GlobalCatalogueSource.apple);

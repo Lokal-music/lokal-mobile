@@ -148,7 +148,10 @@ class IosTransferTransport {
   Future<IosTransferJob> retry(IosTransferJob job) => _control('retry', job);
   Future<IosTransferJob> verify(IosTransferJob job) => _control('verify', job);
 
-  Future<Object?> _importCall(String method, Object payload) async {
+  Future<Object?> _importCall(
+    String method,
+    Map<String, Object> payload,
+  ) async {
     final client = _subscription;
     final ready = _observationReady;
     if (client == null || ready == null) {
@@ -166,7 +169,10 @@ class IosTransferTransport {
     }
 
     checkOwner();
-    final result = await _call(method, payload);
+    if (payload['clientID'] != null && payload['clientID'] != client) {
+      throw StateError('Import lease belongs to a retired transfer client.');
+    }
+    final result = await _call(method, {...payload, 'clientID': client});
     checkOwner();
     return result;
   }
@@ -184,6 +190,11 @@ class IosTransferTransport {
         'reconcileOnly': reconcileOnly,
       }),
     );
+    if (lease.clientId != _subscription) {
+      throw StateError(
+        'Native import reply belongs to another transfer client.',
+      );
+    }
     if (lease.job.id != job.id ||
         lease.job.revision != job.revision ||
         lease.reconcileOnly != reconcileOnly ||

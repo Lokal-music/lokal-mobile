@@ -1,3 +1,7 @@
+import 'package:flick/features/discovery/discovery_artwork.dart';
+import 'package:flick/features/discovery/discovery_http.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/search/models/search_category.dart';
@@ -42,12 +46,33 @@ class _Catalogue extends GlobalCatalogueSearchService {
       albums: const [
         GlobalCatalogueAlbum(name: 'Unrelated album', artist: 'Other'),
       ],
-      artists: const [GlobalCatalogueArtist(
-        name: 'Unrelated artist', artworkUrl: 'https://example.test/portrait.jpg',
-      )],
+      artists: const [
+        GlobalCatalogueArtist(
+          name: 'Unrelated artist',
+          artworkUrl: 'https://example.test/portrait.jpg',
+        ),
+      ],
     );
   }
 }
+
+// Keep artwork fallbacks deterministic: tests must not depend on public CDNs.
+final _quietArtwork = [
+  discoveryLocalArtworkProvider.overrideWithValue(DiscoveryLocalArtwork.empty),
+  discoveryArtworkResolverProvider.overrideWithValue(
+    DiscoveryArtworkResolver(
+      DiscoveryHttp(
+        MockClient(
+          (_) async => http.Response(
+            '{"data":[],"results":[]}',
+            200,
+            headers: {'content-type': 'application/json'},
+          ),
+        ),
+      ),
+    ),
+  ),
+];
 
 Widget _app(ProviderContainer container, Widget child) =>
     UncontrolledProviderScope(
@@ -67,6 +92,7 @@ void main() {
         final api = _Catalogue(catalogue);
         final c = ProviderContainer(
           overrides: [
+            ..._quietArtwork,
             globalCatalogueSearchServiceProvider.overrideWithValue(api),
           ],
         );
@@ -83,26 +109,43 @@ void main() {
         await tester.pumpWidget(section(true));
         await tester.pumpAndSettle();
         expect(find.text('Wanted song'), findsOneWidget);
-        expect(find.text('Online songs'), findsOneWidget);
-        expect(find.text('$catalogue'), findsNothing);
-        expect(find.text('${catalogue == 'spotify' ? 'Spotify' : 'Apple Music'} catalogue · plays through your configured sources'), findsOneWidget);
-        expect(find.text('Global'), findsNothing);
-        expect(find.text('Songs'), findsNothing); // No redundant subheading
-        final headingPadding = tester.widget<Padding>(
-          find.ancestor(
-            of: find.text('Online songs'), matching: find.byType(Padding),
-          ).first,
+        final songArtwork = tester.widget<DiscoveryArtwork>(
+          find.byType(DiscoveryArtwork).first,
         );
-        expect(headingPadding.padding, const EdgeInsets.all(16));
+        expect(songArtwork.kind, DiscoveryArtworkKind.track);
+        expect(songArtwork.title, 'Wanted song');
+        expect(songArtwork.artist, 'Singer');
+        expect(songArtwork.url, isEmpty);
+
+        expect(find.text('Online songs'), findsNothing);
+        expect(find.text('$catalogue'), findsNothing);
+        expect(
+          find.text(
+            '${catalogue == 'spotify' ? 'Spotify' : 'Apple Music'} catalogue · plays through your configured sources',
+          ),
+          findsNothing,
+        );
+        expect(find.text('Global'), findsNothing);
+        expect(
+          find.text('Songs'),
+          findsNothing,
+        ); // Category tabs are the header.
         expect(find.text('Unrelated album'), findsNothing);
         expect(find.text('Unrelated artist'), findsNothing);
         expect(find.text('Albums'), findsNothing);
         expect(find.text('Artists'), findsNothing);
         await tester.pumpWidget(section(false));
         await tester.pumpAndSettle();
-        expect(find.text('Global'), findsOneWidget);
+        expect(find.text('Global'), findsNothing);
         expect(find.text('Online songs'), findsNothing);
         expect(find.text('Unrelated album'), findsOneWidget);
+        final albumArtwork = tester
+            .widgetList<DiscoveryArtwork>(find.byType(DiscoveryArtwork))
+            .where((artwork) => artwork.kind == DiscoveryArtworkKind.album);
+        expect(albumArtwork, hasLength(1));
+        expect(albumArtwork.single.title, 'Unrelated album');
+        expect(albumArtwork.single.artist, 'Other');
+
         expect(find.text('Unrelated artist'), findsOneWidget);
         await tester.pumpWidget(section(true));
         await tester.pumpAndSettle();
@@ -111,11 +154,45 @@ void main() {
       },
     );
   }
+  testWidgets(
+    'Global song long press exposes the same queue and download menu',
+    (tester) async {
+      final c = ProviderContainer(
+        overrides: [
+          ..._quietArtwork,
+          globalCatalogueSearchServiceProvider.overrideWithValue(
+            _Catalogue('apple'),
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        _app(
+          c,
+          const SingleChildScrollView(
+            child: GlobalCatalogueSearchSection(
+              query: 'Wanted',
+              songsOnly: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Wanted song'));
+      await tester.pumpAndSettle();
+      expect(find.text('Play next'), findsOneWidget);
+      expect(find.text('Add to queue'), findsOneWidget);
+      expect(find.text('Download to library'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Songs empty state ignores album/artist-only matches', (
     tester,
   ) async {
     final c = ProviderContainer(
       overrides: [
+        ..._quietArtwork,
         globalCatalogueSearchServiceProvider.overrideWithValue(
           _Catalogue('apple', emptySongs: true),
         ),
@@ -139,6 +216,7 @@ void main() {
       final api = _Catalogue('apple');
       final c = ProviderContainer(
         overrides: [
+          ..._quietArtwork,
           globalCatalogueSearchServiceProvider.overrideWithValue(api),
         ],
       );
@@ -148,8 +226,8 @@ void main() {
       await tester.pumpWidget(_app(c, const SearchScreen()));
       await tester.pumpAndSettle();
       expect(find.text('Search your library'), findsNothing);
-    expect(find.text('Search online'), findsOneWidget);
-    await tester.enterText(find.byType(TextField), 'Wanted');
+      expect(find.text('Search online'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Wanted');
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
       expect(
@@ -167,28 +245,55 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-testWidgets('Online artists and albums use selected catalogue subtitles and artist portrait widgets', (tester) async {
-  final c = ProviderContainer(overrides: [
-    globalCatalogueSearchServiceProvider.overrideWithValue(_Catalogue('spotify')),
-  ]);
-  addTearDown(c.dispose);
-  await tester.pumpWidget(_app(c, const SingleChildScrollView(
-    child: OnlineCatalogueSearchSection(query: 'Wanted', category: SearchCategory.artists),
-  )));
-  await tester.pumpAndSettle();
-  expect(find.text('Online artists'), findsOneWidget);
-  expect(find.text('Spotify catalogue · plays through your configured sources'), findsOneWidget);
-  expect(find.byType(ArtistSearchPortrait), findsOneWidget);
+  testWidgets(
+    'Online artists and albums omit redundant titles but keep artist portraits',
+    (tester) async {
+      final c = ProviderContainer(
+        overrides: [
+          ..._quietArtwork,
+          globalCatalogueSearchServiceProvider.overrideWithValue(
+            _Catalogue('spotify'),
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        _app(
+          c,
+          const SingleChildScrollView(
+            child: OnlineCatalogueSearchSection(
+              query: 'Wanted',
+              category: SearchCategory.artists,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Online artists'), findsNothing);
+      expect(
+        find.text('Spotify catalogue · plays through your configured sources'),
+        findsNothing,
+      );
+      expect(find.byType(ArtistSearchPortrait), findsOneWidget);
 
-  await tester.pumpWidget(_app(c, const SingleChildScrollView(
-    child: OnlineCatalogueSearchSection(query: 'Wanted', category: SearchCategory.albums),
-  )));
-  await tester.pumpAndSettle();
-  expect(find.text('Online albums'), findsOneWidget);
-  expect(find.text('Spotify catalogue · plays through your configured sources'), findsOneWidget);
-  expect(find.text('Unrelated album'), findsOneWidget);
-});
-
+      await tester.pumpWidget(
+        _app(
+          c,
+          const SingleChildScrollView(
+            child: OnlineCatalogueSearchSection(
+              query: 'Wanted',
+              category: SearchCategory.albums,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Online albums'), findsNothing);
+      expect(
+        find.text('Spotify catalogue · plays through your configured sources'),
+        findsNothing,
+      );
+      expect(find.text('Unrelated album'), findsOneWidget);
+    },
+  );
 }
-
-

@@ -77,6 +77,23 @@ func rawDocument(_ url: URL, id: String, replacement: Data? = nil) throws -> Dat
 
 var contractStage = "startup"
 do {
+  if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--migration-open" {
+    _ = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2])).snapshot()
+    exit(0)
+  }
+  if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--custody-worker" {
+    let boundary = CommandLine.arguments[4]
+    let store = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
+      testingCommitBoundary: { if $0 == boundary { exit(97) } })
+    _ = try store.reserveImport(id: CommandLine.arguments[3], revision: 1, songID: 42)
+    exit(0)
+  }
+  if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--migration-crash" {
+    let boundary = CommandLine.arguments[3]
+    _ = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
+      testingCommitBoundary: { if $0 == boundary { exit(98) } })
+    throw TestFailure.failed("migration crash boundary was not reached")
+  }
   if CommandLine.arguments.count == 6 && CommandLine.arguments[1] == "--library-copy" {
     let container = URL(fileURLWithPath: CommandLine.arguments[2])
     let root = URL(fileURLWithPath: CommandLine.arguments[3])
@@ -129,6 +146,8 @@ do {
   contractStage = "initial journal"
   let store = try LokalTransferJournal(container: root)
   try require(store.snapshot().jobs.isEmpty, "fresh journal")
+  contractStage = "durable import custody and migration"
+  try runImportCustodyContracts(container: root)
   contractStage = "process lock ownership"
   let lockRoot = root.appendingPathComponent("write-lock-probe")
   try manager.createDirectory(at: lockRoot, withIntermediateDirectories: false)
@@ -201,9 +220,10 @@ do {
   }
   try require(LokalTransferProtocol.page(Data("{\"offset\":0,\"limit\":100}".utf8)).limit == 100,
     "bounded page request accepted")
-  let claimDocument: [String: Any] = ["id": original.id, "revision": 1, "reconcileOnly": false]
+  let contractClient = "b7d96b93-6526-4f1f-a1af-688ffb5c799d"
+  let claimDocument: [String: Any] = ["id": original.id, "revision": 1, "reconcileOnly": false, "clientID": contractClient]
   let leaseDocument: [String: Any] = ["id": original.id, "revision": 1,
-    "leaseID": "a7d96b93-6526-4f1f-a1af-688ffb5c799d"]
+    "leaseID": "a7d96b93-6526-4f1f-a1af-688ffb5c799d", "clientID": contractClient]
   try require(!LokalTransferProtocol.importClaim(JSONSerialization.data(withJSONObject: claimDocument)).reconcileOnly,
     "bounded typed native import claim accepted")
   try require(LokalTransferProtocol.importLease(JSONSerialization.data(withJSONObject: leaseDocument)).revision == 1,
@@ -462,10 +482,10 @@ do {
 
   contractStage = "strict SQLite records"
   let committed = try store.snapshot()
-  try rawExecute(disk, "PRAGMA user_version=2")
+  try rawExecute(disk, "PRAGMA user_version=3")
   try rejects("future database read") { _ = try store.snapshot() }
   try rejects("future database write") { try store.create([makeJob()]) }
-  try rawExecute(disk, "PRAGMA user_version=1")
+  try rawExecute(disk, "PRAGMA user_version=2")
   try require(store.snapshot().jobs == committed.jobs && store.snapshot().generation == committed.generation,
     "future schema never replaces committed records")
   let originalDocument = try rawDocument(disk, id: original.id)

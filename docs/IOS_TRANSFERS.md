@@ -1,9 +1,13 @@
 # iPhone transfer architecture
 
-Status: native transport, app owner and typed Flutter bridge accepted in build
-80; product library adapter pending, 29 October 2026. Both real iOS 16 SDK checks
+Status: native transport, app owner and typed Flutter bridge accepted through build
+82; product library adapter pending, 29 October 2026. Both real iOS 16 SDK checks
 and both complete iOS 18.6/26 app suites pass, including native channel ownership
-and Keychain migration. Standalone native host contracts also pass five rounds.
+and Keychain migration. Build 82's iOS 26 first attempt failed before app
+installation during simulator boot; one fresh-host retry passed the full suite
+using the same compiled integration app. Standalone native host contracts pass
+20 rounds in native run 7. Later explicit caller-client binding, product schema
+and through-#320 UI source still await batched Apple acceptance.
 This qualifies the integrated protocol, not OS suspension/daemon delivery.
 Deterministic file promotion and private Isar receipts are later isolated
 foundations; their product adapter, uploads and persisted progress are unfinished. Product capability keeps
@@ -421,8 +425,10 @@ cross-process lock, real HTTP, pairing, crash-recovery and host-owner checks.
 | OS background transport | Actual suspended-app download and background-session callback reconciliation, separate from portable HTTP or fake lifecycle tests. |
 | Release candidate | One batched complete app package passes both simulator suites and independent source/binary/symbol verification, then Windows signing and physical iPhone acceptance. |
 
-Remaining integration gates are explicit: register the private schema safely;
-native import claims, engine-owned leases and fast revocation; real media probing;
+The later source registers the private schema on iOS only, while keeping it
+outside the public database exports and peer journal. Native import claims,
+engine-owned leases and fast revocation are wired privately and product
+capability remains disabled. Remaining integration gates include real media probing;
 scanner exclusion inside its writer transaction; cancellation/cleanup before
 reservation retirement; clear/unpair barriers; a root app coordinator and honest
 localized progress. Exact pathname spelling alone must not be assumed to identify
@@ -432,9 +438,12 @@ The receipt's reserved-path query and original-source lookup use their actual
 Isar indexes rather than scanning every receipt/song for each imported file.
 The complete actual native Isar contracts pass again after that query change.
 The isolated database contracts use `relaxedDurability: false`. Product
-`Database.init` currently inherits Isar's relaxed default; its iOS open must use
-full durability before an import may acknowledge its database receipt or retire
-the only staging copy. Process-exit tests do not establish power-loss durability.
+`Database.init` now requests full durability for its iOS open before an import
+may acknowledge a database receipt or retire the only staging copy. Other
+platforms retain their existing mode. The actual native Isar contracts pass again;
+a new iOS probe queries the real application collection without writing songs.
+Apple acceptance of this later product open remains pending. Process-exit tests
+do not establish power-loss durability.
 Actual OS suspension/relaunch acceptance remains separate. Neither the native
 library helper nor the receipt adapter is exposed as an enabled product import API.
 
@@ -479,7 +488,13 @@ to ordinary foreground observation. A replacement root Dart client also revokes
 old authority. Stale engine observation cannot overwrite a current observer.
 
 Private `claimImport`, `validateImport`, `validateImportReconciliation` and
-`releaseImport` byte operations reject caller paths, owner identities and headers.
+`releaseImport` byte operations reject caller paths, engine identities and headers.
+Every private import request carries the canonical client UUID from the acknowledged
+root observation. The native bridge and runtime compare it with their actual
+current owner; they never reinterpret a retired client's request as a request
+from its replacement. Claim replies echo that validated UUID, and Dart refuses
+foreign replies or leases before issuing another control call. This UUID is
+ephemeral routing identity, not a credential or a journal field.
 Claim checks the current journal phase/revision and pairing/account, persists
 staged → validating, and returns only a native-derived relative target, ephemeral
 lease and current staging path. Receipt-only recovery needs no current bearer,
@@ -497,13 +512,16 @@ Three complete later portable Swift rounds pass with real HTTP/WAV staging,
 durable claim/recovery/cancellation and a blocked native credential read.
 Revocation before any lease exists prevents that queued claim from advancing
 the journal. An active writer guard still completes during blocked native I/O;
-release cancels it immediately and waits for queued work to drain. Thirteen
+release cancels it immediately and waits for queued work to drain. Fourteen
 Flutter transport checks pass, including root-observation readiness, replacement
 during a pending reply, strict ephemeral documents, frozen-intent/proof checks,
 read-only refusal and invalid native acknowledgements. The actual Isar contracts
 also pass again. These checks do not run the new bridge in an iOS app; the next
 batched Apple acceptance remains required. Build 80 contains the earlier
-file/receipt foundation and does not qualify this later wiring.
+file/receipt foundation and does not qualify this later wiring. The explicit
+caller-client binding has three later portable native rounds and fourteen Dart
+transport checks, with strict analysis clean. A real-channel simulator probe is
+added for the next batched Apple acceptance; that new probe is not in build 82.
 
 Next, invoke this guard inside the product Isar writer, connect real media
 probing/promotion and the scanner reservation checks, and drain native file
@@ -514,3 +532,67 @@ operation must use the runtime's retained work record, not require its retired
 UI lease to become valid again. A completed receipt is historical proof and may
 be acknowledged without recreating a deleted song. No new native job JSON fields
 are needed merely to persist ephemeral engine/client leases.
+
+### Frozen import work and journal upgrade
+
+Later local source upgrades the SQLite journal from schema 1 to 2 in one
+`BEGIN IMMEDIATE` transaction. The stable directory/session names and job JSON
+remain unchanged. `import_custody` retains the exact validated job/revision and
+reserved positive Isar song ID; it does not store a bearer, absolute sandbox path
+or ephemeral client/engine identity. The original job BLOBs, authentication
+pauses and observable generation survive migration unchanged.
+
+The frozen row deliberately outlives live job cancellation/retry. Cancellation
+advances the live revision while retaining received history; retry also clears
+that history. Neither may discard the old reservation's byte proof. A repeated
+reserve coalesces for the same song and frozen intent across validating/importing;
+a different song is refused. Job documents and custody documents share the
+existing 16 MiB logical budget, with separately checked counts and byte totals.
+Future schemas and unknown/corrupt custody documents are preserved and refused.
+
+```mermaid
+flowchart LR
+  Job[Current native job] -->|reserve before publication| Work[(Frozen revision + song ID)]
+  Cancel[Cancel or retry] -->|advance current revision| Job
+  Work -. pending native file identity .-> File[Owned Music copy]
+  File -. pending coordinator .-> Song[(Song + committed Isar receipt)]
+  Barrier[Drain file work + Isar writer barrier] -. reconcile first .-> Retire[Retire frozen work]
+  Work --> Retire
+```
+
+Three complete portable Swift rounds pass with actual v1 fixture migration,
+process exits before/after the migration and reservation commits, six concurrent
+migrators and six reservers, cancellation/retry history, a real combined-byte
+capacity refusal, and corrupt/future-document preservation. These do not prove
+power-loss durability or installed iOS acceptance. This native-only reservation
+API is not exposed by the bridge. File inode/provenance recording, safe cleanup,
+scanner coordination and the root application coordinator remain gates before
+native product import is enabled.
+
+### Scanner writer coordination
+
+Later source routes the library scanner's upserts and removals through explicit
+scanner repository methods. On iOS, those methods consult the private receipt
+indexes **inside the same Isar write transaction**. Ordinary user repository
+methods and Android's bulk paths keep their existing behavior. The guard uses
+the native ASCII UUID/revision filename suffix instead of an exact display-title
+path, so case, Unicode title spelling and sandbox-parent aliases cannot bypass
+a prepared reservation. Matching UUIDs in another `Desktop Copies` directory
+are conservatively protected too; no filesystem or native queue waits occur
+inside the writer.
+
+Prepared rows cannot be independently indexed or automatically removed.
+Committed receipts reject a stale scan's new ID and path aliases; a fresh scan
+of the current canonical recording can update it. Deleting a completed song
+through an explicit user operation does not let a delayed scan recreate it.
+Automatic deletion/CUE replacement retains the imported identity until an
+accepted coordinator mapping and cleanup barrier exist. Missing-file handling,
+CUE restructuring and accurate progress for excluded scan rows therefore remain
+product-enablement gates, rather than being treated as completed scan parity.
+
+Thirty focused Flutter scanner/path/repository checks pass. Actual Isar
+contracts include a real scanner writer waiting behind preparation, protection
+of source IDs, Unicode/case aliases, stale scans after completion and historical
+deletion. The additional real iOS repository probe uses its own disposable
+database; it is source/analyzer checked and awaits the next Apple app batch.
+These guards do not enable product native imports or qualify file publication.

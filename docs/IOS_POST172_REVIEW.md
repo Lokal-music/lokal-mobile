@@ -1,11 +1,15 @@
 # iPhone review of mobile PRs after #172
 
-Current review: **102 merged product PRs after #172 through #311**. The newest
+Current review: **118 merged product PRs after #172 through #331**. The newest
 continuation includes on-demand large queues, provider resolution, subtitle
 alignment, smooth player expansion, per-minor release notes and direct Help
 navigation. Reviewed
 Android USB changes remain excluded. Each source checkpoint requires its own
 acceptance; review/inclusion does not qualify a physical iPhone release.
+
+iOS Home Screen widgets are excluded from release at the user's request
+(29 October 2026, Europe/Paris). Earlier WidgetKit plans/evidence below are
+historical; they are no longer implementation or release requirements.
 
 Initial pass: 26 October 2026 (Europe/Paris), through merged PR #196. Earlier
 checkpoints carried 53 reviewed PRs through #239, including merged source
@@ -1195,3 +1199,84 @@ through-#311 application/test source, local commit
 `ee85631`. The native ownership continuation changes only Swift/tooling/docs
 after that checkpoint. This result still does not qualify a new IPA; build 80
 continues testing its frozen through-#310 source separately.
+
+## Follow-up: merged PRs #313–#320 and release-scope correction
+
+Review date: 29 October 2026 (Europe/Paris). Eight additional merged product
+PRs bring the audit to 110 after #172. Source changes below are a later
+continuation; build 82 tests the earlier through-#311 ownership source.
+
+| PR | Exact merged commit | iPhone adaptation |
+| --- | --- | --- |
+| #313 | `c90e6d026e9d1bdd79109ffec50d271831ddd1ae` | Library sliver comma already corrected in the through-#311 port and its passing full Flutter checks. |
+| #314 | `e55557622bef33537ee98182d943d949a6df303d` | Button-only artwork reveal in both modern player layouts; preserve swipe behavior, actual selected-song ownership and the iPhone embedded-video exclusion. |
+| #315 | `633abb1c20789a5013743acbf6c77252655ce31d` | Verified online-cover fallback, largest valid Spotify HTTPS artwork, Apple artist-ID releases across bounded storefronts and anonymous exact-channel YouTube artist releases. Keep source attribution and distinct Apple editions. |
+| #316 | `c3a1c08fd9660f691d8dfb82f6b268950691b9b8` | Use the actual `artworkUrl` property for song-associated YouTube releases; retain the regression case. |
+| #317 | `99fc250920940ba6e4ee6f83ef51761f7c47222a` | Precompiled cloud shader, feathered alpha union, final full-frame fade and blur-to-sharp handover. Startup prewarming and stable fallback remain separate from playback. |
+| #318 | `bb3e91c5eb6e3d1ee953e82dd51b50d218fdf2ab` | Remove double text scaling, adapt greeting typography and cap Cover Flow artwork by available height. Retain scrollable Home modes and 44-point targets so long translations and large system fonts stay readable. Exclude Android CI/debug identity changes and unrelated Rust test cleanup. |
+| #319 | `e54ab28cb0e0e571c5299cef116516acd6890bb9` | Pixel-space circular masks across portrait, landscape and square artwork. |
+| #320 | `3491b54b0870faabc24bbc0ff76d71f05697364f` | Continuous slider snapped to hundredths, accessible ±0.01× buttons and two-decimal labels, preserving the 0.50×–2.00× range and existing backend/session guards. |
+
+The compiled shader passes actual raster/pixel tests for three aspect ratios,
+transparent/opaque endpoints, overlapping alpha and the final fade. This is
+host renderer evidence; an added iOS app probe must qualify the same fragment
+program on the Apple runtime. It does not claim physical 60/120 Hz performance.
+The native queue probe also adds actual AVFoundation-backed fractional-speed
+acknowledgements, continued playback and paused adjustment without auto-resume.
+Those later native probes are outside build 82.
+
+The port fixes upstream test-fixture defects rather than bypassing assertions:
+a malformed named-parameter separator, UTF-8 JSON response headers, and exact
+animation endpoint scheduling. The mask must reach full opacity at 2.4 seconds;
+Flutter marks its interpolation complete on the following frame. Artist
+attribution tests retain primary-credit collaborations in Albums and separately
+verify guest-led releases in Features. Cover Flow geometry is checked against
+its measured artwork bounds after adaptive sizing. Enabling system Reduce
+Motion during a handover immediately settles the visual effect.
+
+PR #321 was still open at this review and is tracked separately; its provider
+acquisition rework is not included as merged parity.
+
+**Home Screen widgets are excluded from iOS at the user's request.** Automatic
+WidgetKit research jobs are disabled, and the app no longer starts the iOS
+publisher/sampler, widget-intent listener or publication channel. Existing
+Android widgets and iPhone lock-screen/Control Center playback remain separate.
+
+Validation for this continuation: **1,064 CI-selected Flutter checks pass**;
+27 final Help/settings/You checks pass after removing widget instructions from
+iPhone Help. All new Dart files and the changed widget runtime boundary pass
+strict analysis. Analysis of all changed Dart files has zero errors and three
+pre-existing warnings. Shader pixel, catalogue, typography, video separation and
+artwork geometry checks are included. Actionlint and diff checks pass. Apple
+acceptance of the later UI/shader/speed and no-widget source remains pending;
+local tests do not qualify a new IPA or live-provider/device behavior.
+
+
+## Follow-up: merged PRs #321–#331
+
+The frozen review uses merged main through `4afe9beb90e7039652edaeac70a25abb9f860220`.
+Eight additional merged product PRs bring the reviewed count to 118. PR #330
+closed without merging and contributes no release change; #322/#323 are the
+separate iPhone engineering continuation, not additional main product PRs.
+The earlier note that #321 was open describes the prior review only.
+
+| PR | Merged commit | iPhone disposition |
+| --- | --- | --- |
+| #321 | `edda6e2c9869d3a9fb78dc33afe39ac720d1702e` | Availability-first acquisition, one enrichment retry for every provider, Qobuz-only progressive eligibility, verified completed-file cache adoption and a 90-second inactive-download watchdog. Preserve translated stage labels, opaque progressive handles, source log labels, account verification and iOS playback ownership. Live provider timing remains separate. |
+| #324 | `fa089b70580319b8968b40bb040d40e425dc0ceb` | Recently played shelf below Library More, remove the duplicate history row and Home Fresh shelf, and use actual dock inset plus 12 points. Retain iPhone Songs/Downloads navigation. |
+| #325 | `6e2be274e76d870191ff54ab3927ac163e32614d` | Cleaner online category results, source-aware queue/Play next swipes, persistent reversed directions and accessible actions. |
+| #326 | `1f585c57a6c23964d440279742bf07f46405c632` | Reviewed as Android Oboe output precision. Do not expose an unsupported iPhone hardware/stream-precision selector; preserve the existing native PCM/DSD/USB source. |
+| #327 | `7d2271e40af9f25e54582540089da88900f8a477` | Wider Discovery lane and inset rounded selection lens; retain 44-point hit targets, measure translated/system-scaled labels, use intrinsic lane widths while scrolling and reveal selection on dependency changes. Preserve the iPhone embedded Flow layout. |
+| #328 | `a326ca4351e42c08c673e19773e12e3b23daa92b` | Fullscreen outgoing art uses the complementary cloud mask; incoming-only blur and complementary fallback opacity. Extend the actual compiled-shader pixel contract to cover inverse alpha, while preserving reduced motion and cached offscreen neighbours. |
+| #329 | `09a66671542fcabcbcf6ac32d2f3d6d97930797a` | Desktop genre taxonomy, genre search, No genre browsing, live song lists and placeholder exclusion. |
+| #331 | `4afe9beb90e7039652edaeac70a25abb9f860220` | Expanded exact aliases, visible known singletons, normalized repeated custom genres and one-off unknown fallback. Correct the imported grouping bug: normalized counting must also use normalized bucket keys. Keep the first display label and original music metadata. |
+
+The focused selection passes 138 checks before the additional complete-selection
+run. The original upstream fixtures required corrections: a known Baroque tag
+cannot test the unknown-tag fallback; an opaque live handle needs an actually
+ready file; iPhone More retains its two additional navigation rows; and outgoing
+art teardown must preserve the normal offscreen swipe neighbour. Pixel tests
+inspect the compiled production shader, not just the CPU reference. New swipe,
+genre and resolution-stage phrases have translations in all shipped locales.
+Apple acceptance of this newer source is pending; build 82 covers the earlier
+through-#311 source only. Widgets remain excluded from release.

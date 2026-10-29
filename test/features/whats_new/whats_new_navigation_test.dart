@@ -62,6 +62,9 @@ void main() {
     expect(text, contains('Files'));
     expect(text, isNot(contains('UAC2')));
     expect(text, isNot(contains('Bit-perfect capsule')));
+    expect(text, isNot(contains('Home Screen Widget')));
+    expect(sections.any((section) => section.id == 'home_widget'), isFalse);
+    expect(sections.expand((section) => section.entries).any((entry) => entry.title == 'Widgets'), isFalse);
     expect(manualSections(forIos: false), same(kManualSections));
   });
 

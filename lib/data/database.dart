@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'entities/artist_entity.dart';
 import 'entities/link_event_entities.dart';
 import 'entities/folder_entity.dart';
+import 'entities/ios_transfer_receipt_entity.dart';
 import 'entities/network_server_entity.dart';
 import 'entities/recently_played_entity.dart';
 import 'entities/song_audio_cache_entity.dart';
@@ -65,6 +66,8 @@ class Database {
       NetworkServerEntitySchema,
       PlayEventEntitySchema,
       LibraryOpEntitySchema,
+      // Private import recovery state; never exported through the peer journal.
+      if (Platform.isIOS) IosTransferReceiptEntitySchema,
     ];
 
     try {
@@ -72,6 +75,9 @@ class Database {
         schemas,
         directory: dir.path,
         name: _databaseName,
+        // A native import may acknowledge its receipt only after Isar commits
+        // durable truth. Other platforms retain their existing default mode.
+        relaxedDurability: !Platform.isIOS,
       );
     } on IsarError catch (e) {
       if (Platform.isIOS) rethrow;

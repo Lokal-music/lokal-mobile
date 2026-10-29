@@ -73,14 +73,25 @@ class Responsive {
     return value * scaleFactor;
   }
 
-  /// Get responsive text size that respects both screen size and text scale.
+  /// Get a width-adaptive base font size.
+  ///
+  /// Do not apply MediaQuery.textScaler here: Flutter's Text widgets apply the
+  /// platform TextScaler themselves. Applying it here too would double-scale
+  /// text for users who increase or reduce the system font size.
   static double textSize(BuildContext context, double baseSize) {
-    final scaledSize = scale(context, baseSize);
-    // Clamp text scale factor to prevent excessive scaling
-    final textScaleFactor = MediaQuery.textScalerOf(
-      context,
-    ).clamp(minScaleFactor: 0.8, maxScaleFactor: 1.3).scale(1.0);
-    return scaledSize * textScaleFactor;
+    return scale(context, baseSize);
+  }
+
+  /// Scale a dimension against the available screen width, then keep it within
+  /// a caller-provided range. Useful for artwork and layout geometry.
+  static double boundedScale(
+    BuildContext context,
+    double baseSize, {
+    required double min,
+    required double max,
+  }) {
+    assert(min <= max);
+    return scale(context, baseSize).clamp(min, max).toDouble();
   }
 
   /// Get responsive icon size.

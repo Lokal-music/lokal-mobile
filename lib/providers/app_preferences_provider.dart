@@ -94,9 +94,7 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setShowUsbVolumeOnMenu(bool value) async {
     if (state.showUsbVolumeOnMenu == value) return;
     state = state.copyWith(showUsbVolumeOnMenu: value);
-    await ref
-        .read(appPreferencesServiceProvider)
-        .setShowUsbVolumeOnMenu(value);
+    await ref.read(appPreferencesServiceProvider).setShowUsbVolumeOnMenu(value);
   }
 
   Future<void> setShowUsbVolumeOnSettings(bool value) async {
@@ -116,7 +114,9 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setAutomixStemClipsEnabled(bool value) async {
     if (state.automixStemClipsEnabled == value) return;
     state = state.copyWith(automixStemClipsEnabled: value);
-    await ref.read(appPreferencesServiceProvider).setAutomixStemClipsEnabled(value);
+    await ref
+        .read(appPreferencesServiceProvider)
+        .setAutomixStemClipsEnabled(value);
   }
 
   Future<void> setCrossfadeDurationSecs(double value) async {
@@ -177,6 +177,14 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
     if (state.swipeActionsEnabled == value) return;
     state = state.copyWith(swipeActionsEnabled: value);
     await ref.read(appPreferencesServiceProvider).setSwipeActionsEnabled(value);
+  }
+
+  Future<void> setSwipeQueueDirectionsReversed(bool value) async {
+    if (state.swipeQueueDirectionsReversed == value) return;
+    state = state.copyWith(swipeQueueDirectionsReversed: value);
+    await ref
+        .read(appPreferencesServiceProvider)
+        .setSwipeQueueDirectionsReversed(value);
   }
 
   Future<void> setFavoriteRemovalMode(String value) async {
@@ -406,7 +414,9 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setWidgetCompactBgOpacity(int value) async {
     if (state.widgetCompactBgOpacity == value) return;
     state = state.copyWith(widgetCompactBgOpacity: value);
-    await ref.read(appPreferencesServiceProvider).setWidgetCompactBgOpacity(value);
+    await ref
+        .read(appPreferencesServiceProvider)
+        .setWidgetCompactBgOpacity(value);
   }
 
   Future<void> setWidgetCompactShowAlbumArt(bool value) async {
@@ -490,9 +500,7 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setLeftTopActionButton(String value) async {
     if (state.leftTopActionButton == value) return;
     state = state.copyWith(leftTopActionButton: value);
-    await ref
-        .read(appPreferencesServiceProvider)
-        .setLeftTopActionButton(value);
+    await ref.read(appPreferencesServiceProvider).setLeftTopActionButton(value);
   }
 
   Future<void> setRightTopActionButton(String value) async {
@@ -520,9 +528,7 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setGlanceCardMinimized(bool value) async {
     if (state.glanceCardMinimized == value) return;
     state = state.copyWith(glanceCardMinimized: value);
-    await ref
-        .read(appPreferencesServiceProvider)
-        .setGlanceCardMinimized(value);
+    await ref.read(appPreferencesServiceProvider).setGlanceCardMinimized(value);
   }
 
   Future<void> setReplaceAlbumWithBitPerfectCapsule(bool value) async {
@@ -536,7 +542,9 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setAlbumsStretchArtwork(bool value) async {
     if (state.albumsStretchArtwork == value) return;
     state = state.copyWith(albumsStretchArtwork: value);
-    await ref.read(appPreferencesServiceProvider).setAlbumsStretchArtwork(value);
+    await ref
+        .read(appPreferencesServiceProvider)
+        .setAlbumsStretchArtwork(value);
   }
 
   Future<void> setAnimatedAlbumArt(bool value) async {
@@ -698,9 +706,7 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setBtLdacBitsPerSample(int value) async {
     if (state.btLdacBitsPerSample == value) return;
     state = state.copyWith(btLdacBitsPerSample: value);
-    await ref
-        .read(appPreferencesServiceProvider)
-        .setBtLdacBitsPerSample(value);
+    await ref.read(appPreferencesServiceProvider).setBtLdacBitsPerSample(value);
   }
 
   Future<void> setFloatingPlayerEnabled(bool value) async {
@@ -790,9 +796,7 @@ class AppPreferencesNotifier extends Notifier<AppPreferences> {
   Future<void> setOrbitCardWidthRatio(double value) async {
     if (state.orbitCardWidthRatio == value) return;
     state = state.copyWith(orbitCardWidthRatio: value);
-    await ref
-        .read(appPreferencesServiceProvider)
-        .setOrbitCardWidthRatio(value);
+    await ref.read(appPreferencesServiceProvider).setOrbitCardWidthRatio(value);
   }
 
   Future<void> setOrbitArtResolutionMultiplier(double value) async {

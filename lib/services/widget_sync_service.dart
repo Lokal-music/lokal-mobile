@@ -8,43 +8,19 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/app_preferences_service.dart';
 import 'widget_recommendation_service.dart';
-import 'ios_widget_runtime.dart';
-import '../core/theme/lokal_tokens.dart';
 
 import 'package:flick/core/utils/dev_log.dart';
 
 class WidgetSyncService {
-  // Android AppWidget publisher; WidgetKit needs a separate versioned App Group
-  // snapshot. No iPhone widget extension is registered yet.
+  // Android AppWidget publisher. Home-screen widgets are outside the iOS
+  // release scope; the archived WidgetKit prototype is not started by the app.
   WidgetSyncService._();
   static final WidgetSyncService instance = WidgetSyncService._();
 
   int? _lastLokalAccent;
-  IosWidgetRuntime? _iosRuntime;
-  int _iosAccent = LokalTokens.resolve(LokalThemeId.dark).accent.toARGB32();
-
-  void attachIosRuntime() {
-    if (Platform.isIOS) {
-      _iosRuntime ??= IosWidgetRuntime.system(accentArgb: _iosAccent);
-    }
-  }
-
-  void detachIosRuntime() {
-    _iosRuntime?.dispose();
-    _iosRuntime = null;
-  }
-
-  Future<void> retryIosPublication() async {
-    if (Platform.isIOS) await _iosRuntime?.retry();
-  }
 
   /// App accent is stored separately so explicit per-widget overrides survive.
   Future<void> setLokalAccent(int color) async {
-    if (Platform.isIOS) {
-      _iosAccent = color;
-      _iosRuntime?.setAccent(color);
-      return;
-    }
     if (!Platform.isAndroid || _lastLokalAccent == color) return;
     _lastLokalAccent = color;
     try {
@@ -180,10 +156,7 @@ class WidgetSyncService {
   }
 
   void schedulePush(PlayerState state) {
-    if (Platform.isIOS) {
-      _iosRuntime?.observe(state);
-      return;
-    }
+    if (Platform.isIOS) return;
     _pendingState = state;
     _lastKnownState = state;
     final song = state.currentSong;
@@ -301,10 +274,7 @@ class WidgetSyncService {
   /// playing when the user returns to the launcher. Never falsify the player
   /// state simply because Flutter's activity lost focus.
   Future<void> pushPaused() async {
-    if (Platform.isIOS) {
-      await _iosRuntime?.flush();
-      return;
-    }
+    if (Platform.isIOS) return;
     try {
       final latest = _lastKnownState;
       if (latest != null) {
@@ -319,10 +289,7 @@ class WidgetSyncService {
   }
 
   Future<void> pushKilled() async {
-    if (Platform.isIOS) {
-      await _iosRuntime?.flush();
-      return;
-    }
+    if (Platform.isIOS) return;
     _savedData.remove(keyIsPlaying);
     try {
       await _ensureInit();
@@ -446,8 +413,8 @@ class WidgetSyncService {
   }
 }
 
-ProviderSubscription<PlayerState> installWidgetSync(WidgetRef ref) {
-  WidgetSyncService.instance.attachIosRuntime();
+ProviderSubscription<PlayerState>? installWidgetSync(WidgetRef ref) {
+  if (Platform.isIOS) return null;
   unawaited(WidgetSyncService.instance.pushInitialCustomization());
   return ref.listenManual<PlayerState>(
     playerProvider,

@@ -39,12 +39,17 @@ Map<String, Object?> job({String phase = 'queued', int revision = 1}) => {
   if (phase == 'staged') ...{'receivedBytes': 12, 'receivedSHA256': 'a' * 64},
 };
 
-Map<String, Object?> importLease({bool reconcileOnly = false}) {
+const fixtureClientId = '12dcde21-562f-4417-b660-cd1385ea44ca';
+Map<String, Object?> importLease({
+  bool reconcileOnly = false,
+  String clientId = fixtureClientId,
+}) {
   final document = job(phase: 'staged');
   document['phase'] = 'validating';
   return {
     'job': document,
     'leaseID': 'a7d96b93-6526-4f1f-a1af-688ffb5c799d',
+    'clientID': clientId,
     'reconcileOnly': reconcileOnly,
     'targetRelativePath': 'Desktop Copies/Fixture - ${document['id']}-r1.flac',
     if (!reconcileOnly)
@@ -81,6 +86,9 @@ void main() {
         {'reconcileOnly': 1},
         {'leaseID': 'caller'},
         {'leaseID': 'A7D96B93-6526-4F1F-A1AF-688FFB5C799D'},
+        {'clientID': null},
+        {'clientID': 'caller'},
+        {'clientID': fixtureClientId.toUpperCase()},
         {'targetRelativePath': 'Desktop Copies/other.flac'},
         {'sourcePath': 'file:///private/fixture.wav'},
         {'sourcePath': '/private/../outside.wav'},
@@ -101,10 +109,12 @@ void main() {
   test('import waits for root observation and sends no caller paths or account credentials', () async {
     const channel = MethodChannel('test/ios-import-root');
     final observing = Completer<void>();
+    late String clientId;
     final calls = <MethodCall>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
       if (call.method == 'observe') {
+        clientId = (request(call) as Map)['clientID'] as String;
         await observing.future;
         return null;
       }
@@ -114,12 +124,14 @@ void main() {
           'id': job()['id'],
           'revision': 1,
           'reconcileOnly': false,
+          'clientID': clientId,
         });
-        return encoded(importLease());
+        return encoded(importLease(clientId: clientId));
       }
       expect(
         request(call),
-        IosTransferImportLease.fromJson(importLease()).control,
+        IosTransferImportLease.fromJson(importLease(clientId: clientId))
+            .control,
       );
       return encoded(true);
     });
@@ -163,7 +175,9 @@ void main() {
         if (call.method == 'claimImport') {
           claimEntered.complete();
           await claimReply.future;
-          return encoded(importLease());
+          return encoded(
+            importLease(clientId: (request(call) as Map)['clientID'] as String),
+          );
         }
         return null;
       });
@@ -202,10 +216,15 @@ void main() {
     'import rejects changed frozen intent and recovery role in native replies',
     () async {
       const channel = MethodChannel('test/ios-import-frozen-intent');
-      Object? response = importLease();
+      Map<String, Object?> response = importLease();
       messenger.setMockMethodCallHandler(
         channel,
-        (call) async => call.method == 'claimImport' ? encoded(response) : null,
+        (call) async => call.method == 'claimImport'
+            ? encoded({
+                ...response,
+                'clientID': (request(call) as Map)['clientID'],
+              })
+            : null,
       );
       final transport = IosTransferTransport(channel: channel, supported: true);
       final subscription = transport.changes.listen((_) {});
@@ -250,9 +269,14 @@ void main() {
   test('read-only reconciliation cannot call writer guard; native false acknowledgements fail', () async {
     const channel = MethodChannel('test/ios-import-readonly');
     final calls = <String>[];
+    final observing = Completer<String>();
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call.method);
-      if (call.method == 'observe' || call.method == 'stopObserving') {
+      if (call.method == 'observe') {
+        observing.complete((request(call) as Map)['clientID'] as String);
+        return null;
+      }
+      if (call.method == 'stopObserving') {
         return null;
       }
       return encoded(false);
@@ -261,7 +285,7 @@ void main() {
     final subscription = transport.changes.listen((_) {});
     try {
       final historical = IosTransferImportLease.fromJson(
-        importLease(reconcileOnly: true),
+        importLease(reconcileOnly: true, clientId: await observing.future),
       );
       await expectLater(transport.validateImport(historical), throwsStateError);
       expect(calls, isNot(contains('validateImport')));
@@ -273,6 +297,42 @@ void main() {
         transport.releaseImport(historical),
         throwsFormatException,
       );
+    } finally {
+      await subscription.cancel();
+      await transport.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
+
+  test('foreign-client replies and imported leases never inherit the active client', () async {
+    const channel = MethodChannel('test/ios-import-client-binding');
+    final calls = <String>[];
+    late String clientId;
+    var foreignReply = true;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'observe') {
+        clientId = (request(call) as Map)['clientID'] as String;
+      } else if (call.method == 'claimImport') {
+        return encoded(
+          importLease(clientId: foreignReply ? fixtureClientId : clientId),
+        );
+      }
+      return null;
+    });
+    final transport = IosTransferTransport(channel: channel, supported: true);
+    final subscription = transport.changes.listen((_) {});
+    try {
+      final staged = IosTransferJob.fromJson(job(phase: 'staged'));
+      await expectLater(transport.claimImport(staged), throwsStateError);
+      foreignReply = false;
+      final current = await transport.claimImport(staged);
+      expect(current.clientId, clientId);
+      final foreign = IosTransferImportLease.fromJson(importLease());
+      final callsBefore = calls.length;
+      await expectLater(transport.validateImport(foreign), throwsStateError);
+      await expectLater(transport.releaseImport(foreign), throwsStateError);
+      expect(calls.length, callsBefore);
     } finally {
       await subscription.cancel();
       await transport.dispose();

@@ -4,6 +4,9 @@ import 'dart:io';
 
 import 'fixtures/ios_concurrent_lyrics.dart';
 import 'ios_discovery_cache_probe.dart';
+import 'ios_cloud_cover_probe.dart';
+import 'ios_import_schema_probe.dart';
+import 'ios_import_scan_probe.dart';
 
 import 'package:flick/app/app.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
@@ -53,7 +56,6 @@ import 'ios_rust_polling_probe.dart';
 import 'ios_radio_reset_probe.dart';
 import 'ios_webkit_reset_probe.dart';
 import 'ios_session_reset_probe.dart';
-import 'ios_widget_transport_probe.dart';
 import 'ios_transfer_transport_probe.dart';
 import 'ios_queue_reorder_probe.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
@@ -276,7 +278,7 @@ void main() {
       'post172_search_scopes_and_four_exclusive_filters': 'passed',
       'post172_profile_editor_above_dock': 'passed',
     };
-    await probeIosWidgetTransport(binding);
+    binding.reportData!['ios_home_widgets'] = 'excluded_from_release_scope';
     await probeIosTransferTransport(tester, binding);
 
     final directory = await (await getTemporaryDirectory()).createTemp(
@@ -356,6 +358,9 @@ void main() {
     binding.reportData!['quickjs_echo'] = quickJsResult;
     binding.reportData!['native_discovery_metadata_cache'] =
         await probeIosDiscoveryCache();
+    await probeIosCloudCoverPixels(tester, binding);
+    binding.reportData!['native_import_private_schema'] = await probeIosImportSchema();
+    binding.reportData!['native_import_scanner_writer'] = await probeIosImportScanGuard();
 
     final player = PlayerService();
     // Exercise the complete recovery path before enabling production
