@@ -16,6 +16,7 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
   var location: LokalTransferLibraryLocation?
   var copyNonce: String?
   var publication: LokalTransferLibraryPublication?
+  var stagingRetired: Bool?
 
   init(job: LokalTransferJob, songID: Int64) throws {
     schemaVersion = 1; self.job = job; self.songID = songID
@@ -29,7 +30,8 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
           job.receivedBytes != nil, job.receivedSHA256 != nil else {
       throw LokalTransferError.invalidRecord
     }
-    guard (location == nil) == (copyNonce == nil), publication == nil || location != nil else {
+    guard (location == nil) == (copyNonce == nil), publication == nil || location != nil,
+          stagingRetired != true || publication != nil else {
       throw LokalTransferError.invalidRecord
     }
     try location?.validate()
@@ -48,7 +50,7 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
   static func decode(_ data: Data) throws -> Self {
     guard !data.isEmpty, data.count <= maximumJSONBytes,
           let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-          Set(row.keys).isSubset(of: ["schemaVersion", "job", "songID", "location", "copyNonce", "publication"]),
+          Set(row.keys).isSubset(of: ["schemaVersion", "job", "songID", "location", "copyNonce", "publication", "stagingRetired"]),
           Set(["schemaVersion", "job", "songID"]).isSubset(of: Set(row.keys)),
           let job = row["job"] as? [String: Any] else { throw LokalTransferError.invalidRecord }
     for (key, allowed) in [("location", LokalTransferLibraryLocation.keys),
@@ -498,6 +500,44 @@ final class LokalTransferJournal: @unchecked Sendable {
     return try decodedCustody(query)
   }
 
+  /// Keyset pagination is independent of deletion/insertion before the cursor.
+  /// Read at most limit rows plus one lookahead; never encode the whole journal.
+  func custodyPage(after: String?, limit: Int) throws ->
+      (generation: Int, values: [LokalTransferImportCustody], nextCursor: String?) {
+    guard (1...100).contains(limit), after == nil || LokalTransferTaskBinding(after!) != nil else {
+      throw LokalTransferError.invalidRecord
+    }
+    let cursor = after.flatMap(LokalTransferTaskBinding.init)
+    return try locked {
+      try preflight(); try execute("BEGIN")
+      do {
+        let current = try usage()
+        let sql = cursor == nil ?
+          "SELECT id,revision,document FROM import_custody ORDER BY id,revision LIMIT ?" :
+          "SELECT id,revision,document FROM import_custody WHERE (id,revision)>(?,?) ORDER BY id,revision LIMIT ?"
+        let query = try statement(sql)
+        defer { sqlite3_finalize(query) }
+        var parameter: Int32 = 1
+        if let cursor {
+          try bind(cursor.id, at: 1, to: query)
+          try check(sqlite3_bind_int64(query, 2, Int64(cursor.revision))); parameter = 3
+        }
+        try check(sqlite3_bind_int(query, parameter, Int32(limit + 1)))
+        var values: [LokalTransferImportCustody] = [], more = false
+        while true {
+          let code = sqlite3_step(query)
+          if code == SQLITE_DONE { break }
+          guard code == SQLITE_ROW else { throw LokalTransferError.database(code) }
+          if values.count == limit { more = true; break }
+          values.append(try decodedCustody(query).0)
+        }
+        let next = more ? values.last.map { $0.job.id + ":" + String($0.job.revision) } : nil
+        try execute("COMMIT")
+        return (Int(current.generation), values, next)
+      } catch { try? execute("ROLLBACK"); throw error }
+    }
+  }
+
   /// Reserve before any library publication. A cancelled/retried job cannot
   /// erase this frozen revision's proof or silently adopt a different song ID.
   /// Only the private native publisher calls this after writer validation;
@@ -554,7 +594,15 @@ final class LokalTransferJournal: @unchecked Sendable {
     }
   }
 
+  /// Only after actual private file cleanup. This is separate from the earlier
+  /// app-attested library commit, so a crash between them remains recoverable.
+  func recordImportStagingRetired(_ expected: LokalTransferImportCustody) throws -> LokalTransferImportCustody {
+    guard expected.publication != nil else { throw LokalTransferError.invalidRecord }
+    return try mutateImportCustody(expected, phase: .complete) { $0.stagingRetired = true }
+  }
+
   private func mutateImportCustody(_ expected: LokalTransferImportCustody,
+                                  phase: LokalTransferPhase = .validating,
                                   _ operation: (inout LokalTransferImportCustody) throws -> Void) throws -> LokalTransferImportCustody {
     try expected.validate()
     return try transaction { current in
@@ -565,7 +613,7 @@ final class LokalTransferJournal: @unchecked Sendable {
       try bind(expected.job.id, at: 1, to: query)
       guard sqlite3_step(query) == SQLITE_ROW else { throw LokalTransferError.missingJob }
       let (job, _) = try decoded(query)
-      guard previous.matches(job), job.phase == .validating else { throw LokalTransferError.staleRevision }
+      guard previous.matches(job), job.phase == phase else { throw LokalTransferError.staleRevision }
       var next = previous
       try operation(&next)
       try next.validate()

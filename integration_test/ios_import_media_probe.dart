@@ -65,6 +65,7 @@ Future<Map<String, Object>> probeIosImportMedia(File generatedWav) async {
     final staged = await generatedWav.copy("${root.path}/source '曲' .download");
     final pcm = await inspect(staged);
     expect(pcm.codec, 'PCM_S16LE');
+    expect(pcm.format, 'WAV');
     expect(pcm.sampleRate, 44100);
     expect(pcm.channels, 1);
     expect(pcm.bitDepth, 16);
@@ -88,8 +89,10 @@ Future<Map<String, Object>> probeIosImportMedia(File generatedWav) async {
     }
     final lossless = await inspect(flac), lossy = await inspect(aac);
     expect(lossless.codec, 'FLAC');
+    expect(lossless.format, 'FLAC');
     expect(lossless.bitDepth, 16);
     expect(lossy.codec, 'AAC');
+    expect(lossy.format, 'M4A');
     expect(lossy.bitDepth, isNull);
     expect(lossy.sampleRate, 44100);
     expect(lossy.durationMs, inInclusiveRange(7900, 8200));

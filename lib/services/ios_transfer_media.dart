@@ -2,6 +2,15 @@ import 'dart:convert';
 
 import '../models/ios_transfer_import.dart';
 
+enum IosTransferMediaFailure { invalid, retired, timeout, unavailable }
+
+class IosTransferMediaException implements Exception {
+  const IosTransferMediaException(this.reason);
+  final IosTransferMediaFailure reason;
+  @override
+  String toString() => 'iPhone media verification ${reason.name}.';
+}
+
 /// Shared by the bundled FFprobe adapter and actual-process host contracts.
 /// A staged .download suffix and desktop quality claims are never media proof.
 class IosTransferMedia {
@@ -162,9 +171,21 @@ class IosTransferMedia {
     }
     final bitsPerSecond =
         _integer(stream['bit_rate']) ?? _integer(format['bit_rate']);
+    final demuxer = (format['format_name'] as String)
+        .split(',')
+        .firstWhere(formats.contains);
+    final fileType = switch (demuxer) {
+      'mov' => 'M4A',
+      'ogg' when codec == 'opus' => 'OPUS',
+      'dsdiff' => 'DFF',
+      'loas' => 'AAC',
+      'mpc8' => 'MPC',
+      _ => demuxer.toUpperCase(),
+    };
     final media = IosTransferMediaInfo(
       recognized: true,
       codec: codec.toUpperCase(),
+      format: fileType,
       durationMs: duration,
       sampleRate: rate,
       channels: channels,

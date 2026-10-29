@@ -10,14 +10,8 @@ import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import '../models/ios_transfer_import.dart';
 import 'ios_transfer_media.dart';
 
-enum IosTransferMediaFailure { invalid, retired, timeout, unavailable }
-
-class IosTransferMediaException implements Exception {
-  const IosTransferMediaException(this.reason);
-  final IosTransferMediaFailure reason;
-  @override
-  String toString() => 'iPhone media verification ${reason.name}.';
-}
+export 'ios_transfer_media.dart'
+    show IosTransferMediaFailure, IosTransferMediaException;
 
 /// Local bundled native reader for an active writer's native-derived staging
 /// path. It never opens a URL, persists a path, changes global logs, or cancels

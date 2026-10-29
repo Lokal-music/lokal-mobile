@@ -239,6 +239,25 @@ do {
   try require(LokalTransferProtocol.page(Data("{\"offset\":0,\"limit\":100}".utf8)).limit == 100,
     "bounded page request accepted")
   let contractClient = "b7d96b93-6526-4f1f-a1af-688ffb5c799d"
+  let recoveryRequest: [String: Any] = ["limit": 2, "clientID": contractClient]
+  try require(LokalTransferProtocol.importWorkPage(JSONSerialization.data(withJSONObject: recoveryRequest)).limit == 2,
+    "bounded client-bound recovery request accepted")
+  for invalid: Any in [false, 0, 101, "2", 1.5] {
+    var row = recoveryRequest; row["limit"] = invalid
+    try rejects("recovery requires a bounded integer limit") {
+      _ = try LokalTransferProtocol.importWorkPage(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  for invalid in ["../file", original.id + ":01", original.id.uppercased() + ":1"] {
+    var row = recoveryRequest; row["after"] = invalid
+    try rejects("recovery requires a canonical keyset cursor") {
+      _ = try LokalTransferProtocol.importWorkPage(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  var injectedRecovery = recoveryRequest; injectedRecovery["sourcePath"] = "/caller"
+  try rejects("recovery cannot accept a caller's private path") {
+    _ = try LokalTransferProtocol.importWorkPage(JSONSerialization.data(withJSONObject: injectedRecovery))
+  }
   let claimDocument: [String: Any] = ["id": original.id, "revision": 1, "reconcileOnly": false, "clientID": contractClient]
   let leaseDocument: [String: Any] = ["id": original.id, "revision": 1,
     "leaseID": "a7d96b93-6526-4f1f-a1af-688ffb5c799d", "clientID": contractClient]

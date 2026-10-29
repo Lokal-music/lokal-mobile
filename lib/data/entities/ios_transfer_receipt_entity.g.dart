@@ -75,6 +75,11 @@ const IosTransferReceiptEntitySchema = CollectionSchema(
       type: IsarType.string,
     ),
     r'state': PropertySchema(id: 16, name: r'state', type: IsarType.string),
+    r'validatedMediaJson': PropertySchema(
+      id: 17,
+      name: r'validatedMediaJson',
+      type: IsarType.string,
+    ),
   },
 
   estimateSize: _iosTransferReceiptEntityEstimateSize,
@@ -166,6 +171,12 @@ int _iosTransferReceiptEntityEstimateSize(
   bytesCount += 3 + object.sha256.length * 3;
   bytesCount += 3 + object.sourceId.length * 3;
   bytesCount += 3 + object.state.length * 3;
+  {
+    final value = object.validatedMediaJson;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -192,6 +203,7 @@ void _iosTransferReceiptEntitySerialize(
   writer.writeString(offsets[14], object.sha256);
   writer.writeString(offsets[15], object.sourceId);
   writer.writeString(offsets[16], object.state);
+  writer.writeString(offsets[17], object.validatedMediaJson);
 }
 
 IosTransferReceiptEntity _iosTransferReceiptEntityDeserialize(
@@ -219,6 +231,7 @@ IosTransferReceiptEntity _iosTransferReceiptEntityDeserialize(
   object.sha256 = reader.readString(offsets[14]);
   object.sourceId = reader.readString(offsets[15]);
   object.state = reader.readString(offsets[16]);
+  object.validatedMediaJson = reader.readStringOrNull(offsets[17]);
   return object;
 }
 
@@ -263,6 +276,8 @@ P _iosTransferReceiptEntityDeserializeProp<P>(
       return (reader.readString(offset)) as P;
     case 16:
       return (reader.readString(offset)) as P;
+    case 17:
+      return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -3217,6 +3232,213 @@ extension IosTransferReceiptEntityQueryFilter
       );
     });
   }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'validatedMediaJson'),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'validatedMediaJson'),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonEqualTo(String? value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'validatedMediaJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'validatedMediaJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'validatedMediaJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'validatedMediaJson',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonStartsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'validatedMediaJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonEndsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'validatedMediaJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'validatedMediaJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'validatedMediaJson',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'validatedMediaJson', value: ''),
+      );
+    });
+  }
+
+  QueryBuilder<
+    IosTransferReceiptEntity,
+    IosTransferReceiptEntity,
+    QAfterFilterCondition
+  >
+  validatedMediaJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'validatedMediaJson', value: ''),
+      );
+    });
+  }
 }
 
 extension IosTransferReceiptEntityQueryObject
@@ -3479,6 +3701,20 @@ extension IosTransferReceiptEntityQuerySortBy
       return query.addSortBy(r'state', Sort.desc);
     });
   }
+
+  QueryBuilder<IosTransferReceiptEntity, IosTransferReceiptEntity, QAfterSortBy>
+  sortByValidatedMediaJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'validatedMediaJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IosTransferReceiptEntity, IosTransferReceiptEntity, QAfterSortBy>
+  sortByValidatedMediaJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'validatedMediaJson', Sort.desc);
+    });
+  }
 }
 
 extension IosTransferReceiptEntityQuerySortThenBy
@@ -3739,6 +3975,20 @@ extension IosTransferReceiptEntityQuerySortThenBy
       return query.addSortBy(r'state', Sort.desc);
     });
   }
+
+  QueryBuilder<IosTransferReceiptEntity, IosTransferReceiptEntity, QAfterSortBy>
+  thenByValidatedMediaJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'validatedMediaJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IosTransferReceiptEntity, IosTransferReceiptEntity, QAfterSortBy>
+  thenByValidatedMediaJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'validatedMediaJson', Sort.desc);
+    });
+  }
 }
 
 extension IosTransferReceiptEntityQueryWhereDistinct
@@ -3867,6 +4117,16 @@ extension IosTransferReceiptEntityQueryWhereDistinct
   distinctByState({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'state', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<IosTransferReceiptEntity, IosTransferReceiptEntity, QDistinct>
+  distinctByValidatedMediaJson({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(
+        r'validatedMediaJson',
+        caseSensitive: caseSensitive,
+      );
     });
   }
 }
@@ -4000,6 +4260,13 @@ extension IosTransferReceiptEntityQueryProperty
   stateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'state');
+    });
+  }
+
+  QueryBuilder<IosTransferReceiptEntity, String?, QQueryOperations>
+  validatedMediaJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'validatedMediaJson');
     });
   }
 }

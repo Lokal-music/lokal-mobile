@@ -39,6 +39,27 @@ struct LokalTransferPublishedImport: Encodable, Sendable {
   let receipt: LokalTransferLibraryReceipt
 }
 
+struct LokalTransferImportWork: Encodable, Sendable {
+  let job: LokalTransferJob
+  let songID: Int64
+  let targetRelativePath: String
+  let publicationRecorded: Bool
+  let currentRevision: Int?
+  let currentPhase: LokalTransferPhase?
+}
+
+struct LokalTransferImportWorkPage: Encodable, Sendable {
+  let generation: Int
+  let entries: [LokalTransferImportWork]
+  let nextCursor: String?
+}
+
+struct LokalTransferImportCandidatePage: Encodable, Sendable {
+  let generation: Int
+  let entries: [LokalTransferJob]
+  let nextCursor: String?
+}
+
 /// One serial native owner survives Flutter lifecycle changes. Networking can
 /// finish before Flutter starts; native events are committed before the system
 /// background completion is acknowledged. Import remains an application task.
@@ -217,6 +238,81 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     queue.async {
       guard offset >= 0, limit > 0, limit <= 100 else { reply(.failure(LokalTransferError.invalidRecord)); return }
       reply(.success(self.order.dropFirst(offset).prefix(limit).compactMap { self.jobs[$0] }))
+    }
+  }
+
+  /// Drain prior native file work even when a revoked lease can no longer be
+  /// released. Current root identity is required; this grants no new file write.
+  func drainImports(ticket: LokalTransferImportOwnership.Ticket,
+                    reply: @escaping LokalTransferCompletion<Bool>) {
+    queue.async {
+      do {
+        guard !self.shuttingDown else { throw LokalTransferError.invalidTransition }
+        try self.importOwnership.validateTicket(ticket)
+        self.fileQueue.async {
+          self.queue.async {
+            do { try self.importOwnership.validateTicket(ticket); reply(.success(true)) }
+            catch { reply(.failure(error)) }
+          }
+        }
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// Only ready app work crosses the channel; queued/progress/history rows do
+  /// not make every foreground event serialize a library-sized job list.
+  func importCandidatesPage(_ request: LokalTransferProtocol.ImportWorkPage,
+                            ticket: LokalTransferImportOwnership.Ticket,
+                            reply: @escaping LokalTransferCompletion<LokalTransferImportCandidatePage>) {
+    queue.async {
+      do {
+        guard request.clientID == ticket.owner.clientID, (1...100).contains(request.limit),
+              request.after == nil || LokalTransferTaskBinding(request.after!) != nil,
+              !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidRecord }
+        try self.importOwnership.validateTicket(ticket)
+        let cursor = request.after.flatMap(LokalTransferTaskBinding.init)
+        let ready = self.jobs.values.filter { job in
+          guard job.direction == .download,
+                [.downloaded, .staged, .validating, .importing].contains(job.phase) else { return false }
+          guard let cursor else { return true }
+          return job.id > cursor.id || (job.id == cursor.id && job.revision > cursor.revision)
+        }.sorted { $0.id == $1.id ? $0.revision < $1.revision : $0.id < $1.id }
+        let entries = Array(ready.prefix(request.limit))
+        let next = ready.count > entries.count ? entries.last.map { $0.id + ":" + String($0.revision) } : nil
+        try self.importOwnership.validateTicket(ticket)
+        reply(.success(LokalTransferImportCandidatePage(generation: self.generation,
+          entries: entries, nextCursor: next)))
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// Frozen work remains available even after a live revision is cancelled.
+  func importWorkPage(_ request: LokalTransferProtocol.ImportWorkPage,
+                      ticket: LokalTransferImportOwnership.Ticket,
+                      reply: @escaping LokalTransferCompletion<LokalTransferImportWorkPage>) {
+    queue.async {
+      do {
+        guard request.clientID == ticket.owner.clientID, !self.shuttingDown,
+              !self.persistenceFailed else { throw LokalTransferError.staleRevision }
+        try self.importOwnership.validateTicket(ticket)
+        let page = try self.journal.custodyPage(after: request.after, limit: request.limit)
+        let entries = try page.values.compactMap { work -> LokalTransferImportWork? in
+          let current = self.jobs[work.job.id]
+          if work.stagingRetired == true {
+            guard current?.phase == .complete, current?.revision == work.job.revision else {
+              throw LokalTransferError.invalidRecord
+            }
+            return nil
+          }
+          return LokalTransferImportWork(job: work.job, songID: work.songID,
+            targetRelativePath: LokalTransferLibrary.directoryName + "/" + (try LokalTransferLibrary.fileName(work.job)),
+            publicationRecorded: work.publication != nil,
+            currentRevision: current?.revision, currentPhase: current?.phase)
+        }
+        try self.importOwnership.validateTicket(ticket)
+        reply(.success(LokalTransferImportWorkPage(generation: page.generation,
+          entries: entries, nextCursor: page.nextCursor)))
+      } catch { reply(.failure(error)) }
     }
   }
 
@@ -712,10 +808,23 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         let completed = job.phase == .complete ? job : try self.update(job, acknowledging: work) {
           if $0.phase != .complete { try $0.transition(to: .complete, nowMs: Self.now()) }
         }
+        if work.stagingRetired == true { reply(.success(completed)); return }
         self.fileQueue.async {
           let cleanup = Result { try self.files.discard(work.job) }
           self.queue.async {
-            do { try cleanup.get(); reply(.success(completed)) }
+            do {
+              try cleanup.get()
+              guard let current = try self.journal.importCustody(id: request.id, revision: request.revision),
+                    current.job == work.job, current.songID == work.songID,
+                    current.publication == work.publication, current.location == work.location else {
+                throw LokalTransferError.staleRevision
+              }
+              if current.stagingRetired != true {
+                _ = try self.journal.recordImportStagingRetired(current)
+                self.generation += 1; self.notify()
+              }
+              reply(.success(completed))
+            }
             catch { reply(.failure(error)) }
           }
         }

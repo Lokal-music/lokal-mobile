@@ -748,5 +748,64 @@ public bytes and untouched inodes remain preserved. The actual SQLite contract
 also refuses a stale/unpublished custody witness without changing importing
 state. All 19 focused Dart transport contracts pass and targeted analysis is
 clean. These tests use an explicit app-commit attestation fixture, not a real
-Isar commit; integrated completion, public-file abandonment, clear/unpair/CUE
-barriers and Apple acceptance of this later source remain pending.
+Isar commit. The coordinator checkpoint below supersedes that fixture-only
+completion status; public-file abandonment, clear/unpair/CUE barriers and Apple
+acceptance of this later source remain pending.
+
+### Root coordinator checkpoint (after build84)
+
+The app root now owns one capability-gated coordinator. It listens while
+disabled, recovers the native owner, drains prior file work, then accepts
+events. Foreground retries are explicit; no timer polls paused transfers.
+Native recovery uses bounded keyset pages and keeps frozen revision/Song
+bindings separate from current job state. Completed staging retirement is
+durable, so ordinary progress does not repeatedly rehash completed history.
+Normal native import/upload capabilities remain false: this checkpoint does
+not activate background transfers or replace the existing foreground flow.
+
+```mermaid
+sequenceDiagram
+  participant R as App root
+  participant N as Native owner and journal
+  participant I as Actual Isar writer
+  participant M as Bounded media reader
+  participant F as Tracked private/public files
+  R->>N: Recover current client and drain previous file work
+  R->>N: Read bounded ready/frozen pages
+  R->>I: Prepare stable Song identity
+  R->>M: Decode staged bytes outside Isar
+  R->>I: Persist validated media under current native authority
+  R->>N: Publish with frozen Song identity
+  N->>F: Verify custody and publish exclusively
+  R->>I: Commit Song plus completed receipt atomically
+  R->>N: Acknowledge actual committed receipt
+  N->>F: Drain only private staging
+  N->>N: Persist staging retirement
+```
+
+Validated quality is stored before publication in a nullable private receipt
+field. A lost publication reply can therefore recover without inventing media
+quality or requiring staging that native already retired. Codec and container
+are distinct: PCM in a WAV retains a WAV file label. Native authority is checked
+at both ends of actual Isar prepare/media/commit transactions. Committed
+historical receipts acknowledge completion without recreating deleted Songs.
+
+Host acceptance includes the actual coordinator and locked Isar engine, real
+FFprobe WAV decoding, lost-reply/reopen recovery, missing-reservation refusal,
+interrupted-reader retirement, capability-off inactivity and startup file-worker
+barriers. The actual store suite upgrades a database written by the prior
+schema in a separate process, exercises eight receipt/media process-exit
+boundaries and rolls back writes after late native revocation. Three complete
+portable native rounds and 23 focused Dart transport checks pass; targeted
+analysis, workflow lint and the full integration entry compile pass locally.
+The native port in the host coordinator harness is explicitly a fixture; this
+does not qualify an installed end-to-end product import or OS relaunch.
+
+Remaining recovery must also page Isar-only prepared reservations: a process
+can stop before native custody is created. Old or canceled frozen work is
+currently blocked as cleanup-required, preserving public files. Before product
+activation, add retiring-state bookkeeping, Apple-coordinated abandonment,
+clear/unpair submission epochs and OS-task drainage, atomic CUE/scanner mapping,
+terminal-history retirement, owned uploads and persisted transfer UI. The
+bundled decoder and this checkpoint still require their own Apple run. Build84
+remains a separately qualified fallback, not evidence for this newer source.

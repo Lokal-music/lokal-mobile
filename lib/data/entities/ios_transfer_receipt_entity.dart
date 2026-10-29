@@ -33,4 +33,8 @@ class IosTransferReceiptEntity {
   late String sha256;
   late DateTime preparedAt;
   DateTime? committedAt;
+
+  /// Bounded actual-reader result for these exact frozen bytes/hash. No tags,
+  /// source URL, credentials or absolute sandbox path enters this document.
+  String? validatedMediaJson;
 }

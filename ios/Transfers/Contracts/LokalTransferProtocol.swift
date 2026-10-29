@@ -20,6 +20,11 @@ enum LokalTransferProtocol {
   struct Client: Decodable, Sendable {
     let clientID: String
   }
+  struct ImportWorkPage: Decodable, Sendable {
+    let after: String?
+    let limit: Int
+    let clientID: String
+  }
   struct ImportClaim: Decodable, Sendable {
     let id: String
     let revision: Int
@@ -70,6 +75,16 @@ enum LokalTransferProtocol {
   static func importClaim(_ data: Data) throws -> ImportClaim {
     let value = try object(ImportClaim.self, data, keys: ["id", "revision", "reconcileOnly", "clientID"])
     guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
+      throw LokalTransferError.invalidRecord
+    }
+    return value
+  }
+
+  static func importWorkPage(_ data: Data) throws -> ImportWorkPage {
+    let value = try object(ImportWorkPage.self, data, keys: ["after", "limit", "clientID"])
+    guard (1...100).contains(value.limit),
+          value.after == nil || LokalTransferTaskBinding(value.after!) != nil,
           UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
       throw LokalTransferError.invalidRecord
     }

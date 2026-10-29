@@ -221,7 +221,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["claimImport", "publishImport", "acknowledgeImport", "validateImport", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "publishImport", "acknowledgeImport", "validateImport", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -247,7 +247,26 @@ final class LokalTransferBridge {
     do {
       guard let data = call.arguments as? FlutterStandardTypedData,
             !data.data.isEmpty, data.data.count <= 8192 else { throw LokalTransferError.invalidRecord }
-      if call.method == "claimImport" {
+      if call.method == "drainImports" {
+        let request = try LokalTransferProtocol.client(data.data)
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ticket = try host.importOwnership.capture(owner)
+        host.withRuntime({ runtime in runtime.drainImports(ticket: ticket) { reply.encode($0) } },
+                         unavailable: { reply.failure($0) })
+      } else if call.method == "importWorkPage" || call.method == "importCandidatesPage" {
+        let request = try LokalTransferProtocol.importWorkPage(data.data)
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ticket = try host.importOwnership.capture(owner)
+        if call.method == "importWorkPage" {
+          host.withRuntime({ runtime in runtime.importWorkPage(request, ticket: ticket) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        } else {
+          host.withRuntime({ runtime in runtime.importCandidatesPage(request, ticket: ticket) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        }
+      } else if call.method == "claimImport" {
         let request = try LokalTransferProtocol.importClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
         guard request.clientID == clientID else { throw LokalTransferError.staleRevision }

@@ -16,6 +16,7 @@ import 'package:flick/providers/providers.dart';
 import 'package:flick/features/onboarding/screens/onboarding_screen.dart';
 import 'package:flick/widgets/common/connection_notice_host.dart';
 import 'package:flick/widgets/common/ios_audio_recovery_host.dart';
+import 'package:flick/widgets/common/ios_transfer_root.dart';
 import 'package:flick/services/lokal_launcher_icon.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
 import 'package:flick/l10n/l10n.dart';
@@ -120,7 +121,10 @@ class FlickPlayerApp extends StatelessWidget {
                 ),
                 child: LokalPerformanceAdvisor(
                   child: IosAudioRecoveryHost(
-                    child: child ?? const SizedBox.shrink()),
+                    child: IosTransferRoot(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
+                  ),
                 ),
               ),
             ),

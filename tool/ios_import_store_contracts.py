@@ -5,6 +5,7 @@ Pure Dart + the locked package's actual native core; no Flutter storage mock.
 This does not qualify the product adapter, native lease RPC or media decoder.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -23,6 +24,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dart', default=shutil.which('dart'))
     parser.add_argument('--isar-library', type=Path)
+    parser.add_argument('--coordinator', action='store_true')
+    parser.add_argument('--ffprobe', help='Actual host FFprobe for coordinator media contracts.')
     args = parser.parse_args()
     if not args.dart:
         parser.error('Install the locked Flutter/Dart toolchain or pass --dart.')
@@ -45,9 +48,26 @@ def main():
     with tempfile.TemporaryDirectory(prefix='lokal-import-database-') as directory:
         audio = Path(directory) / 'Generated fixture.wav'
         audio.write_bytes(audio_bytes())
+        script = 'ios_import_coordinator_contracts.dart' if args.coordinator else 'ios_import_store_contracts.dart'
+        extra = ['--ffprobe', args.ffprobe] if args.ffprobe else []
+        if not args.coordinator:
+            legacy = Path(directory) / 'legacy-private-media'
+            legacy.mkdir()
+            job = json.loads((ROOT / 'test/fixtures/ios_transfer_intents_v1.json').read_text())[0]
+            job['metadata']['fileExtension'] = 'wav'
+            payload = audio.read_bytes()
+            job.update(revision=1, direction='download', updatedMs=2000,
+                       expectedBytes=len(payload), expectedSHA256=hashlib.sha256(payload).hexdigest(),
+                       receivedBytes=len(payload), receivedSHA256=hashlib.sha256(payload).hexdigest())
+            (legacy / 'job.json').write_text(json.dumps(job))
+            subprocess.run([args.dart, '--packages=' + str(config),
+                            str(ROOT / 'tool/ios_import_legacy_schema.dart'),
+                            '--isar-library', str(library.resolve()), '--directory', str(legacy)],
+                           check=True, timeout=60, cwd=ROOT)
+            extra += ['--legacy-root', str(legacy)]
         subprocess.run([args.dart, '--packages=' + str(config),
-                        str(ROOT / 'tool/ios_import_store_contracts.dart'),
-                        '--isar-library', str(library.resolve()), '--audio', str(audio)],
+                        str(ROOT / 'tool' / script),
+                        '--isar-library', str(library.resolve()), '--audio', str(audio), *extra],
                        check=True, timeout=240, cwd=ROOT)
 
 

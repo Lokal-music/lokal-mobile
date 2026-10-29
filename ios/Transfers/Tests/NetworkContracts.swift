@@ -389,6 +389,7 @@ private func runRuntimeImportContracts(origin: String, length: Int64, checksum: 
     let _: LokalTransferImportClaim = try native { runtime.claimImport(bound, ticket: oldTicket, reply: $0) }
   }
   let beforeCancel = try claim(write, replacement)
+  _ = try LokalTransferJournal(container: root).reserveImport(id: job.id, revision: 1, songID: 42)
   let cancelled: LokalTransferJob = try native { runtime.cancel(id: job.id, revision: 1, reply: $0) }
   try require(cancelled.phase == .cancelled && cancelled.revision == 2, "actual import cancellation advances durable revision")
   try rejects("cancelled import cannot pass the direct Isar guard") {
@@ -396,6 +397,24 @@ private func runRuntimeImportContracts(origin: String, length: Int64, checksum: 
       leaseID: beforeCancel.leaseID, requiresWrite: true)
   }
   try rejects("cancelled durable jobs cannot be reclaimed using their old revision") { _ = try claim(write, replacement) }
+  let request = LokalTransferProtocol.ImportWorkPage(after: nil, limit: 1, clientID: replacement.clientID)
+  let ticket = try ownership.capture(replacement)
+  let work: LokalTransferImportWorkPage = try native { runtime.importWorkPage(request, ticket: ticket, reply: $0) }
+  try require(work.entries.count == 1 && work.entries[0].job.revision == 1 &&
+    work.entries[0].currentRevision == 2 && work.entries[0].currentPhase == .cancelled,
+    "actual runtime recovery retains frozen work independently of cancelled live revision")
+  let candidates: LokalTransferImportCandidatePage = try native {
+    runtime.importCandidatesPage(request, ticket: ticket, reply: $0)
+  }
+  try require(candidates.entries.isEmpty, "cancelled jobs are never app import candidates")
+  let foreign = LokalTransferProtocol.ImportWorkPage(after: nil, limit: 1, clientID: owner.clientID)
+  try rejects("recovery pages cannot borrow another client's ticket") {
+    let _: LokalTransferImportWorkPage = try native { runtime.importWorkPage(foreign, ticket: ticket, reply: $0) }
+  }
+  ownership.revokeAll()
+  try rejects("a queued recovery page cannot cross the native revocation barrier") {
+    let _: LokalTransferImportWorkPage = try native { runtime.importWorkPage(request, ticket: ticket, reply: $0) }
+  }
   print("Native runtime import contracts passed: real HTTP staging, durable validation phase, coalesced claims, independent guard during blocked native I/O, drained release, engine replacement, pairing refusal, read-only recovery and durable cancellation. Product Isar import remains disabled.")
 }
 
@@ -506,7 +525,14 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
         owner = try ownership.attachClient(engineID: nextEngine, clientID: UUID().uuidString.lowercased())
         // Claiming a replacement does not wait behind the blocked file queue.
         lease = try claim(owner)
+        let drained = NativeResult<Bool>(), drainDone = DispatchSemaphore(value: 0)
+        let ticket = try ownership.capture(owner)
+        runtime.drainImports(ticket: ticket) { drained.set($0); drainDone.signal() }
+        try require(drainDone.wait(timeout: .now()) == .timedOut,
+          "current-root drainage cannot pass an actual blocked retired file worker")
         gate.resume.signal()
+        try require(drainDone.wait(timeout: .now() + 5) == .success && drained.get(),
+          "replacement root independently drains prior native file work")
       }
       try require(completed.wait(timeout: .now() + 5) == .success, "retired publication settles")
       try rejects("revoked publication cannot return an importing acknowledgement") { _ = try result.get() }
@@ -552,6 +578,16 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
     // Fixture attestation only: product Root must prove a real committed Isar
     // receipt before this acknowledgement API is reachable in normal flows.
     credentials.set(nil)
+    let request = LokalTransferProtocol.ImportWorkPage(after: nil, limit: 1, clientID: owner.clientID)
+    let pageTicket = try ownership.capture(owner)
+    let page: LokalTransferImportWorkPage = try native {
+      runtime.importWorkPage(request, ticket: pageTicket, reply: $0)
+    }
+    try require(page.entries.count == 1 && page.entries[0].publicationRecorded &&
+      page.entries[0].currentPhase == .importing, "pending cleanup is exposed as bounded recovery work")
+    let encodedPage = String(decoding: try JSONEncoder().encode(page), as: UTF8.self)
+    try require(!encodedPage.contains(root.path) && !encodedPage.contains("copyNonce") &&
+      !encodedPage.contains("transfer-fixture-token"), "recovery replies expose no private path, marker or bearer")
     try rejects("completion cannot acknowledge a different prepared Song ID") {
       let _: LokalTransferJob = try native {
         runtime.acknowledgeImport(publication(readOnly, songID: 43), owner: owner, reply: $0)
@@ -570,6 +606,14 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
       .appendingPathComponent(completedJob.stagedName).path), "completion drains actual private retained staging")
     try require(journal.snapshot().custodies.count == 1,
       "completion retains native publication provenance for lost acknowledgements")
+    try require(journal.snapshot().custodies[0].stagingRetired == true,
+      "actual staging drainage is durable separately from app library completion")
+    let retiredTicket = try ownership.capture(owner)
+    let retiredPage: LokalTransferImportWorkPage = try native {
+      runtime.importWorkPage(request, ticket: retiredTicket, reply: $0)
+    }
+    try require(retiredPage.entries.isEmpty && retiredPage.nextCursor == nil,
+      "retained completed history is omitted from app recovery work")
     let historical = try claim(owner, readOnly: true)
     try require(historical.job.phase == .complete && historical.sourcePath == nil,
       "complete recovery is receipt-only and never exposes an old staged source")

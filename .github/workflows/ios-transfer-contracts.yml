@@ -14,6 +14,14 @@ on:
       - 'lib/models/ios_transfer_import.dart'
       - 'lib/models/ios_transfer_models.dart'
       - 'lib/services/ios_transfer_import_store.dart'
+      - 'lib/models/ios_transfer_recovery.dart'
+      - 'lib/services/ios_transfer_coordinator_port.dart'
+      - 'lib/services/ios_transfer_import_coordinator.dart'
+      - 'lib/services/ios_transfer_media.dart'
+      - 'lib/services/ios_transfer_media_probe.dart'
+      - 'tool/ios_import_coordinator_contracts.dart'
+      - 'tool/ios_import_legacy_schema.dart'
+      - 'test/fixtures/ios_receipt_v1/**'
       - 'pubspec.*'
       - 'test/fixtures/ios_transfer_credentials_v2.json'
       - 'test/fixtures/ios_transfer_intents_v1.json'
@@ -50,3 +58,5 @@ jobs:
         run: flutter pub get --enforce-lockfile
       - name: Exercise actual Isar import transactions and process recovery
         run: python3 tool/ios_import_store_contracts.py
+      - name: Exercise the root coordinator with actual Isar recovery
+        run: python3 tool/ios_import_store_contracts.py --coordinator

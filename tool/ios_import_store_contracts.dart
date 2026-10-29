@@ -155,13 +155,23 @@ class Fixture {
     bool Function()? current,
     Future<void> Function()? ownership,
     Future<void> Function(String)? boundary,
-  }) => store(boundary: boundary).commit(
-    job('importing'),
-    copy,
-    media,
-    isCurrent: current ?? () => true,
-    validateOwnership: ownership ?? () async {},
-  );
+  }) async {
+    await store().recordMediaValidation(
+      job(),
+      target,
+      media,
+      isCurrent: current ?? () => true,
+      validateOwnership: ownership ?? () async {},
+    );
+    return store(boundary: boundary).commit(
+      job('importing'),
+      copy,
+      media,
+      isCurrent: current ?? () => true,
+      validateOwnership: ownership ?? () async {},
+    );
+  }
+
   Future<void> publishFixture() async {
     final file = File(store().absolutePath(target));
     await file.parent.create(recursive: true);
@@ -225,6 +235,16 @@ Future<void> main(List<String> arguments) async {
 
     if (options['--worker'] == 'prepare') {
       await fixture.prepare(boundary: boundary);
+    } else if (options['--worker'] == 'media') {
+      await fixture
+          .store(boundary: boundary)
+          .recordMediaValidation(
+            fixture.job(),
+            fixture.target,
+            Fixture.media,
+            isCurrent: () => true,
+            validateOwnership: () async {},
+          );
     } else {
       await fixture.commit(boundary: boundary);
     }
@@ -275,6 +295,73 @@ Future<void> main(List<String> arguments) async {
     boundary,
   ]);
   try {
+    if (options['--legacy-root'] case final String directory) {
+      final data = Map<String, dynamic>.from(
+        jsonDecode(await File('$directory/job.json').readAsString()) as Map,
+      );
+      final legacy = Fixture(Directory(directory), audio, data);
+      await legacy.open();
+      try {
+        await legacy.seed();
+        final old = (await legacy.store().peek(legacy.job(), legacy.target))!;
+        require(
+          old.receipt.id == 7 &&
+              old.receipt.preparedAt.isAtSameMomentAs(DateTime.utc(2020)) &&
+              old.validatedMedia == null,
+          'Actual old private schema upgrades with identity/history intact and no invented media',
+        );
+        await legacy.store().recordMediaValidation(
+          legacy.job(),
+          legacy.target,
+          Fixture.media,
+          isCurrent: () => true,
+          validateOwnership: () async {},
+        );
+        await legacy.close();
+        await legacy.open();
+        final upgraded = (await legacy.store().peek(
+          legacy.job(),
+          legacy.target,
+        ))!;
+        require(
+          upgraded.receipt.id == 7 &&
+              upgraded.receipt.preparedAt.isAtSameMomentAs(
+                DateTime.utc(2020),
+              ) &&
+              upgraded.validatedMedia?.bitDepth == 16,
+          'New validated media persists alongside the preserved old-schema reservation',
+        );
+      } finally {
+        await legacy.close();
+      }
+    }
+    for (final boundary in ['media:beforeCommit', 'media:afterCommit']) {
+      await scenario('process-${boundary.replaceAll(':', '-')}', (
+        fixture,
+      ) async {
+        await fixture.prepare();
+        await fixture.close();
+        final exited = await child(fixture, 'media', boundary);
+        require(
+          exited.exitCode == 95,
+          'Media child exits at the exact writer boundary',
+        );
+        await fixture.open();
+        final saved = (await fixture.store().peek(
+          fixture.job(),
+          fixture.target,
+        ))!;
+        require(
+          (saved.validatedMedia != null) == boundary.endsWith('afterCommit'),
+          'Process loss leaves either no reader result or the complete hash-bound validation',
+        );
+        require(
+          saved.receipt.state == 'prepared' &&
+              saved.song!.sourceType == 'lokal',
+          'Saving media alone never claims file publication or a playable Song commit',
+        );
+      });
+    }
     await scenario('add-private-schema', (fixture) async {
       // Reopen the same file with the eight existing product collections first.
       // Adding receipts must preserve every serialized field and reference.
@@ -439,7 +526,7 @@ Future<void> main(List<String> arguments) async {
       final preparing = fixture.prepare(
         boundary: (stage) async {
           if (stage == 'prepare:beforeCommit') {
-            entered.complete();
+            if (!entered.isCompleted) entered.complete();
             await release.future;
           }
         },
@@ -584,6 +671,44 @@ Future<void> main(List<String> arguments) async {
         );
       });
     }
+    for (final phase in ['prepare', 'commit']) {
+      await scenario('native-revoked-after-$phase-write', (fixture) async {
+        var authorized = true;
+        Future<void> guard() async {
+          if (!authorized)
+            throw const IosTransferImportException(
+              IosTransferImportConflict.retired,
+            );
+        }
+
+        Future<void> boundary(String stage) async {
+          if (stage == '$phase:afterSong') authorized = false;
+        }
+
+        if (phase == 'commit') await fixture.prepare();
+        await rejects(
+          () => phase == 'prepare'
+              ? fixture.prepare(ownership: guard, boundary: boundary)
+              : fixture.commit(ownership: guard, boundary: boundary),
+          IosTransferImportConflict.retired,
+        );
+        final song = await fixture.db.songEntitys.get(42);
+        require(
+          song?.sourceType == 'lokal',
+          'Native revocation rolls back the actual Song writer despite a still-current local epoch',
+        );
+        final receipt = await fixture.store().peek(
+          fixture.job(),
+          fixture.target,
+        );
+        require(
+          phase == 'prepare'
+              ? receipt == null
+              : receipt?.receipt.state == 'prepared',
+          'Final native guard cannot leave an acknowledged reservation/completion after retirement',
+        );
+      });
+    }
     await scenario('retired-after-write', (fixture) async {
       await fixture.prepare();
       var current = true;
@@ -605,7 +730,7 @@ Future<void> main(List<String> arguments) async {
       final entered = Completer<void>(), release = Completer<void>();
       final preparing = fixture.prepare(
         ownership: () async {
-          entered.complete();
+          if (!entered.isCompleted) entered.complete();
           await release.future;
         },
       );
@@ -827,7 +952,7 @@ Future<void> main(List<String> arguments) async {
       );
     }, existing: false);
     stdout.writeln(
-      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, six commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
+      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, eight receipt/media commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
     );
   } catch (error, stack) {
     stderr.writeln('Isar import contracts failed at $stage: $error\n$stack');
