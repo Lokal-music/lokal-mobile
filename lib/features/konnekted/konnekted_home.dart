@@ -326,6 +326,15 @@ class _HomeModeSelector extends StatefulWidget {
 }
 
 class _HomeModeSelectorState extends State<_HomeModeSelector> {
+  double _modeTabFontSize(double width) {
+    // Keep a little breathing room around the complete three-tab row while
+    // using more of the capsule on regular and wide phones.
+    if (width < 220) return 9;
+    if (width < 260) return 10;
+    if (width < 310) return 11;
+    return 12;
+  }
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) => SizedBox(
@@ -348,6 +357,7 @@ class _HomeModeSelectorState extends State<_HomeModeSelector> {
                   label: lokalText(tab.label),
                   selected: tab == widget.selectedTab,
                   compact: true,
+                  fontSize: _modeTabFontSize(constraints.maxWidth),
                   onTap: () => widget.onTabChanged?.call(tab),
                 ),
             ],
@@ -426,12 +436,14 @@ class _ShelfChip extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.compact = false,
+    this.fontSize,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
   final bool compact;
+  final double? fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -465,7 +477,7 @@ class _ShelfChip extends StatelessWidget {
             overflow: TextOverflow.visible,
             style: LokalTheme.label(
               t,
-              size: compact ? 9 : 10,
+              size: fontSize ?? (compact ? 9 : 10),
               color: selected ? t.text : t.muted,
             ),
           ),
