@@ -98,6 +98,14 @@ List<LokalSettingsSection> appearanceSettings(
       title: lokalText('Now Playing'),
       children: [
         LokalSettingRow.toggle(
+          label: lokalText('Full resolution tags in full player'),
+          description: lokalText(
+            'Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.',
+          ),
+          value: appearance.resolutionTagsInFullPlayer,
+          onChanged: look.setResolutionTagsInFullPlayer,
+        ),
+        LokalSettingRow.toggle(
           label: lokalText('Unboxed player controls'),
           description: lokalText('Remove button backgrounds while keeping the same icons and layout.'),
           value: appearance.unboxedPlayerControls,
@@ -179,6 +187,14 @@ List<LokalSettingsSection> appearanceSettings(
     LokalSettingsSection(
       title: lokalText('Interface'),
       children: [
+        LokalSettingRow.toggle(
+          label: lokalText('Full resolution tags in lists'),
+          description: lokalText(
+            'Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.',
+          ),
+          value: appearance.resolutionTagsInLists,
+          onChanged: look.setResolutionTagsInLists,
+        ),
         LokalSettingRow(
           label: lokalText('Language'),
           description: lokalText(

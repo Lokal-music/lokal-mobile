@@ -5,6 +5,8 @@ import 'package:flick/features/morneye/morneye_auth_sheet.dart';
 
 import 'dart:async';
 import 'dart:convert';
+
+import 'discovery_snapshot_cache.dart';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -66,18 +68,116 @@ final konnektedLastfmCallProvider = Provider<LastfmCall>((ref) {
   return (method, params) => client.get({'method': method, ...params});
 });
 
-/// Spotify is loaded only after the listener selects the opt-in provider.
+/// Disk metadata is restored only for the selected, authenticated provider.
+final konnektedDiscoverySnapshotCacheProvider =
+    Provider<DiscoverySnapshotCache>((ref) => const DiscoverySnapshotCache());
+
+/// Spotify retains previous shelves during network failures and refreshes
+/// expired snapshots without blocking first paint.
 final konnektedSpotifyDiscoveryProvider =
-    FutureProvider<SpotifyDiscoverySnapshot>((ref) async {
-      final settings = SpotifySettingsStore();
-      final oauth = SpotifyOAuthService(tokenStore: settings.tokenStore);
-      final api = SpotifyApi(tokenStore: settings.tokenStore, oauth: oauth);
-      return loadSpotifyDiscoverySnapshot(
-        settings: settings,
-        oauth: oauth,
-        api: api,
-      );
-    });
+    AsyncNotifierProvider<KonnektedSpotifyDiscoveryNotifier,
+        SpotifyDiscoverySnapshot>(KonnektedSpotifyDiscoveryNotifier.new);
+
+class KonnektedSpotifyDiscoveryNotifier
+    extends AsyncNotifier<SpotifyDiscoverySnapshot> {
+  String? _accountKey;
+  int _generation = 0;
+
+  @override
+  Future<SpotifyDiscoverySnapshot> build() async {
+    _accountKey = null;
+    void onSessionChanged() {
+      final previous = _accountKey;
+      if (previous != null) {
+        unawaited(ref.read(konnektedDiscoverySnapshotCacheProvider)
+            .invalidate('spotify', previous));
+      }
+      ref.invalidateSelf();
+    }
+    SecureSpotifyTokenStore.sessionRevision.addListener(onSessionChanged);
+    ref.onDispose(() =>
+        SecureSpotifyTokenStore.sessionRevision.removeListener(onSessionChanged));
+    final settings = SpotifySettingsStore();
+    if (!await settings.loadDiscoveryEnabled()) {
+      return const SpotifyDiscoverySnapshot(enabled: false, connected: false);
+    }
+    final tokens = await settings.tokenStore.readTokens();
+    final cookie = tokens?.sessionCookie;
+    if (cookie == null || cookie.isEmpty) {
+      return const SpotifyDiscoverySnapshot(enabled: true, connected: false);
+    }
+    // Authentication material is never persisted in filenames or cache JSON.
+    final key = sha256.convert(utf8.encode(cookie)).toString();
+    _accountKey = key;
+    final cache = ref.read(konnektedDiscoverySnapshotCacheProvider);
+    final saved = await cache.readSpotify(key);
+    if (saved != null) {
+      if (!saved.isFresh(DiscoverySnapshotCache.spotifyTtl)) {
+        // The first frame uses the disk copy; only expired data triggers I/O.
+        Future<void>.delayed(Duration.zero, () => refresh());
+      }
+      return SpotifyDiscoverySnapshot(
+        enabled: true, connected: true, data: saved.data);
+    }
+    final SpotifyDiscoverySnapshot result;
+    try {
+      result = await _fetch(settings);
+    } catch (_) {
+      return const SpotifyDiscoverySnapshot(
+        enabled: true, connected: true,
+        error: 'Spotify Discovery could not be loaded. Try again later.');
+    }
+    if (result.data case final data? when !data.isEmpty) {
+      await cache.writeSpotify(key, data);
+    }
+    return result;
+  }
+
+  Future<SpotifyDiscoverySnapshot> _fetch(SpotifySettingsStore settings) {
+    final oauth = SpotifyOAuthService(tokenStore: settings.tokenStore);
+    return loadSpotifyDiscoverySnapshot(
+      settings: settings,
+      oauth: oauth,
+      api: SpotifyApi(tokenStore: settings.tokenStore, oauth: oauth),
+    );
+  }
+
+  Future<void> refresh() async {
+    final key = _accountKey;
+    if (key == null) {
+      ref.invalidateSelf();
+      return;
+    }
+    final generation = ++_generation;
+    final previous = state.value;
+    SpotifyDiscoverySnapshot result;
+    try {
+      result = await _fetch(SpotifySettingsStore());
+    } catch (_) {
+      result = const SpotifyDiscoverySnapshot(
+        enabled: true, connected: true,
+        error: 'Spotify Discovery could not be loaded. Try again later.');
+    }
+    if (!ref.mounted || generation != _generation ||
+        key != _accountKey) return;
+    if (result.data case final data? when !data.isEmpty) {
+      state = AsyncData(result);
+      await ref.read(konnektedDiscoverySnapshotCacheProvider)
+          .writeSpotify(key, data);
+    } else if (!result.enabled || !result.connected) {
+      state = AsyncData(result);
+      await ref.read(konnektedDiscoverySnapshotCacheProvider)
+          .invalidate('spotify', key);
+    } else {
+      state = AsyncData(SpotifyDiscoverySnapshot(
+        enabled: true,
+        connected: true,
+        data: previous?.data,
+        error: result.error,
+      ));
+    }
+  }
+}
 
 /// A tap opens the native Spotify playlist with the same saved-cookie session.
 /// Keep the client scoped to the action, including expiry refresh and cleanup.
@@ -191,6 +291,7 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
     ++_generation;
     _page = 0;
     _account = null;
+    _loadAttempted = false;
     _sourceLoaded = true;
     state = KonnektedDiscoveryState(source: source, connected: true);
     try {
@@ -199,7 +300,7 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
     } catch (_) {
       // The in-memory selection remains usable if persistence fails.
     }
-    await load(refresh: true);
+    await load();
   }
 
   Future<void> _restoreSource() {
@@ -228,6 +329,11 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
   /// Clears displayed account data immediately when the user signs out.
   void clearYoutubeMusicAccount() {
     if (state.source != KonnektedDiscoverySource.youtube) return;
+    final previousAccount = _account;
+    if (previousAccount != null) {
+      unawaited(ref.read(konnektedDiscoverySnapshotCacheProvider)
+          .invalidate('youtube', previousAccount));
+    }
     ++_generation;
     _page = 0;
     _account = null;
@@ -280,10 +386,26 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
         return;
       }
       final accountKey = 'youtube:' + session.accountKey;
-      final previous = accountKey == _account ? state.data : null;
-      if (accountKey != _account) _page = 0;
+      final cache = ref.read(konnektedDiscoverySnapshotCacheProvider);
+      final existing = accountKey == _account ? state.data : null;
+      final saved = existing == null
+          ? await cache.readLokal('youtube', accountKey) : null;
+      if (generation != _generation) return;
+      final previous = existing ?? saved?.data;
+      if (accountKey != _account) _page = previous?.page ?? 0;
       _account = accountKey;
+      if (previous != null) {
+        state = KonnektedDiscoveryState(
+          data: previous, source: source, loading: false);
+      }
+      if (!refresh && previous != null &&
+          (existing != null ||
+           saved?.isFresh(DiscoverySnapshotCache.youtubeTtl) == true)) return;
       if (refresh && previous != null) _page++;
+      if (previous != null) {
+        state = KonnektedDiscoveryState(
+          data: previous, source: source, loading: true);
+      }
       try {
         final result = await loadYoutubeMusicDiscovery(
           account,
@@ -291,15 +413,14 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
           force: refresh,
         );
         if (generation != _generation) return;
-        state = KonnektedDiscoveryState(
-          data: result.keeping(previous),
-          source: source,
-        );
+        final merged = result.keeping(previous);
+        state = KonnektedDiscoveryState(data: merged, source: source);
+        unawaited(cache.writeLokal('youtube', accountKey, merged));
       } on YoutubeMusicSignedOut catch (error) {
         if (generation != _generation) return;
         await ref.read(konnektedYoutubeMusicSessionProvider.notifier).signOut();
+        unawaited(cache.invalidate('youtube', accountKey));
         state = KonnektedDiscoveryState(
-          data: previous,
           error: error.message,
           connected: false,
           source: source,
@@ -342,11 +463,27 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
       );
       return;
     }
-    final accountKey = 'lastfm:' + account;
-    final previous = accountKey == _account ? state.data : null;
-    if (accountKey != _account) _page = 0;
+    final accountKey = 'lastfm:' + account.toLowerCase();
+    final cache = ref.read(konnektedDiscoverySnapshotCacheProvider);
+    final existing = accountKey == _account ? state.data : null;
+    final saved = existing == null
+        ? await cache.readLokal('lastfm', accountKey) : null;
+    if (generation != _generation) return;
+    final previous = existing ?? saved?.data;
+    if (accountKey != _account) _page = previous?.page ?? 0;
     _account = accountKey;
+    if (previous != null) {
+      state = KonnektedDiscoveryState(
+        data: previous, source: source, loading: false);
+    }
+    if (!refresh && previous != null &&
+        (existing != null ||
+         saved?.isFresh(DiscoverySnapshotCache.lastfmTtl) == true)) return;
     if (refresh && previous != null) _page++;
+    if (previous != null) {
+      state = KonnektedDiscoveryState(
+        data: previous, source: source, loading: true);
+    }
     try {
       final result = await loadLastfmDiscovery(
         username: account,
@@ -354,10 +491,10 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
         page: _page,
       );
       if (generation != _generation) return;
+      final merged = result.keeping(previous);
       state = KonnektedDiscoveryState(
-        data: result.keeping(previous),
-        source: KonnektedDiscoverySource.lastfm,
-      );
+        data: merged, source: KonnektedDiscoverySource.lastfm);
+      unawaited(cache.writeLokal('lastfm', accountKey, merged));
     } catch (error) {
       if (generation != _generation) return;
       state = KonnektedDiscoveryState(

@@ -56,7 +56,7 @@ class BitPerfectIndicator extends ConsumerWidget {
       return GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: LokalQualityPill(tier: tier, icon: state.icon),
+        child: LokalQualityPill(tier: tier, song: song, fullPlayer: true, icon: state.icon),
       );
     }
 
