@@ -85,6 +85,18 @@ class KonnektedSpotifyDiscoveryNotifier
 
   @override
   Future<SpotifyDiscoverySnapshot> build() async {
+    _accountKey = null;
+    void onSessionChanged() {
+      final previous = _accountKey;
+      if (previous != null) {
+        unawaited(ref.read(konnektedDiscoverySnapshotCacheProvider)
+            .invalidate('spotify', previous));
+      }
+      ref.invalidateSelf();
+    }
+    SecureSpotifyTokenStore.sessionRevision.addListener(onSessionChanged);
+    ref.onDispose(() =>
+        SecureSpotifyTokenStore.sessionRevision.removeListener(onSessionChanged));
     final settings = SpotifySettingsStore();
     if (!await settings.loadDiscoveryEnabled()) {
       return const SpotifyDiscoverySnapshot(enabled: false, connected: false);
@@ -107,7 +119,14 @@ class KonnektedSpotifyDiscoveryNotifier
       return SpotifyDiscoverySnapshot(
         enabled: true, connected: true, data: saved.data);
     }
-    final result = await _fetch(settings);
+    final SpotifyDiscoverySnapshot result;
+    try {
+      result = await _fetch(settings);
+    } catch (_) {
+      return const SpotifyDiscoverySnapshot(
+        enabled: true, connected: true,
+        error: 'Spotify Discovery could not be loaded. Try again later.');
+    }
     if (result.data case final data? when !data.isEmpty) {
       await cache.writeSpotify(key, data);
     }
@@ -131,8 +150,16 @@ class KonnektedSpotifyDiscoveryNotifier
     }
     final generation = ++_generation;
     final previous = state.value;
-    final result = await _fetch(SpotifySettingsStore());
-    if (generation != _generation) return;
+    SpotifyDiscoverySnapshot result;
+    try {
+      result = await _fetch(SpotifySettingsStore());
+    } catch (_) {
+      result = const SpotifyDiscoverySnapshot(
+        enabled: true, connected: true,
+        error: 'Spotify Discovery could not be loaded. Try again later.');
+    }
+    if (!ref.mounted || generation != _generation ||
+        key != _accountKey) return;
     if (result.data case final data? when !data.isEmpty) {
       state = AsyncData(result);
       await ref.read(konnektedDiscoverySnapshotCacheProvider)
@@ -392,8 +419,8 @@ class KonnektedDiscoveryNotifier extends Notifier<KonnektedDiscoveryState> {
       } on YoutubeMusicSignedOut catch (error) {
         if (generation != _generation) return;
         await ref.read(konnektedYoutubeMusicSessionProvider.notifier).signOut();
+        unawaited(cache.invalidate('youtube', accountKey));
         state = KonnektedDiscoveryState(
-          data: previous,
           error: error.message,
           connected: false,
           source: source,
