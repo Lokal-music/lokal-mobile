@@ -89,6 +89,8 @@ Future<void> _bootstrapApp() async {
 
   // Glass renders frosted until the lens is ready, so don't wait for it.
   unawaited(LokalGlassShaders.load());
+  // Prepare the cover dissolve before the first Next/Previous tap.
+  unawaited(CloudCoverShaders.load());
   runApp(
     ProviderScope(
       overrides: [
