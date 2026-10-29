@@ -757,7 +757,7 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                       ),
                     if (rows.any((row) => row.owned == null))
                       Align(
-                        alignment: Alignment.centerRight,
+                        alignment: Alignment.center,
                         child: TextButton.icon(
                           onPressed: _busy ? null : () => _download(rows),
                           icon: const Icon(Icons.download_rounded, size: 18),
