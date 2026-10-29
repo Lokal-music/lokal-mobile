@@ -827,8 +827,8 @@ class KonnektedMiniPlayerContent extends StatelessWidget {
     );
   }
 
-  /// Rounds the artwork from the mini player's circle to the full player's
-  /// 28 px corners as it flies, both ways.
+  /// Rounds the artwork from the mini player's circle to the normal
+  /// full player's actual 20 px corner radius, in both directions.
   Widget _flight(
     BuildContext flightContext,
     Animation<double> animation,
@@ -839,7 +839,7 @@ class KonnektedMiniPlayerContent extends StatelessWidget {
     animation: animation,
     builder: (context, child) => ClipRRect(
       borderRadius: BorderRadius.circular(
-        lerpDouble(21, 28, Curves.easeInOutCubic.transform(animation.value))!,
+        lerpDouble(21, 20, Curves.easeInOutCubic.transform(animation.value))!,
       ),
       child: child,
     ),

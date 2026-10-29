@@ -5,6 +5,81 @@ import 'ios_transfer_models.dart';
 Never _invalidImport() =>
     throw const FormatException('Invalid iPhone import receipt.');
 
+/// Ephemeral native authority. Never save this document to Isar/preferences or
+/// send its current sandbox path to peers. Job + receipt remain durable truth.
+class IosTransferImportLease {
+  const IosTransferImportLease._({
+    required this.job,
+    required this.leaseId,
+    required this.reconcileOnly,
+    required this.target,
+    this.sourcePath,
+  });
+  final IosTransferJob job;
+  final String leaseId;
+  final bool reconcileOnly;
+  final IosTransferLibraryTarget target;
+  final String? sourcePath;
+
+  factory IosTransferImportLease.fromJson(Object? value) {
+    if (value is! Map ||
+        value.keys.any(
+          (key) => !{
+            'job',
+            'leaseID',
+            'reconcileOnly',
+            'targetRelativePath',
+            'sourcePath',
+          }.contains(key),
+        ) ||
+        value['leaseID'] is! String ||
+        value['reconcileOnly'] is! bool ||
+        value['targetRelativePath'] is! String ||
+        (value['sourcePath'] != null && value['sourcePath'] is! String)) {
+      _invalidImport();
+    }
+    final job = IosTransferJob.fromJson(value['job']);
+    final leaseId = value['leaseID'] as String;
+    final reconcileOnly = value['reconcileOnly'] as bool;
+    final source = value['sourcePath'] as String?;
+    final target = IosTransferLibraryTarget(
+      value['targetRelativePath'] as String,
+    );
+    if (!RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        ).hasMatch(leaseId) ||
+        job.direction != 'download' ||
+        !{
+          IosTransferPhase.validating,
+          IosTransferPhase.importing,
+        }.contains(job.phase) ||
+        (reconcileOnly && source != null) ||
+        (source != null &&
+            (!source.startsWith('/') ||
+                source.contains('\u0000') ||
+                utf8.encode(source).length > 4096 ||
+                source
+                    .split('/')
+                    .any((part) => part == '.' || part == '..')))) {
+      _invalidImport();
+    }
+    target.validateFor(job);
+    return IosTransferImportLease._(
+      job: job,
+      leaseId: leaseId,
+      reconcileOnly: reconcileOnly,
+      target: target,
+      sourcePath: source,
+    );
+  }
+
+  Map<String, Object> get control => {
+    'id': job.id,
+    'revision': job.revision,
+    'leaseID': leaseId,
+  };
+}
+
 /// A native-derived target is relative to the current app's Music directory.
 /// Preparing this target does not claim that a file has been published.
 class IosTransferLibraryTarget {

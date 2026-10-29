@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:flutter/services.dart';
 
 import '../models/ios_transfer_models.dart';
+import '../models/ios_transfer_import.dart';
 import 'link/link_protocol.dart' show linkUuid;
 
 Uint8List _prepareIntents(List<IosTransferIntent> intents) {
@@ -38,7 +39,11 @@ class IosTransferTransport {
     bool? supported,
   }) : supported = supported ?? Platform.isIOS {
     _changes = StreamController<void>.broadcast(
-      onListen: () => unawaited(_start()),
+      onListen: () {
+        final ready = _start();
+        _observationReady = ready;
+        unawaited(ready);
+      },
       onCancel: () => unawaited(_stop()),
     );
   }
@@ -49,6 +54,8 @@ class IosTransferTransport {
   late final StreamController<void> _changes;
   bool _disposed = false;
   String? _subscription;
+  String? _observedClient;
+  Future<void>? _observationReady;
   (BinaryMessenger, String) get _key => (channel.binaryMessenger, channel.name);
   Stream<void> get changes => _changes.stream;
 
@@ -141,6 +148,83 @@ class IosTransferTransport {
   Future<IosTransferJob> retry(IosTransferJob job) => _control('retry', job);
   Future<IosTransferJob> verify(IosTransferJob job) => _control('verify', job);
 
+  Future<Object?> _importCall(String method, Object payload) async {
+    final client = _subscription;
+    final ready = _observationReady;
+    if (client == null || ready == null) {
+      throw StateError('Import requires the active root transfer client.');
+    }
+    await ready;
+    void checkOwner() {
+      if (_disposed ||
+          !supported ||
+          _subscription != client ||
+          _observedClient != client ||
+          !identical(_owners[_key], this)) {
+        throw StateError('Import transfer client was replaced.');
+      }
+    }
+
+    checkOwner();
+    final result = await _call(method, payload);
+    checkOwner();
+    return result;
+  }
+
+  /// Private integration boundary; capability.libraryImport stays false until
+  /// the media/database/scanner/clear/unpair coordinator is accepted.
+  Future<IosTransferImportLease> claimImport(
+    IosTransferJob job, {
+    bool reconcileOnly = false,
+  }) async {
+    final lease = IosTransferImportLease.fromJson(
+      await _importCall('claimImport', {
+        'id': job.id,
+        'revision': job.revision,
+        'reconcileOnly': reconcileOnly,
+      }),
+    );
+    if (lease.job.id != job.id ||
+        lease.job.revision != job.revision ||
+        lease.reconcileOnly != reconcileOnly ||
+        (job.receivedBytes != null &&
+            job.receivedBytes != lease.job.receivedBytes) ||
+        (job.receivedSha256 != null &&
+            job.receivedSha256 != lease.job.receivedSha256) ||
+        jsonEncode(lease.job.intent.toJson()) !=
+            jsonEncode(job.intent.toJson())) {
+      throw const FormatException(
+        'Native import claim changed its frozen intent.',
+      );
+    }
+    return lease;
+  }
+
+  Future<void> validateImport(
+    IosTransferImportLease lease, {
+    bool requiresWrite = true,
+  }) async {
+    if (requiresWrite && lease.reconcileOnly) {
+      throw StateError(
+        'Receipt reconciliation cannot authorize a library write.',
+      );
+    }
+    final result = await _importCall(
+      requiresWrite ? 'validateImport' : 'validateImportReconciliation',
+      lease.control,
+    );
+    if (result != true) {
+      throw const FormatException('Invalid native import guard response.');
+    }
+  }
+
+  Future<void> releaseImport(IosTransferImportLease lease) async {
+    final result = await _importCall('releaseImport', lease.control);
+    if (result != true) {
+      throw const FormatException('Invalid native import release response.');
+    }
+  }
+
   Future<IosTransferSummary> resume(IosTransferScope scope) async {
     scope.validate();
     return IosTransferSummary.fromJson(await _call('resume', scope.toJson()));
@@ -167,6 +251,9 @@ class IosTransferTransport {
         'observe',
         Uint8List.fromList(utf8.encode(jsonEncode({'clientID': id}))),
       );
+      if (!_disposed && _subscription == id && identical(_owners[_key], this)) {
+        _observedClient = id;
+      }
       if (_disposed || _subscription != id || !identical(_owners[_key], this)) {
         await _stopNative(id);
       }
@@ -190,6 +277,8 @@ class IosTransferTransport {
   Future<void> _stop() async {
     final id = _subscription;
     _subscription = null;
+    _observedClient = null;
+    _observationReady = null;
     if (!supported || id == null) return;
     if (identical(_owners[_key], this)) {
       _owners.remove(_key);

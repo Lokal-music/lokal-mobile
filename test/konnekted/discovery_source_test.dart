@@ -7,17 +7,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class _SpotifyCounter extends KonnektedSpotifyDiscoveryNotifier {
+  static int calls = 0;
+  @override
+  Future<SpotifyDiscoverySnapshot> build() async {
+    calls++;
+    return const SpotifyDiscoverySnapshot(enabled: true, connected: true);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test('Spotify shelves survive losing Home listeners and same-source selection, but change-source refreshes', () async {
-    var calls = 0;
+    _SpotifyCounter.calls = 0;
     final container = ProviderContainer(
       overrides: [
-        konnektedSpotifyDiscoveryProvider.overrideWith((ref) async {
-          calls++;
-          return const SpotifyDiscoverySnapshot(enabled: true, connected: true);
-        }),
+        konnektedSpotifyDiscoveryProvider.overrideWith(_SpotifyCounter.new),
         konnektedLastfmAccountProvider.overrideWith((ref) async => null),
       ],
     );
@@ -38,11 +44,11 @@ void main() {
     addTearDown(second.close);
     await container.read(konnektedSpotifyDiscoveryProvider.future);
     await notifier.setSource(KonnektedDiscoverySource.spotify);
-    expect(calls, 1);
+    expect(_SpotifyCounter.calls, 1);
     await notifier.setSource(KonnektedDiscoverySource.lastfm);
     await notifier.setSource(KonnektedDiscoverySource.spotify);
     await container.read(konnektedSpotifyDiscoveryProvider.future);
-    expect(calls, 2);
+    expect(_SpotifyCounter.calls, 2);
   });
 
   test(

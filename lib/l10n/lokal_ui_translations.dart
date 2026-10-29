@@ -1,5 +1,9 @@
 // Generated Lokal presentation phrases. Music metadata and route IDs are not localized here.
 const Map<String, String> _uifr = {
+  "Full resolution tags in lists": "Résolution audio dans les listes",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Afficher les détails audio connus à la place des niveaux de qualité dans les listes. Conserver les couleurs de qualité actuelles.",
+  "Full resolution tags in full player": "Résolution audio dans le lecteur",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Afficher le codec, la profondeur de bits, la fréquence ou le débit disponibles à la place du niveau de qualité. Conserver le badge blanc.",
   "Starting {source}…": "Démarrage de {source}…",
   "Checking metadata on {source}…": "Vérification des métadonnées sur {source}…",
   "Verifying recording on {source}…": "Vérification du morceau sur {source}…",
@@ -635,6 +639,10 @@ const Map<String, String> _uifr = {
   "“{arg0}” plays next": "\"{arg0}\" joue ensuite",
 };
 const Map<String, String> _uide = {
+  "Full resolution tags in lists": "Audioauflösung in Listen",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Bekannte Audiodetails statt Qualitätsstufen in Titellisten anzeigen. Die bisherigen Qualitätsfarben bleiben erhalten.",
+  "Full resolution tags in full player": "Audioauflösung im Player",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Verfügbaren Codec, Bittiefe, Abtastrate oder Bitrate statt der Qualitätsstufe anzeigen. Das Player-Abzeichen bleibt weiß.",
   "Starting {source}…": "{source} wird gestartet…",
   "Checking metadata on {source}…": "Metadaten auf {source} prüfen…",
   "Verifying recording on {source}…": "Aufnahme auf {source} prüfen…",
@@ -1263,6 +1271,10 @@ const Map<String, String> _uide = {
   "“{arg0}” plays next": "Als nächstes wird „{arg0}“ abgespielt",
 };
 const Map<String, String> _uies = {
+  "Full resolution tags in lists": "Resolución de audio en listas",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Mostrar los datos de audio conocidos en lugar de los niveles de calidad en las listas. Mantener los colores de calidad actuales.",
+  "Full resolution tags in full player": "Resolución de audio en el reproductor",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Mostrar el códec, profundidad de bits, frecuencia o tasa de bits disponibles en lugar del nivel de calidad. Mantener la etiqueta blanca.",
   "Starting {source}…": "Iniciando {source}…",
   "Checking metadata on {source}…": "Comprobando metadatos en {source}…",
   "Verifying recording on {source}…": "Verificando la grabación en {source}…",
@@ -1899,6 +1911,10 @@ const Map<String, String> _uies = {
   "“{arg0}” plays next": "“{arg0}” se reproduce a continuación",
 };
 const Map<String, String> _uiit = {
+  "Full resolution tags in lists": "Risoluzione audio negli elenchi",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Mostra i dettagli audio noti al posto dei livelli di qualità negli elenchi. Mantieni gli attuali colori della qualità.",
+  "Full resolution tags in full player": "Risoluzione audio nel lettore",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Mostra codec, profondità in bit, frequenza o bitrate disponibili al posto del livello di qualità. Mantieni il badge bianco.",
   "Starting {source}…": "Avvio di {source}…",
   "Checking metadata on {source}…": "Controllo dei metadati su {source}…",
   "Verifying recording on {source}…": "Verifica della registrazione su {source}…",
@@ -2537,6 +2553,10 @@ const Map<String, String> _uiit = {
   "“{arg0}” plays next": "Successivamente viene riprodotto “{arg0}”.",
 };
 const Map<String, String> _uiptBR = {
+  "Full resolution tags in lists": "Resolução de áudio nas listas",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Mostrar os detalhes de áudio conhecidos no lugar dos níveis de qualidade nas listas. Manter as cores de qualidade atuais.",
+  "Full resolution tags in full player": "Resolução de áudio no player",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Mostrar o codec, a profundidade de bits, a frequência ou a taxa de bits disponíveis no lugar do nível de qualidade. Manter o indicador branco.",
   "Starting {source}…": "Iniciando {source}…",
   "Checking metadata on {source}…": "Verificando metadados em {source}…",
   "Verifying recording on {source}…": "Verificando a gravação em {source}…",
@@ -3170,6 +3190,10 @@ const Map<String, String> _uiptBR = {
   "“{arg0}” plays next": "“{arg0}” é reproduzido a seguir",
 };
 const Map<String, String> _uinl = {
+  "Full resolution tags in lists": "Audioresolutie in lijsten",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Toon bekende audiodetails in plaats van kwaliteitsniveaus in nummerlijsten. Behoud de bestaande kwaliteitskleuren.",
+  "Full resolution tags in full player": "Audioresolutie in de speler",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Toon de beschikbare codec, bitdiepte, samplefrequentie of bitsnelheid in plaats van het kwaliteitsniveau. Houd het spelerlabel wit.",
   "Starting {source}…": "{source} starten…",
   "Checking metadata on {source}…": "Metadata op {source} controleren…",
   "Verifying recording on {source}…": "Opname op {source} controleren…",
@@ -3815,6 +3839,10 @@ const Map<String, String> _uinl = {
   "“{arg0}” plays next": "Vervolgens wordt “{arg0}” afgespeeld",
 };
 const Map<String, String> _uipl = {
+  "Full resolution tags in lists": "Szczegóły audio na listach",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Pokazuj znane parametry audio zamiast poziomów jakości na listach utworów. Zachowaj obecne kolory jakości.",
+  "Full resolution tags in full player": "Szczegóły audio w odtwarzaczu",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Pokazuj dostępny kodek, głębię bitową, częstotliwość lub przepływność zamiast poziomu jakości. Zachowaj biały kolor etykiety.",
   "Starting {source}…": "Uruchamianie {source}…",
   "Checking metadata on {source}…": "Sprawdzanie metadanych w {source}…",
   "Verifying recording on {source}…": "Weryfikowanie nagrania w {source}…",
@@ -4450,6 +4478,10 @@ const Map<String, String> _uipl = {
   "“{arg0}” plays next": "Następnie odtwarzany jest utwór „{arg0}”.",
 };
 const Map<String, String> _uisv = {
+  "Full resolution tags in lists": "Ljudupplösning i listor",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Visa kända ljudegenskaper i stället för kvalitetsnivåer i låtlistor. Behåll de befintliga kvalitetsfärgerna.",
+  "Full resolution tags in full player": "Ljudupplösning i spelaren",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Visa tillgänglig kodek, bitdjup, samplingsfrekvens eller bithastighet i stället för kvalitetsnivån. Behåll spelarens vita etikett.",
   "Starting {source}…": "Startar {source}…",
   "Checking metadata on {source}…": "Kontrollerar metadata på {source}…",
   "Verifying recording on {source}…": "Verifierar inspelningen på {source}…",
@@ -5091,6 +5123,10 @@ const Map<String, String> _uisv = {
   "“{arg0}” plays next": "\"{arg0}\" spelas härnäst",
 };
 const Map<String, String> _uizh = {
+  "Full resolution tags in lists": "列表中显示完整音频规格",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "在歌曲列表中以已知的音频规格替代质量等级，并保留现有的质量颜色。",
+  "Full resolution tags in full player": "播放器中显示完整音频规格",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "以可用的编解码器、位深、采样率或比特率替代质量等级，并保持播放器标签为白色。",
   "Starting {source}…": "正在启动 {source}…",
   "Checking metadata on {source}…": "正在检查 {source} 的元数据…",
   "Verifying recording on {source}…": "正在验证 {source} 上的录音…",
@@ -5731,6 +5767,10 @@ const Map<String, String> _uizh = {
   "“{arg0}” plays next": "接下来播放“{arg0}”",
 };
 const Map<String, String> _uitr = {
+  "Full resolution tags in lists": "Listelerde ses çözünürlüğü",
+  "Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.": "Şarkı listelerinde kalite düzeyleri yerine bilinen ses bilgilerini göster. Mevcut kalite renklerini koru.",
+  "Full resolution tags in full player": "Oynatıcıda ses çözünürlüğü",
+  "Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.": "Kalite düzeyi yerine mevcut codec, bit derinliği, örnekleme hızı veya bit hızını göster. Oynatıcı etiketini beyaz tut.",
   "Starting {source}…": "{source} başlatılıyor…",
   "Checking metadata on {source}…": "{source} üzerindeki meta veriler denetleniyor…",
   "Verifying recording on {source}…": "{source} üzerindeki kayıt doğrulanıyor…",

@@ -20,6 +20,16 @@ enum LokalTransferProtocol {
   struct Client: Decodable, Sendable {
     let clientID: String
   }
+  struct ImportClaim: Decodable, Sendable {
+    let id: String
+    let revision: Int
+    let reconcileOnly: Bool
+  }
+  struct ImportLease: Decodable, Sendable {
+    let id: String
+    let revision: Int
+    let leaseID: String
+  }
 
   private static func object<T: Decodable>(_ type: T.Type, _ data: Data,
                                            keys: Set<String>) throws -> T {
@@ -41,6 +51,23 @@ enum LokalTransferProtocol {
     let value = try object(Page.self, data, keys: ["offset", "limit"])
     guard value.offset >= 0, value.offset <= LokalTransferJournal.maximumJobs,
           value.limit > 0, value.limit <= 100 else { throw LokalTransferError.invalidRecord }
+    return value
+  }
+
+  static func importClaim(_ data: Data) throws -> ImportClaim {
+    let value = try object(ImportClaim.self, data, keys: ["id", "revision", "reconcileOnly"])
+    guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil else {
+      throw LokalTransferError.invalidRecord
+    }
+    return value
+  }
+
+  static func importLease(_ data: Data) throws -> ImportLease {
+    let value = try object(ImportLease.self, data, keys: ["id", "revision", "leaseID"])
+    guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil,
+          UUID(uuidString: value.leaseID)?.uuidString.lowercased() == value.leaseID else {
+      throw LokalTransferError.invalidRecord
+    }
     return value
   }
 

@@ -109,6 +109,7 @@ private enum LokalWidgetRenderProof {
 
   static func run() async {
     guard Bundle.main.bundleIdentifier == "app.lokal.widgetPreview" else { return }
+    let renderStartedAtMs = Int64(Date().timeIntervalSince1970 * 1000)
     do {
       // Let the real native scene connect before using the SwiftUI renderer.
       await Task.yield()
@@ -174,6 +175,8 @@ private enum LokalWidgetRenderProof {
         "schemaVersion": 1, "locale": locale, "preferredLocalizations": Bundle.main.preferredLocalizations,
         "scope": "shared SwiftUI layout rendered in isolated native app, not installed WidgetKit",
         "scale": 2, "cases": rows,
+        "renderStartedAtMs": renderStartedAtMs,
+        "renderFinishedAtMs": Int64(Date().timeIntervalSince1970 * 1000),
       ]
       let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
       try data.write(to: output.appendingPathComponent("report-\(locale).json"), options: .atomic)

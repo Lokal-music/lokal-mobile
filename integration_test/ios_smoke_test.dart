@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'fixtures/ios_concurrent_lyrics.dart';
+import 'ios_discovery_cache_probe.dart';
 
 import 'package:flick/app/app.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
@@ -353,6 +354,8 @@ void main() {
       guest.close();
     }
     binding.reportData!['quickjs_echo'] = quickJsResult;
+    binding.reportData!['native_discovery_metadata_cache'] =
+        await probeIosDiscoveryCache();
 
     final player = PlayerService();
     // Exercise the complete recovery path before enabling production

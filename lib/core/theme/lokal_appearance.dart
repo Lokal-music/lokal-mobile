@@ -24,6 +24,8 @@ class LokalAppearance {
     this.ultraPerformanceMode = false,
     this.fullscreenCover = false,
     this.unboxedPlayerControls = false,
+    this.resolutionTagsInLists = false,
+    this.resolutionTagsInFullPlayer = false,
   });
 
   final LokalThemeId theme;
@@ -50,6 +52,12 @@ class LokalAppearance {
   final bool fullscreenCover;
   final bool unboxedPlayerControls;
 
+  /// Show measured/explicit audio resolution instead of quality tiers in lists.
+  final bool resolutionTagsInLists;
+
+  /// Separate choice for the player quality badge (keeps its white styling).
+  final bool resolutionTagsInFullPlayer;
+
   static const minTextScale = 0.7;
   static const maxTextScale = 1.5;
 
@@ -64,6 +72,8 @@ class LokalAppearance {
     bool? ultraPerformanceMode,
     bool? fullscreenCover,
     bool? unboxedPlayerControls,
+    bool? resolutionTagsInLists,
+    bool? resolutionTagsInFullPlayer,
   }) => LokalAppearance(
     theme: theme ?? this.theme,
     accent: clearAccent ? null : (accent ?? this.accent),
@@ -72,6 +82,9 @@ class LokalAppearance {
     ultraPerformanceMode: ultraPerformanceMode ?? this.ultraPerformanceMode,
     fullscreenCover: fullscreenCover ?? this.fullscreenCover,
     unboxedPlayerControls: unboxedPlayerControls ?? this.unboxedPlayerControls,
+    resolutionTagsInLists: resolutionTagsInLists ?? this.resolutionTagsInLists,
+    resolutionTagsInFullPlayer:
+        resolutionTagsInFullPlayer ?? this.resolutionTagsInFullPlayer,
   );
 
   Map<String, Object?> toJson() => {
@@ -82,6 +95,8 @@ class LokalAppearance {
     'ultraPerformanceMode': ultraPerformanceMode,
     'fullscreenCover': fullscreenCover,
     'unboxedPlayerControls': unboxedPlayerControls,
+    'resolutionTagsInLists': resolutionTagsInLists,
+    'resolutionTagsInFullPlayer': resolutionTagsInFullPlayer,
   };
 
   factory LokalAppearance.fromJson(Map<String, Object?> json) {
@@ -99,6 +114,8 @@ class LokalAppearance {
       ultraPerformanceMode: json['ultraPerformanceMode'] as bool? ?? false,
       fullscreenCover: json['fullscreenCover'] as bool? ?? false,
       unboxedPlayerControls: json['unboxedPlayerControls'] as bool? ?? false,
+      resolutionTagsInLists: json['resolutionTagsInLists'] == true,
+      resolutionTagsInFullPlayer: json['resolutionTagsInFullPlayer'] == true,
     );
   }
 
@@ -111,7 +128,9 @@ class LokalAppearance {
       other.performanceMode == performanceMode &&
       other.ultraPerformanceMode == ultraPerformanceMode &&
       other.fullscreenCover == fullscreenCover &&
-      other.unboxedPlayerControls == unboxedPlayerControls;
+      other.unboxedPlayerControls == unboxedPlayerControls &&
+      other.resolutionTagsInLists == resolutionTagsInLists &&
+      other.resolutionTagsInFullPlayer == resolutionTagsInFullPlayer;
 
   @override
   int get hashCode => Object.hash(
@@ -122,6 +141,8 @@ class LokalAppearance {
     ultraPerformanceMode,
     fullscreenCover,
     unboxedPlayerControls,
+    resolutionTagsInLists,
+    resolutionTagsInFullPlayer,
   );
 }
 
@@ -213,6 +234,12 @@ class LokalAppearanceNotifier extends Notifier<LokalAppearance> {
 
   Future<void> setFullscreenCover(bool value) =>
       _commit(state.copyWith(fullscreenCover: value));
+
+  Future<void> setResolutionTagsInLists(bool value) =>
+      _commit(state.copyWith(resolutionTagsInLists: value));
+
+  Future<void> setResolutionTagsInFullPlayer(bool value) =>
+      _commit(state.copyWith(resolutionTagsInFullPlayer: value));
 
   Future<void> setPerformanceMode(bool value) => _commit(
     state.copyWith(

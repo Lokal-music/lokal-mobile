@@ -1,10 +1,14 @@
 import 'dart:ui' as ui;
 
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/theme/lokal_appearance.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/widgets/lokal/lokal_quality.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Song _song(String type, {int? bits, int? rate, String? resolution}) => Song(
@@ -19,6 +23,7 @@ Song _song(String type, {int? bits, int? rate, String? resolution}) => Song(
 );
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   test('tiers follow desktop src/quality.js', () {
     expect(
       LokalQualityTier.of(_song('flac', bits: 16, rate: 44100)),
@@ -59,10 +64,12 @@ void main() {
   testWidgets('pill shows the label and explains itself', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
-      MaterialApp(
-        theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.light)),
-        home: const Center(
-          child: LokalQualityPill(tier: LokalQualityTier.lossless),
+      ProviderScope(
+        child: MaterialApp(
+          theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.light)),
+          home: const Center(
+            child: LokalQualityPill(tier: LokalQualityTier.lossless),
+          ),
         ),
       ),
     );
@@ -72,6 +79,115 @@ void main() {
       findsOneWidget,
     );
     semantics.dispose();
+  });
+
+  test(
+    'full resolution uses known source measurements without inventing quality',
+    () {
+      expect(
+        lokalSongResolutionLabel(_song('FLAC', bits: 24, rate: 96000)),
+        'FLAC · 24-bit / 96 kHz',
+      );
+      expect(
+        lokalSongResolutionLabel(_song('FLAC', resolution: '16/44.1')),
+        'FLAC · 16-bit / 44.1 kHz',
+      );
+      expect(
+        lokalSongResolutionLabel(
+          _song('OPUS', bits: 24, rate: 48000, resolution: '160 kbps'),
+        ),
+        'OPUS · 160 kbps / 48 kHz',
+        reason: 'Decoded lossy PCM bit depth is not encoded source depth',
+      );
+      expect(lokalSongResolutionLabel(_song('DSD', rate: 2822400)), 'DSD64');
+      expect(lokalSongResolutionLabel(_song('FLAC')), isNull);
+      expect(
+        lokalSongResolutionLabel(_song('FLAC', resolution: 'HI_RES_LOSSLESS')),
+        isNull,
+      );
+      expect(
+        lokalSongResolutionLabel(_song('MP3', resolution: 'HIGH')),
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'list and player resolution toggles are independent and keep colors',
+    (tester) async {
+      const song = Song(
+        id: 'flac-96',
+        title: 'Track',
+        artist: 'Artist',
+        duration: Duration(seconds: 180),
+        fileType: 'FLAC',
+        bitDepth: 24,
+        sampleRate: 96000,
+      );
+      Widget app({required bool lists, required bool player}) => ProviderScope(
+        key: ValueKey('$lists-$player'),
+        overrides: [
+          lokalInitialAppearanceProvider.overrideWithValue(
+            LokalAppearance(
+              resolutionTagsInLists: lists,
+              resolutionTagsInFullPlayer: player,
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
+          home: const Scaffold(
+            body: Column(
+              children: [
+                LokalQualityPill(tier: LokalQualityTier.hiRes, song: song),
+                LokalQualityPill(
+                  tier: LokalQualityTier.hiRes,
+                  song: song,
+                  fullPlayer: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(app(lists: true, player: false));
+      await tester.pump();
+      expect(find.text('FLAC · 24-bit / 96 kHz'), findsOneWidget);
+      expect(find.text('Hi-res'), findsOneWidget);
+      final text = tester.widget<Text>(find.text('FLAC · 24-bit / 96 kHz'));
+      expect(text.style?.color, LokalQualityTier.hiRes.text);
+
+      await tester.pumpWidget(app(lists: false, player: true));
+      await tester.pump();
+      expect(find.text('Hi-res'), findsOneWidget);
+      expect(find.text('FLAC · 24-bit / 96 kHz'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text('FLAC · 24-bit / 96 kHz')).style?.color,
+        const Color(0xFFF8F0EB),
+      );
+    },
+  );
+
+  test('resolution preference labels and explanations are translated in every locale', () {
+    final previous = l10n;
+    addTearDown(() => LocaleController.instance.bind(previous));
+    for (final locale in kSupportedLocales.where(
+      (locale) => locale.languageCode != 'en',
+    )) {
+      LocaleController.instance.bindLocale(locale);
+      for (final phrase in [
+        'Full resolution tags in lists',
+        'Show known audio resolution details instead of quality tiers in song lists. Keep the existing quality colors.',
+        'Full resolution tags in full player',
+        'Show the available codec, bit depth, sample rate or bitrate instead of the quality tier. Keep the player badge white.',
+      ]) {
+        expect(
+          lokalText(phrase),
+          isNot(phrase),
+          reason: locale.toLanguageTag(),
+        );
+      }
+    }
   });
 
   test('glass shaders compile and load', () async {

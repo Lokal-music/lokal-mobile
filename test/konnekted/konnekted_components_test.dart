@@ -588,8 +588,15 @@ void main() {
     for (final gone in ['Classipod', 'Listening hub', 'Manage library']) {
       expect(find.text(gone), findsNothing);
     }
-    expect(find.text('Spotify library'), findsOneWidget);
+    expect(find.text('Spotify library'), findsNothing);
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.text('Songs'), findsOneWidget);
+    expect(find.text('Videos'), findsOneWidget);
     expect(find.text('Linked playlists'), findsOneWidget);
+    await tester.tap(find.text('Songs'));
+    await tester.tap(find.text('Downloads'));
+    expect(opened, [KonnektedDestination.settings,
+      KonnektedDestination.songs, KonnektedDestination.downloads]);
   });
 
   testWidgets('shelf reports errors and retry without pretending to be empty', (

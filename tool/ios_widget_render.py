@@ -13,6 +13,7 @@ import re
 import shutil
 import struct
 import subprocess
+import time
 
 import ios_simulator
 from ios_widget_live_capture import capture
@@ -185,11 +186,25 @@ def main():
         container = Path(command("xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"))
         for locale in LOCALES:
             stage = "render-" + locale
-            with (args.output / f"launch-{locale}.log").open("w") as log:
-                subprocess.run([
-                    "xcrun", "simctl", "launch", "--console", udid, BUNDLE,
-                    "--render-locale", locale, "-AppleLanguages", f'("{locale}")',
-                ], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=150)
+            timing = {"locale": locale, "launchStartedAtMs": int(time.time() * 1000),
+                      "timeoutSeconds": 150, "status": "pending"}
+            timing_path = args.output / f"launch-{locale}-timing.json"
+            timing_path.write_text(json.dumps(timing, indent=2) + "\n")
+            started = time.monotonic()
+            try:
+                with (args.output / f"launch-{locale}.log").open("w") as log:
+                    subprocess.run([
+                        "xcrun", "simctl", "launch", "--console", udid, BUNDLE,
+                        "--render-locale", locale, "-AppleLanguages", f'("{locale}")',
+                    ], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=150)
+                timing["status"] = "success"
+            except (OSError, subprocess.SubprocessError) as error:
+                timing["status"] = type(error).__name__
+                raise
+            finally:
+                timing["launchFinishedAtMs"] = int(time.time() * 1000)
+                timing["elapsedMs"] = round((time.monotonic() - started) * 1000)
+                timing_path.write_text(json.dumps(timing, indent=2) + "\n")
         stage = "export"
         shutil.copytree(container / "Documents/WidgetRenderProof", args.output / "images")
         stage = "verify"

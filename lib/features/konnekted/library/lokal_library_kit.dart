@@ -568,7 +568,7 @@ class LokalTrackRow extends ConsumerWidget {
                           ),
                         if (LokalQualityTier.of(song) case final tier?) ...[
                           const SizedBox(width: 8),
-                          LokalQualityPill(tier: tier),
+                          LokalQualityPill(tier: tier, song: song),
                         ],
                       ],
                     ),

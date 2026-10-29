@@ -1,7 +1,7 @@
 # iPhone transfer architecture
 
 Status: native transport, app owner and typed Flutter bridge accepted in build
-78; product library adapter pending, 28 October 2026. Both real iOS 16 SDK checks
+80; product library adapter pending, 29 October 2026. Both real iOS 16 SDK checks
 and both complete iOS 18.6/26 app suites pass, including native channel ownership
 and Keychain migration. Standalone native host contracts also pass five rounds.
 This qualifies the integrated protocol, not OS suspension/daemon delivery.
@@ -437,3 +437,80 @@ full durability before an import may acknowledge its database receipt or retire
 the only staging copy. Process-exit tests do not establish power-loss durability.
 Actual OS suspension/relaunch acceptance remains separate. Neither the native
 library helper nor the receipt adapter is exposed as an enabled product import API.
+
+### Native ownership and private bridge (29 October)
+
+`LokalTransferImportOwnership` is a separate, ephemeral lock-protected owner.
+It does not open SQLite/Isar, authorize pairing, run media probes or wait on a
+file queue. The durable identity remains the native job/revision plus the private
+Isar receipt. Replacing an engine or Dart client retires its active copy token;
+old disposal/release cannot stop a replacement. Recovery-only leases cannot
+authorize new library writes. Scope comparison canonicalizes the origin.
+
+The bridge must capture an ownership ticket synchronously **before dispatching**
+a claim to the utility queue. Clear/unpair rotates a barrier nonce even when no
+lease exists yet. An old queued claim is then refused after its journal wait;
+checking only an already active file token would leave that race open. Runtime
+must still authorize pairing and re-read job phase/revision before issuing a
+lease. These tickets do not replace those checks.
+
+```mermaid
+sequenceDiagram
+  participant UI as Native bridge
+  participant G as Direct ownership guard
+  participant Q as Runtime queue
+  participant DB as Isar writer
+  UI->>G: Capture engine/client + barrier ticket
+  UI->>Q: Queue claim with captured ticket
+  UI->>G: Clear/unpair rotates barrier and revokes copy
+  Q->>G: Issue lease using old ticket
+  G-->>Q: Refuse stale claim
+  Note over G,DB: Writer validation calls the guard directly, never through Q
+```
+
+Three complete portable Swift rounds pass with the added ownership contracts:
+24 actual concurrent claim threads, queued barriers before a lease exists,
+engine/client replacement, unrelated-scope retention, canonical-scope revocation,
+read-only recovery and direct guard/revocation while a real worker is blocked.
+The continuation now links this guard and the library filename helper into
+Runner. The host shares the same registry with its runtime; a separate engine
+lifetime lease cancels old imports on disposal without tying that cancellation
+to ordinary foreground observation. A replacement root Dart client also revokes
+old authority. Stale engine observation cannot overwrite a current observer.
+
+Private `claimImport`, `validateImport`, `validateImportReconciliation` and
+`releaseImport` byte operations reject caller paths, owner identities and headers.
+Claim checks the current journal phase/revision and pairing/account, persists
+staged → validating, and returns only a native-derived relative target, ephemeral
+lease and current staging path. Receipt-only recovery needs no current bearer,
+exposes no staging path, and cannot pass the writer guard. A missing staging file
+permits reconciliation; it is not permission to synthesize a recording.
+
+Validation calls the registry directly on the bridge, without filesystem,
+Keychain, host-queue or runtime-queue work. Release cancels publication immediately,
+then traverses runtime → file worker → runtime before acknowledging release.
+This ordering also covers file work not yet submitted by earlier queued native
+operations. Recovery, shutdown, cancellation, phase/revision retirement and
+persistence failure revoke import authority. Lost claim replies coalesce.
+
+Three complete later portable Swift rounds pass with real HTTP/WAV staging,
+durable claim/recovery/cancellation and a blocked native credential read.
+Revocation before any lease exists prevents that queued claim from advancing
+the journal. An active writer guard still completes during blocked native I/O;
+release cancels it immediately and waits for queued work to drain. Thirteen
+Flutter transport checks pass, including root-observation readiness, replacement
+during a pending reply, strict ephemeral documents, frozen-intent/proof checks,
+read-only refusal and invalid native acknowledgements. The actual Isar contracts
+also pass again. These checks do not run the new bridge in an iOS app; the next
+batched Apple acceptance remains required. Build 80 contains the earlier
+file/receipt foundation and does not qualify this later wiring.
+
+Next, invoke this guard inside the product Isar writer, connect real media
+probing/promotion and the scanner reservation checks, and drain native file
+cleanup before retiring reservations.
+Revoke the token before queueing clear/unpair, then serialize native job
+cancellation and the Isar mutation barrier. Cleanup of an already revoked file
+operation must use the runtime's retained work record, not require its retired
+UI lease to become valid again. A completed receipt is historical proof and may
+be acknowledged without recreating a deleted song. No new native job JSON fields
+are needed merely to persist ephemeral engine/client leases.

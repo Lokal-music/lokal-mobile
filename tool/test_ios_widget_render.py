@@ -1,5 +1,6 @@
 """Infrastructure gate policy only; these tests do not render SwiftUI."""
 import os
+import json
 import plistlib
 import tempfile
 from pathlib import Path
@@ -70,6 +71,11 @@ class WidgetRenderStartupTest(unittest.TestCase):
                 evidence.assert_called_once()
                 self.assertEqual(evidence.call_args.args[1], "render-en")
                 self.assertEqual(command.call_count, 2)
+                timing = json.loads((root / "proof/launch-en-timing.json").read_text())
+                self.assertEqual(timing["status"], "CalledProcessError")
+                self.assertEqual(timing["timeoutSeconds"], 150)
+                self.assertGreaterEqual(timing["elapsedMs"], 0)
+                self.assertGreaterEqual(timing["launchFinishedAtMs"], timing["launchStartedAtMs"])
 
     def test_invalid_or_missing_orientations_fail_before_boot_or_installation(self):
         with tempfile.TemporaryDirectory() as directory:

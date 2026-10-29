@@ -191,6 +191,42 @@ do {
   }
   try require(LokalTransferProtocol.page(Data("{\"offset\":0,\"limit\":100}".utf8)).limit == 100,
     "bounded page request accepted")
+  let claimDocument: [String: Any] = ["id": original.id, "revision": 1, "reconcileOnly": false]
+  let leaseDocument: [String: Any] = ["id": original.id, "revision": 1,
+    "leaseID": "a7d96b93-6526-4f1f-a1af-688ffb5c799d"]
+  try require(!LokalTransferProtocol.importClaim(JSONSerialization.data(withJSONObject: claimDocument)).reconcileOnly,
+    "bounded typed native import claim accepted")
+  try require(LokalTransferProtocol.importLease(JSONSerialization.data(withJSONObject: leaseDocument)).revision == 1,
+    "bounded typed native lease guard accepted")
+  for (key, value) in [("sourcePath", "/tmp/caller.wav"), ("targetRelativePath", "caller.wav"),
+      ("owner", "caller"), ("headers", "caller")] {
+    var injectedClaim = claimDocument, injectedLease = leaseDocument
+    injectedClaim[key] = value; injectedLease[key] = value
+    try rejects("caller cannot inject path/owner/headers into an import claim") {
+      _ = try LokalTransferProtocol.importClaim(JSONSerialization.data(withJSONObject: injectedClaim))
+    }
+    try rejects("caller cannot inject path/owner/headers into the direct lease guard") {
+      _ = try LokalTransferProtocol.importLease(JSONSerialization.data(withJSONObject: injectedLease))
+    }
+  }
+  for invalid: Any in [1, "false", NSNull()] {
+    var row = claimDocument; row["reconcileOnly"] = invalid
+    try rejects("import recovery role must be an explicit JSON Boolean") {
+      _ = try LokalTransferProtocol.importClaim(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  for invalid: Any in [false, 0, -1, 1.5, "1"] {
+    var row = leaseDocument; row["revision"] = invalid
+    try rejects("direct import guard requires a positive integer revision") {
+      _ = try LokalTransferProtocol.importLease(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  for invalid in ["caller", "A7D96B93-6526-4F1F-A1AF-688FFB5C799D", ""] {
+    var row = leaseDocument; row["leaseID"] = invalid
+    try rejects("native lease identity must be a canonical UUID") {
+      _ = try LokalTransferProtocol.importLease(JSONSerialization.data(withJSONObject: row))
+    }
+  }
   let credentialBytes = try Data(contentsOf: URL(fileURLWithPath: "test/fixtures/ios_transfer_credentials_v2.json"))
   guard let atomicAuthorization = try LokalTransferCredentials.decode(credentialBytes) else {
     throw TestFailure.failed("Shared credential contract did not authorize")
@@ -390,6 +426,8 @@ do {
   try rejects("staged bytes alone do not grant an importer path") { _ = try files.importURL(transfer) }
   transfer = try store.update(id: binaryJob.id, revision: 1) { try $0.transition(to: .validating, nowMs: 1050) }
   try require(Data(contentsOf: files.importURL(transfer)) == Data("abc".utf8), "current owned import path")
+  contractStage = "ephemeral native import ownership"
+  try runImportOwnershipContracts(job: transfer)
   contractStage = "deterministic library file promotion"
   try runLibraryContracts(container: root, job: transfer, files: files)
   try store.update(id: binaryJob.id, revision: 1) { try $0.cancel(nowMs: 1060) }
