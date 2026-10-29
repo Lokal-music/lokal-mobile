@@ -327,12 +327,12 @@ class _HomeModeSelector extends StatefulWidget {
 
 class _HomeModeSelectorState extends State<_HomeModeSelector> {
   double _modeTabFontSize(double width) {
-    // Keep a little breathing room around the complete three-tab row while
-    // using more of the capsule on regular and wide phones.
-    if (width < 220) return 9;
-    if (width < 260) return 10;
-    if (width < 310) return 11;
-    return 12;
+    // The logo and fixed action buttons leave a fairly narrow selector on
+    // phones, so keep the labels comfortably readable there too.
+    if (width < 220) return 11;
+    if (width < 260) return 12;
+    if (width < 310) return 13;
+    return 14;
   }
 
   @override
@@ -461,7 +461,7 @@ class _ShelfChip extends StatelessWidget {
           curve: Curves.easeOutCubic,
           constraints: BoxConstraints(minHeight: 44, minWidth: compact ? 0 : 56),
           alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 10, vertical: 8),
           decoration: BoxDecoration(
             color: selected
                 ? (t.isLight
