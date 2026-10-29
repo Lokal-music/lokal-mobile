@@ -227,6 +227,28 @@ void main() {
     expect(find.text('Download Dolby Atmos'), findsNothing);
   });
 
+  testWidgets('Amazon catalogue ATMOS metadata uses the same purple badge as Tidal', (tester) async {
+    final amazon = OnlineSource(
+      id: 'a-amazon', name: 'Amazon Music', addon: true,
+      results: (_) async => [
+        const OnlineResult(DiscoveryTrack(
+          id: 'amazon-known', title: 'Amazon Atmos edition', artist: 'Artist',
+          source: DiscoverySource.morneye, addonId: 'amazon',
+          atmosAvailable: true, atmosRequestable: true,
+          requestedQuality: 'FLAC best (requested)',
+        )),
+      ],
+      play: (_) async => throw const DiscoveryException('not needed'),
+    );
+    await _pump(tester, sources: [amazon]);
+    expect(find.text('ATMOS'), findsOneWidget);
+    expect(find.text('Try AC-4'), findsNothing,
+        reason: 'Confirmed catalogue Atmos should show the purple badge rather than a tentative action');
+    await tester.longPress(find.text('Amazon Atmos edition'));
+    await tester.pumpAndSettle();
+    expect(find.text('Play Dolby Atmos'), findsOneWidget);
+  });
+
   testWidgets('Amazon AC-4 is an explicit action, not a badge on every song', (tester) async {
     final amazon = OnlineSource(
       id: 'a-amazon', name: 'Amazon Music', addon: true,
