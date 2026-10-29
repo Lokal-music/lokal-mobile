@@ -266,9 +266,8 @@ class DiscoveryPlaybackCache {
     }
   }
 
-  /// An Android MediaExtractor-confirmed E-AC-3 JOC stream. Do not use
-  /// Symphonia or a PCM metadata decoder: Atmos objects must reach Android's
-  /// licensed E-AC-3 JOC implementation unchanged.
+  /// Verified original compressed E-AC-3 JOC or AC-4 from the addon.
+  /// Do not decode/transcode to PCM: preserve all encoded presentation data.
   Future<Song> _verifiedAtmos(DiscoveryTrack track, File ready, String hash, {Map? sourceInfo}) async {
     final artwork = await _cover(track, ready, embed: false);
     return Song(
