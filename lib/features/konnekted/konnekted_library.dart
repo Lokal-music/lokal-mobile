@@ -162,7 +162,7 @@ class KonnektedLibrary extends ConsumerWidget {
               child: KonnektedLoading(
                 label: lokalText('Opening your collection'),
               ),
-            )
+            ),
 
           SliverToBoxAdapter(
             child: SizedBox(height: 150 + MediaQuery.paddingOf(context).bottom),
