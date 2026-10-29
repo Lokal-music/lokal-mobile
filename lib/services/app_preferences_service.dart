@@ -19,6 +19,8 @@ class AppPreferences {
   final int crossfadeCurveIndex;
   final int crossfeedLevel;
   final bool swipeActionsEnabled;
+  /// Swap song-row swipe actions: right = Play next, left = Add to queue.
+  final bool swipeQueueDirectionsReversed;
   final String favoriteRemovalMode; // 'swipe' or 'longpress'
   final bool fastIndexEnabled;
   final int fastIndexTimeoutSeconds;
@@ -143,6 +145,7 @@ class AppPreferences {
     this.crossfadeCurveIndex = 0,
     this.crossfeedLevel = 0,
     this.swipeActionsEnabled = true,
+    this.swipeQueueDirectionsReversed = false,
     this.favoriteRemovalMode = 'swipe',
     this.fastIndexEnabled = true,
     this.fastIndexTimeoutSeconds = 3,
@@ -264,6 +267,7 @@ class AppPreferences {
     int? crossfadeCurveIndex,
     int? crossfeedLevel,
     bool? swipeActionsEnabled,
+    bool? swipeQueueDirectionsReversed,
     String? favoriteRemovalMode,
     bool? fastIndexEnabled,
     int? fastIndexTimeoutSeconds,
@@ -387,6 +391,7 @@ class AppPreferences {
       crossfadeCurveIndex: crossfadeCurveIndex ?? this.crossfadeCurveIndex,
       crossfeedLevel: crossfeedLevel ?? this.crossfeedLevel,
       swipeActionsEnabled: swipeActionsEnabled ?? this.swipeActionsEnabled,
+      swipeQueueDirectionsReversed: swipeQueueDirectionsReversed ?? this.swipeQueueDirectionsReversed,
       favoriteRemovalMode: favoriteRemovalMode ?? this.favoriteRemovalMode,
       fastIndexEnabled: fastIndexEnabled ?? this.fastIndexEnabled,
       fastIndexTimeoutSeconds:
@@ -553,6 +558,7 @@ class AppPreferencesService {
   static const _crossfadeCurveKey = 'audio_crossfade_curve_index';
   static const _crossfeedLevelKey = 'audio_crossfeed_level';
   static const _swipeActionsEnabledKey = 'swipe_actions_enabled';
+  static const _swipeQueueDirectionsReversedKey = 'swipe_queue_directions_reversed';
   static const _favoriteRemovalModeKey = 'favorite_removal_mode';
   static const _fastIndexEnabledKey = 'fast_index_enabled';
   static const _fastIndexTimeoutKey = 'fast_index_timeout_seconds';
@@ -693,6 +699,7 @@ class AppPreferencesService {
       crossfadeCurveIndex: prefs.getInt(_crossfadeCurveKey) ?? 0,
       crossfeedLevel: prefs.getInt(_crossfeedLevelKey) ?? 0,
       swipeActionsEnabled: prefs.getBool(_swipeActionsEnabledKey) ?? true,
+      swipeQueueDirectionsReversed: prefs.getBool(_swipeQueueDirectionsReversedKey) ?? false,
       favoriteRemovalMode: prefs.getString(_favoriteRemovalModeKey) ?? 'swipe',
       fastIndexEnabled: prefs.getBool(_fastIndexEnabledKey) ?? true,
       fastIndexTimeoutSeconds: prefs.getInt(_fastIndexTimeoutKey) ?? 3,
@@ -1059,6 +1066,16 @@ class AppPreferencesService {
   Future<void> setSwipeActionsEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_swipeActionsEnabledKey, value);
+  }
+
+  Future<bool> getSwipeQueueDirectionsReversed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_swipeQueueDirectionsReversedKey) ?? false;
+  }
+
+  Future<void> setSwipeQueueDirectionsReversed(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_swipeQueueDirectionsReversedKey, value);
   }
 
   Future<String> getFavoriteRemovalMode() async {
