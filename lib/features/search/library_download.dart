@@ -203,7 +203,8 @@ class LibraryDownloader {
     // filesystem scan may replace the codec field with the MP4 container
     // extension; the suffix keeps the original JOC routing identifiable.
     final savedExtension = prepared.atmosEncoded
-        ? '.atmos$extension' : extension;
+        ? (prepared.fileType.toUpperCase() == 'AC-4'
+          ? '.ac4.atmos$extension' : '.atmos$extension') : extension;
     final folders = await _folders();
     final directories = MusicLibraryPath.directories(
       artist: prepared.artist,
@@ -292,7 +293,7 @@ class LibraryDownloader {
           ..album = prepared.album
           ..durationMs = prepared.duration.inMilliseconds
           ..fileType = prepared.atmosEncoded
-              ? 'E-AC-3 JOC'
+              ? (prepared.fileType.toUpperCase() == 'AC-4' ? 'AC-4' : 'E-AC-3 JOC')
               : extension.replaceFirst('.', '').toUpperCase()
           ..fileSize = stat.size
           ..sampleRate = prepared.sampleRate
