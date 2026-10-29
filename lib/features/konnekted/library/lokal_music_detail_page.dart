@@ -1258,21 +1258,32 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
           borderRadius: BorderRadius.circular(9),
           child: SizedBox.square(
             dimension: 48,
-            child: CachedImageWidget(
-              imagePath:
-                  row.owned?.albumArt ??
-                  (track.artworkUrl.isEmpty ? null : track.artworkUrl),
-              audioSourcePath: row.owned?.filePath,
-              fit: BoxFit.cover,
-              placeholder: ColoredBox(
-                color: t.surface2,
-                child: Icon(Icons.music_note_rounded, color: t.muted),
-              ),
-              errorWidget: ColoredBox(
-                color: t.surface2,
-                child: Icon(Icons.music_note_rounded, color: t.muted),
-              ),
-            ),
+            child: row.owned == null
+                ? DiscoveryArtwork(
+                    kind: DiscoveryArtworkKind.track,
+                    title: track.title,
+                    artist: track.artist,
+                    url: track.artworkUrl,
+                    width: 48,
+                    height: 48,
+                    placeholder: ColoredBox(
+                      color: t.surface2,
+                      child: Icon(Icons.music_note_rounded, color: t.muted),
+                    ),
+                  )
+                : CachedImageWidget(
+                    imagePath: row.owned?.albumArt,
+                    audioSourcePath: row.owned?.filePath,
+                    fit: BoxFit.cover,
+                    placeholder: ColoredBox(
+                      color: t.surface2,
+                      child: Icon(Icons.music_note_rounded, color: t.muted),
+                    ),
+                    errorWidget: ColoredBox(
+                      color: t.surface2,
+                      child: Icon(Icons.music_note_rounded, color: t.muted),
+                    ),
+                  ),
           ),
         ),
         title: Text(
