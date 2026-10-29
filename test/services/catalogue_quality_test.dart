@@ -18,6 +18,8 @@ void main() {
     ];
     expect(explicitMorneyePlaybackTier(atmosRequested: false), isNull);
     expect(explicitMorneyePlaybackTier(atmosRequested: true), 'DOLBY_ATMOS');
+    expect(explicitMorneyePlaybackTier(atmosRequested: true, provider: 'amazon'), 'ac4');
+    expect(explicitMorneyePlaybackTier(atmosRequested: false, provider: 'amazon'), isNull);
     for (final quality in ['HIGH', 'LOW', 'LOSSLESS']) {
       expect(resolveMorneyeRequestQuality(
         forPlayback: true,
