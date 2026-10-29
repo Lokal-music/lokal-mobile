@@ -78,17 +78,16 @@ class SearchFilterChips extends StatelessWidget {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 2, 16, 0),
-          child: Text(
-            scope == SearchScope.online
-                ? lokalText('Search online catalogues and playback sources')
-                : !supportsOnlineCategory(enabled.singleOrNull)
-                ? lokalText('This category searches your library')
-                : lokalText('Choose a result type'),
-            style: TextStyle(color: t.muted, fontSize: 11),
+        if (scope == SearchScope.library)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 2, 16, 0),
+            child: Text(
+              !supportsOnlineCategory(enabled.singleOrNull)
+                  ? lokalText('This category searches your library')
+                  : lokalText('Choose a result type'),
+              style: TextStyle(color: t.muted, fontSize: 11),
+            ),
           ),
-        ),
       ],
     );
   }
