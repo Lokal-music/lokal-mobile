@@ -326,66 +326,6 @@ class _HomeModeSelector extends StatefulWidget {
 }
 
 class _HomeModeSelectorState extends State<_HomeModeSelector> {
-  final _scrollController = ScrollController();
-  bool _revealScheduled = false;
-  final _viewportKey = GlobalKey();
-  final _tabKeys = {
-    for (final tab in KonnektedHomeTab.values) tab: GlobalKey(),
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _revealSelected();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _revealSelected();
-  }
-
-  @override
-  void didUpdateWidget(covariant _HomeModeSelector oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedTab != widget.selectedTab) _revealSelected();
-  }
-
-  void _revealSelected() {
-    if (_revealScheduled) return;
-    _revealScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _revealScheduled = false;
-      if (!mounted || !_scrollController.hasClients) return;
-      final tab = _tabKeys[widget.selectedTab]?.currentContext?.findRenderObject();
-      final viewport = _viewportKey.currentContext?.findRenderObject();
-      if (tab is! RenderBox || viewport is! RenderBox ||
-          !tab.attached || !viewport.attached) {
-        return;
-      }
-      final left = tab.localToGlobal(Offset.zero, ancestor: viewport).dx;
-      final offset = (_scrollController.offset +
-              left + tab.size.width / 2 - viewport.size.width / 2)
-          .clamp(0.0, _scrollController.position.maxScrollExtent);
-      if ((offset - _scrollController.offset).abs() < 1) return;
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _scrollController.jumpTo(offset);
-      } else {
-        _scrollController.animateTo(
-          offset,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) => SizedBox(
@@ -393,28 +333,22 @@ class _HomeModeSelectorState extends State<_HomeModeSelector> {
       child: LokalGlass.capsule(
         thickness: LokalGlassThickness.thin,
         shadow: false,
-        padding: const EdgeInsets.symmetric(horizontal: 3),
-        // Keep the glass capsule fixed to the available width. Only the tabs
-        // inside it scroll; scrolling the capsule itself clipped its right
-        // border beside the Discord button on narrow screens.
-        child: SingleChildScrollView(
-          key: _viewportKey,
-          controller: _scrollController,
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final tab in KonnektedHomeTab.values)
-                KeyedSubtree(
-                  key: _tabKeys[tab],
-                  child: _ShelfChip(
-                    label: lokalText(tab.label),
-                    selected: tab == widget.selectedTab,
-                    onTap: () => widget.onTabChanged?.call(tab),
-                  ),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        // The capsule and all three labels stay visible at every width.
+        // Each tab shares the available width instead of scrolling the glass
+        // boundary off-screen on compact phones.
+        child: Row(
+          children: [
+            for (final tab in KonnektedHomeTab.values)
+              Expanded(
+                child: _ShelfChip(
+                  label: lokalText(tab.label),
+                  selected: tab == widget.selectedTab,
+                  compact: true,
+                  onTap: () => widget.onTabChanged?.call(tab),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     ),
@@ -488,11 +422,13 @@ class _ShelfChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -508,9 +444,9 @@ class _ShelfChip extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(minHeight: 44, minWidth: 56),
+          constraints: BoxConstraints(minHeight: 44, minWidth: compact ? 0 : 56),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 2 : 10, vertical: 8),
           decoration: BoxDecoration(
             color: selected
                 ? (t.isLight
@@ -523,7 +459,7 @@ class _ShelfChip extends StatelessWidget {
             label.toUpperCase(),
             style: LokalTheme.label(
               t,
-              size: 10,
+              size: compact ? 9 : 10,
               color: selected ? t.text : t.muted,
             ),
           ),
