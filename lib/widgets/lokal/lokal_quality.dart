@@ -213,7 +213,7 @@ class LokalQualityPill extends ConsumerWidget {
             ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: (MediaQuery.sizeOf(context).width * .48)
-                    .clamp(100.0, 240.0),
+                    .clamp(100.0, 240.0).toDouble(),
               ),
               child: Text(
                 display,
