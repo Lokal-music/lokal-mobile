@@ -306,8 +306,10 @@ void main() {
     // runs into the neighboring label or background.
     expect(discovery.width, greaterThan(local.width + 12));
     expect(discovery.width, greaterThan(flow.width + 12));
-    expect(discovery.left - local.right, greaterThanOrEqualTo(7));
-    expect(flow.left - discovery.right, greaterThanOrEqualTo(7));
+    // Widget bounds include the inner pill margins; the visible lenses have
+    // an additional inset on both sides of these 4dp lane gaps.
+    expect(discovery.left - local.right, greaterThanOrEqualTo(3.5));
+    expect(flow.left - discovery.right, greaterThanOrEqualTo(3.5));
     for (final tab in KonnektedHomeTab.values) {
       expect(
         tester.getSize(find.bySemanticsLabel(tab.label)).height,
