@@ -170,11 +170,6 @@ class _LyricsSearchSectionState extends ConsumerState<LyricsSearchSection> {
       return Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Online lyrics', style: TextStyle(color: t.text, fontSize: 17,
-              fontWeight: FontWeight.w600)),
-          Text('LRCLIB catalogue · searchable by song, artist and album name (not lyric-line text)',
-              style: TextStyle(color: t.muted, fontSize: 11)),
-          const SizedBox(height: 8),
           FutureBuilder<List<OnlineLyricsResult>>(
             future: _onlineResults,
             builder: (context, snapshot) {
