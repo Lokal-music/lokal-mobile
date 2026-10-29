@@ -89,6 +89,7 @@ void main() {
       final catalogue = LokalOnlineCatalogue(
         apple: api,
         sources: (http.Client _) async => [],
+        youtubeReleases: (_) async => [],
       );
       final page = await catalogue.artist(artist);
       final names = page.albums.map((album) => album.title).toList();
