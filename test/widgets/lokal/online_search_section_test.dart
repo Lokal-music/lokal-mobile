@@ -227,6 +227,34 @@ void main() {
     expect(find.text('Download Dolby Atmos'), findsNothing);
   });
 
+  testWidgets('Amazon AC-4 is an explicit action, not a badge on every song', (tester) async {
+    final amazon = OnlineSource(
+      id: 'a-amazon', name: 'Amazon Music', addon: true,
+      results: (_) async => [
+        const OnlineResult(DiscoveryTrack(
+          id: 'amazon-1', title: 'TEST ME', artist: 'Chanmina',
+          source: DiscoverySource.morneye, addonId: 'amazon',
+          atmosRequestable: true, atmosAvailable: false,
+          requestedQuality: 'FLAC best (requested)',
+        )),
+      ],
+      play: (_) async => throw const DiscoveryException('not needed'),
+    );
+    await _pump(tester, sources: [amazon]);
+    expect(find.text('TEST ME'), findsOneWidget);
+    expect(find.text('FLAC best (requested)'), findsOneWidget);
+    expect(find.text('AC-4?'), findsNothing);
+    expect(find.text('ATMOS'), findsNothing);
+    expect(find.text('Try AC-4').hitTestable(), findsOneWidget,
+        reason: 'The unverified codec is an explicit interactive action');
+    await tester.longPress(find.text('TEST ME'));
+    await tester.pumpAndSettle();
+    expect(find.text('Try AC-4 (availability unverified)'), findsOneWidget);
+    expect(find.text('Download Amazon AC-4'), findsOneWidget);
+    expect(find.text('Play Dolby Atmos'), findsNothing,
+        reason: 'Do not promise a confirmed Atmos edition in Amazon search');
+  });
+
   testWidgets('Search shows measured quality without inventing badges for unspecified tracks', (tester) async {
     final httpAddon = OnlineSource(
       id: 'w-http-quality', name: 'HTTP Audio', addon: true,
