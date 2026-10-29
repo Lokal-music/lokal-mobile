@@ -70,21 +70,13 @@ Map<String, Object?>? morneyeSelectedTrackHint({
   };
 }
 
-/// Only an unresolved cross-provider lookup may need metadata enrichment
-/// after the authoritative availability check fails. Play and Save run
-/// exactly the same acquisition path; provider names do not select fast paths.
-bool morneyeNeedsCrossProviderEnrichment({
-  required String addonName,
-  required Map track,
-}) {
-  final owner = '${track['provider_id'] ?? ''}'.trim().toLowerCase()
-      .replaceFirst(RegExp(r'-web$'), '');
-  final addon = addonName.trim().toLowerCase()
-      .replaceFirst(RegExp(r'-web$'), '');
-  final id = '${track['id'] ?? ''}'.trim();
-  final name = '${track['name'] ?? ''}'.trim();
-  return owner != addon || id.isEmpty || name.isEmpty;
-}
+/// A negative first availability result can be retried once after
+/// enrichment, for any provider. Tidal and other native catalogue matches
+/// are not exempt. Authorization is still checked again on the retry.
+bool morneyeShouldRetryEnrichment({
+  required Object? available,
+  required bool hasEnrichment,
+}) => hasEnrichment && (available is! Map || available['available'] != true);
 
 /// The installed package's stable key (also its storage namespace).
 String morneyeKeyOf(String name) =>
@@ -1790,11 +1782,10 @@ class MorneyePackages {
       }
       phase('availability');
       var available = await checkAvailability();
-      if ((available is! Map || available['available'] != true) &&
-          runtime.methods.contains('enrichTrack') &&
-          morneyeNeedsCrossProviderEnrichment(
-            addonName: addon.name, track: track,
-          )) {
+      if (morneyeShouldRetryEnrichment(
+        available: available,
+        hasEnrichment: runtime.methods.contains('enrichTrack'),
+      )) {
         phase('cross_provider_enrichment');
         final enriched = await runtime.invoke('enrichTrack', [
           track,
