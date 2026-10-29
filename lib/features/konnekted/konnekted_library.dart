@@ -157,6 +157,18 @@ class KonnektedLibrary extends ConsumerWidget {
             child: LokalSectionTitle(title: lokalText('More')),
           ),
           SliverToBoxAdapter(child: _MoreRows(onNavigate: onNavigate)),
+          SliverToBoxAdapter(
+            child: KonnektedSongShelf(
+              title: lokalText('Recently played'),
+              songs: ref.watch(konnektedRecentSongsProvider),
+              emptyTitle: 'Nothing played yet',
+              emptyMessage: 'Songs you play show up here.',
+              onSeeAll: () => onNavigate(KonnektedDestination.recentlyPlayed),
+              onRetry: () => ref.invalidate(konnektedRecentSongsProvider),
+              onPlay: (song, queue) =>
+                  lokalPlay(context, ref, queue, start: song),
+            ),
+          ),
           if (songs == null)
             SliverToBoxAdapter(
               child: KonnektedLoading(
@@ -164,8 +176,13 @@ class KonnektedLibrary extends ConsumerWidget {
               ),
             ),
 
+          // The shell provides the floating dock clearance via MediaQuery.
+          // Avoid stacking an extra 150px spacer beneath the final shelf.
           SliverToBoxAdapter(
-            child: SizedBox(height: 150 + MediaQuery.paddingOf(context).bottom),
+            child: SizedBox(
+              key: const Key('library-bottom-clearance'),
+              height: 12 + MediaQuery.paddingOf(context).bottom,
+            ),
           ),
         ],
       ),
@@ -276,11 +293,6 @@ class _MoreRows extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      LokalNavRow(
-        icon: Icons.history_rounded,
-        label: lokalText('Recently played'),
-        onTap: () => onNavigate(KonnektedDestination.recentlyPlayed),
-      ),
       LokalNavRow(
         icon: Icons.auto_graph_rounded,
         label: lokalText('Recap'),

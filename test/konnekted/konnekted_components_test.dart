@@ -431,6 +431,56 @@ void main() {
     },
   );
 
+  testWidgets('Home keeps repeat and liked shelves without extra end space', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          konnektedLibraryProvider.overrideWithValue(const AsyncData([])),
+          konnektedFavoritesProvider.overrideWithValue(const AsyncData([])),
+          konnektedRecentSongsProvider.overrideWith(
+            (ref) => Stream.value([]),
+          ),
+          konnektedGreetingProvider.overrideWith(
+            (ref) => Stream.value(
+              const LokalHomeMessages('A quiet day', 'Your music'),
+            ),
+          ),
+        ],
+        child: _app(
+          KonnektedHome(onNavigate: (_) {}, onPlay: (_, _) {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('On repeat, lately'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('On repeat, lately'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Close to your heart'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Close to your heart'), findsOneWidget);
+
+    final clearance = find.byKey(const Key('home-bottom-clearance'));
+    await tester.scrollUntilVisible(
+      clearance,
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final bottomInsets = MediaQuery.paddingOf(tester.element(clearance)).bottom;
+    expect(tester.widget<SizedBox>(clearance).height, 12 + bottomInsets);
+    expect(find.text('Fresh in your library'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('no mixes, no sections', (tester) async {
     await tester.pumpWidget(
       _app(
