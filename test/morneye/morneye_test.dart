@@ -556,29 +556,21 @@ void main() {
       });
     });
 
-    test('only trusted provider-owned Search rows skip duplicate enrichment', () {
-      bool skip({
-        required String addon,
-        required String provider,
-        bool playing = true,
-        bool native = true,
-        bool validates = true,
-      }) => morneyeMaySkipDuplicateEnrichment(
-        addonName: addon, forPlayback: playing,
-        nativeSearchResult: native, hasAvailabilityCheck: validates,
-        track: {
-          'id': 'canonical-track', 'name': 'Song',
-          'provider_id': provider,
-        },
-      );
-      expect(skip(addon: 'tidal-web', provider: 'tidal-web'), isTrue);
-      expect(skip(addon: 'qobuz-web', provider: 'qobuz'), isTrue);
-      expect(skip(addon: 'deezer', provider: 'deezer'), isTrue);
-      expect(skip(addon: 'amazon', provider: 'amazon'), isTrue);
-      expect(skip(addon: 'tidal-web', provider: 'spotify'), isFalse);
-      expect(skip(addon: 'tidal-web', provider: 'tidal', native: false), isFalse);
-      expect(skip(addon: 'tidal-web', provider: 'tidal', playing: false), isFalse);
-      expect(skip(addon: 'tidal-web', provider: 'tidal', validates: false), isFalse);
+    test('all failed provider lookups can retry enrichment once', () {
+      for (final provider in ['tidal-web', 'qobuz-web', 'deezer', 'amazon']) {
+        expect(morneyeShouldRetryEnrichment(
+          available: {'available': false, 'reason': '$provider unavailable'},
+          hasEnrichment: true,
+        ), isTrue, reason: provider);
+      }
+      expect(morneyeShouldRetryEnrichment(
+        available: {'available': true, 'track_id': 't1'},
+        hasEnrichment: true,
+      ), isFalse);
+      expect(morneyeShouldRetryEnrichment(
+        available: {'available': false},
+        hasEnrichment: false,
+      ), isFalse);
     });
   });
 
@@ -846,7 +838,7 @@ void main() {
       },
     );
 
-    test('native first click skips duplicate enrichment but always verifies', () async {
+    test('first click verifies availability without redundant enrichment', () async {
       var enriched = 0;
       var checked = 0;
       engine.scripts['fast-preflight'] = {
@@ -864,9 +856,8 @@ void main() {
       final addon = await packages.install(
         bytes: packageBytes(manifestFor('qobuz'), 'fast-preflight'),
       );
-      // A selected item from this exact provider has a canonical ID.
-      // This test's fixture has no provider_id, so the provider-wide
-      // optimizer intentionally refuses to infer ownership.
+      // A source-owned catalogue entry can be checked directly even if its
+      // optional provider_id field is absent. The download still authorizes.
       await packages.search(addon.key, 'Song');
       final stages = <String>[];
       final download = await packages.download(
@@ -874,8 +865,8 @@ void main() {
         onResolutionStage: stages.add,
       );
       expect(checked, 1);
-      expect(enriched, 1,
-          reason: 'Unmarked third-party metadata must still be enriched');
+      expect(enriched, 0,
+          reason: 'Availability should be attempted before enrichment');
       expect(stages, containsAllInOrder([
         'worker_start', 'initializing', 'metadata', 'availability',
         'preparing_media',
@@ -883,7 +874,7 @@ void main() {
       await download.cleanup();
     });
 
-    test('owned Search result avoids enrichment but still checks availability',
+    test('owned Search result uses the same availability-first path for Play',
         () async {
       var enriched = 0, checked = 0;
       engine.scripts['owned-fast-path'] = {
@@ -910,8 +901,69 @@ void main() {
       final file = await packages.download(addon.key, 't1', forPlayback: true);
       expect(enriched, 0);
       expect(checked, 1,
-          reason: 'skipping duplicate metadata must not skip authorization');
+          reason: 'metadata and authorization are separate stages');
       await file.cleanup();
+    });
+
+    test('native Tidal lookup also retries after failed availability', () async {
+      final steps = <String>[];
+      engine.scripts['tidal-retry'] = {
+        ...downloader(),
+        'searchTracks': (args, call) async => [{
+          'id': 't1', 'name': 'Song', 'artists': 'Artist',
+          'provider_id': 'tidal', 'duration_ms': 180000,
+        }],
+        'checkAvailability': (args, call) async {
+          steps.add('availability');
+          return steps.length >= 3
+              ? {'available': true, 'track_id': 't1'}
+              : {'available': false, 'reason': 'Refresh metadata'};
+        },
+        'enrichTrack': (args, call) async {
+          steps.add('enrichment');
+          return {'name': 'Song', 'tidal_id': 't1'};
+        },
+      };
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('tidal-web'), 'tidal-retry'),
+      );
+      await packages.search(addon.key, 'Song');
+      final downloaded = await packages.download(
+        addon.key, 't1', forPlayback: true,
+      );
+      expect(steps, ['availability', 'enrichment', 'availability']);
+      await downloaded.cleanup();
+    });
+
+    test('failed cross-catalogue availability enriches and retries once', () async {
+      final steps = <String>[];
+      engine.scripts['cross-catalogue-retry'] = {
+        ...downloader(),
+        'searchTracks': (args, call) async => [{
+          'id': 'spotify-track', 'name': 'Song', 'artists': 'Artist',
+          'provider_id': 'spotify',
+        }],
+        'checkAvailability': (args, call) async {
+          steps.add('availability');
+          final track = (args[3] as Map)['track'] as Map;
+          return track['provider_id'] == 'tidal'
+              ? {'available': true, 'track_id': 't1'}
+              : {'available': false, 'reason': 'Needs provider match'};
+        },
+        'enrichTrack': (args, call) async {
+          steps.add('enrichment');
+          return {'id': 't1', 'provider_id': 'tidal'};
+        },
+      };
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('tidal-web'), 'cross-catalogue-retry'),
+      );
+      await packages.search(addon.key, 'Song');
+      final saved = await packages.download(
+        addon.key, 'spotify-track', forPlayback: false,
+      );
+      expect(steps, ['availability', 'enrichment', 'availability']);
+      await saved.cleanup();
     });
 
     test('evicted Search track uses exact selected metadata, not extra getTrack',

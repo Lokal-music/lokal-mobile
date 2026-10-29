@@ -70,28 +70,13 @@ Map<String, Object?>? morneyeSelectedTrackHint({
   };
 }
 
-/// An addon-owned native Search row already has its canonical provider ID.
-/// For direct playback, checkAvailability still validates the recording and
-/// returns fresh authorization/metadata. This skips only a *second metadata
-/// enrichment request*, never availability checks, and never for a different
-/// provider's cross-catalogue match or explicit download/save.
-bool morneyeMaySkipDuplicateEnrichment({
-  required String addonName,
-  required Map track,
-  required bool forPlayback,
-  required bool nativeSearchResult,
-  required bool hasAvailabilityCheck,
-}) {
-  if (!forPlayback || !nativeSearchResult || !hasAvailabilityCheck) {
-    return false;
-  }
-  final provider = '${track['provider_id'] ?? ''}'.trim().toLowerCase();
-  final addon = addonName.trim().toLowerCase();
-  final id = '${track['id'] ?? ''}'.trim();
-  final title = '${track['name'] ?? ''}'.trim();
-  return provider.isNotEmpty && id.isNotEmpty && title.isNotEmpty &&
-      (provider == addon || provider == addon.replaceFirst(RegExp(r'-web$'), ''));
-}
+/// A negative first availability result can be retried once after
+/// enrichment, for any provider. Tidal and other native catalogue matches
+/// are not exempt. Authorization is still checked again on the retry.
+bool morneyeShouldRetryEnrichment({
+  required Object? available,
+  required bool hasEnrichment,
+}) => hasEnrichment && (available is! Map || available['available'] != true);
 
 /// The installed package's stable key (also its storage namespace).
 String morneyeKeyOf(String name) =>
@@ -1708,6 +1693,24 @@ class MorneyePackages {
                 const [])
             .any((h) => h is Map && h['defaultEnabled'] == true);
     final preparation = Stopwatch()..start();
+    var sawFirstByte = false;
+    MorneyeRuntime? activeRuntime;
+    Timer? inactivityTimer;
+    var monitoringTransfer = false;
+    var transferStalled = false;
+    double lastPercent = -1;
+    String? lastPart;
+    var lastWritten = 0;
+    void recordActivity() {
+      if (!monitoringTransfer) return;
+      inactivityTimer?.cancel();
+      inactivityTimer = Timer(const Duration(seconds: 90), () {
+        transferStalled = true;
+        // End only an inactive *download*, never an interactive account or
+        // verification step. Closing the guest rejects its pending invoke.
+        activeRuntime?.close();
+      });
+    }
     void phase(String stage) {
       onResolutionStage?.call(stage);
       // Private IDs, signed URLs, tokens and track names are never logged.
@@ -1719,12 +1722,35 @@ class MorneyePackages {
       addon,
       _code(key),
       grants: [staged.path],
-      onProgress: onProgress,
-      onTransfer: hooks ? null : onTransfer,
+      onProgress: ({double? percent, String? message}) {
+        // Percent can restart from zero on a failed segment retry.
+        // Compare with the preceding callback, not the highest old value.
+        if (percent != null) {
+          if (percent > lastPercent) recordActivity();
+          lastPercent = percent;
+        }
+        onProgress?.call(percent: percent, message: message);
+      },
+      onTransfer: hooks ? null : (transfer) {
+        // A header-only transfer restart isn't progress. Once real bytes
+        // resume, even below the previous attempt's total, reset watchdog.
+        if (transfer.written > 0 &&
+            (transfer.part != lastPart || transfer.written > lastWritten)) {
+          recordActivity();
+        }
+        lastPart = transfer.part;
+        lastWritten = transfer.written;
+        if (!sawFirstByte && transfer.written > 0) {
+          sawFirstByte = true;
+          phase('first_byte');
+        }
+        onTransfer?.call(transfer);
+      },
       // Isolated download workers need headroom for segments/decryption.
       // Browsing stays at 64 MiB. Native code caps this at 256 MiB.
       heapMb: 256,
     );
+    activeRuntime = runtime;
     unawaited(cancel?.then((_) => runtime.close()));
     try {
       phase('initializing');
@@ -1758,93 +1784,58 @@ class MorneyePackages {
         };
       }
       track = Map.of(track);
-      // Some providers (notably Qobuz) explicitly advertise that search
-      // results already carry the canonical metadata. Their enrichment does
-      // another remote lookup before checkAvailability performs verification;
-      // don't serialize two expensive requests before playback can start.
-      // Other providers, including Amazon, still require enrichment.
-      final nativeSearchResult = _tracks.containsKey('$key:$id') &&
-          (track['id']?.toString().isNotEmpty ?? false) &&
-          (track['name']?.toString().isNotEmpty ?? false);
-      final hasCanonicalIdentity =
-          (track['id']?.toString().isNotEmpty ?? false) &&
-          (track['name']?.toString().isNotEmpty ?? false);
-      final amazonNativeTrack = forPlayback &&
-          providerIdentityIsAmazon(addon.name, track) &&
-          nativeSearchResult;
-      final deezerNativeTrack = forPlayback &&
-          nativeSearchResult && providerIdentityIsDeezer(addon.name, track);
-      final skipEnrichment =
-          morneyeMaySkipDuplicateEnrichment(
-            addonName: addon.name,
-            track: track,
-            forPlayback: forPlayback,
-            nativeSearchResult: nativeSearchResult,
-            hasAvailabilityCheck: runtime.methods.contains('checkAvailability'),
-          ) ||
-          // Only the remembered native Deezer Search row avoids enrichTrack;
-          // cross-provider matches, saving and noncanonical IDs still verify.
-          deezerNativeTrack ||
-          // A native Amazon Search result already has its canonical ASIN.
-          // enrichTrack() performs unnecessary network requests before
-          // checkAvailability can hand back the same ASIN. Keep enrichment
-          // for non-native/fallback matches where an ID must be resolved.
-          amazonNativeTrack ||
-          // Respect the extension manifest even if this by-ID track came
-          // from getTrack rather than a remembered Search result.
-          (addon.manifest['skipMetadataEnrichment'] == true &&
-              hasCanonicalIdentity) ||
-          // Tidal's enrichTrack fetches the same remote track record that
-          // checkAvailability fetches again to validate the direct Tidal ID.
-          // Only skip this extra request for its own remembered Search row.
-          (addon.name.toLowerCase().startsWith('tidal') &&
-              nativeSearchResult);
-      if (!skipEnrichment && runtime.methods.contains('enrichTrack')) {
-        try {
-          final enriched = await runtime.invoke('enrichTrack', [
-            track,
-          ], const Duration(seconds: 60));
-          if (enriched is Map) {
-            enriched.forEach((field, value) {
-              if (value != null &&
-                  value != '' &&
-                  value != 0 &&
-                  !(value is String && value.trim().isEmpty) &&
-                  !(value is List && value.isEmpty)) {
-                track[field] = value;
-              }
-            });
-          }
-        } catch (error) {
-          if (runtime.closed) rethrow;
-        }
-      }
       final provider = addon.name.replaceFirst(RegExp(r'-web$'), '');
-      final options = <String, Object?>{
-        'track': track,
-        'duration_ms': track['duration_ms'] ?? 0,
-      };
-      const directFields = {
-        'qobuz': 'qobuz_id',
-        'tidal': 'tidal_id',
-        'deezer': 'deezer_id',
-        'soundcloud': 'spotify_id',
-        'amazon': 'spotify_id',
-      };
-      final directField = directFields[provider];
-      if (directField != null) {
-        options[directField] =
-            '${track[directField] ?? (provider == 'amazon' || provider == 'soundcloud' ? track['id'] : id)}';
+      // First request is always the provider's own availability/download
+      // ticket, regardless of Play vs Save or Tidal/Deezer/Qobuz identity.
+      // This removes redundant enrichment before a source can transfer bytes.
+      Future<dynamic> checkAvailability() {
+        final options = <String, Object?>{
+          'track': track,
+          'duration_ms': track['duration_ms'] ?? 0,
+        };
+        const directFields = {
+          'qobuz': 'qobuz_id',
+          'tidal': 'tidal_id',
+          'deezer': 'deezer_id',
+          'soundcloud': 'spotify_id',
+          'amazon': 'spotify_id',
+        };
+        final directField = directFields[provider];
+        if (directField != null) {
+          options[directField] =
+              '${track[directField] ?? (provider == 'amazon' || provider == 'soundcloud' ? track['id'] : id)}';
+        }
+        return runtime.methods.contains('checkAvailability')
+            ? runtime.invoke('checkAvailability', [
+                track['isrc'] ?? '',
+                track['name'] ?? '',
+                track['artists'] ?? '',
+                options,
+              ], const Duration(seconds: 25))
+            : Future.value({'available': true, 'track_id': id});
       }
       phase('availability');
-      final available = runtime.methods.contains('checkAvailability')
-          ? await runtime.invoke('checkAvailability', [
-              track['isrc'] ?? '',
-              track['name'] ?? '',
-              track['artists'] ?? '',
-              options,
-            ])
-          : {'available': true, 'track_id': id};
+      var available = await checkAvailability();
+      if (morneyeShouldRetryEnrichment(
+        available: available,
+        hasEnrichment: runtime.methods.contains('enrichTrack'),
+      )) {
+        phase('cross_provider_enrichment');
+        final enriched = await runtime.invoke('enrichTrack', [
+          track,
+        ], const Duration(seconds: 20));
+        if (enriched is Map) {
+          enriched.forEach((field, value) {
+            if (value != null && value != '' && value != 0 &&
+                !(value is String && value.trim().isEmpty) &&
+                !(value is List && value.isEmpty)) {
+              track[field] = value;
+            }
+          });
+        }
+        phase('availability_retry');
+        available = await checkAvailability();
+      }
       if (available is! Map || available['available'] != true) {
         throw MorneyePackageError(
           available is Map && available['reason'] != null
@@ -1881,12 +1872,28 @@ class MorneyePackages {
         'quality': 'DOLBY_ATMOS',
       });
       phase('preparing_media');
-      final result = await runtime.invoke('download', [
-        '${available['track_id'] ?? available['trackId'] ?? id}',
-        chosen,
-        p.join(staged.path, 'audio.flac'),
-        {'preparedContext': prepared, 'resolutionTimeoutMs': 60000},
-      ], const Duration(hours: 24));
+      monitoringTransfer = true;
+      recordActivity();
+      dynamic result;
+      try {
+        result = await runtime.invoke('download', [
+          '${available['track_id'] ?? available['trackId'] ?? id}',
+          chosen,
+          p.join(staged.path, 'audio.flac'),
+          {'preparedContext': prepared, 'resolutionTimeoutMs': 60000},
+        ], const Duration(hours: 24));
+      } catch (error) {
+        if (transferStalled) {
+          throw const MorneyePackageError(
+            'The provider stopped delivering audio for 90 seconds. Retry the track.',
+          );
+        }
+        rethrow;
+      } finally {
+        monitoringTransfer = false;
+        inactivityTimer?.cancel();
+      }
+      phase('download_complete');
       if (result is! Map || result['success'] != true) {
         if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('addon_download_failed', {
           'reason': 'addon_returned_failure',
@@ -2104,6 +2111,7 @@ class MorneyePackages {
       if (staged.existsSync()) await staged.delete(recursive: true);
       rethrow;
     } finally {
+      inactivityTimer?.cancel();
       runtime.close();
     }
   }

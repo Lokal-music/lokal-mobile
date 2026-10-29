@@ -109,6 +109,39 @@ void main() {
     },
   );
 
+  test('fast Morneye playback reuses verified download metadata without waiting for artwork', () async {
+    final source = File(p.join(directory.path, 'work', 'audio.flac'));
+    await source.create(recursive: true);
+    await source.writeAsBytes(flacHeader);
+    final coverReply = Completer<http.Response>();
+    var probes = 0;
+    final cache = DiscoveryPlaybackCache(
+      http: DiscoveryHttp(MockClient((_) => coverReply.future)),
+      directory: () async => Directory(p.join(directory.path, 'cache')),
+      probe: (_) async {
+        probes++;
+        throw StateError('the already-verified Morneye file was reprobed');
+      },
+    );
+    final song = await cache.adopt(
+      fixtureTrack.withArtwork('https://img.example/cover.jpg'),
+      source,
+      fastPlayback: true,
+      sourceInfo: const {
+        'codec': 'flac',
+        'format': 'flac',
+        'sample_rate': 44100,
+        'channels': 2,
+        'bit_depth': 16,
+      },
+    ).timeout(const Duration(seconds: 1));
+    expect(probes, 0);
+    expect(song.sampleRate, 44100);
+    expect(song.bitDepth, 16);
+    expect(song.albumArt, 'https://img.example/cover.jpg');
+    coverReply.complete(http.Response('', 404));
+  });
+
   test('the cover is kept next to the song and played with it', () async {
     final source = File(p.join(directory.path, 'work', 'audio.flac'));
     await source.create(recursive: true);

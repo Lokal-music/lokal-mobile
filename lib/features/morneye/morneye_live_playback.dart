@@ -8,6 +8,12 @@ import 'package:flutter/foundation.dart';
 
 import 'morneye_host.dart';
 
+/// Only Qobuz downloads are eligible for verified growing-file playback.
+/// Other providers wait for the completed audio produced by the same downloader.
+bool morneyeCanPlayWhileDownloading(String providerName) =>
+    providerName.trim().toLowerCase().replaceFirst(RegExp(r'-web$'), '') ==
+    'qobuz';
+
 /// Read a genuine, still-growing FLAC file through just_audio's ranged local
 /// audio proxy. Never expose a guest URL, credentials, or its staging path as
 /// a persisted Song. This mirrors desktop's Morneye liveResponse() path.
