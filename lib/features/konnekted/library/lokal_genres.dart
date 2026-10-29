@@ -74,6 +74,13 @@ String? _inferGenreFamily(String raw) {
   String? found;
   for (final family in _normalizedFamilyHints) {
     if (!family.$2.any((hint) => padded.contains(' $hint '))) continue;
+    // "Indie" and "Alternative" are modifiers when another clear style
+    // is present. E.g. indie shoegaze remains Rock, not Other.
+    if (family.$1 == 'Indie / Alternative' && found != null) continue;
+    if (found == 'Indie / Alternative') {
+      found = family.$1;
+      continue;
+    }
     if (found != null && found != family.$1) return null;
     found = family.$1;
   }
