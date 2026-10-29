@@ -6,6 +6,8 @@ import 'dart:collection';
 import 'package:flick/services/queue_pre_resolver.dart';
 import 'package:flick/features/discovery/discovery_artwork.dart';
 import 'package:flick/features/discovery/discovery_http.dart';
+import 'package:flick/features/discovery/discovery_sources.dart';
+import 'youtube_artist_releases.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:flick/features/discovery/discovery_models.dart';
@@ -134,9 +136,11 @@ class LokalOnlineCatalogue {
     AppleMusicMetadataService? apple,
     Future<List<OnlineSource>> Function(http.Client)? sources,
     Future<String> Function(String title, String artist)? albumArtwork,
+    Future<List<LokalCatalogueAlbum>> Function(String artist)? youtubeReleases,
   }) : _apple = apple ?? AppleMusicMetadataService.instance,
        _sources = sources ?? onlineSources,
-       _albumArtwork = albumArtwork;
+       _albumArtwork = albumArtwork,
+       _youtubeReleases = youtubeReleases;
   static final instance = LokalOnlineCatalogue();
   void invalidateArtist(String name) =>
       _cache.remove('artist:${recommendationKey(name)}');
@@ -144,6 +148,24 @@ class LokalOnlineCatalogue {
   final AppleMusicMetadataService _apple;
   final Future<List<OnlineSource>> Function(http.Client) _sources;
   final Future<String> Function(String, String)? _albumArtwork;
+  final Future<List<LokalCatalogueAlbum>> Function(String)? _youtubeReleases;
+
+  Future<List<LokalCatalogueAlbum>> _loadYoutubeReleases(String artist) async {
+    if (_youtubeReleases != null) return _youtubeReleases(artist);
+    final client = http.Client();
+    try {
+      return await loadYoutubeArtistReleases(
+        artist,
+        catalogue: YoutubeMusicCatalog(
+          DiscoveryHttp(client, timeout: const Duration(seconds: 9)),
+          refreshClientContext: true,
+        ),
+      );
+    } finally {
+      client.close();
+    }
+  }
+
   final _cache = LinkedHashMap<String, (DateTime, LokalCataloguePage)>();
   final _pending = <String, Future<LokalCataloguePage>>{};
 
@@ -184,6 +206,7 @@ class LokalOnlineCatalogue {
     AppleMusicArtistData? data;
     List<AppleMusicAlbumMatch> releases = const [];
     List<AppleMusicAlbumMatch> artistReleases = const [];
+    List<LokalCatalogueAlbum> youtubeReleases = const [];
     // A free-text search returns only the first 100 relevance-ranked albums,
     // often omitting singles, EPs and older releases. Supplement it with the
     // artist-ID discography (including other storefronts). Keep failures
@@ -209,6 +232,11 @@ class LokalOnlineCatalogue {
             name, refresh: refresh,
           );
         } catch (_) {}
+      }(),
+      () async {
+        try {
+          youtubeReleases = await _loadYoutubeReleases(name);
+        } catch (_) { /* Keep Apple Music releases if YouTube is offline. */ }
       }(),
     ]);
     if (data != null &&
@@ -259,6 +287,16 @@ class LokalOnlineCatalogue {
         addAlbum(album);
       }
     }
+    // YouTube Music's own artist channel fills missing EPs, singles and
+    // albums not indexed by Apple. Do not replace verified Apple catalogue
+    // identities, but preserve distinct editions with different titles.
+    final existingTitles = albums.map((a) => recommendationKey(a.title)).toSet();
+    for (final release in youtubeReleases) {
+      if (existingTitles.add(recommendationKey(release.title))) {
+        albums.add(release);
+      }
+    }
+
     // The popular-song list independently proves additional named releases.
     // A metadata-only release remains navigable even without an iTunes ID.
     final knownTitles = albums.map((a) => recommendationKey(a.title)).toSet();
@@ -299,7 +337,10 @@ class LokalOnlineCatalogue {
           ),
         ),
     ];
-    String label = 'Apple Music';
+    String label = youtubeReleases.isEmpty
+        ? 'Apple Music'
+        : (data == null && releases.isEmpty && artistReleases.isEmpty
+            ? 'YouTube Music' : 'Apple Music + YouTube Music');
     if (tracks.isEmpty) {
       final found = await _search(name, artist: name);
       if (found.$1.isNotEmpty) {
