@@ -1,9 +1,9 @@
 # iPhone review of mobile PRs after #172
 
-Current review: **86 merged product PRs after #172 through #290**. The newest
-continuation includes explicit bilingual lyrics export, Library add actions, full
-queue history/occurrences, source validation and foreground loading priority,
-static Flow artwork and motion-art memory pressure handling. Reviewed
+Current review: **101 merged product PRs after #172 through #310**. The newest
+continuation includes on-demand large queues, provider resolution, subtitle
+alignment, smooth player expansion, per-minor release notes and direct Help
+navigation. Reviewed
 Android USB changes remain excluded. Each source checkpoint requires its own
 acceptance; review/inclusion does not qualify a physical iPhone release.
 
@@ -1115,3 +1115,44 @@ are refresh hints, never an authorization prerequisite. Recovery logs include
 controlled status/booleans or exception types, without arbitrary gateway/native
 error descriptions. The verified IPA remains build 78 until this continuation's
 new native app suite and large-queue probe pass.
+
+### Source continuation reviewed through #310
+
+| PR | Exact merged commit | iPhone adaptation |
+| --- | --- | --- |
+| #309 | `6076484af741ebc44328191e886a1f162c0506cf` | Anchor Space captions to the hidden seek row using a painted composited leader; preserve dynamic layout and enlarge the fullscreen-video inset. Retain the iPhone embedded player's separate caption band and timing-available notifier; do not place caption/tap overlays over its official controls. |
+| #310 | `b0c9eba114ab7ab361c0415f4e71309197901f9c` | Keep four-corner clipping continuous through the player spring's final frame. Move Help directly into You; remove duplicate About Help. Licences uses the same installed bundle metadata as About. Remove the nested-context Got it pop action. Track release notes once per minor, with legacy-key migration and asynchronous loading. iPhone notes use `ios-vX.Y.0` tags and their own 1.0 fallback, never Android USB notes. Android-only USB maintenance changes are excluded. |
+
+The release-note adaptation silently records a fresh installation's minor as its
+baseline, and reads persisted seen state independently of the asynchronously
+loaded preferences snapshot. Acknowledgement survives a late old snapshot.
+Controlled delayed-note/preferences tests pass, including a subsequent minor
+update and a patch that must not reopen notes. Native capabilities are unchanged.
+iPhone Help describes Files/AirPlay instead of the Android bit-perfect capsule
+and UAC2 page; About does not offer APK installation. Widget accent previews now
+use the active Lokal theme, resolving an existing settings-reskin regression.
+
+Build 79 successfully compiles/packages the app and captures its first launch.
+Its actual iOS 18.6 probe exposes an unscoped service await during paused
+large-queue shuffle: `Local audio mutation requires a captured request scope`.
+The continuation captures a local request for on-demand queue mutations and
+checks the selected engine/selection again before publishing sequence changes.
+The actual native probe retains its assertions and now also covers paused manual
+queue/tail insertion. Native acceptance of this correction is pending. No
+lifecycle fence, audio-progress threshold or retired-player check is removed.
+
+The exact CI Flutter selection passes **979 checks** on frozen commit
+`6cd1a6196bf1bfc64c9a1776eb67dcf0bc1c7531` (6m12s). A focused selection passes
+106 audio/lifecycle/UI checks; the Help back-button interaction also passes
+separately. New release-note/navigation/provider files pass strict analysis, and
+workspace analysis reports zero errors with existing warnings/information.
+
+The isolated iOS 26 build-79 job fails its unchanged 300-second `bootstatus`
+gate before app installation. CI now permits one fresh-device recovery only
+when that exact command times out on a device created by that same attempt.
+Existing-device, inventory, control and application failures cannot use this
+recovery. It shuts down only the failed owned device, retains both evidence
+directories, keeps the requested OS, and propagates a second failure. Nine boot,
+five control and eleven widget-render coordinator tests pass; these are mock
+orchestration tests, not proof that the hosted boot correction works. Application
+runtime gates and their timeouts are unchanged.

@@ -5,7 +5,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:flick/core/constants/app_constants.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flick/providers/app_build_info_provider.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/widgets/lokal/lokal_logo.dart';
@@ -21,7 +22,7 @@ String lokalLicencePackageLabel(String package) =>
 
 /// The open-source licences, in Lokal's settings look: Lokal's own licence
 /// first, then every package with how many licences it carries.
-class LokalLicencesPage extends StatefulWidget {
+class LokalLicencesPage extends ConsumerStatefulWidget {
   const LokalLicencesPage({super.key, this.licences});
 
   /// Replaces [LicenseRegistry.licenses], for tests.
@@ -29,10 +30,10 @@ class LokalLicencesPage extends StatefulWidget {
   final Stream<LicenseEntry>? licences;
 
   @override
-  State<LokalLicencesPage> createState() => _LokalLicencesPageState();
+  ConsumerState<LokalLicencesPage> createState() => _LokalLicencesPageState();
 }
 
-class _LokalLicencesPageState extends State<LokalLicencesPage> {
+class _LokalLicencesPageState extends ConsumerState<LokalLicencesPage> {
   final _packages = <String, List<LicenseEntry>>{};
   StreamSubscription<LicenseEntry>? _sub;
   bool _done = false;
@@ -95,7 +96,18 @@ class _LokalLicencesPageState extends State<LokalLicencesPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        lokalText("Lokal {arg0}", args: {'arg0': kAppVersion}),
+                        lokalText(
+                          "Lokal {arg0}",
+                          args: {
+                            'arg0': ref
+                                .watch(appBuildInfoProvider)
+                                .when(
+                                  data: (info) => info.version,
+                                  loading: () => '…',
+                                  error: (_, _) => lokalText('Unavailable'),
+                                ),
+                          },
+                        ),
                         style: TextStyle(
                           fontFamily: LokalTheme.sans,
                           fontSize: 16,

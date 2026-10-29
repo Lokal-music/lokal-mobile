@@ -10,6 +10,42 @@ import 'package:flick/services/lyrics_service.dart';
 bool hasImmersiveLyrics(LyricsData? lyrics) =>
     lyrics != null && lyrics.isSynchronized && lyrics.lines.isNotEmpty;
 
+/// Places Space subtitles at the normal full-player timeline's height.
+/// The leader wraps the (possibly hidden) seek row so its position survives
+/// immersive mode's Visibility/Opacity treatment and dynamic layout changes.
+class SeekbarAlignedSpaceSubtitle extends StatelessWidget {
+  const SeekbarAlignedSpaceSubtitle({
+    super.key,
+    required this.seekbarLink,
+    required this.subtitle,
+  });
+
+  final LayerLink seekbarLink;
+  final Widget subtitle;
+
+  @override
+  Widget build(BuildContext context) => Positioned.fill(
+    child: IgnorePointer(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: FractionallySizedBox(
+          widthFactor: 1,
+          child: CompositedTransformFollower(
+            link: seekbarLink,
+            showWhenUnlinked: false,
+            targetAnchor: Alignment.center,
+            followerAnchor: Alignment.center,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: subtitle,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Identical line selection and resolved syllable timing to Lyrics mode.
 int immersiveLyricsLineIndex(LyricsData lyrics, Duration position) {
   if (!lyrics.isSynchronized) return -1;

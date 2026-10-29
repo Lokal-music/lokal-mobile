@@ -78,16 +78,60 @@ class _HomeState extends State<_Home> {
 }
 
 void main() {
+  test('all sheet corners shrink smoothly without a terminal snap', () {
+    expect(LokalPlayerMotion.sheetCornerRadius(0), 36);
+    expect(LokalPlayerMotion.sheetCornerRadius(.5), 18);
+    expect(LokalPlayerMotion.sheetCornerRadius(.98), closeTo(.72, 1e-8));
+    expect(LokalPlayerMotion.sheetCornerRadius(1), 0);
+    expect(LokalPlayerMotion.sheetCornerRadius(1.01), 0);
+  });
+
+  testWidgets('the final frame keeps a four-corner clip', (tester) async {
+    Future<ClipRRect> clipAt(double progress) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LokalPlayerMotion.sheet(
+            progress: progress,
+            startTop: 500,
+            child: const ColoredBox(color: Colors.black),
+          ),
+        ),
+      );
+      return tester.widget<ClipRRect>(find.byType(ClipRRect).last);
+    }
+
+    final nearEnd = await clipAt(.99);
+    expect(
+      nearEnd.borderRadius,
+      BorderRadius.circular(LokalPlayerMotion.sheetCornerRadius(.99)),
+    );
+    expect(nearEnd.clipBehavior, Clip.antiAlias);
+
+    final finished = await clipAt(1);
+    expect(finished.borderRadius, BorderRadius.zero);
+    expect(
+      finished.clipBehavior,
+      Clip.antiAlias,
+      reason: 'Never drop clipping at the instant the sheet settles',
+    );
+  });
+
   test('opening spring reaches the top without a slow final stall', () {
     final open = LokalPlayerMotion.simulation(0, 1, 0);
     final close = LokalPlayerMotion.simulation(1, 0, 0);
     expect(open.x(0), closeTo(0, .00001));
     expect(open.x(.20), greaterThan(0.87));
-    expect(open.x(.40), greaterThan(0.99),
-        reason: 'The old opening spring hovered below the top for too long');
+    expect(
+      open.x(.40),
+      greaterThan(0.99),
+      reason: 'The old opening spring hovered below the top for too long',
+    );
     expect(open.isDone(.65), isTrue);
-    expect(close.x(.20), greaterThan(0),
-        reason: 'The closing spring remains independently tuned');
+    expect(
+      close.x(.20),
+      greaterThan(0),
+      reason: 'The closing spring remains independently tuned',
+    );
   });
 
   Future<_HomeState> pump(

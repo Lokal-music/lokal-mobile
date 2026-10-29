@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Boot an isolated iPhone for the exact test OS and preserve boot evidence."""
 import json
+import argparse
 import os
 from pathlib import Path
 import re
@@ -64,9 +65,11 @@ def main():
     udid = device['udid']
     os.environ['IOS_SIMULATOR_UDID'] = udid
     os.environ['IOS_SIMULATOR_RUNTIME'] = runtime_id
+    os.environ['IOS_SIMULATOR_CREATED_THIS_ATTEMPT'] = '0' if candidates else '1'
     (output / 'selected.json').write_text(json.dumps({
         'udid': udid, 'name': name, 'runtime': runtime_id,
         'device_type': device_type['identifier'],
+        'created_this_attempt': not candidates,
     }, indent=2) + '\n')
     # Publish before boot: later diagnostics need the UDID even if boot fails.
     if os.environ.get('GITHUB_ENV'):
@@ -106,5 +109,43 @@ def main():
     print(f'iPhone simulator ready: iOS {version}, {device_type["name"]} ({udid})', flush=True)
 
 
-if __name__ == '__main__':
+def boot_before_install():
+    """One fresh-device recovery only for bootstatus on a newly created phone.
+
+    Call strictly before app installation. Existing-device, inventory, install,
+    control-VM and application failures never qualify for this path.
+    """
+    try:
+        main()
+        return
+    except subprocess.TimeoutExpired as error:
+        previous = os.environ.get('IOS_SIMULATOR_UDID')
+        if (not previous or os.environ.get('IOS_SIMULATOR_CREATED_THIS_ATTEMPT') != '1'
+                or list(error.cmd) != ['xcrun', 'simctl', 'bootstatus', previous, '-b']):
+            raise
+        # Keep the original evidence directory untouched. No erase/delete,
+        # service kill or shutdown-all can affect another simulator or app.
+        output = Path(os.environ.get('RUNNER_TEMP', 'build/ios/runtime-evidence'))
+        with (output / 'ios-preinstall-boot-recovery.log').open('w') as log:
+            log.write(f'First newly-created device bootstatus timed out: {previous}\n')
+            log.flush()
+            try:
+                subprocess.run(['xcrun', 'simctl', 'shutdown', previous],
+                               stdout=log, stderr=subprocess.STDOUT, check=False, timeout=30)
+            except (OSError, subprocess.SubprocessError) as shutdown_error:
+                log.write(f'{type(shutdown_error).__name__}: {shutdown_error}\n')
+        os.environ['IOS_SIMULATOR_SESSION_SUFFIX'] = 'boot-recovery-' + previous[:8]
+        print('New test device failed to boot before installation; preserving evidence '
+              'and trying one fresh device of the same required OS', flush=True)
+    # Deliberately outside the catch: any second failure propagates normally.
     main()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--recover-preinstall-boot', action='store_true')
+    args = parser.parse_args()
+    if args.recover_preinstall_boot:
+        boot_before_install()
+    else:
+        main()

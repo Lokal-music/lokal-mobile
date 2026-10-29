@@ -9,7 +9,7 @@ class AppBuildInfo {
   String get label => '$version (build $build)';
 }
 
-/// Read the installed APK metadata, including workflow --build-name/number
+/// Read installed app metadata (APK or iPhone bundle), including build-name/number
 /// overrides. Never substitute the legacy upstream marketing constants.
 final appBuildInfoProvider = FutureProvider<AppBuildInfo>((ref) async {
   final result = await const MethodChannel('lokal/app_info')

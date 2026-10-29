@@ -10,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/providers/app_build_info_provider.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
-import 'package:flick/features/manual/screens/manual_screen.dart';
 import 'package:flick/features/settings/lokal/lokal_licences_page.dart';
 import 'package:flick/features/settings/screens/logs_screen.dart';
 import 'package:flick/features/settings/screens/privacy_policy_screen.dart';
@@ -46,7 +45,7 @@ void openLokalLicences(BuildContext context) {
   _push(context, const LokalLicencesPage());
 }
 
-/// About: version, updates, what's new, help, licences, privacy and logs.
+/// About: version, updates, what's new, licences, privacy and logs.
 List<LokalSettingsSection> aboutSettings(BuildContext context, WidgetRef ref) {
   final t = context.lokal;
   final build = ref.watch(appBuildInfoProvider);
@@ -66,27 +65,18 @@ List<LokalSettingsSection> aboutSettings(BuildContext context, WidgetRef ref) {
             style: LokalTheme.label(t, size: 12, color: t.text),
           ),
         ),
-        LokalSettingLink(
-          label: lokalText('Updates'),
-          description: lokalText(
-            'Check for updates, download and install a newer APK.',
+        if (defaultTargetPlatform == TargetPlatform.android)
+          LokalSettingLink(
+            label: lokalText('Updates'),
+            description: lokalText(
+              'Check for updates, download and install a newer APK.',
+            ),
+            onTap: () => unawaited(showLokalUpdates(context, check: true)),
           ),
-          onTap: () => unawaited(showLokalUpdates(context, check: true)),
-        ),
         LokalSettingLink(
           label: lokalText('What’s new'),
           description: lokalText('What changed in this version.'),
           onTap: () => unawaited(WhatsNewBottomSheet.show<void>(context)),
-        ),
-      ],
-    ),
-    LokalSettingsSection(
-      title: lokalText('Help'),
-      children: [
-        LokalSettingLink(
-          label: lokalText('Help'),
-          description: lokalText('Every control, explained.'),
-          onTap: () => _push(context, const ManualScreen()),
         ),
       ],
     ),

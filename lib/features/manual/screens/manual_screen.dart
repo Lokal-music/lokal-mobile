@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flick/core/constants/app_constants.dart';
@@ -24,11 +25,14 @@ class _ManualScreenState extends ConsumerState<ManualScreen> {
   final Map<String, GlobalKey> _sectionKeys = {};
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  List<ManualSection> get _sections => manualSections(
+    forIos: defaultTargetPlatform == TargetPlatform.iOS,
+  );
 
   @override
   void initState() {
     super.initState();
-    for (final s in kManualSections) {
+    for (final s in _sections) {
       _sectionKeys[s.id] = GlobalKey();
     }
     if (widget.initialSection != null) {
@@ -60,7 +64,7 @@ class _ManualScreenState extends ConsumerState<ManualScreen> {
     if (_query.isEmpty) return const [];
     final q = _query.toLowerCase();
     final hits = <_SearchHit>[];
-    for (final section in kManualSections) {
+    for (final section in _sections) {
       for (final entry in section.entries) {
         final inTitle = entry.title.toLowerCase().contains(q);
         final inBody = entry.body.toLowerCase().contains(q);
@@ -92,7 +96,7 @@ class _ManualScreenState extends ConsumerState<ManualScreen> {
           ),
         ),
         if (!searching)
-          for (final section in kManualSections)
+          for (final section in _sections)
             LokalSettingsBlock(
               top: 12,
               child: _ManualSectionCard(

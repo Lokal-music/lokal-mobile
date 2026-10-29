@@ -59,6 +59,58 @@ class _ArtworkMarkerState extends State<_ArtworkMarker> {
 }
 
 void main() {
+  testWidgets('Space subtitles follow the hidden full-player seekbar',
+      (tester) async {
+    final seekbarLink = LayerLink();
+    final seekRowKey = GlobalKey();
+    final subtitleKey = GlobalKey();
+
+    Widget harness(double height, double bottomInset) => MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 320,
+            height: height,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: bottomInset,
+                  child: CompositedTransformTarget(
+                    link: seekbarLink,
+                    // The actual seek row is invisible in Space but retains
+                    // its layout; its composited leader remains visible.
+                    child: Opacity(
+                      opacity: 0,
+                      child: SizedBox(key: seekRowKey, height: 54),
+                    ),
+                  ),
+                ),
+                SeekbarAlignedSpaceSubtitle(
+                  seekbarLink: seekbarLink,
+                  subtitle: SizedBox(key: subtitleKey, height: 44),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Future<void> expectAligned(double height, double bottomInset) async {
+      await tester.pumpWidget(harness(height, bottomInset));
+      await tester.pump(); // Resolve the follower's composited transform.
+      final seekY = tester.getCenter(find.byKey(seekRowKey)).dy;
+      final subtitleY = tester.getCenter(find.byKey(subtitleKey)).dy;
+      expect((seekY - subtitleY).abs(), lessThan(1),
+          reason: 'Space subtitles should track the normal seekbar height');
+    }
+
+    await expectAligned(380, 105);
+    await expectAligned(560, 155);
+  });
+
   testWidgets('video Space interpolation freezes during buffering', (tester) async {
     final video = Media3MusicVideoController();
     addTearDown(video.dispose);

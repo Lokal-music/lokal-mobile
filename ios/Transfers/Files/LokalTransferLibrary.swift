@@ -13,6 +13,32 @@ struct LokalTransferLibraryReceipt: Codable, Equatable, Sendable {
   let sha256: String
 }
 
+/// Immediate cancellation is independent of the utility/file queues. Publication
+/// and revocation share this short lock; long copying/hashing never holds it.
+/// A published file still needs the reservation/cleanup barrier before retiring
+/// its database intent. This token alone does not implement that app barrier.
+final class LokalTransferCopyCancellation: @unchecked Sendable {
+  private let lock = NSLock()
+  private var cancelled = false
+
+  func cancel() {
+    lock.lock()
+    cancelled = true
+    lock.unlock()
+  }
+
+  func check() throws {
+    try whileCurrent {}
+  }
+
+  func whileCurrent<T>(_ operation: () throws -> T) throws -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !cancelled else { throw LokalTransferError.invalidTransition }
+    return try operation()
+  }
+}
+
 /// Filesystem boundary only: this does not acknowledge a playable Isar row.
 /// The app supplies its own Music root; no Flutter-supplied path is accepted.
 /// One deterministic name per frozen job/revision survives lost acknowledgments.
@@ -93,7 +119,9 @@ final class LokalTransferLibrary: @unchecked Sendable {
     guard fsync(directory) == 0 else { throw LokalTransferError.posix("sync_music_directory", errno) }
   }
 
-  private func existing(_ job: LokalTransferJob, name: String, part: String) throws -> LokalTransferLibraryReceipt? {
+  private func existing(_ job: LokalTransferJob, name: String, part: String,
+                        cancellation: LokalTransferCopyCancellation) throws -> LokalTransferLibraryReceipt? {
+    try cancellation.check()
     let file = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
     guard file >= 0 else {
       if errno == ENOENT { return nil }
@@ -120,7 +148,7 @@ final class LokalTransferLibrary: @unchecked Sendable {
           Int64(before.st_size) == job.receivedBytes, before.st_size <= LokalTransferFiles.maximumBytes else {
       throw LokalTransferError.checksumMismatch
     }
-    let digest = try LokalTransferFiles.digest(file)
+    let digest = try LokalTransferFiles.digest(file, checkCancellation: cancellation.check)
     var after = stat(), named = stat()
     guard fstat(file, &after) == 0, after.st_nlink == 1, after.st_size == before.st_size,
           fstatat(directory, name, &named, AT_SYMLINK_NOFOLLOW) == 0,
@@ -142,7 +170,9 @@ final class LokalTransferLibrary: @unchecked Sendable {
       bytes: Int64(after.st_size), sha256: digest)
   }
 
-  func install(_ job: LokalTransferJob, from files: LokalTransferFiles) throws -> LokalTransferLibraryReceipt {
+  func install(_ job: LokalTransferJob, from files: LokalTransferFiles,
+               cancellation: LokalTransferCopyCancellation = LokalTransferCopyCancellation()) throws -> LokalTransferLibraryReceipt {
+    try cancellation.check()
     try job.validate()
     guard job.direction == .download, job.phase == .validating || job.phase == .importing,
           job.receivedBytes != nil, job.receivedSHA256 != nil else { throw LokalTransferError.invalidTransition }
@@ -153,8 +183,9 @@ final class LokalTransferLibrary: @unchecked Sendable {
       if errno != EINTR { throw LokalTransferError.posix("lock_library_copy", errno) }
     }
     defer { _ = flock(writer, LOCK_UN) }
+    try cancellation.check()
     try checkRoot()
-    if let receipt = try existing(job, name: name, part: part) { return receipt }
+    if let receipt = try existing(job, name: name, part: part, cancellation: cancellation) { return receipt }
     var oldPart = stat()
     if fstatat(directory, part, &oldPart, AT_SYMLINK_NOFOLLOW) == 0 {
       guard oldPart.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), oldPart.st_nlink == 1,
@@ -173,15 +204,23 @@ final class LokalTransferLibrary: @unchecked Sendable {
       [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
       ofItemAtPath: root.appendingPathComponent(Self.directoryName).appendingPathComponent(part).path)
     #endif
-    _ = try files.copyForLibrary(job, to: output)
+    _ = try files.copyForLibrary(job, to: output, checkCancellation: {
+      try cancellation.check()
+      self.testingBoundary?("copyCheckpoint")
+      try cancellation.check()
+    })
     try checkRoot()
     testingBoundary?("beforePublication")
-    guard linkat(directory, part, directory, name, 0) == 0 else { throw LokalTransferError.unsafeFile }
+    try cancellation.whileCurrent {
+      guard linkat(directory, part, directory, name, 0) == 0 else { throw LokalTransferError.unsafeFile }
+    }
     testingBoundary?("afterPublication")
     guard unlinkat(directory, part, 0) == 0 else { throw LokalTransferError.posix("retire_library_part", errno) }
     try syncDirectory()
     testingBoundary?("afterPromotion")
-    guard let receipt = try existing(job, name: name, part: part) else { throw LokalTransferError.unsafeFile }
+    guard let receipt = try existing(job, name: name, part: part, cancellation: cancellation) else {
+      throw LokalTransferError.unsafeFile
+    }
     return receipt
   }
 }

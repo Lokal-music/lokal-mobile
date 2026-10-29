@@ -4,6 +4,7 @@ import 'package:flick/widgets/common/overflow_marquee_title.dart';
 import 'package:flick/data/repositories/recently_played_repository.dart';
 import 'package:flick/features/konnekted/konnekted_destination.dart';
 import 'package:flick/features/konnekted/konnekted_you.dart';
+import 'package:flick/features/manual/screens/manual_screen.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_group.dart';
 import 'package:flick/models/song.dart';
 import 'package:flick/services/milestone_service.dart';
@@ -331,6 +332,10 @@ void main() {
     await tester.tap(find.bySemanticsLabel('YouTube, not connected'));
     await tester.tap(find.text('Full history'));
     await tester.tap(find.text('Help'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ManualScreen), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('About'));
     await tester.pump();
 
@@ -349,10 +354,6 @@ void main() {
         section: LokalDataSections.accounts,
       ),
       KonnektedDestination.recentlyPlayed,
-      const KonnektedDestination.settingsAt(
-        LokalSettingsGroup.about,
-        section: 'Help',
-      ),
       const KonnektedDestination.settingsAt(
         LokalSettingsGroup.about,
         section: 'About',

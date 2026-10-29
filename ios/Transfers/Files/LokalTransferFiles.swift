@@ -168,7 +168,9 @@ final class LokalTransferFiles: @unchecked Sendable {
   /// Copy from an already-open owned source into a caller-owned exclusive part
   /// file. Cancelling may unlink staging while this runs; it cannot redirect
   /// the open descriptor. The caller must still fence its later library commit.
-  func copyForLibrary(_ job: LokalTransferJob, to destination: Int32) throws -> LokalTransferFileReceipt {
+  func copyForLibrary(_ job: LokalTransferJob, to destination: Int32,
+                      checkCancellation: () throws -> Void = {}) throws -> LokalTransferFileReceipt {
+    try checkCancellation()
     try job.validate()
     guard job.phase == .validating || job.phase == .importing,
           let expectedBytes = job.receivedBytes, let expectedHash = job.receivedSHA256 else {
@@ -183,6 +185,7 @@ final class LokalTransferFiles: @unchecked Sendable {
     var buffer = [UInt8](repeating: 0, count: 256 * 1024)
     var total: Int64 = 0
     while true {
+      try checkCancellation()
       let count = buffer.withUnsafeMutableBytes { read(source, $0.baseAddress, $0.count) }
       if count < 0 {
         if errno == EINTR { continue }
@@ -194,6 +197,7 @@ final class LokalTransferFiles: @unchecked Sendable {
       try buffer.withUnsafeBytes { bytes in
         var offset = 0
         while offset < count {
+          try checkCancellation()
           let written = write(destination, bytes.baseAddress!.advanced(by: offset), count - offset)
           if written < 0, errno == EINTR { continue }
           guard written > 0 else { throw LokalTransferError.posix("write_library_part", errno) }
@@ -217,7 +221,7 @@ final class LokalTransferFiles: @unchecked Sendable {
     #endif
     guard total == expectedBytes, fsync(destination) == 0,
           lseek(destination, 0, SEEK_SET) == 0 else { throw LokalTransferError.checksumMismatch }
-    let digest = try Self.digest(destination)
+    let digest = try Self.digest(destination, checkCancellation: checkCancellation)
     guard digest == expectedHash else { throw LokalTransferError.checksumMismatch }
     return LokalTransferFileReceipt(bytes: total, sha256: digest)
   }
@@ -235,7 +239,8 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
-  static func digest(_ fd: Int32) throws -> String {
+  static func digest(_ fd: Int32, checkCancellation: () throws -> Void = {}) throws -> String {
+    try checkCancellation()
     #if canImport(CryptoKit)
     var hash = SHA256()
     #elseif os(Linux)
@@ -254,6 +259,7 @@ final class LokalTransferFiles: @unchecked Sendable {
     var total: Int64 = 0
     do {
       while true {
+        try checkCancellation()
         let count = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
         if count < 0 {
           if errno == EINTR { continue }
@@ -269,6 +275,7 @@ final class LokalTransferFiles: @unchecked Sendable {
         try input.fileHandleForWriting.write(contentsOf: bytes)
         #endif
       }
+      try checkCancellation()
     } catch {
       #if os(Linux) && !canImport(CryptoKit)
       try? input.fileHandleForWriting.close()
@@ -283,6 +290,7 @@ final class LokalTransferFiles: @unchecked Sendable {
     try input.fileHandleForWriting.close()
     let bytes = output.fileHandleForReading.readDataToEndOfFile()
     process.waitUntilExit()
+    try checkCancellation()
     guard process.terminationStatus == 0,
           let text = String(data: bytes, encoding: .utf8),
           let result = text.split(separator: " ").first, result.count == 64 else {

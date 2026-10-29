@@ -1,12 +1,12 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-Status: implementation and hosted native validation, 28 October 2026 (Europe/Paris).
+Status: implementation and hosted native validation, 29 October 2026 (UTC).
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **99 reviewed merged
-mobile PRs after #172 through #306**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **101 reviewed merged
+mobile PRs after #172 through #310**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
@@ -26,8 +26,18 @@ import/upload capability remains disabled. Existing product copy paths remain
 active. OS transfer suspension/relaunch, deterministic Isar import/receipt
 recovery, physical Windows signing/iPhone installation, live providers/receivers
 and installed WidgetKit still need their own acceptance. Later source reviewed
-through #306 and deterministic file promotion are outside the build-78 package.
+through #310 and deterministic file promotion are outside the build-78 package.
 Builds 74 and 67 remain preserved older checkpoints.
+
+The later local import continuation now passes actual native Isar contracts:
+private identity reservations, atomic song/receipt commits, deletion without
+resurrection, eight-collection schema preservation, six process-exit boundaries
+and six concurrent process writers. Native copy cancellation also passes three
+complete portable rounds, including interruption after an actual 256 KiB write.
+These are isolated foundations, outside the verified IPA. The product database
+does not yet register receipts, and native import capability stays disabled.
+The [transfer plan](IOS_TRANSFERS.md#private-receipt-store-and-cancellation-continuation-29-october)
+records the next integration gates and the limits of this evidence.
 
 | Checkpoint | Accepted scope and limit |
 | --- | --- |
@@ -54,6 +64,8 @@ Builds 74 and 67 remain preserved older checkpoints.
 | [Build 76](https://github.com/lokal-music/lokal-mobile/actions/runs/40740172170) / PR #304 | Through-#296 package compiles and the full iOS 26 suite passes. iOS 18.6 stops at the legacy Keychain migration check before playback. No package promotion. The native transfer core was unembedded in this build; later bridge wiring, SQLite corrections and through-#302 source are excluded. |
 
 | [Build 78](https://github.com/lokal-music/lokal-mobile/actions/runs/40755702150) / PR #307 | Both complete native app suites pass on iOS 18.6 and 26 through #302 plus the embedded transfer protocol and per-account Keychain preparation. The actual Swift/Flutter channel and Keychain migration pass. Independently reverified IPA/source/notices/34 binaries/26 native symbol bundles; tree `3bd499d1c86c5de010a05ff7d1f7cd681338c47c`. Import/upload capability is false; later through-#306 changes are excluded. |
+
+| [Build 79](https://github.com/lokal-music/lokal-mobile/actions/runs/40786437699) / PR #308 | Release packaging and first launch pass. iOS 18.6 finds a real missing request scope during paused shuffle of the 2,654-entry on-demand queue; iOS 26 times out during simulator boot before app installation. No package promotion. The later source captures queue-mutation scope and adds one strictly pre-installation fresh-device boot recovery; native acceptance remains pending. |
 
 Unsigned engineering packages pass binary/resource/privacy/source/notices and
 matching-symbol inspection. Installation still requires local signing. See

@@ -1,6 +1,6 @@
 /// Structured changelog data shown to the user in the "What's New" bottom
-/// sheet. Current Lokal notes are labeled with installed APK metadata; the
-/// historical upstream entries below remain available for reference.
+/// sheet. Lokal uses per-minor release notes; the upstream archive remains
+/// available for historical reference.
 class ChangelogEntry {
   const ChangelogEntry({
     required this.version,
@@ -34,105 +34,8 @@ class ChangelogSubsection {
   final List<String> bullets;
 }
 
-/// Current Lokal notes. The displayed version/build comes from the installed APK.
-const kLokalReleaseNotes = ChangelogEntry(
-  version: 'Lokal',
-  date: '2026-10-22',
-  sections: [
-    ChangelogSection(
-      title: 'Moving covers, accounts and streaming',
-      bullets: [
-        'Moving covers work in both players, with Apple Music, Tidal, community, m8tec and Spotify Canvas sources. Choose sources and Canvas priority in Appearance; save individual song overrides from the song menu.',
-        'Home headlines and subheaders follow desktop listening patterns. Flow track circles show cover art.',
-        'Search and add-on preparation show progress. Installed sources awaiting verification remain visible and retain their priority.',
-        'Amazon add-on downloads support the validated decryption descriptor used on desktop.',
-        'Spotify shows when its cookie is saved. Discovery uses web-player mixes and liked songs; Data has an optional matching-library likes sync toggle.',
-        'Discord updates promptly between songs and resolves public cover art for local tracks.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Lyrics and seamless player transitions',
-      bullets: [
-        'One cover and title move between full artwork, the queue header and the compact lyrics row. Playback buttons resize and the play/pause icon morphs.',
-        'Japanese lyric lookup uses desktop matching, and timed words wrap without overlapping the next line.',
-        'Manual lyrics search matches desktop: title, artist, Search and tap to use a result. Source timing and refresh remain available; translated and romanized sublines animate in and out.',
-        'Translation is unavailable when lyrics already match your system language.',
-        'Updated paired desktops can sync saved syllable lyrics to music already copied to your phone.',
-        'Home settings opens Playback. You settings opens Data with Accounts first; Online sources and About have their own rows in You → More.',
-        'Cover Flow fills two songs from each of the first six mixes as your library loads.',
-        'Failed Android sources reload on retry; stalled seeks time out rather than blocking later commands.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Player and lyrics follow-up',
-      bullets: [
-        'The full player uses soft artwork-colored gradients instead of a live background blur. Performance mode keeps the background still.',
-        'Player sliders use vertical Material-style handles.',
-        'Lyrics use real word timing, soft sweeps and held-note motion, with better catalogue matching and parallel source lookup.',
-        'Translate and Romanize icons replace Lyrics Studio. Translation requests happen only when you tap a toggle.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Sync repairs',
-      bullets: [
-        'Sync repairs audio details for music already copied to your phone; transferring the files again is not required.',
-        'History-only desktop songs no longer become library files. Listening history remains available to milestones.',
-        'Listening hours include synced events without counting this phone’s plays twice, and lower artist milestones unlock correctly.',
-        'Missing quality details and genres are read from local files.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Library and discovery',
-      bullets: [
-        'Run music-video discovery, album-release refresh and artist-info refresh from their library sections, with progress and stop controls.',
-        'New library artists load their portraits automatically. Matching desktop placeholders no longer duplicate phone recordings.',
-        'Search remembers recent songs in a vertically scrolling cover grid.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Player and lyrics',
-      bullets: [
-        'Choose and reorder more lyrics sources in Playback settings, or switch sources directly in player lyrics.',
-        'Quality badges sit beside the artist name, including Low when the track has a known low bitrate.',
-        'Cover art sits closer to the song title. Visualizers and their settings have been removed.',
-        'Stalled online lookups time out with a retry message instead of waiting indefinitely.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Settings and performance',
-      bullets: [
-        'Performance mode is the default for fresh preferences; your saved choice is preserved.',
-        'Accounts have clearer headings, source ranks have proper spacing and choice controls fit their contents.',
-        'Rose Gold and Midnight Blue have matching launcher icons. Icon changes wait until the app is in the background and playback is idle.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Accounts in one place',
-      bullets: [
-        'Find YouTube Music sign-in, Spotify cookies, Discord Rich Presence, Desktop link, Last.fm and ListenBrainz in Settings → Data → Accounts.',
-        'About and What’s New now show the installed app version and build number.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Playback and appearance',
-      bullets: [
-        'Player volume bars follow Android media volume and the phone’s volume buttons.',
-        'Launcher icons use pre-colored accent artwork to match your selected theme.',
-        'Optional Discord Rich Presence shares your current song through the Discord app on your phone.',
-      ],
-    ),
-    ChangelogSection(
-      title: 'Desktop library sync',
-      bullets: [
-        'Follow library sync progress in an Android notification.',
-        'Home updates stay steadier during library merges.',
-      ],
-    ),
-  ],
-);
-
-/// Historical Flick changelog, retained for reference. Current UI uses
-/// [kLokalReleaseNotes] and the installed APK version/build instead.
+/// Historical Flick changelog. Lokal's release-specific notes are fetched
+/// from tagged minor releases by lokal_minor_release_notes.dart.
 const List<ChangelogEntry> kChangelogEntries = [
   ChangelogEntry(
     version: '0.22.2-beta.4',
