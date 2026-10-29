@@ -1497,12 +1497,18 @@ class MorneyePackages {
     } else {
       tracks = const [];
     }
+    // Amazon search may repeat the same recording in multiple widgets.
+    // Collapse only identical provider track IDs, not different releases
+    // sharing a title/artist (which can have distinct Atmos editions).
+    final seenAmazonTrackIds = <String>{};
     final songs = [
       for (final t in tracks)
         if (t is Map &&
             t['id'] != null &&
             (t['name'] ?? t['title']) != null &&
-            (t['item_type'] == null || t['item_type'] == 'track'))
+            (t['item_type'] == null || t['item_type'] == 'track') &&
+            (!addon.name.toLowerCase().startsWith('amazon') ||
+                seenAmazonTrackIds.add('${t['id']}')))
           t,
     ];
     _remember(key, songs);
