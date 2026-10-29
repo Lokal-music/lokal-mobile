@@ -2,6 +2,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flick/services/atmos_diagnostics.dart';
 
 void main() {
+  test('codec handoffs retain both codecs while redacting private values', () {
+    final line = AtmosDiagnostics.format('playback_handoff', {
+      'from': 'ac4',
+      'to': 'eac3_joc',
+      'outcome': 'releasing_previous_decoder',
+    });
+    expect(line, contains('"from":"ac4"'));
+    expect(line, contains('"to":"eac3_joc"'));
+    final private = AtmosDiagnostics.format('playback_handoff', {
+      'from': '/private/audio.mp4',
+      'to': 'https://example.com/stream?token=secret',
+    });
+    expect(private, contains('"from":"redacted"'));
+    expect(private, contains('"to":"redacted"'));
+    expect(private, isNot(contains('secret')));
+  });
+
   test('Atmos diagnostics preserve actionable categorical values', () {
     final line = AtmosDiagnostics.format('capability', {
       'available': true,

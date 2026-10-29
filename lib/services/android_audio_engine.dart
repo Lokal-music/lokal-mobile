@@ -1016,7 +1016,7 @@ class AndroidAudioEngine implements AudioEngine {
     _lastAtmosPlaybackState = null;
     if (track.atmosEncoded) {
       AtmosDiagnostics.record('native_load_start', {
-        'codec': androidDolbyCodec(song),
+        'codec': androidDolbyCodec(track),
         'engine': 'normalAndroid',
         'crossfadeDisabled': true,
       });
