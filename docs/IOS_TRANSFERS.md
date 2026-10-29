@@ -895,3 +895,42 @@ idempotent private drainage, preservation of edited public bytes, and refusal of
 replacement private inodes and symlinks. All three complete portable native rounds
 pass. Runtime/Runner/Dart cleanup integration and Apple execution of this newer
 source remain pending; native product import/upload are still disabled.
+
+### Drained cleanup claim and typed channel continuation
+
+The private Runner bridge now fences publication synchronously when the current
+root requests cleanup. Pending cleanup blocks new writer claims before entering
+the host/file queues. The runtime grants a separate cleanup lease only after old
+file work and its queued runtime callbacks have drained, then re-reads the exact
+frozen native custody. A failed/missing reservation aborts only that pending
+ticket and restores the ability to make fresh ordinary claims. Engine/client
+replacement and global revocation retire pending cleanup as well as active work.
+
+The typed Dart cleanup lease cannot become a publication/reconciliation lease.
+It carries frozen intent, Song binding, fresh publication/current-phase facts
+and an optional durable resolution; it carries no source path or private nonce.
+The direct cleanup guard remains independent of file/SQLite queues. A real HTTP
+WAV contract blocks the actual publisher after its public link, proves that
+cleanup authority waits for drainage, then validates/releases cleanup without a
+current pairing and resumes ordinary recovery. Missing-custody requests are
+refused without inventing provenance or leaving submission permanently blocked.
+
+Three complete portable native rounds pass; a final round also checks the added
+publication flag. All 27 focused Dart transport contracts pass, including four
+cleanup codec/channel checks; fatal-info analysis and workflow lint are clean.
+These native/Dart changes are later than build85 and still need Apple SDK/bridge
+execution. Claims/guards do not yet perform the full root cleanup sequence:
+runtime resolution/finalization, actual Isar cleanup integration, Isar-only
+orphan retirement and clear/unpair/UI barriers remain required. Product native
+import/upload remain false.
+
+The cleanup request now has its own strict three-field Swift decoder. A shared
+JSON fixture checks the exact Dart request shape and actual native reply keys;
+this caught and fixed reuse of the writer decoder's required `reconcileOnly`
+field before Apple validation. Three native rounds and all 27 transport checks
+pass the shared fixture. The installed-app probe additionally requires a valid
+three-field missing-custody request to reach runtime (`TRANSFER_CHANGED`), then
+checks ordinary missing-job classification. The separate actual HTTP native
+contract proves a fresh writer can be granted after cleanup abort. A malformed
+request must fail decoding instead. Installed acceptance of this new probe is
+pending the next Apple run.

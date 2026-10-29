@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_import.dart';
 import '../models/ios_transfer_recovery.dart';
+import '../models/ios_transfer_cleanup.dart';
 import 'link/link_protocol.dart' show linkUuid;
 import 'ios_transfer_coordinator_port.dart';
 
@@ -224,6 +225,36 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   Future<void> drainImports() async {
     if (await _importCall('drainImports', {}) != true) {
       throw const FormatException('Invalid native import drainage response.');
+    }
+  }
+
+  /// Private cleanup claim only; product activation and the Isar decision are
+  /// separate. Native revokes publication before draining the old file worker.
+  Future<IosTransferCleanupLease> claimImportCleanup(
+    IosTransferImportWork work,
+  ) async {
+    final claim = IosTransferCleanupLease.fromJson(
+      await _importCall('claimImportCleanup', {
+        'id': work.job.id,
+        'revision': work.job.revision,
+      }),
+    );
+    if (claim.clientId != _subscription) {
+      throw StateError('Cleanup belongs to a retired transfer client.');
+    }
+    claim.validateFor(work);
+    return claim;
+  }
+
+  Future<void> validateImportCleanup(IosTransferCleanupLease lease) async {
+    if (await _importCall('validateImportCleanup', lease.control) != true) {
+      throw const FormatException('Invalid native cleanup guard response.');
+    }
+  }
+
+  Future<void> releaseImportCleanup(IosTransferCleanupLease lease) async {
+    if (await _importCall('releaseImport', lease.control) != true) {
+      throw const FormatException('Invalid native cleanup release response.');
     }
   }
 

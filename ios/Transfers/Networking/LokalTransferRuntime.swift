@@ -39,6 +39,17 @@ struct LokalTransferPublishedImport: Encodable, Sendable {
   let receipt: LokalTransferLibraryReceipt
 }
 
+struct LokalTransferImportCleanupClaim: Encodable, Sendable {
+  let permission = "cleanup"
+  let job: LokalTransferJob
+  let songID: Int64
+  let leaseID, clientID, targetRelativePath: String
+  let currentRevision: Int
+  let currentPhase: LokalTransferPhase
+  let publicationRecorded: Bool
+  let resolution: LokalTransferImportResolution?
+}
+
 struct LokalTransferImportWork: Encodable, Sendable {
   let job: LokalTransferJob
   let songID: Int64
@@ -730,6 +741,56 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           throw error
         }
       } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// Bridge has already fenced old/new publication synchronously. Grant this
+  /// separate permission only after prior file work and its runtime callbacks
+  /// have drained. Claim never mutates public/private files or Isar.
+  func claimImportCleanup(_ request: LokalTransferProtocol.ImportCleanupClaim,
+                          ticket: LokalTransferImportOwnership.Ticket,
+                          reply: @escaping LokalTransferCompletion<LokalTransferImportCleanupClaim>) {
+    queue.async {
+      do {
+        guard request.clientID == ticket.owner.clientID,
+              self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
+          throw LokalTransferError.invalidTransition
+        }
+        try self.importOwnership.validateTicket(ticket)
+        self.fileQueue.async {
+          self.queue.async {
+            do {
+              try self.importOwnership.validateTicket(ticket)
+              guard self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+                    let work = try self.journal.importCustody(id: request.id, revision: request.revision),
+                    let current = self.jobs[request.id], current.revision >= request.revision,
+                    current.direction == work.job.direction, current.identity == work.job.identity,
+                    current.metadata == work.job.metadata, current.createdMs == work.job.createdMs,
+                    current.expectedBytes == work.job.expectedBytes,
+                    current.expectedSHA256 == work.job.expectedSHA256 else {
+                throw LokalTransferError.staleRevision
+              }
+              if current.revision == request.revision {
+                guard work.matches(current), [.validating, .importing, .complete].contains(current.phase) else {
+                  throw LokalTransferError.invalidTransition
+                }
+              }
+              let lease = try self.importOwnership.claim(ticket, job: work.job, permission: .cleanup)
+              let target = LokalTransferLibrary.directoryName + "/" + (try LokalTransferLibrary.fileName(work.job))
+              reply(.success(LokalTransferImportCleanupClaim(job: work.job, songID: work.songID,
+                leaseID: lease.id, clientID: request.clientID, targetRelativePath: target,
+                currentRevision: current.revision, currentPhase: current.phase,
+                publicationRecorded: work.publication != nil, resolution: work.resolution)))
+            } catch {
+              self.importOwnership.abortCleanup(ticket)
+              reply(.failure(error))
+            }
+          }
+        }
+      } catch {
+        self.importOwnership.abortCleanup(ticket)
+        reply(.failure(error))
+      }
     }
   }
 

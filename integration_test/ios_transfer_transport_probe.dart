@@ -117,9 +117,26 @@ Future<void> probeIosTransferTransport(
       'reconcileOnly': false,
       'clientID': retiredClient!,
     }, 'TRANSFER_CHANGED');
+    await rejectedControl('claimImportCleanup', {
+      'id': missingJobId,
+      'revision': 1,
+      'sourcePath': '/caller/injected.wav',
+    }, 'INVALID_TRANSFER_REQUEST');
+    // Three fields must reach the real runtime, rather than fail decoding a
+    // missing writer-only flag. No real transfer/library data is created.
+    await rejectedControl('claimImportCleanup', {
+      'id': missingJobId,
+      'revision': 1,
+    }, 'TRANSFER_CHANGED');
+    await rejectedControl('claimImport', {
+      'id': missingJobId,
+      'revision': 1,
+      'reconcileOnly': false,
+    }, 'TRANSFER_MISSING');
     for (final method in [
       'validateImport',
       'validateImportReconciliation',
+      'validateImportCleanup',
       'releaseImport',
     ]) {
       await rejectedControl(method, {
@@ -154,6 +171,9 @@ Future<void> probeIosTransferTransport(
       'private_import_control_rejects_injection': true,
       'unclaimed_import_guard_rejected_without_commit': true,
       'retired_client_cannot_inherit_replacement_import_owner': true,
+      'cleanup_claim_three_field_codec_reaches_runtime': true,
+      'cleanup_claim_injection_rejected': true,
+      'ordinary_claim_reaches_missing_job_after_cleanup_refusal': true,
       'background_daemon_or_library_import_acceptance': false,
     };
   } finally {

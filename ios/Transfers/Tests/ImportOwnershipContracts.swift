@@ -112,7 +112,14 @@ func runImportOwnershipContracts(job: LokalTransferJob) throws {
     origin: origin + "/", pairingID: job.identity.pairingID))
   try rejects("equivalent origin spelling revokes the matching copy") { try recovery.cancellation.check() }
 
-  let cleanupTicket = try registry.capture(third)
+  let beforeCleanup = try registry.capture(third)
+  let cleanupTicket = try registry.beginCleanup(beforeCleanup)
+  try rejects("cleanup intent fences publication queued before the file barrier") {
+    _ = try registry.claim(beforeCleanup, job: job, permission: .write)
+  }
+  try rejects("pending cleanup blocks new writers before its file barrier completes") {
+    _ = try registry.claim(registry.capture(third), job: job, permission: .write)
+  }
   let cleanup = try registry.claim(cleanupTicket, job: job, permission: .cleanup)
   try registry.validateCleanup(third, jobID: job.id, revision: job.revision, leaseID: cleanup.id)
   try require(registry.cleanupCancellation(third, jobID: job.id, revision: job.revision,
@@ -142,6 +149,11 @@ func runImportOwnershipContracts(job: LokalTransferJob) throws {
   try rejects("clear immediately retires cleanup without waiting on a file queue") { try cleanup.cancellation.check() }
   try rejects("an old cleanup ticket cannot survive the mutation barrier") {
     _ = try registry.claim(cleanupTicket, job: job, permission: .cleanup)
+  }
+  let aborted = try registry.beginCleanup(registry.capture(third))
+  registry.abortCleanup(aborted)
+  try rejects("aborted cleanup cannot later claim a lease") {
+    _ = try registry.claim(aborted, job: job, permission: .cleanup)
   }
   let last = try registry.claim(registry.capture(third), job: job, permission: .write)
   try rejects("a publication writer cannot authorize abandonment") {

@@ -28,8 +28,8 @@ checks and both complete installed iOS18.6/26 suites using the same compiled
 integration app. Both jobs pass on their first attempts. The new runtime reports
 independently confirm private schema/scan guards, caller-client retirement,
 seven real codec playback fixtures, fractional speeds and actual shader pixel
-complements. Build84 is now the latest qualified engineering checkpoint through
-#332; later native publication/media/completion source has separate gates.
+complements. Build84 remains the earlier qualified engineering checkpoint through
+#332; build85 below adds the native publication/media/coordinator foundations.
 The build84 IPA SHA-256 is
 `14300a4c5fb2ad6dc88f83b6d9d738c678daf4b909a504c59b557a8856914679`.
 It needs local signing before sideloading from Windows.
@@ -42,9 +42,16 @@ tracked publication, atomic Song/receipt completion and native acknowledgement.
 Frozen [PR338](https://github.com/lokal-music/lokal-mobile/pull/338), tree
 `dbd5ebcd1eb5f2cffa9a289484655618df8d3db3`, passes native run10: both actual
 iOS16 SDK/Flutter bridge checks, 20 native rounds and actual macOS Isar/root
-contracts. Build85 is still in progress; installed iOS18.6/26 and bundled-reader
-acceptance remain pending. Host PCM24/FLAC24/AAC/MP3 and multi-track FFprobe
-contracts pass; the root harness explicitly uses a native-port fixture.
+contracts. Build85 passes 1,139 Flutter checks and both complete installed
+iOS18.6/26 suites on first attempts with the same compiled integration app.
+Both reports independently qualify the actual bundled FFprobe WAV/FLAC/AAC
+fixtures, invalid input refusal and retired-reader refusal; their ownership
+callback is explicitly a fixture. Host PCM24/FLAC24/AAC/MP3 and multi-track
+FFprobe contracts pass; the root harness explicitly uses a native-port fixture.
+The unsigned build85 IPA SHA-256 is
+`e6cd43a5730a4f4ca169c1e6734fc5096267d482b098b1d2ab567d3cfd7a01ba`.
+All 2,355 exported source files, 34 arm64 binaries and 26 matching native symbol
+bundles were independently checked against its frozen source tree.
 
 Newer source detects Isar-only orphan reservations, protects durable retiring
 rows, and adds an unexposed Apple-coordinated abandonment helper. Its portable
@@ -59,7 +66,7 @@ by OS suspension/relaunch acceptance. See
 for the implemented boundary and remaining gates. Home Screen widgets remain
 excluded.
 
-**This source is not a finalized release.** Build84 is the current independently
+**This source is not a finalized release.** Build85 is the current independently
 verified engineering package, described above. Earlier build82 covers #311,
 including native private import
 ownership and metadata-cache acceptance. Both complete iOS 18.6 and 26 suites
@@ -85,10 +92,10 @@ active. Later source registers the private receipt collection with full Isar
 durability on iOS, binds import RPCs to the acknowledged root client, preserves
 frozen import work through a transactional SQLite v1→v2 migration, and checks
 scanner reservations inside the actual library writer. Local native process/crash,
-actual Isar and focused Flutter checks pass; this later wiring and through-#331
-UI/provider changes are outside build 82 and require their own Apple acceptance.
-OS transfer suspension/relaunch, native file provenance/promotion/cleanup,
-coordinated Isar completion, clear/unpair/deletion, imported-file CUE restructuring,
+actual Isar and focused Flutter checks pass. The private schema/client/scanner
+foundations passed build84; publication/media/coordinator foundations passed
+build85 within the acceptance limits above. OS transfer suspension/relaunch,
+integrated native cleanup, clear/unpair/deletion, imported-file CUE restructuring,
 accurate persistent progress and uploads remain development/acceptance gates.
 Physical Windows signing/iPhone installation and live providers/receivers remain
 separate. The [transfer plan](IOS_TRANSFERS.md) records implemented boundaries

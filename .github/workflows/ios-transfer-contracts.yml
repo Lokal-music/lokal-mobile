@@ -15,6 +15,7 @@ on:
       - 'lib/models/ios_transfer_models.dart'
       - 'lib/services/ios_transfer_import_store.dart'
       - 'lib/models/ios_transfer_recovery.dart'
+      - 'lib/models/ios_transfer_cleanup.dart'
       - 'lib/services/ios_transfer_coordinator_port.dart'
       - 'lib/services/ios_transfer_import_coordinator.dart'
       - 'lib/services/ios_transfer_media.dart'
@@ -24,6 +25,7 @@ on:
       - 'test/fixtures/ios_receipt_v1/**'
       - 'pubspec.*'
       - 'test/fixtures/ios_transfer_credentials_v2.json'
+      - 'test/fixtures/ios_transfer_cleanup_v1.json'
       - 'test/fixtures/ios_transfer_intents_v1.json'
       - '.github/workflows/ios-transfer-contracts.yml'
   workflow_dispatch:

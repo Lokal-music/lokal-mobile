@@ -55,6 +55,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   private var owner: Owner?
   private var barrier = UUID()
   private var active: Lease?
+  private var cleanupPending = false
 
   private func locked<T>(_ operation: () throws -> T) rethrows -> T {
     lock.lock()
@@ -65,6 +66,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   private func retireActive() {
     active?.cancellation.cancel()
     active = nil
+    cleanupPending = false
   }
 
   private func normalized(_ value: LokalTransferScope) throws -> LokalTransferScope {
@@ -117,6 +119,26 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     }
   }
 
+  /// Fence queued/new publication before entering a potentially busy host or
+  /// file queue. Runtime grants the cleanup lease only after old work drains.
+  func beginCleanup(_ ticket: Ticket) throws -> Ticket {
+    try locked {
+      guard owner == ticket.owner, barrier == ticket.barrier else { throw LokalTransferError.staleRevision }
+      barrier = UUID()
+      retireActive()
+      cleanupPending = true
+      return Ticket(owner: ticket.owner, barrier: barrier)
+    }
+  }
+
+  func abortCleanup(_ ticket: Ticket) {
+    locked {
+      guard owner == ticket.owner, barrier == ticket.barrier, cleanupPending else { return }
+      barrier = UUID()
+      retireActive()
+    }
+  }
+
   func claim(_ ticket: Ticket, job: LokalTransferJob,
              permission: Permission) throws -> Lease {
     try job.validate()
@@ -130,6 +152,9 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     return try locked {
       guard ticket.barrier == barrier, owner == ticket.owner else {
         throw LokalTransferError.staleRevision
+      }
+      guard cleanupPending == (permission == .cleanup) else {
+        throw LokalTransferError.invalidTransition
       }
       if let active {
         guard active.jobID == job.id, active.revision == job.revision,
