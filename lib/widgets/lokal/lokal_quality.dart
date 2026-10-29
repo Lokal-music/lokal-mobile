@@ -137,7 +137,7 @@ String? lokalSongResolutionLabel(Song song) {
 
   final depth = lossless.contains(codec)
       ? (song.bitDepth ?? pair?.bitDepth ?? int.tryParse(bitMatch?.group(1) ?? ''))
-      : pair?.bitDepth ?? int.tryParse(bitMatch?.group(1) ?? '');
+      : null;
   final rate = song.sampleRate ?? pair?.sampleRate ??
       ((double.tryParse(rateMatch?.group(1) ?? '') ?? 0) * 1000).round();
   final parts = <String>[];
@@ -189,37 +189,47 @@ class LokalQualityPill extends ConsumerWidget {
         ? lokalSongResolutionLabel(song!) : null;
     final display = resolution ?? tier.label;
     return Semantics(
-    label: lokalText(
-      "{arg0} quality. {arg1}",
-      args: {'arg0': display, 'arg1': tier.hint},
-    ),
-    excludeSemantics: true,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: tier.fill.withValues(alpha: .15),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: tier.border.withValues(alpha: .25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 10, color: tier.text),
-            const SizedBox(width: 3),
+      label: resolution == null
+          ? lokalText(
+              "{arg0} quality. {arg1}",
+              args: {'arg0': tier.label, 'arg1': tier.hint},
+            )
+          : display,
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: tier.fill.withValues(alpha: .15),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: tier.border.withValues(alpha: .25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 10, color: tier.text),
+              const SizedBox(width: 3),
+            ],
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: (MediaQuery.sizeOf(context).width * .48)
+                    .clamp(100.0, 240.0),
+              ),
+              child: Text(
+                display,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: LokalTheme.label(
+                  context.lokal,
+                  size: 10,
+                  color: tier.text,
+                ).copyWith(letterSpacing: .4),
+              ),
+            ),
           ],
-          Text(
-            display,
-            style: LokalTheme.label(
-              context.lokal,
-              size: 10,
-              color: tier.text,
-            ).copyWith(letterSpacing: .4),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
   }
 }
 
