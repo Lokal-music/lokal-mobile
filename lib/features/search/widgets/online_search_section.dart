@@ -518,25 +518,6 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (ref.watch(searchScopeProvider) != SearchScope.online) ...[
-            Text(
-              'Not in your library',
-              style: TextStyle(
-                color: t.text,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 2),
-            ],
-            Text(
-              source == null
-                  ? 'Looking for places to search…'
-                  : source.addon
-                  ? 'From an add-on you installed'
-                  : 'Streams from YouTube Music',
-              style: TextStyle(color: t.muted, fontSize: 12),
-            ),
             if (_sources case final sources? when sources.length > 1) ...[
               const SizedBox(height: 10),
               SingleChildScrollView(
