@@ -45,12 +45,12 @@ class MorneyeService extends ChangeNotifier {
             .where((addon) => addon.name == 'amazon-new')
             .firstOrNull;
         if (installed == null ||
-            morneyeCompareVersions(installed.version, '2.3.15') < 0) {
+            morneyeCompareVersions(installed.version, '2.3.16') < 0) {
           final data = await rootBundle.load('assets/morneye/amazon-new.sflx');
           final bytes = data.buffer.asUint8List(
             data.offsetInBytes, data.lengthInBytes,
           );
-          const expected = 'ae1ac4dbeb9028939e39bda1a58fabaedf41e8adc37b9b3fc61ee10c9a5bdca7';
+          const expected = '967bc8cf940cf39029ef7e33f55bf37c5f686028332570ef484579ebc75c5543';
           if (sha256.convert(bytes).toString() != expected) {
             throw StateError('Bundled Amazon (New) archive checksum mismatch');
           }
