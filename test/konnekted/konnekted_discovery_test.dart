@@ -156,6 +156,33 @@ class _HiddenOnlyLastfm extends KonnektedDiscoveryNotifier {
   Future<void> load({bool refresh = false}) async {}
 }
 
+class _ReadySpotifySnapshot extends KonnektedSpotifyDiscoveryNotifier {
+  @override
+  Future<SpotifyDiscoverySnapshot> build() async =>
+      const SpotifyDiscoverySnapshot(
+        enabled: true,
+        connected: true,
+        data: SpotifyDiscoveryData(
+          account: 'Spotify',
+          quickPicks: [],
+          recentlyPlayed: [
+            LokalDiscoveryTrack(title: 'Spotify history track', artist: 'Artist'),
+          ],
+          likedSongs: [LokalDiscoveryTrack(title: 'Like', artist: 'Artist')],
+          artists: [],
+          albums: [],
+          freshFinds: [],
+          mixes: [
+            LokalDiscoveryMix(
+              id: '37i9dQZF1E000000000001',
+              title: 'Daily Mix 1',
+              author: 'Spotify',
+            ),
+          ],
+        ),
+      );
+}
+
 class _ReadySpotify extends KonnektedDiscoveryNotifier {
   @override
   KonnektedDiscoveryState build() =>
@@ -213,33 +240,7 @@ void main() {
         ProviderScope(
           overrides: [
             konnektedDiscoveryProvider.overrideWith(_ReadySpotify.new),
-            konnektedSpotifyDiscoveryProvider.overrideWith(
-              (ref) async => const SpotifyDiscoverySnapshot(
-                enabled: true,
-                connected: true,
-                data: SpotifyDiscoveryData(
-                  account: 'Spotify',
-                  quickPicks: [],
-                  recentlyPlayed: [
-                    LokalDiscoveryTrack(title: 'Spotify history track',
-                        artist: 'Artist'),
-                  ],
-                  likedSongs: [
-                    LokalDiscoveryTrack(title: 'Like', artist: 'Artist'),
-                  ],
-                  artists: [],
-                  albums: [],
-                  freshFinds: [],
-                  mixes: [
-                    LokalDiscoveryMix(
-                      id: '37i9dQZF1E000000000001',
-                      title: 'Daily Mix 1',
-                      author: 'Spotify',
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            konnektedSpotifyDiscoveryProvider.overrideWith(_ReadySpotifySnapshot.new),
             konnektedSpotifyMixLoaderProvider.overrideWithValue((id) async {
               loaded.add(id);
               return const [
