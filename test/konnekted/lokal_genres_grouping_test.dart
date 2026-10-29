@@ -34,7 +34,13 @@ void main() {
     expect(lokalNormalizeGenreName('norteño'), 'Latin');
     expect(lokalNormalizeGenreName('NORTENO'), 'Latin');
     expect(lokalNormalizeGenreName('рэп'), 'Hip-Hop');
-    expect(lokalNormalizeGenreName('invented microgenre'), 'Other');
+    expect(lokalNormalizeGenreName('City Pop'), 'Pop');
+    expect(lokalNormalizeGenreName('Afro House'), 'Electronic');
+    expect(lokalNormalizeGenreName('UK Garage'), 'Electronic');
+    expect(lokalNormalizeGenreName('Amapiano'), 'Electronic');
+    expect(lokalNormalizeGenreName('Shoegaze'), 'Rock');
+    expect(lokalNormalizeGenreName('Raï'), 'World');
+    expect(lokalNormalizeGenreName('invented microgenre'), 'invented microgenre');
   });
 
   test('ignored tags are not genres; do not modify stored raw metadata', () {
@@ -49,7 +55,7 @@ void main() {
     expect(song.genre, 'VGM; Video Game Soundtrack / Rock');
   });
 
-  test('desktop genre summary merges aliases and singletons into Other', () {
+  test('desktop genre summary keeps single recognized and repeated custom genres', () {
     final items = [
       track('1', 'VGM'),
       track('2', 'video game'),
@@ -62,24 +68,29 @@ void main() {
       track('9', 'Baroque'),
       track('10', 'Karaoke_Plain, Unknown, 128'),
       track('11', 'Unknown'),
+      track('12', 'Future Jazz'),
+      track('13', 'future-jazz'),
     ];
     final summary = lokalGenreSummary(items);
     final byName = {for (final g in summary.genres) g.name: g};
     expect(byName['Video Game Music']!.songs.length, 2);
     expect(byName['Rock']!.songs.length, 3);
     expect(byName['Electronic']!.songs.length, 3);
-    expect(byName['Other']!.songs.length, 3);
-    expect(byName.containsKey('Classical'), false);
+    expect(byName['Other']!.songs.length, 2);
+    expect(byName['Classical']!.songs.length, 1);
+    expect(byName['Future Jazz']!.songs.length, 2);
     expect(summary.noGenre.map((s) => s.id), ['10', '11']);
-    expect(summary.genres.every((g) => g.songs.length >= 2), isTrue);
+    expect(summary.genres.where((g) => g.songs.length == 1).map((g) => g.name),
+        ['Classical']);
     expect(summary.genres.map((g) => g.name).toList(),
-        ['Electronic', 'Other', 'Rock', 'Video Game Music']);
+        ['Electronic', 'Rock', 'Future Jazz', 'Other',
+         'Video Game Music', 'Classical']);
     // Each category is populated from the same recordings as the cards.
     expect(byName['Rock']!.songs.map((s) => s.id), ['3', '4', '5']);
     expect(items[0].genre, 'VGM');
   });
 
-  test('one-off valid tag becomes No genre when Other cannot reach two tracks', () {
+  test('rare unknown tag becomes No genre when Other cannot reach two tracks', () {
     final summary = lokalGenreSummary([
       track('1', 'Baroque'),
       track('2', 'Hip-Hop'),
@@ -100,6 +111,35 @@ void main() {
     expect(summary.genres.map((g) => g.name), ['Electronic', 'Hip-Hop']);
     expect(summary.genres.firstWhere((g) => g.name == 'Hip-Hop')
         .songs.map((s) => s.id), ['1', '2']);
+    expect(summary.noGenre, isEmpty);
+  });
+
+
+  test('unknown labels used on several recordings become a custom category', () {
+    final summary = lokalGenreSummary([
+      track('1', 'Highlife'),
+      track('2', 'Future Soul'),
+      track('3', 'future-soul'),
+      track('4', 'Other'),
+      track('5', 'Other'),
+    ]);
+    final genres = {for (final genre in summary.genres) genre.name: genre};
+    expect(genres['World']!.songs.map((s) => s.id), ['1']);
+    expect(genres['Future Soul']!.songs.map((s) => s.id), ['2', '3']);
+    expect(genres['Other']!.songs.map((s) => s.id), ['4', '5']);
+  });
+
+  test('recognized one-track categories stay visible and do not pollute Other', () {
+    final summary = lokalGenreSummary([
+      track('1', 'Classical'),
+      track('2', 'Unknown style a'),
+      track('3', 'Unknown style b'),
+      track('4', 'Rock, Unknown style c'),
+    ]);
+    final byName = {for (final g in summary.genres) g.name: g};
+    expect(byName['Classical']!.songs.map((s) => s.id), ['1']);
+    expect(byName['Rock']!.songs.map((s) => s.id), ['4']);
+    expect(byName['Other']!.songs.map((s) => s.id), ['2', '3']);
     expect(summary.noGenre, isEmpty);
   });
 

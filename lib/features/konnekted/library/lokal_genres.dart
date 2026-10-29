@@ -57,7 +57,9 @@ String? lokalNormalizeGenreName(String? value) {
       lokalDesktopGenreNoise.contains(key)) {
     return null;
   }
-  return _aliases[key] ?? _other;
+  // Keep meaningful unfamiliar tags intact; repeated tags can become their
+  // own categories instead of automatically entering Other.
+  return _aliases[key] ?? raw;
 }
 
 /// Split a file's raw multi-genre tag without changing what is on disk.
@@ -104,6 +106,10 @@ class LokalGenreSummary {
   final List<Song> noGenre;
 }
 
+final _knownGenreKeys = <String>{
+  for (final group in lokalDesktopGenreGroups) _taxonomyKey(group.$1),
+};
+
 List<String> _visibleGenres(List<String> genres, Set<String> rare) {
   final common = [
     for (final name in genres)
@@ -117,8 +123,10 @@ List<String> _visibleGenres(List<String> genres, Set<String> rare) {
 /// Mirrors desktop electron/genreList.js genreSummary:
 ///  * classify aliases and subgenres into broad categories;
 ///  * count each track only once per category;
-///  * roll singleton categories into Other;
-///  * suppress a one-track Other card, putting those songs in No genre;
+///  * keep every recognized category, even when it has only one song;
+///  * allow unknown but repeatedly-used labels to form custom genres;
+///  * put only one-off unknown tags in Other, suppressing a one-track
+///    Other card in favor of No genre;
 ///  * keep order newest-first for cover art and count-desc for the grid.
 /// Ghost/pending catalogue placeholders are not real library recordings.
 LokalGenreSummary lokalGenreSummary(Iterable<Song> library) {
@@ -152,6 +160,7 @@ LokalGenreSummary lokalGenreSummary(Iterable<Song> library) {
   final rare = <String>{
     for (final entry in counts.entries)
       if (entry.key != lokalGenreKey(_other) &&
+          !_knownGenreKeys.contains(entry.key) &&
           entry.value < _minimumGenreTracks) entry.key,
   };
   final otherCount = categorized.where(
@@ -197,8 +206,8 @@ final lokalGenresProvider = Provider<AsyncValue<List<LokalGenre>>>(
   (ref) => ref.watch(lokalGenreSummaryProvider).whenData((data) => data.genres),
 );
 
-/// Library › Genres: exactly the same canonical and rare-category cards as
-/// desktop, plus No genre and a search across the visible category labels.
+/// Library › Genres: canonical and repeated custom categories match desktop,
+/// plus No genre and a search across the visible labels.
 class LokalGenresPage extends ConsumerStatefulWidget {
   const LokalGenresPage({super.key});
 
