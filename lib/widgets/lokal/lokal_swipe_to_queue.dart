@@ -150,40 +150,40 @@ class _LokalSwipeToQueueState extends ConsumerState<LokalSwipeToQueue> {
               final directionNext =
                   offset > 0 ? rightMeansNext : !rightMeansNext;
               return Stack(
-              children: [
-                if (offset != 0)
-                  Positioned(
-                    left: offset > 0 ? 0 : null,
-                    right: offset < 0 ? 0 : null,
-                    top: 0,
-                    bottom: 0,
-                    width: offset.abs(),
-                    child: ClipRect(
-                      child: ColoredBox(
-                        color: accent.withValues(alpha: 0.16),
-                        child: Align(
-                          alignment: offset > 0
-                              ? Alignment.centerLeft
-                              : Alignment.centerRight,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 23),
-                            child: Icon(
-                              directionNext
-                                  ? Icons.queue_play_next_rounded
-                                  : Icons.queue_music_rounded,
-                              size: 27,
-                              color: accent,
+                children: [
+                  if (offset != 0)
+                    Positioned(
+                      left: offset > 0 ? 0 : null,
+                      right: offset < 0 ? 0 : null,
+                      top: 0,
+                      bottom: 0,
+                      width: offset.abs(),
+                      child: ClipRect(
+                        child: ColoredBox(
+                          color: accent.withValues(alpha: 0.16),
+                          child: Align(
+                            alignment: offset > 0
+                                ? Alignment.centerLeft
+                                : Alignment.centerRight,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 23),
+                              child: Icon(
+                                directionNext
+                                    ? Icons.queue_play_next_rounded
+                                    : Icons.queue_music_rounded,
+                                size: 27,
+                                color: accent,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
+                  Transform.translate(
+                    offset: Offset(offset, 0),
+                    child: child,
                   ),
-                Transform.translate(
-                  offset: Offset(offset, 0),
-                  child: child,
-                ),
-              ],
+                ],
               );
             },
             child: widget.child,
