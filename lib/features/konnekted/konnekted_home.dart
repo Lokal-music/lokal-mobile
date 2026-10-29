@@ -186,6 +186,7 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
             // MediaQuery.padding.bottom. Add only a small visual margin.
             SliverToBoxAdapter(
               child: SizedBox(
+                key: const Key('home-bottom-clearance'),
                 height: 12 + MediaQuery.paddingOf(context).bottom,
               ),
             ),
