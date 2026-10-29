@@ -178,6 +178,16 @@ List<LokalSettingsSection> playbackSettings(
       title: lokalText('Queue'),
       children: [
         LokalSettingRow.toggle(
+          label: lokalText('Reverse song swipe actions'),
+          description: lokalText(
+            prefs.swipeQueueDirectionsReversed
+                ? 'Swipe right to Play next, left to Add to queue.'
+                : 'Swipe right to Add to queue, left to Play next.',
+          ),
+          value: prefs.swipeQueueDirectionsReversed,
+          onChanged: notifier.setSwipeQueueDirectionsReversed,
+        ),
+        LokalSettingRow.toggle(
           label: lokalText('Autoplay'),
           description: lokalText(
             'When the queue ends, keep playing songs from your library.',
