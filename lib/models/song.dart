@@ -116,8 +116,9 @@ class Song {
   /// Tidal catalogue advertises an Atmos version. Does not verify the
   /// decoded stream or the output device (which may be stereo).
   final bool atmosAvailable;
-  /// True for a locally inspected E-AC-3 JOC stream. This describes the
-  /// encoded source; the Android device must still support a JOC output path.
+  /// True for a verified Dolby encoded stream (E-AC-3 JOC or AC-4) that
+  /// must retain its bitstream via native Android playback, rather than PCM.
+  /// AC-4 encoding alone does not confirm an immersive Atmos presentation.
   final bool atmosEncoded;
 
   /// The server's song id (Subsonic song id, WebDAV file URL, Jellyfin Item.Id).
