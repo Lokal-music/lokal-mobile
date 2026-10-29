@@ -18,16 +18,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install Python test dependency
+        run: python3 -m pip install --disable-pip-version-check Pillow
+      - name: Generate full-bleed CD launcher assets
+        run: |
+          python3 tool/gen_lokal_launcher_icons.py
+          python3 -m unittest tool/ci_brand_icons_test.py -v
       - name: Test CI helpers
         run: |
           python3 -B -m unittest discover -s tool -p 'ci_*_test.py' -v
           python3 -B tool/native_test_cargokit_launcher.py
       - uses: ./.github/actions/android-toolchain
-      - name: Generate full-bleed CD launcher assets
-        run: |
-          python3 -m pip install --disable-pip-version-check Pillow
-          python3 tool/gen_lokal_launcher_icons.py
-          python3 -m unittest tool/ci_brand_icons_test.py -v
       - name: Focused suites from docs/BUILD.md, including share and picker
         run: >-
           flutter test --no-pub
@@ -65,6 +66,15 @@ jobs:
           flutter build apk --debug --flavor full --target-platform android-arm64 --no-pub
           flutter build apk --debug --flavor play --target-platform android-arm64 --no-pub
           bash android/gradlew -p android verifyBuiltInKotlin --console=plain --no-daemon
+      - name: Publish installable test APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: lokal-mobile-adaptive-test-apks
+          path: |
+            build/app/outputs/flutter-apk/app-full-debug.apk
+            build/app/outputs/flutter-apk/app-play-debug.apk
+          if-no-files-found: error
+          retention-days: 14
       - name: Test widget preference codec compatibility
         run: >-
           bash android/gradlew -p android :app:testFullDebugUnitTest

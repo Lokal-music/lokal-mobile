@@ -1,6 +1,7 @@
 import 'package:flick/features/flow/flow_screen.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/utils/responsive.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/features/konnekted/lokal_home_greeting.dart';
@@ -283,7 +284,7 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 (greeting ?? lokalHomeMessages(const [], now: at)).headline,
               ),
               style: TextStyle(
-                fontSize: 34,
+                fontSize: context.responsiveText(34),
                 fontWeight: FontWeight.w600,
                 letterSpacing: -.7,
                 color: context.lokal.text,
@@ -298,7 +299,7 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 (greeting ?? lokalHomeMessages(const [], now: at)).subheader,
               ),
               key: ValueKey(greeting),
-              style: TextStyle(fontSize: 15, color: context.lokal.muted),
+              style: TextStyle(fontSize: context.responsiveText(15), color: context.lokal.muted),
             ),
           ),
         ],
@@ -325,95 +326,39 @@ class _HomeModeSelector extends StatefulWidget {
 }
 
 class _HomeModeSelectorState extends State<_HomeModeSelector> {
-  final _scrollController = ScrollController();
-  bool _revealScheduled = false;
-  final _viewportKey = GlobalKey();
-  final _tabKeys = {
-    for (final tab in KonnektedHomeTab.values) tab: GlobalKey(),
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _revealSelected();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _revealSelected();
-  }
-
-  @override
-  void didUpdateWidget(covariant _HomeModeSelector oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedTab != widget.selectedTab) _revealSelected();
-  }
-
-  void _revealSelected() {
-    if (_revealScheduled) return;
-    _revealScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _revealScheduled = false;
-      if (!mounted || !_scrollController.hasClients) return;
-      final tab = _tabKeys[widget.selectedTab]?.currentContext?.findRenderObject();
-      final viewport = _viewportKey.currentContext?.findRenderObject();
-      if (tab is! RenderBox || viewport is! RenderBox ||
-          !tab.attached || !viewport.attached) {
-        return;
-      }
-      final left = tab.localToGlobal(Offset.zero, ancestor: viewport).dx;
-      final offset = (_scrollController.offset +
-              left + tab.size.width / 2 - viewport.size.width / 2)
-          .clamp(0.0, _scrollController.position.maxScrollExtent);
-      if ((offset - _scrollController.offset).abs() < 1) return;
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _scrollController.jumpTo(offset);
-      } else {
-        _scrollController.animateTo(
-          offset,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  double _modeTabFontSize(double width) {
+    // The logo and fixed action buttons leave a fairly narrow selector on
+    // phones, so keep the labels comfortably readable there too.
+    if (width < 220) return 11;
+    if (width < 260) return 12;
+    if (width < 310) return 13;
+    return 14;
   }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      key: _viewportKey,
-      controller: _scrollController,
-      scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minWidth: constraints.maxWidth),
-        child: Align(
-          alignment: Alignment.center,
-          child: LokalGlass.capsule(
-            thickness: LokalGlassThickness.thin,
-            shadow: false,
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final tab in KonnektedHomeTab.values)
-                  KeyedSubtree(
-                    key: _tabKeys[tab],
-                    child: _ShelfChip(
-                      label: lokalText(tab.label),
-                      selected: tab == widget.selectedTab,
-                      onTap: () => widget.onTabChanged?.call(tab),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+    builder: (context, constraints) => SizedBox(
+      width: constraints.maxWidth,
+      child: LokalGlass.capsule(
+        thickness: LokalGlassThickness.thin,
+        shadow: false,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        // Spread the tabs across the whole capsule so neither end has
+        // a large unused gap. Each label is kept on one line and scales down
+        // only if its own slot is too narrow.
+        child: Row(
+          children: [
+            for (final tab in KonnektedHomeTab.values)
+              Expanded(
+                child: _ShelfChip(
+                  label: lokalText(tab.label),
+                  selected: tab == widget.selectedTab,
+                  compact: true,
+                  fontSize: _modeTabFontSize(constraints.maxWidth),
+                  onTap: () => widget.onTabChanged?.call(tab),
+                ),
+              ),
+          ],
         ),
       ),
     ),
@@ -487,11 +432,15 @@ class _ShelfChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
+    this.fontSize,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
+  final double? fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -507,9 +456,9 @@ class _ShelfChip extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(minHeight: 44, minWidth: 56),
+          constraints: BoxConstraints(minHeight: 44, minWidth: compact ? 0 : 56),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 1 : 10, vertical: 8),
           decoration: BoxDecoration(
             color: selected
                 ? (t.isLight
@@ -518,12 +467,17 @@ class _ShelfChip extends StatelessWidget {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Text(
-            label.toUpperCase(),
-            style: LokalTheme.label(
-              t,
-              size: 10,
-              color: selected ? t.text : t.muted,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              softWrap: false,
+              style: LokalTheme.label(
+                t,
+                size: fontSize ?? (compact ? 9 : 10),
+                color: selected ? t.text : t.muted,
+              ),
             ),
           ),
         ),

@@ -474,7 +474,7 @@ mod tests {
 
         let saved = Probe::open(&path).unwrap().read().unwrap();
         let tag = saved.primary_tag().or_else(|| saved.first_tag()).unwrap();
-        assert_eq!(tag.get_string(&ItemKey::Lyrics), Some(expected));
+        assert_eq!(tag.get_string(ItemKey::Lyrics), Some(expected));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -541,7 +541,7 @@ mod tests {
         let raw = Probe::open(&path).unwrap().read().unwrap();
         let tag = raw.primary_tag().or_else(|| raw.first_tag()).unwrap();
         assert_eq!(
-            tag.get_string(&ItemKey::UnsyncLyrics),
+            tag.get_string(ItemKey::UnsyncLyrics),
             Some("[00:01.20] A test line")
         );
         assert_eq!(after.genre.as_deref(), Some("Electronic"));

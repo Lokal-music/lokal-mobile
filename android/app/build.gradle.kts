@@ -81,6 +81,8 @@ android {
     }
 
     defaultConfig {
+        // Keep test builds installable alongside the production app.
+        // CI debug builds opt into this suffix; release identity remains unchanged.
         applicationId = "com.lokalkonnekt.konnekted2"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
@@ -132,6 +134,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Separate package identity for the adaptive-layout test APK only.
+            // Production/release builds keep the stable application ID.
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
