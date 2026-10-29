@@ -2944,11 +2944,13 @@ fn open_android_output_stream(
             } else {
                 match precision {
                     1 => &[ManagedPcmFormat::S16, ManagedPcmFormat::F32],
-                    2 => &[ManagedPcmFormat::F32, ManagedPcmFormat::S16],
+                    // Last attempt restores normal Android conversion so an
+                    // unsupported forced format never leaves playback silent.
+                    2 => &[ManagedPcmFormat::F32, ManagedPcmFormat::S16, ManagedPcmFormat::F32],
                     _ => &[ManagedPcmFormat::F32],
                 }
             };
-            for &attempt_fmt in try_formats {
+            for (attempt_index, &attempt_fmt) in try_formats.iter().enumerate() {
                 let result: Result<AndroidManagedStreamKind, String> = if use_integer_format {
                     let builder = oboe::AudioStreamBuilder::default()
                         .set_stereo()
@@ -3071,7 +3073,12 @@ fn open_android_output_stream(
                         .set_usage(Usage::Media)
                         .set_content_type(ContentType::Music)
                         .set_channel_conversion_allowed(false)
-                        .set_format_conversion_allowed(bit_perfect_route || precision == 0)
+                        .set_format_conversion_allowed(
+                            bit_perfect_route
+                                || precision == 0
+                                || (precision == 1 && attempt_fmt == ManagedPcmFormat::F32)
+                                || (precision == 2 && attempt_index == 2)
+                        )
                         .set_sample_rate_conversion_quality(if bit_perfect_route {
                             SampleRateConversionQuality::None
                         } else {
@@ -3214,6 +3221,15 @@ fn open_android_output_stream(
                             AndroidManagedStreamKind::I32Pcm(_) => "s32",
                             AndroidManagedStreamKind::I16(_) => "s16",
                         };
+                        if !bit_perfect_route && !use_integer_format && precision != 0 {
+                            let wanted = if precision == 1 { "i16" } else { "f32" };
+                            if sample_format != wanted || (precision == 2 && attempt_index == 2) {
+                                log::warn!(
+                                    "[AUDIO] Requested PCM precision {} unavailable; using managed output {} (compatibility fallback)",
+                                    wanted, sample_format
+                                );
+                            }
+                        }
                         let exclusive_error = if sharing_label(actual_sharing) == "exclusive" {
                             None
                         } else {
