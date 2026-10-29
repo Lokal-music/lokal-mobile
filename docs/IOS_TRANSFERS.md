@@ -8,7 +8,8 @@ installation during simulator boot; one fresh-host retry passed the full suite
 using the same compiled integration app. Standalone native host contracts pass
 20 rounds in native run 7. Build84 now contains explicit caller-client binding,
 the private product schema and through-#332 UI source. Its unsigned IPA is
-independently verified; complete installed simulator acceptance remains pending.
+independently verified; its complete installed iOS18.6 suite passes, and the
+separate iOS26 suite is running against the same compiled integration app.
 Native run9 passes 20 Apple rounds, both actual iOS16 SDK/Flutter bridge checks
 and actual Isar contracts. Build82 remains the earlier complete app checkpoint.
 This qualifies the integrated protocol, not OS suspension/daemon delivery.
@@ -721,3 +722,32 @@ That probe and all later publication/media source are outside build84 and still
 need Apple execution. No integrated product-import or OS lifecycle acceptance
 is claimed. The next product work remains the root coordinator and its
 Isar/cleanup/scanner/deletion barriers.
+
+### Completion acknowledgement foundation
+
+Later source adds private `acknowledgeImport` after the root has proved its
+durable committed Isar receipt and exact prepared Song ID. Native cannot
+independently inspect Isar: this API is the app's attestation, and normal
+product import remains disabled until the actual root coordinator is accepted.
+The native writer checks the exact frozen publication witness and importing
+job in one SQLite transaction before recording completion. It then drains only
+its private retained staging. It never edits, deletes, rehashes or recreates a
+public Music file at this historical boundary.
+
+Frozen provenance remains available after completion for lost-reply recovery.
+A completed job can acquire only a receipt-only claim, without current pairing
+credentials or a staged-source path. It cannot acquire a new publication
+writer. Repeated acknowledgement leaves the job and observable generation
+unchanged, preventing an event-driven recovery loop. The future coordinator
+must bound recovery pages and retire terminal history deliberately; retaining
+provenance is not a license for unbounded startup scanning or journal growth.
+
+Actual native runtime contracts cover wrong-Song refusal, private staging
+drainage, acknowledgement without a current pairing, lost completion replies
+and complete read-only recovery. Deleted public copies stay deleted; edited
+public bytes and untouched inodes remain preserved. The actual SQLite contract
+also refuses a stale/unpublished custody witness without changing importing
+state. All 19 focused Dart transport contracts pass and targeted analysis is
+clean. These tests use an explicit app-commit attestation fixture, not a real
+Isar commit; integrated completion, public-file abandonment, clear/unpair/CUE
+barriers and Apple acceptance of this later source remain pending.

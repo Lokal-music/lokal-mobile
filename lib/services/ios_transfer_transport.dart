@@ -229,6 +229,33 @@ class IosTransferTransport {
     return result;
   }
 
+  /// The root must first prove its durable committed Isar receipt. This call
+  /// only acknowledges native job history and drains private retained staging.
+  Future<IosTransferJob> acknowledgeImport(
+    IosTransferImportLease lease, {
+    required int songId,
+  }) async {
+    if (songId < 1) {
+      throw const FormatException('Invalid completed Song identity.');
+    }
+    final result = IosTransferJob.fromJson(
+      await _importCall('acknowledgeImport', {
+        ...lease.control,
+        'songID': songId,
+      }),
+    );
+    if (result.phase != IosTransferPhase.complete ||
+        result.id != lease.job.id ||
+        result.revision != lease.job.revision ||
+        result.receivedBytes != lease.job.receivedBytes ||
+        result.receivedSha256 != lease.job.receivedSha256 ||
+        jsonEncode(result.intent.toJson()) !=
+            jsonEncode(lease.job.intent.toJson())) {
+      throw const FormatException('Invalid native import completion.');
+    }
+    return result;
+  }
+
   Future<void> validateImport(
     IosTransferImportLease lease, {
     bool requiresWrite = true,

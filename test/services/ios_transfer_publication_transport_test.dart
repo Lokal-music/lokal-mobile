@@ -237,4 +237,73 @@ void main() {
       messenger.setMockMethodCallHandler(channel, null);
     }
   });
+
+  test('completed history is read-only and acknowledgement preserves the frozen job', () async {
+    const channel = MethodChannel('test/ios-import-acknowledgement');
+    final client = Completer<String>();
+    final source = Map<String, Object?>.from(
+      publicationDocument()['job'] as Map,
+    );
+    var reply = {...source, 'phase': 'complete'};
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'observe') {
+        client.complete((request(call) as Map)['clientID'] as String);
+        return null;
+      }
+      if (call.method == 'stopObserving') return null;
+      expect(call.method, 'acknowledgeImport');
+      expect(request(call), {
+        'id': source['id'],
+        'revision': 1,
+        'leaseID': importLease()['leaseID'],
+        'clientID': await client.future,
+        'songID': 42,
+      });
+      return encoded(reply);
+    });
+    final transport = IosTransferTransport(channel: channel, supported: true);
+    final subscription = transport.changes.listen((_) {});
+    try {
+      final raw = {
+        ...importLease(reconcileOnly: true, clientId: await client.future),
+        'job': reply,
+      };
+      final historical = IosTransferImportLease.fromJson(raw);
+      expect(historical.sourcePath, isNull);
+      expect(
+        () => IosTransferImportLease.fromJson({...raw, 'reconcileOnly': false}),
+        throwsFormatException,
+      );
+      final completed = await transport.acknowledgeImport(
+        historical,
+        songId: 42,
+      );
+      expect(completed.phase, IosTransferPhase.complete);
+      reply = source;
+      await expectLater(
+        transport.acknowledgeImport(historical, songId: 42),
+        throwsFormatException,
+      );
+      reply = {
+        ...source,
+        'phase': 'complete',
+        'metadata': {
+          ...source['metadata'] as Map,
+          'title': 'Changed completion recording',
+        },
+      };
+      await expectLater(
+        transport.acknowledgeImport(historical, songId: 42),
+        throwsFormatException,
+      );
+      await expectLater(
+        transport.acknowledgeImport(historical, songId: 0),
+        throwsFormatException,
+      );
+    } finally {
+      await subscription.cancel();
+      await transport.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
 }

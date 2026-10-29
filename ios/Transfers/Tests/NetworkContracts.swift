@@ -523,7 +523,7 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
     }
     let inode = try manager.attributesOfItem(atPath: target.path)[.systemFileNumber] as! NSNumber
     let files = try LokalTransferFiles(container: root)
-    try files.discard(completedCopy.job)
+    if boundary != "none" { try files.discard(completedCopy.job) }
     let repeated: LokalTransferPublishedImport = try native {
       runtime.publishImport(publication(lease), owner: owner, reply: $0)
     }
@@ -549,6 +549,51 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
       }
     }
     try require(manager.fileExists(atPath: target.path), "release and receipt-only refusal preserve the actual copy")
+    // Fixture attestation only: product Root must prove a real committed Isar
+    // receipt before this acknowledgement API is reachable in normal flows.
+    credentials.set(nil)
+    try rejects("completion cannot acknowledge a different prepared Song ID") {
+      let _: LokalTransferJob = try native {
+        runtime.acknowledgeImport(publication(readOnly, songID: 43), owner: owner, reply: $0)
+      }
+    }
+    try require((try journal.snapshot()).jobs.first?.phase == .importing,
+      "wrong completion identity never changes native job truth")
+    if boundary == "afterTrackedPublication" { try manager.removeItem(at: target) }
+    if boundary == "trackedCopyCheckpoint" { try Data("edited after fixture commit".utf8).write(to: target) }
+    let completedJob: LokalTransferJob = try native {
+      runtime.acknowledgeImport(publication(readOnly), owner: owner, reply: $0)
+    }
+    try require(completedJob.phase == .complete && completedJob.revision == 1,
+      "app acknowledgement commits complete for the exact frozen revision without current pairing")
+    try require(!manager.fileExists(atPath: root.appendingPathComponent(LokalTransferJournal.directoryName)
+      .appendingPathComponent(completedJob.stagedName).path), "completion drains actual private retained staging")
+    try require(journal.snapshot().custodies.count == 1,
+      "completion retains native publication provenance for lost acknowledgements")
+    let historical = try claim(owner, readOnly: true)
+    try require(historical.job.phase == .complete && historical.sourcePath == nil,
+      "complete recovery is receipt-only and never exposes an old staged source")
+    try rejects("a completed historical claim never becomes writer authority") {
+      try ownership.validate(owner, jobID: job.id, revision: 1, leaseID: historical.leaseID, requiresWrite: true)
+    }
+    try rejects("completed jobs cannot acquire a fresh publication lease") { _ = try claim(owner) }
+    let beforeRepeated: LokalTransferSummary = try native { runtime.summary($0) }
+    let repeatedCompletion: LokalTransferJob = try native {
+      runtime.acknowledgeImport(publication(historical), owner: owner, reply: $0)
+    }
+    try require(repeatedCompletion == completedJob, "lost completion reply coalesces the same durable job")
+    let afterRepeated: LokalTransferSummary = try native { runtime.summary($0) }
+    try require(beforeRepeated.generation == afterRepeated.generation,
+      "duplicate completion does not generate another event-driven recovery mutation")
+    if boundary == "afterTrackedPublication" {
+      try require(!manager.fileExists(atPath: target.path), "historical completion cannot recreate a deleted public copy")
+    } else if boundary == "trackedCopyCheckpoint" {
+      try require(Data(contentsOf: target) == Data("edited after fixture commit".utf8),
+        "completion never edits or deletes user-modified public bytes")
+    } else {
+      try require((manager.attributesOfItem(atPath: target.path)[.systemFileNumber] as! NSNumber) == inode,
+        "completion leaves the original public inode untouched")
+    }
   }
-  print("Tracked runtime contracts passed: real HTTP WAV publication, importing persistence, lost staging/acknowledgement, exact Song binding, foreign/read-only/pairing refusal, blocked-copy cancellation/drainage and engine handoff after link. Product media/Isar completion remains disabled.")
+  print("Tracked runtime contracts passed: real HTTP WAV publication, importing persistence, exact Song binding, ownership/pairing refusal, blocked-copy cancellation/drainage, engine handoff, app-attested completion, actual private staging drainage, read-only complete recovery and preservation of deleted/edited public copies. Actual Isar completion/product adapter remains disabled.")
 }

@@ -221,7 +221,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["claimImport", "publishImport", "validateImport", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["claimImport", "publishImport", "acknowledgeImport", "validateImport", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -256,14 +256,19 @@ final class LokalTransferBridge {
         let ticket = try host.importOwnership.capture(owner)
         host.withRuntime({ runtime in runtime.claimImport(request, ticket: ticket) { reply.encode($0) } },
                          unavailable: { reply.failure($0) })
-      } else if call.method == "publishImport" {
+      } else if call.method == "publishImport" || call.method == "acknowledgeImport" {
         let request = try LokalTransferProtocol.importPublication(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
         guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
         try host.importOwnership.validate(owner, jobID: request.id, revision: request.revision,
-          leaseID: request.leaseID, requiresWrite: true)
-        host.withRuntime({ runtime in runtime.publishImport(request, owner: owner) { reply.encode($0) } },
-                         unavailable: { reply.failure($0) })
+          leaseID: request.leaseID, requiresWrite: call.method == "publishImport")
+        if call.method == "publishImport" {
+          host.withRuntime({ runtime in runtime.publishImport(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        } else {
+          host.withRuntime({ runtime in runtime.acknowledgeImport(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        }
       } else {
         let request = try LokalTransferProtocol.importLease(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }

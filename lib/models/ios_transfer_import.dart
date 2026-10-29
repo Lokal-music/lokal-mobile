@@ -60,7 +60,9 @@ class IosTransferImportLease {
         !{
           IosTransferPhase.validating,
           IosTransferPhase.importing,
+          IosTransferPhase.complete,
         }.contains(job.phase) ||
+        (job.phase == IosTransferPhase.complete && !reconcileOnly) ||
         (reconcileOnly && source != null) ||
         (source != null &&
             (!source.startsWith('/') ||

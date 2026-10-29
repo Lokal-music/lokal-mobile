@@ -239,9 +239,11 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   }
 
   private func update(_ job: LokalTransferJob, pause: LokalTransferPause? = nil,
+                      acknowledging custody: LokalTransferImportCustody? = nil,
                       _ operation: (inout LokalTransferJob) throws -> Void) throws -> LokalTransferJob {
     let next: LokalTransferJob
-    do { next = try journal.update(id: job.id, revision: job.revision, pausingScope: pause, operation) }
+    do { next = try journal.update(id: job.id, revision: job.revision, pausingScope: pause,
+                                  acknowledging: custody, operation) }
     catch {
       importOwnership.revoke(jobID: job.id, revision: job.revision)
       if let failure = error as? LokalTransferError {
@@ -589,7 +591,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         }
         guard job.revision == request.revision else { throw LokalTransferError.staleRevision }
         if request.reconcileOnly {
-          guard [.validating, .importing].contains(job.phase) else {
+          guard [.validating, .importing, .complete].contains(job.phase) else {
             throw LokalTransferError.invalidTransition
           }
         } else {
@@ -680,6 +682,41 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
                 revision: request.revision, leaseID: request.leaseID, requiresWrite: true)
               reply(.success(LokalTransferPublishedImport(job: importing, songID: request.songID, receipt: receipt)))
             } catch { reply(.failure(error)) }
+          }
+        }
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// Root must first read its durable committed Isar receipt and exact Song ID.
+  /// This is its private acknowledgement, not independent proof of an Isar
+  /// commit. Completion retains frozen native custody for lost-reply recovery.
+  /// Cleanup touches only app-private retained staging, never public Music.
+  func acknowledgeImport(_ request: LokalTransferProtocol.ImportPublication,
+                         owner: LokalTransferImportOwnership.Owner,
+                         reply: @escaping LokalTransferCompletion<LokalTransferJob>) {
+    queue.async {
+      do {
+        guard request.clientID == owner.clientID else { throw LokalTransferError.staleRevision }
+        try self.importOwnership.validate(owner, jobID: request.id,
+          revision: request.revision, leaseID: request.leaseID, requiresWrite: false)
+        guard self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+              let job = self.jobs[request.id], job.revision == request.revision,
+              [.importing, .complete].contains(job.phase),
+              let work = try self.journal.importCustody(id: request.id, revision: request.revision),
+              work.songID == request.songID, work.matches(job), work.publication != nil else {
+          throw LokalTransferError.staleRevision
+        }
+        // Repeated completion must not emit another mutation/change event:
+        // event-driven recovery could otherwise acknowledge history forever.
+        let completed = job.phase == .complete ? job : try self.update(job, acknowledging: work) {
+          if $0.phase != .complete { try $0.transition(to: .complete, nowMs: Self.now()) }
+        }
+        self.fileQueue.async {
+          let cleanup = Result { try self.files.discard(work.job) }
+          self.queue.async {
+            do { try cleanup.get(); reply(.success(completed)) }
+            catch { reply(.failure(error)) }
           }
         }
       } catch { reply(.failure(error)) }

@@ -404,6 +404,7 @@ final class LokalTransferJournal: @unchecked Sendable {
 
   @discardableResult
   func update(id: String, revision: Int, pausingScope: LokalTransferPause? = nil,
+              acknowledging expectedCustody: LokalTransferImportCustody? = nil,
               _ operation: (inout LokalTransferJob) throws -> Void) throws -> LokalTransferJob {
     try transaction { current in
       let select = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
@@ -414,6 +415,15 @@ final class LokalTransferJournal: @unchecked Sendable {
       guard code == SQLITE_ROW else { throw LokalTransferError.database(code) }
       let (previous, oldBytes) = try decoded(select)
       guard previous.revision == revision else { throw LokalTransferError.staleRevision }
+      if let expectedCustody {
+        // The completion transition and exact frozen publication witness are
+        // checked in one native writer transaction. Never infer an Isar commit.
+        guard let (stored, _) = try selectCustody(id: id, revision: revision),
+              stored == expectedCustody, stored.matches(previous),
+              stored.publication != nil, [.importing, .complete].contains(previous.phase) else {
+          throw LokalTransferError.staleRevision
+        }
+      }
       var job = previous
       try operation(&job)
       guard job.id == previous.id, job.direction == previous.direction,
@@ -490,7 +500,8 @@ final class LokalTransferJournal: @unchecked Sendable {
 
   /// Reserve before any library publication. A cancelled/retried job cannot
   /// erase this frozen revision's proof or silently adopt a different song ID.
-  /// Only the future native coordinator calls this; no public bridge exposes it.
+  /// Only the private native publisher calls this after writer validation;
+  /// product import remains disabled until its root coordinator is accepted.
   func reserveImport(id: String, revision: Int, songID: Int64) throws -> LokalTransferImportCustody {
     try transaction { current in
       let query = try statement("SELECT id,revision,document FROM jobs WHERE id=?")

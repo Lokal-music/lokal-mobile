@@ -154,6 +154,26 @@ func runTrackedLibraryContracts(container: URL, template: LokalTransferJob) thro
   }
   try require(!manager.fileExists(atPath: importing.target().path), "missing committing copy stays missing")
 
+  let acknowledgement = try fixture("acknowledgement")
+  let oldProof = try acknowledgement.journal.reserveImport(id: acknowledgement.job.id, revision: 1, songID: 42)
+  _ = try acknowledgement.install()
+  let publishedProof = try acknowledgement.work()
+  let committing = try acknowledgement.journal.update(id: acknowledgement.job.id, revision: 1) {
+    try $0.transition(to: .importing, nowMs: 1040)
+  }
+  try rejects("a stale/unpublished custody witness cannot acknowledge completion") {
+    _ = try acknowledgement.journal.update(id: committing.id, revision: 1, acknowledging: oldProof) {
+      try $0.transition(to: .complete, nowMs: 1050)
+    }
+  }
+  try require(acknowledgement.journal.snapshot().jobs.first?.phase == .importing,
+    "failed atomic custody comparison leaves the job importing")
+  let completed = try acknowledgement.journal.update(id: committing.id, revision: 1, acknowledging: publishedProof) {
+    try $0.transition(to: .complete, nowMs: 1050)
+  }
+  try require(completed.phase == .complete && acknowledgement.journal.snapshot().custodies == [publishedProof],
+    "exact native completion and frozen publication retention share the journal transaction")
+
   let concurrent = try fixture("concurrent")
   let children = try (0..<6).map { _ in try child(concurrent) }
   for process in children { process.waitUntilExit() }

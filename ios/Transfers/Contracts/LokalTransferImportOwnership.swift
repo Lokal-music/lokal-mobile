@@ -120,7 +120,9 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func claim(_ ticket: Ticket, job: LokalTransferJob,
              permission: Permission) throws -> Lease {
     try job.validate()
-    guard job.direction == .download, [.validating, .importing].contains(job.phase) else {
+    guard job.direction == .download,
+          [.validating, .importing].contains(job.phase) ||
+            (job.phase == .complete && permission == .reconcileOnly) else {
       throw LokalTransferError.invalidTransition
     }
     let scope = try normalized(LokalTransferScope(desktopID: job.identity.desktopID,
