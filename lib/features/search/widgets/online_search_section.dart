@@ -799,41 +799,9 @@ class _OnlineTile extends StatelessWidget {
                                 child: const LokalAtmosPill(),
                               ),
                             ),
-                          // Amazon's AC-4 tier is provider-wide. It must not
-                          // appear as a codec or Atmos *badge* on every search
-                          // result. This is an opt-in action; the actual codec
-                          // is checked only after the requested source arrives.
-                          if (track.atmosRequestable && !track.atmosAvailable)
-                            Tooltip(
-                              message: 'Try requesting Amazon AC-4 for this recording. Availability is unknown until download; playback needs an Android AC-4 decoder or direct output.',
-                              child: InkWell(
-                                onTap: busy ? null : onAtmos,
-                                borderRadius: BorderRadius.circular(999),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: t.accent.withValues(alpha: .65),
-                                    ),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.surround_sound_rounded,
-                                          size: 14, color: t.accent),
-                                      const SizedBox(width: 4),
-                                      Text('Try AC-4',
-                                          style: TextStyle(
-                                              fontSize: 11, color: t.accent,
-                                              fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
+                          // Unknown Atmos availability is not a track badge
+                          // or a row action. Amazon's global AC-4 capability
+                          // remains configurable in provider settings.
                       ],
                     ),
                   ],
