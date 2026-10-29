@@ -53,6 +53,17 @@ enum LokalTransferProtocol {
       ImportLease(id: id, revision: revision, leaseID: leaseID, clientID: clientID)
     }
   }
+  struct ImportCleanupDecision: Decodable, Sendable {
+    let id: String
+    let revision: Int
+    let leaseID, clientID: String
+    let songID: Int64
+    let mode: LokalTransferImportResolution.Mode
+    let isarState: String
+    var lease: ImportLease {
+      ImportLease(id: id, revision: revision, leaseID: leaseID, clientID: clientID)
+    }
+  }
 
   private static func object<T: Decodable>(_ type: T.Type, _ data: Data,
                                            keys: Set<String>) throws -> T {
@@ -124,6 +135,17 @@ enum LokalTransferProtocol {
       keys: ["id", "revision", "leaseID", "clientID", "songID"])
     try validateImportLease(value.lease)
     guard value.songID > 0 else { throw LokalTransferError.invalidRecord }
+    return value
+  }
+
+  static func importCleanupDecision(_ data: Data, finalized: Bool = false) throws -> ImportCleanupDecision {
+    let value = try object(ImportCleanupDecision.self, data,
+      keys: ["id", "revision", "leaseID", "clientID", "songID", "mode", "isarState"])
+    try validateImportLease(value.lease)
+    guard value.songID > 0,
+          value.isarState == (value.mode == .abandoned ? (finalized ? "retired" : "retiring") : "committed") else {
+      throw LokalTransferError.invalidRecord
+    }
     return value
   }
 

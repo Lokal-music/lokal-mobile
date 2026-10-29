@@ -5,6 +5,8 @@ import 'dart:isolate';
 
 import 'package:flutter/services.dart';
 
+import '../data/entities/ios_transfer_receipt_entity.dart';
+
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_import.dart';
 import '../models/ios_transfer_recovery.dart';
@@ -230,6 +232,7 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
 
   /// Private cleanup claim only; product activation and the Isar decision are
   /// separate. Native revokes publication before draining the old file worker.
+  @override
   Future<IosTransferCleanupLease> claimImportCleanup(
     IosTransferImportWork work,
   ) async {
@@ -246,15 +249,89 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     return claim;
   }
 
+  @override
   Future<void> validateImportCleanup(IosTransferCleanupLease lease) async {
     if (await _importCall('validateImportCleanup', lease.control) != true) {
       throw const FormatException('Invalid native cleanup guard response.');
     }
   }
 
+  @override
   Future<void> releaseImportCleanup(IosTransferCleanupLease lease) async {
     if (await _importCall('releaseImport', lease.control) != true) {
       throw const FormatException('Invalid native cleanup release response.');
+    }
+  }
+
+  Map<String, Object> _cleanupDecision(
+    IosTransferCleanupLease lease,
+    IosTransferReceiptEntity receipt, {
+    required bool finalized,
+  }) {
+    final job = lease.job, identity = lease.job.intent.identity;
+    final committed = receipt.state == 'committed';
+    if (receipt.id < 1 ||
+        receipt.schemaVersion != 1 ||
+        receipt.operationKey != '${job.id}:${job.revision}' ||
+        receipt.jobId != job.id ||
+        receipt.revision != job.revision ||
+        receipt.localSongId != lease.songId ||
+        receipt.serverId != identity.localServerId ||
+        receipt.desktopId != identity.scope.desktopId ||
+        receipt.desktopUserId != identity.desktopUserId ||
+        receipt.pairingId != identity.scope.pairingId ||
+        receipt.origin != identity.scope.origin ||
+        receipt.sourceId != identity.sourceId ||
+        receipt.relativePath != lease.target.relativePath ||
+        receipt.bytes != job.receivedBytes ||
+        receipt.sha256 != job.receivedSha256 ||
+        committed != (receipt.committedAt != null) ||
+        (committed && !lease.publicationRecorded) ||
+        (!committed && receipt.state != (finalized ? 'retired' : 'retiring'))) {
+      throw const FormatException(
+        'Cleanup requires the exact durable Isar decision.',
+      );
+    }
+    return {
+      ...lease.control,
+      'songID': lease.songId,
+      'mode': committed ? 'committed' : 'abandoned',
+      'isarState': receipt.state,
+    };
+  }
+
+  /// Caller has crossed the actual Isar writer barrier. Passing a prepared
+  /// receipt cannot authorize deletion, and committed history always preserves
+  /// public Music. Native retains provenance after the returned resolution.
+  @override
+  Future<IosTransferResolvedCleanup> resolveImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  }) async {
+    final payload = _cleanupDecision(lease, receipt, finalized: false);
+    final mode = payload['mode'] == 'committed'
+        ? IosTransferCleanupMode.committed
+        : IosTransferCleanupMode.abandoned;
+    final result = IosTransferResolvedCleanup.fromJson(
+      await _importCall('resolveImportCleanup', payload),
+    );
+    result.validateFor(lease, mode);
+    return result;
+  }
+
+  /// Only after Isar retirement (or durable committed history). This removes
+  /// native bookkeeping, not files or Songs, then the caller releases cleanup.
+  @override
+  Future<void> finalizeImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  }) async {
+    if (await _importCall(
+          'finalizeImportCleanup',
+          _cleanupDecision(lease, receipt, finalized: true),
+        ) !=
+        true) {
+      throw const FormatException('Invalid native cleanup finalization.');
     }
   }
 

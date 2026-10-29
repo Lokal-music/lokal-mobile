@@ -290,6 +290,25 @@ do {
     "bounded typed native lease guard accepted")
   var publicationDocument = leaseDocument
   publicationDocument["songID"] = 42
+  var decisionDocument = publicationDocument
+  decisionDocument["mode"] = "abandoned"; decisionDocument["isarState"] = "retiring"
+  try require(LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument)).mode == .abandoned,
+    "cleanup decision requires explicit app retiring attestation")
+  try rejects("retiring is not final Isar retirement") {
+    _ = try LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument), finalized: true)
+  }
+  decisionDocument["isarState"] = "retired"
+  try require(LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument), finalized: true).isarState == "retired",
+    "finalization requires the separate app retirement boundary")
+  try rejects("finalized Isar state cannot authorize a new public cleanup") {
+    _ = try LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument))
+  }
+  for key in ["sourcePath", "targetRelativePath", "headers", "copyNonce"] {
+    var injected = decisionDocument; injected[key] = "caller"
+    try rejects("cleanup finalization accepts no caller file authority") {
+      _ = try LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: injected), finalized: true)
+    }
+  }
   try require(LokalTransferProtocol.importPublication(JSONSerialization.data(withJSONObject: publicationDocument)).songID == 42,
     "publication accepts only the current lease and positive prepared Song identity")
   for invalid: Any in [false, 0, -1, 1.5, "42", NSNull()] {

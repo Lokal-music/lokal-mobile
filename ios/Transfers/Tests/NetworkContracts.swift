@@ -119,6 +119,7 @@ func runNetworkContracts(origin: String, length: Int64, checksum: String) throws
   try runHostContracts()
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
+  try runCleanupResolutionContracts(origin: origin, length: length, checksum: checksum)
   let manager = FileManager.default
   let root = manager.temporaryDirectory.resolvingSymlinksInPath()
     .appendingPathComponent("lokal-native-network-" + UUID().uuidString)
@@ -439,6 +440,107 @@ private final class PublicationGate: @unchecked Sendable {
 
 /// The actual native runtime, HTTP-retained WAV, ownership registry, serial file
 /// worker and journal. This still does not acknowledge media or an Isar Song.
+private func runCleanupResolutionContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  for mode in [LokalTransferImportResolution.Mode.committed, .abandoned] {
+    let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+      .appendingPathComponent("lokal-cleanup-resolution-" + UUID().uuidString)
+    let music = root.appendingPathComponent("Music")
+    try manager.createDirectory(at: music, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: root) }
+    let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+      token: "transfer-fixture-token")
+    let ownership = LokalTransferImportOwnership()
+    let runtime = try LokalTransferRuntime(container: root, importOwnership: ownership,
+      library: { try LokalTransferLibrary(root: music) }, credentials: { authorization })
+    defer {
+      let done = DispatchSemaphore(value: 0)
+      runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+    }
+    let job = try LokalTransferJob(direction: .download,
+      identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: "import-fixture",
+        localSongID: "42", origin: origin),
+      metadata: LokalTransferMetadata(title: "Cleanup resolution", artist: "Native fixture", album: nil, fileExtension: "wav"),
+      nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+    let _: LokalTransferSummary = try native { runtime.recover($0) }
+    let _: LokalTransferSummary = try native { runtime.enqueue([job], reply: $0) }
+    _ = try awaitJob(runtime, id: job.id, phase: [.downloaded])
+    let _: LokalTransferJob = try native { runtime.verify(id: job.id, revision: 1, reply: $0) }
+    let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+    let writerRequest = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1, reconcileOnly: false, clientID: owner.clientID)
+    let writerTicket = try ownership.capture(owner)
+    let writer: LokalTransferImportClaim = try native { runtime.claimImport(writerRequest, ticket: writerTicket, reply: $0) }
+    let journal = try LokalTransferJournal(container: root)
+    let files = try LokalTransferFiles(container: root)
+    if mode == .committed {
+      // Restoration/uncertain app history is an explicit app-commit fixture.
+      // Native must preserve bytes; this does not assert an actual Isar commit.
+      _ = try LokalTransferLibrary(root: music).installTracked(writer.job, songID: 42,
+        journal: journal, files: files, cancellation: LokalTransferCopyCancellation(), validateOwnership: {})
+      let _: LokalTransferJob = try native { runtime.cancel(id: job.id, revision: 1, reply: $0) }
+    } else {
+      let request = LokalTransferProtocol.ImportPublication(id: job.id, revision: 1, leaseID: writer.leaseID,
+        clientID: owner.clientID, songID: 42)
+      let _: LokalTransferPublishedImport = try native { runtime.publishImport(request, owner: owner, reply: $0) }
+    }
+    let target = music.appendingPathComponent(writer.targetRelativePath)
+    let ticket = try ownership.beginCleanup(ownership.capture(owner))
+    let request = LokalTransferProtocol.ImportCleanupClaim(id: job.id, revision: 1, clientID: owner.clientID)
+    let cleanup: LokalTransferImportCleanupClaim = try native { runtime.claimImportCleanup(request, ticket: ticket, reply: $0) }
+    let decision = LokalTransferProtocol.ImportCleanupDecision(id: job.id, revision: 1, leaseID: cleanup.leaseID,
+      clientID: owner.clientID, songID: 42, mode: mode, isarState: mode == .abandoned ? "retiring" : "committed")
+    let finalize = LokalTransferProtocol.ImportCleanupDecision(id: job.id, revision: 1, leaseID: cleanup.leaseID,
+      clientID: owner.clientID, songID: 42, mode: mode, isarState: mode == .abandoned ? "retired" : "committed")
+    try rejects("unresolved cleanup cannot discard frozen native bookkeeping") {
+      let _: Bool = try native { runtime.finalizeImportCleanup(finalize, owner: owner, reply: $0) }
+    }
+    #if os(Linux)
+    if mode == .abandoned {
+      try rejects("runtime refuses uncoordinated public cleanup on a portable host") {
+        let _: LokalTransferResolvedCleanup = try native { runtime.resolveImportCleanup(decision, owner: owner, reply: $0) }
+      }
+      try require(Data(contentsOf: target).count == length && journal.snapshot().custodies.first?.resolution == nil &&
+        journal.snapshot().jobs.first?.revision == 2,
+        "portable refusal retains actual public bytes and provenance after authorized native retirement")
+      continue
+    }
+    #endif
+    let first = NativeResult<LokalTransferResolvedCleanup>(), second = NativeResult<LokalTransferResolvedCleanup>()
+    let done = DispatchSemaphore(value: 0)
+    runtime.resolveImportCleanup(decision, owner: owner) { first.set($0); done.signal() }
+    runtime.resolveImportCleanup(decision, owner: owner) { second.set($0); done.signal() }
+    try require(done.wait(timeout: .now() + 10) == .success && done.wait(timeout: .now() + 10) == .success,
+      "both native cleanup callers settle")
+    let resolved = try first.get()
+    try require(resolved == second.get() && resolved.resolution.mode == mode,
+      "concurrent/lost cleanup replies coalesce one durable decision")
+    if mode == .committed {
+      try require(Data(contentsOf: target).count == length, "committed history preserves actual public audio")
+    } else {
+      try require(!manager.fileExists(atPath: target.path) && resolved.resolution.abandonment == .removedOwnedFile,
+        "actual Apple-coordinated abandoned copy is removed")
+    }
+    try require(journal.snapshot().custodies.first?.resolution == resolved.resolution &&
+      !manager.fileExists(atPath: root.appendingPathComponent(LokalTransferJournal.directoryName)
+        .appendingPathComponent(writer.job.stagedName).path),
+      "native result is durable after real private staging drainage, before Isar finalization")
+    let before: LokalTransferSummary = try native { runtime.summary($0) }
+    let repeated: LokalTransferResolvedCleanup = try native { runtime.resolveImportCleanup(decision, owner: owner, reply: $0) }
+    let after: LokalTransferSummary = try native { runtime.summary($0) }
+    try require(repeated == resolved && before.generation == after.generation, "lost cleanup reply emits no new generation")
+    let _: Bool = try native { runtime.finalizeImportCleanup(finalize, owner: owner, reply: $0) }
+    let finalized: LokalTransferSummary = try native { runtime.summary($0) }
+    let _: Bool = try native { runtime.finalizeImportCleanup(finalize, owner: owner, reply: $0) }
+    let finalizedAgain: LokalTransferSummary = try native { runtime.summary($0) }
+    try require(journal.snapshot().custodies.isEmpty && finalized.generation == finalizedAgain.generation,
+      "acknowledged app finalization removes only bookkeeping and repeated replies are inert")
+    try ownership.validateCleanup(owner, jobID: job.id, revision: 1, leaseID: cleanup.leaseID)
+    let control = LokalTransferProtocol.ImportLease(id: job.id, revision: 1, leaseID: cleanup.leaseID, clientID: owner.clientID)
+    let _: Bool = try native { runtime.releaseImport(control, owner: owner, reply: $0) }
+  }
+  print("Native cleanup driver contracts passed: real HTTP/custody/staging, coalesced durable resolution and finalization, committed-file preservation; app Isar states are explicit fixtures. Public abandonment requires actual Apple coordination and is refused on Linux.")
+}
+
 private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum: String) throws {
   let manager = FileManager.default
   for boundary in ["none", "trackedCopyCheckpoint", "afterTrackedPublication"] {

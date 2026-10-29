@@ -221,7 +221,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -274,6 +274,20 @@ final class LokalTransferBridge {
         let ticket = try ownership.beginCleanup(ownership.capture(owner))
         host.withRuntime({ runtime in runtime.claimImportCleanup(request, ticket: ticket) { reply.encode($0) } },
                          unavailable: { ownership.abortCleanup(ticket); reply.failure($0) })
+      } else if call.method == "resolveImportCleanup" || call.method == "finalizeImportCleanup" {
+        let request = try LokalTransferProtocol.importCleanupDecision(data.data,
+          finalized: call.method == "finalizeImportCleanup")
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        try host.importOwnership.validateCleanup(owner, jobID: request.id,
+          revision: request.revision, leaseID: request.leaseID)
+        if call.method == "resolveImportCleanup" {
+          host.withRuntime({ runtime in runtime.resolveImportCleanup(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        } else {
+          host.withRuntime({ runtime in runtime.finalizeImportCleanup(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        }
       } else if call.method == "claimImport" {
         let request = try LokalTransferProtocol.importClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }

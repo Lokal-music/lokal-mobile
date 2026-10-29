@@ -934,3 +934,37 @@ checks ordinary missing-job classification. The separate actual HTTP native
 contract proves a fresh writer can be granted after cleanup abort. A malformed
 request must fail decoding instead. Installed acceptance of this new probe is
 pending the next Apple run.
+
+### Runtime/root finalization continuation (outside PR341/build86)
+
+Later source connects native resolution and app finalization as separate private
+operations. A cleanup claim alone cannot delete a file: the app supplies its
+exact durable Isar retiring/committed receipt binding. Native prepared retirement
+compares frozen custody atomically and retains that cleanup permission while
+advancing the live revision. File handling runs outside Isar/runtime queues;
+public coordination, private-part and staging drainage finish before native
+resolution is recorded. Concurrent callers coalesce. Only after actual Isar
+retirement/committed history may finalization remove native bookkeeping.
+
+The root now resumes known-custody cleanup, preserves committed history (including
+deleted Songs), and recovers native-resolution or finalization reply loss without
+repeating file handling. Current-revision committed imports use the existing
+receipt-only completion route. Missing Isar reservations and contradictory states
+remain nondestructively blocked. Isar-only orphans without native custody still
+need a separate drained bookkeeping witness; they do not authorize public cleanup.
+
+Foreground recovery is coalesced. Mutation/disposal retire the app epoch and
+active cleanup token, then await old startup/foreground/file work before a caller
+crosses its actual storage barrier. The app's clear/unpair/enqueue integration
+still needs its own hooks and submission epochs before activation.
+
+Three portable native rounds pass real HTTP/custody/staging, coalesced resolution,
+idempotent finalization and committed-file preservation. Native driver Isar states
+are explicit fixtures; Linux refuses public abandonment. Actual Isar/root checks
+pass retiring→native resolution→Isar retired→native finalization ordering, lost
+replies across reopen, edited-file preservation, deleted committed history and
+coalesced foreground/mutation retirement. Their native port/file ownership is
+explicitly a fixture. All 28 focused transport checks and fatal-info analysis
+pass. This later driver/root integration has no Apple SDK/installed acceptance
+yet. Native product import/upload remain false; owned uploads/progress, orphan,
+clear/unpair/CUE and OS lifecycle work remain release gates.

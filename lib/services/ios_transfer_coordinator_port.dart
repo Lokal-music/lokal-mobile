@@ -1,4 +1,6 @@
 import '../models/ios_transfer_import.dart';
+import '../models/ios_transfer_cleanup.dart';
+import '../data/entities/ios_transfer_receipt_entity.dart';
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_recovery.dart';
 
@@ -36,6 +38,19 @@ abstract interface class IosTransferCoordinatorPort {
     required int songId,
   });
   Future<void> releaseImport(IosTransferImportLease lease);
+  Future<IosTransferCleanupLease> claimImportCleanup(
+    IosTransferImportWork work,
+  );
+  Future<void> validateImportCleanup(IosTransferCleanupLease lease);
+  Future<IosTransferResolvedCleanup> resolveImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  });
+  Future<void> finalizeImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  });
+  Future<void> releaseImportCleanup(IosTransferCleanupLease lease);
 }
 
 typedef IosTransferMediaReader = Future<IosTransferMediaInfo> Function(

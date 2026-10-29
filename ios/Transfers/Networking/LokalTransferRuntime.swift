@@ -50,6 +50,13 @@ struct LokalTransferImportCleanupClaim: Encodable, Sendable {
   let resolution: LokalTransferImportResolution?
 }
 
+struct LokalTransferResolvedCleanup: Encodable, Equatable, Sendable {
+  let id: String
+  let revision: Int
+  let songID: Int64
+  let resolution: LokalTransferImportResolution
+}
+
 struct LokalTransferImportWork: Encodable, Sendable {
   let job: LokalTransferJob
   let songID: Int64
@@ -114,6 +121,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private var backgroundEventsFinished = false
   private var shuttingDown = false
   private var verifications: [String: [LokalTransferCompletion<LokalTransferJob>]] = [:]
+  private var cleanupResolutions: [String: (mode: LokalTransferImportResolution.Mode,
+    replies: [LokalTransferCompletion<LokalTransferResolvedCleanup>])] = [:]
 
   private final class BackgroundReply: @unchecked Sendable {
     private let callback: () -> Void
@@ -347,10 +356,20 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
 
   private func update(_ job: LokalTransferJob, pause: LokalTransferPause? = nil,
                       acknowledging custody: LokalTransferImportCustody? = nil,
+                      retiring prepared: LokalTransferImportCustody? = nil,
+                      retainingCleanup cleanup: (owner: LokalTransferImportOwnership.Owner, leaseID: String)? = nil,
                       _ operation: (inout LokalTransferJob) throws -> Void) throws -> LokalTransferJob {
     let next: LokalTransferJob
-    do { next = try journal.update(id: job.id, revision: job.revision, pausingScope: pause,
-                                  acknowledging: custody, operation) }
+    do {
+      guard (prepared == nil) == (cleanup == nil) else { throw LokalTransferError.invalidTransition }
+      if let cleanup {
+        guard custody == nil else { throw LokalTransferError.invalidTransition }
+        try importOwnership.validateCleanup(cleanup.owner, jobID: job.id,
+          revision: job.revision, leaseID: cleanup.leaseID)
+      }
+      next = try journal.update(id: job.id, revision: job.revision, pausingScope: pause,
+                                acknowledging: custody, retiring: prepared, operation)
+    }
     catch {
       importOwnership.revoke(jobID: job.id, revision: job.revision)
       if let failure = error as? LokalTransferError {
@@ -363,8 +382,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       }
       throw error
     }
-    if job.revision != next.revision ||
-        ([.validating, .importing].contains(job.phase) && ![.validating, .importing].contains(next.phase)) {
+    if cleanup == nil && (job.revision != next.revision ||
+        ([.validating, .importing].contains(job.phase) && ![.validating, .importing].contains(next.phase))) {
       importOwnership.revoke(jobID: job.id, revision: job.revision)
     }
     jobs[next.id] = next
@@ -791,6 +810,127 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         self.importOwnership.abortCleanup(ticket)
         reply(.failure(error))
       }
+    }
+  }
+
+  /// App attests its actual Isar retiring/committed receipt. This driver never
+  /// opens Isar. Cleanup permission alone cannot make this decision, and the
+  /// native work remains until the app acknowledges durable Isar finalization.
+  func resolveImportCleanup(_ request: LokalTransferProtocol.ImportCleanupDecision,
+                            owner: LokalTransferImportOwnership.Owner,
+                            reply: @escaping LokalTransferCompletion<LokalTransferResolvedCleanup>) {
+    let cancellation: LokalTransferCopyCancellation
+    do {
+      guard request.clientID == owner.clientID,
+            request.isarState == (request.mode == .abandoned ? "retiring" : "committed") else {
+        throw LokalTransferError.invalidRecord
+      }
+      cancellation = try importOwnership.cleanupCancellation(owner, jobID: request.id,
+        revision: request.revision, leaseID: request.leaseID)
+    } catch { reply(.failure(error)); return }
+    queue.async {
+      do {
+        guard self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+              let work = try self.journal.importCustody(id: request.id, revision: request.revision),
+              work.songID == request.songID, let current = self.jobs[request.id] else {
+          throw LokalTransferError.staleRevision
+        }
+        try self.importOwnership.validateCleanup(owner, jobID: request.id,
+          revision: request.revision, leaseID: request.leaseID)
+        guard request.mode != .committed || work.publication != nil else {
+          throw LokalTransferError.invalidTransition
+        }
+        if let recorded = work.resolution {
+          guard recorded.mode == request.mode, current.revision > request.revision else {
+            throw LokalTransferError.invalidTransition
+          }
+          reply(.success(LokalTransferResolvedCleanup(id: request.id, revision: request.revision,
+            songID: request.songID, resolution: recorded)))
+          return
+        }
+        if let pending = self.cleanupResolutions[request.leaseID] {
+          guard pending.mode == request.mode else { throw LokalTransferError.invalidTransition }
+          self.cleanupResolutions[request.leaseID]?.replies.append(reply)
+          return
+        }
+        if current.revision == request.revision {
+          // Committed current-revision history uses the existing receipt-only
+          // acknowledgement path, preserving the native completion semantics.
+          guard request.mode == .abandoned else { throw LokalTransferError.invalidTransition }
+          _ = try self.update(current, retiring: work,
+            retainingCleanup: (owner, request.leaseID)) { try $0.retirePreparedImportAfterBarrier(nowMs: Self.now()) }
+        }
+        try self.journal.validateAbandonment(work)
+        try cancellation.check()
+        self.cleanupResolutions[request.leaseID] = (request.mode, [reply])
+        self.fileQueue.async {
+          let handled = Result { () throws -> LokalTransferImportResolution in
+            let validate = { @Sendable in
+              try self.importOwnership.validateCleanup(owner, jobID: request.id,
+                revision: request.revision, leaseID: request.leaseID)
+            }
+            try validate(); try cancellation.check()
+            let publicResult: LokalTransferLibraryAbandonment?
+            if request.mode == .abandoned {
+              publicResult = try self.library().abandonTracked(work, journal: self.journal,
+                files: self.files, cancellation: cancellation, validateCleanupAuthority: validate)
+            } else { publicResult = nil }
+            try validate(); try cancellation.check()
+            try self.files.discardPrivateLibraryPart(work, cancellation: cancellation, validateCleanupAuthority: validate)
+            try cancellation.check()
+            try self.files.discard(work.job)
+            try cancellation.check()
+            return LokalTransferImportResolution(mode: request.mode, abandonment: publicResult)
+          }
+          self.queue.async {
+            let result: Result<LokalTransferResolvedCleanup, Error>
+            do {
+              let resolution = try handled.get()
+              try self.importOwnership.validateCleanup(owner, jobID: request.id,
+                revision: request.revision, leaseID: request.leaseID)
+              _ = try self.journal.recordImportResolution(work, resolution: resolution)
+              self.generation += 1; self.notify()
+              result = .success(LokalTransferResolvedCleanup(id: request.id, revision: request.revision,
+                songID: request.songID, resolution: resolution))
+            } catch { result = .failure(error) }
+            let waiting = self.cleanupResolutions.removeValue(forKey: request.leaseID)?.replies ?? []
+            for callback in waiting { callback(result) }
+          }
+        }
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// The app has now finalized its actual Isar receipt. Remove only the native
+  /// resolved bookkeeping, never any file or Song. Keep the cleanup permission
+  /// until the caller releases it, including after a lost finalization reply.
+  func finalizeImportCleanup(_ request: LokalTransferProtocol.ImportCleanupDecision,
+                             owner: LokalTransferImportOwnership.Owner,
+                             reply: @escaping LokalTransferCompletion<Bool>) {
+    queue.async {
+      do {
+        guard request.clientID == owner.clientID,
+              request.isarState == (request.mode == .abandoned ? "retired" : "committed"),
+              self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+              let current = self.jobs[request.id], current.revision > request.revision else {
+          throw LokalTransferError.invalidTransition
+        }
+        try self.importOwnership.validateCleanup(owner, jobID: request.id,
+          revision: request.revision, leaseID: request.leaseID)
+        guard let work = try self.journal.importCustody(id: request.id, revision: request.revision) else {
+          reply(.success(true)); return
+        }
+        guard work.songID == request.songID, work.resolution?.mode == request.mode,
+              current.direction == work.job.direction, current.identity == work.job.identity,
+              current.metadata == work.job.metadata, current.createdMs == work.job.createdMs,
+              current.expectedBytes == work.job.expectedBytes,
+              current.expectedSHA256 == work.job.expectedSHA256 else {
+          throw LokalTransferError.staleRevision
+        }
+        try self.journal.removeImportCustody(work)
+        self.generation += 1; self.notify()
+        reply(.success(true))
+      } catch { reply(.failure(error)) }
     }
   }
 
