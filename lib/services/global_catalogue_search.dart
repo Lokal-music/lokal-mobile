@@ -59,6 +59,25 @@ String _image(dynamic raw) {
 
 List<Map> _items(dynamic raw) => raw is List ? raw.whereType<Map>().toList() : const [];
 
+/// Both Spotify REST and Pathfinder provide multiple image sizes, sometimes
+/// with an empty/invalid first URL. Prefer the largest valid HTTPS image.
+String _bestArtwork(dynamic images) {
+  String best = '';
+  int bestPixels = -1;
+  for (final image in _items(images)) {
+    final url = _image(image['url']);
+    if (url.isEmpty) continue;
+    final width = (image['width'] as num?)?.toInt() ?? 0;
+    final height = (image['height'] as num?)?.toInt() ?? 0;
+    final pixels = width > 0 && height > 0 ? width * height : 0;
+    if (best.isEmpty || pixels > bestPixels) {
+      best = url;
+      bestPixels = pixels;
+    }
+  }
+  return best;
+}
+
 String _artistNames(dynamic raw) => _items(raw)
     .map((item) => (item['name'] ?? '').toString().trim())
     .where((name) => name.isNotEmpty).join(', ');
@@ -69,10 +88,6 @@ GlobalCatalogueMatches parseSpotifyGlobal(Map<String, dynamic> json) {
   final tracks = (json['tracks'] is Map ? json['tracks']['items'] : null);
   final albums = (json['albums'] is Map ? json['albums']['items'] : null);
   final artists = (json['artists'] is Map ? json['artists']['items'] : null);
-  String art(dynamic images) {
-    final photos = _items(images);
-    return photos.isEmpty ? '' : _image(photos.first['url']);
-  }
 
   final seen = <String>{};
   return GlobalCatalogueMatches(
@@ -87,7 +102,7 @@ GlobalCatalogueMatches parseSpotifyGlobal(Map<String, dynamic> json) {
             title: item['name'] as String,
             artist: _artistNames(item['artists']),
             album: item['album'] is Map ? (item['album']['name'] ?? '').toString() : '',
-            artworkUrl: item['album'] is Map ? art(item['album']['images']) : '',
+            artworkUrl: item['album'] is Map ? _bestArtwork(item['album']['images']) : '',
             duration: Duration(milliseconds: (item['duration_ms'] as num?)?.toInt() ?? 0),
           ),
     ],
@@ -97,14 +112,14 @@ GlobalCatalogueMatches parseSpotifyGlobal(Map<String, dynamic> json) {
           GlobalCatalogueAlbum(
             name: item['name'] as String,
             artist: _artistNames(item['artists']),
-            artworkUrl: art(item['images']),
+            artworkUrl: _bestArtwork(item['images']),
           ),
     ],
     artists: [
       for (final item in _items(artists))
         if (item['name'] is String)
           GlobalCatalogueArtist(name: item['name'] as String,
-            artworkUrl: art(item['images'])),
+            artworkUrl: _bestArtwork(item['images'])),
     ],
   );
 }
@@ -137,9 +152,8 @@ GlobalCatalogueMatches parseSpotifyPathfinder(Map<String, dynamic> data) {
                 album: item['albumOfTrack'] is Map
                     ? (item['albumOfTrack']['name'] ?? '').toString() : '',
                 artworkUrl: item['albumOfTrack'] is Map &&
-                        item['albumOfTrack']['coverArt'] is Map &&
-                        _items(item['albumOfTrack']['coverArt']['sources']).isNotEmpty
-                    ? _image(_items(item['albumOfTrack']['coverArt']['sources']).first['url'])
+                        item['albumOfTrack']['coverArt'] is Map
+                    ? _bestArtwork(item['albumOfTrack']['coverArt']['sources'])
                     : '',
                 duration: Duration(milliseconds: item['duration'] is Map
                     ? (item['duration']['totalMilliseconds'] as num?)?.toInt() ?? 0
