@@ -186,6 +186,8 @@ class SongStageCarouselState extends State<SongStageCarousel>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _buttonChangePending = false;
         });
+        // A no-op at the queue boundary may not trigger a player rebuild.
+        WidgetsBinding.instance.scheduleFrame();
       }
     }
   }
