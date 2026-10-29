@@ -14,7 +14,8 @@ class AtmosDiagnostics {
   static const _safeKeys = <String>{
     'stage', 'mode', 'quality', 'codec', 'engine', 'desiredEngine',
     'reason', 'outcome', 'errorClass', 'errorCode', 'container', 'source',
-    'jocDecoder', 'passthrough', 'available', 'encoded',
+    'jocDecoder', 'passthrough', 'ac4Decoder', 'ac4Passthrough',
+    'available', 'encoded',
     'downloadOnly', 'crossfadeDisabled', 'requested', 'sdk',
     'sampleRate', 'channels', 'trackCount', 'megabytes',
   };
