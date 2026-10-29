@@ -1,4 +1,4 @@
-name: Signed Android APKs (shared)
+name: Signed Android distributions (shared)
 on:
   workflow_call:
     inputs:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 jobs:
   build:
-    name: Signed ${{ matrix.flavor }} APK
+    name: Signed ${{ matrix.flavor }} APK / Play AAB
     if: github.repository == 'Lokal-music/lokal-mobile'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -70,7 +70,7 @@ jobs:
           restore-keys: |
             beta-rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml', 'rust/cargokit.yaml', 'rust_builder/cargokit/**', '.github/actions/android-toolchain/action.yml', 'tool/ci_android.py', 'android/app/build.gradle.kts') }}-
 
-      - name: Build and verify the signed APK
+      - name: Build and verify signed APK (plus Play AAB for play flavor)
         env:
           RELEASE_FLAVOR: ${{ matrix.flavor }}
           RELEASE_VERSION: ${{ inputs.version }}
