@@ -1016,6 +1016,9 @@ class LokalDesktopSource extends NetworkSourceService {
           durationMs: row.durationMs ?? 0,
           remoteServerId: row.remoteServerId,
           remoteId: row.remoteId,
+          isLocalFile: row.sourceType == null &&
+              !row.filePath.startsWith('ghost://') &&
+              !row.filePath.startsWith('lokal://'),
         ),
     ]);
     final existing = {for (final row in rows) row.id: row};
