@@ -274,6 +274,106 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Home mode selector has balanced lanes and rounded selection', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(393, 852)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var selected = KonnektedHomeTab.local;
+    await tester.pumpWidget(
+      _app(
+        StatefulBuilder(
+          builder: (context, update) => KonnektedHomeTopBar(
+            onSettings: () {},
+            onAppearance: () {},
+            selectedTab: selected,
+            onTabChanged: (tab) => update(() => selected = tab),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Finder indicator(KonnektedHomeTab tab) =>
+        find.byKey(ValueKey('home-mode-indicator-${tab.name}'));
+
+    final local = tester.getRect(indicator(KonnektedHomeTab.local));
+    final discovery = tester.getRect(indicator(KonnektedHomeTab.discovery));
+    final flow = tester.getRect(indicator(KonnektedHomeTab.flow));
+    // The longest label gets the most space; the selected background never
+    // runs into the neighboring label or background.
+    expect(discovery.width, greaterThan(local.width + 12));
+    expect(discovery.width, greaterThan(flow.width + 12));
+    expect(discovery.left - local.right, greaterThanOrEqualTo(7));
+    expect(flow.left - discovery.right, greaterThanOrEqualTo(7));
+    for (final tab in KonnektedHomeTab.values) {
+      expect(
+        tester.getSize(find.bySemanticsLabel(tab.label)).height,
+        greaterThanOrEqualTo(44),
+      );
+      expect(
+        tester.getRect(indicator(tab)).center.dy,
+        closeTo(local.center.dy, .1),
+      );
+    }
+
+    Future<void> checkSelection(KonnektedHomeTab tab) async {
+      final chip = tester.widget<AnimatedContainer>(indicator(tab));
+      final decoration = chip.decoration! as BoxDecoration;
+      expect(decoration.borderRadius, BorderRadius.circular(999));
+      expect(decoration.color!.a, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    }
+
+    await checkSelection(KonnektedHomeTab.local);
+    await tester.tap(find.bySemanticsLabel('Discovery'));
+    await tester.pumpAndSettle();
+    expect(selected, KonnektedHomeTab.discovery);
+    await checkSelection(KonnektedHomeTab.discovery);
+    await tester.tap(find.bySemanticsLabel('Flow'));
+    await tester.pumpAndSettle();
+    expect(selected, KonnektedHomeTab.flow);
+    await checkSelection(KonnektedHomeTab.flow);
+  });
+
+  testWidgets('Very narrow header scrolls to the selected mode without moving actions', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(320, 568)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        KonnektedHomeTopBar(
+          onSettings: () {},
+          onAppearance: () {},
+          selectedTab: KonnektedHomeTab.flow,
+        ),
+        scale: 2,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final selectorScroll = find.descendant(
+      of: find.byType(KonnektedHomeTopBar),
+      matching: find.byType(SingleChildScrollView),
+    );
+    expect(selectorScroll, findsOneWidget);
+    final viewport = tester.getRect(selectorScroll);
+    final selectedIndicator =
+        tester.getRect(find.byKey(const ValueKey('home-mode-indicator-flow')));
+    expect(selectedIndicator.left, greaterThanOrEqualTo(viewport.left));
+    expect(selectedIndicator.right, lessThanOrEqualTo(viewport.right));
+    expect(tester.getSize(find.bySemanticsLabel('Flow')).height,
+        greaterThanOrEqualTo(44));
+    expect(viewport.right, lessThanOrEqualTo(
+        tester.getRect(find.bySemanticsLabel('Discord')).left));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Your Mixes play with their own queues', (tester) async {
     final mixes = [
       for (final name in ['Daily Mix', 'New Arrivals', 'Most Played'])
