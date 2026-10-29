@@ -632,7 +632,7 @@ class AndroidAudioEngine implements AudioEngine {
             AtmosDiagnostics.record('playback_state', {
               'stage': state.processingState.name,
               'outcome': state.playing ? 'playing' : 'paused_or_buffering',
-              'codec': androidDolbyCodec(song),
+              'codec': androidDolbyCodec(song!),
             });
           }
         }
@@ -988,7 +988,7 @@ class AndroidAudioEngine implements AudioEngine {
     final outputModeChanged = shouldResetAndroidAtmosDecoder(priorTrack, track);
     if (outputModeChanged) {
       // Stop Media3's old codec / audio sink before reloading a different
-      // audio format. A JOC decoder may still own the output when stereo
+      // audio format. An AC-4 or JOC decoder may still own the output when stereo
       // starts; a seek into the previous playlist cannot release it.
       AtmosDiagnostics.record('playback_handoff', {
         'from': androidDolbyCodec(priorTrack!),
