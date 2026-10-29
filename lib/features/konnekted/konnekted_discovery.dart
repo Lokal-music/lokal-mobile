@@ -814,10 +814,14 @@ Future<List<_PlaybackSource>> _morneyeSources(
           final configured = settings['downloadQuality'] as String?;
           final tidal = addon.name.toLowerCase().contains('tidal') ||
               addon.key.toLowerCase().contains('tidal');
+          final amazon = addon.name.toLowerCase().startsWith('amazon');
           final requestedQuality = tidal
               ? tidalRequestedQualityLabel(
                   configured: configured, options: addon.qualityOptions)
-              : null;
+              : amazon
+                  ? amazonRequestedPlaybackQualityLabel(
+                      configured: configured, options: addon.qualityOptions)
+                  : null;
           // A configured tier is not proof of the rendered stream's quality.
           // Retain Tidal's *per-track catalogue availability* regardless of
           // the selected quality; Search labels it as catalogue data, not
@@ -863,11 +867,14 @@ Future<List<_PlaybackSource>> _morneyeSources(
               sourceName: addon.displayName,
               artwork: song.thumbnail,
               atmosAvailable: song.atmosAvailable,
-              // Amazon exposes AC-4 as a download tier even if its search
-              // metadata does not declare an Atmos presentation. Offer an
-              // explicit attempt, without inventing an Atmos catalogue badge.
-              atmosRequestable: addon.name.toLowerCase().startsWith('amazon') &&
-                  addon.qualityOptions.any((q) => q is Map && q['id'] == 'ac4'),
+              // This flag denotes only that the installed *Amazon addon*
+              // offers an optional AC-4 request. It does NOT certify that
+              // this specific search result has an AC-4 or Atmos edition.
+              // Keep it out of the quality/Atmos badges; UI exposes a
+              // separate clearly labelled "Try AC-4" playback action.
+              atmosRequestable: amazon &&
+                  addon.qualityOptions.any((q) => q is Map &&
+                      q['id']?.toString().toLowerCase() == 'ac4'),
               // Tidal's search metadata describes catalogue availability,
               // while requestedQuality describes the user's download option.
               // Both must survive to the badge formatter so it can distinguish

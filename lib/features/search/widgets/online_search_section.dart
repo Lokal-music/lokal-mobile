@@ -330,7 +330,9 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         return;
       }
       if (!await AtmosPlaybackSupport.availableFor(result.track.atmosRequestable ? 'ac4' : 'eac3-joc')) {
-        _say('This device does not report native support for the selected Dolby audio codec.');
+        _say(result.track.atmosRequestable
+            ? 'AC-4 playback is not supported by this device\'s native decoder or direct audio output. You can still try Download Amazon AC-4 from the song menu.'
+            : 'This device does not report native support for E-AC-3 JOC or direct audio output.');
         return;
       }
     }
@@ -786,17 +788,50 @@ class _OnlineTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                          if (track.atmosAvailable || track.atmosRequestable)
+                          // Verified catalogue mode: this is an Atmos
+                          // availability badge, not a claimed output format.
+                          if (track.atmosAvailable)
                             Tooltip(
-                              message: track.atmosRequestable && !track.atmosAvailable
-                                  ? 'Try Amazon AC-4 (catalogue Atmos unverified; needs native Android AC-4 support)'
-                                  : 'Play original Dolby Atmos (requires a native E-AC-3 JOC decoder or direct output)',
+                              message: 'Catalogue advertises Dolby Atmos. Original compressed audio requires compatible native Android output.',
                               child: InkWell(
                                 onTap: busy ? null : onAtmos,
                                 borderRadius: BorderRadius.circular(6),
-                                child: track.atmosRequestable && !track.atmosAvailable
-                                    ? const Text('AC-4?', style: TextStyle(fontSize: 10))
-                                    : const LokalAtmosPill(),
+                                child: const LokalAtmosPill(),
+                              ),
+                            ),
+                          // Amazon's AC-4 tier is provider-wide. It must not
+                          // appear as a codec or Atmos *badge* on every search
+                          // result. This is an opt-in action; the actual codec
+                          // is checked only after the requested source arrives.
+                          if (track.atmosRequestable && !track.atmosAvailable)
+                            Tooltip(
+                              message: 'Try requesting Amazon AC-4 for this recording. Availability is unknown until download; playback needs an Android AC-4 decoder or direct output.',
+                              child: InkWell(
+                                onTap: busy ? null : onAtmos,
+                                borderRadius: BorderRadius.circular(999),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: t.accent.withValues(alpha: .65),
+                                    ),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.surround_sound_rounded,
+                                          size: 14, color: t.accent),
+                                      const SizedBox(width: 4),
+                                      Text('Try AC-4',
+                                          style: TextStyle(
+                                              fontSize: 11, color: t.accent,
+                                              fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                       ],
