@@ -1337,6 +1337,7 @@ class MorneyePackages {
     List<String> grants = const [],
     void Function({double? percent, String? message})? onProgress,
     void Function(MorneyeTransfer)? onTransfer,
+    void Function(int bytes)? onByteProgress,
     int heapMb = 64,
   }) {
     final network = _networkFor(addon);
@@ -1354,6 +1355,7 @@ class MorneyePackages {
       isrcLookup: isrcLookup,
       onProgress: onProgress,
       onTransfer: onTransfer,
+      onByteProgress: onByteProgress,
       appVersion: appVersion,
     );
     return MorneyeRuntime.start(
@@ -1699,6 +1701,7 @@ class MorneyePackages {
     var monitoringTransfer = false;
     var transferStalled = false;
     double lastPercent = -1;
+    var lastByteActivity = 0;
     String? lastPart;
     var lastWritten = 0;
     void recordActivity() {
@@ -1730,6 +1733,20 @@ class MorneyePackages {
           lastPercent = percent;
         }
         onProgress?.call(percent: percent, message: message);
+      },
+      onByteProgress: (bytes) {
+        if (bytes <= 0) return;
+        if (!sawFirstByte) {
+          sawFirstByte = true;
+          phase('first_byte');
+        }
+        // Source bytes, not segment completion or UI percentages, keep a
+        // genuinely active transfer from being labelled a 90-second stall.
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (now - lastByteActivity >= 250) {
+          lastByteActivity = now;
+          recordActivity();
+        }
       },
       onTransfer: hooks ? null : (transfer) {
         // A header-only transfer restart isn't progress. Once real bytes
