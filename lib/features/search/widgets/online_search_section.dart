@@ -325,12 +325,12 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
       return;
     }
     if (atmos) {
-      if (!result.track.atmosAvailable) {
+      if (!result.track.atmosAvailable && !result.track.atmosRequestable) {
         _say('This track has no advertised Dolby Atmos version.');
         return;
       }
-      if (!await AtmosPlaybackSupport.available) {
-        _say('This device does not report an E-AC-3 JOC decoder or direct Atmos output.');
+      if (!await AtmosPlaybackSupport.availableFor(result.track.atmosRequestable ? 'ac4' : 'eac3-joc')) {
+        _say('This device does not report native support for the selected Dolby audio codec.');
         return;
       }
     }
@@ -786,9 +786,11 @@ class _OnlineTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                          if (track.atmosAvailable)
+                          if (track.atmosAvailable || track.atmosRequestable)
                             Tooltip(
-                              message: 'Play original Dolby Atmos (requires an Android E-AC-3 JOC decoder or direct output)',
+                              message: track.atmosRequestable && !track.atmosAvailable
+                                  ? 'Try Amazon AC-4 (catalogue Atmos unverified; needs native Android AC-4 support)'
+                                  : 'Play original Dolby Atmos (requires a native E-AC-3 JOC decoder or direct output)',
                               child: InkWell(
                                 onTap: busy ? null : onAtmos,
                                 borderRadius: BorderRadius.circular(6),
