@@ -305,7 +305,15 @@ impl EngineManager {
                     return false;
                 }
 
-                if handle.output_signature() == desired_signature {
+                // Precision is persistent Android state and may change while
+                // the engine is alive. Recreate the Oboe stream on the next
+                // track even when the sample-rate signature is unchanged.
+                #[cfg(target_os = "android")]
+                let precision_matches = handle.output_precision_pref()
+                    == crate::audio::device::output_precision_preference();
+                #[cfg(not(target_os = "android"))]
+                let precision_matches = true;
+                if handle.output_signature() == desired_signature && precision_matches {
                     return true;
                 }
 
@@ -331,7 +339,8 @@ impl EngineManager {
                         && handle.sample_rate() == requested_rate
                         && (allow_dap_native || strategy != "dap_native")
                         && dap_bit_perfect_enabled == (strategy == "dap_native")
-                        && handle.audio_api_pref() == audio_api_preference;
+                        && handle.audio_api_pref() == audio_api_preference
+                        && precision_matches;
                 }
 
                 #[allow(unreachable_code)]
