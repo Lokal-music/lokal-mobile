@@ -794,7 +794,9 @@ class _OnlineTile extends StatelessWidget {
                               child: InkWell(
                                 onTap: busy ? null : onAtmos,
                                 borderRadius: BorderRadius.circular(6),
-                                child: const LokalAtmosPill(),
+                                child: track.atmosRequestable && !track.atmosAvailable
+                                    ? const Text('AC-4?', style: TextStyle(fontSize: 10))
+                                    : const LokalAtmosPill(),
                               ),
                             ),
                       ],
