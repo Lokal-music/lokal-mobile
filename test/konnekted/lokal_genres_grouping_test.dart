@@ -161,6 +161,10 @@ void main() {
       ('modern samba', 'Latin'),
       ('Jazz Rap', 'Hip-Hop'),
       ('jazz house', 'Electronic'),
+      ('indie shoegaze', 'Rock'),
+      ('alternative jazz', 'Jazz'),
+      ('alternative techno', 'Electronic'),
+      ('indie', 'Indie / Alternative'),
       ('Acid House', 'Electronic'),
     ];
     for (final (raw, expected) in examples) {
