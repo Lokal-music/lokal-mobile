@@ -9,6 +9,10 @@ enum Uac2FormatPreference { highestQuality, compatibility, custom }
 
 enum AudioEnginePreference { exoPlayer, rustOboe, isochronousUsb }
 
+/// PCM sample format for Android's Rust/Oboe managed output stream.
+/// Direct USB, DSD passthrough, Atmos and ExoPlayer negotiate separately.
+enum OutputPrecisionPreference { auto, pcm16, float32 }
+
 enum DsdOutputMode { auto, forcePcm, forceDop, native }
 
 /// Per-device field-tuning override for native-DSD wire byte order (DSD_U32 packing).
@@ -40,6 +44,9 @@ class Uac2PreferencesService {
   static const _keyExclusiveDacModeEnabled = 'uac2_exclusive_dac_mode_enabled';
   static const _keyAudioEnginePreference = 'audio_engine_preference';
   static const _keyAndroidAudioApi = 'android_audio_api';
+  // SharedPreferences stores Dart int values as Java longs. The Rust Oboe
+  // engine reads this key directly before opening a stream.
+  static const _keyOutputPrecision = 'output_precision';
   static const _keyDeveloperModeEnabled = 'developer_mode_enabled';
   static const _keyAudioFormatEnabled = 'uac2_audio_format_enabled';
   static const _keyUsbSoftwareVolume = 'uac2_usb_software_volume';
@@ -295,6 +302,20 @@ class Uac2PreferencesService {
       devLog('Failed to load Android audio API preference: $e');
       return AudioApiPreference.auto;
     }
+  }
+
+  Future<void> setOutputPrecision(OutputPrecisionPreference value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyOutputPrecision, value.index);
+  }
+
+  Future<OutputPrecisionPreference> getOutputPrecision() async {
+    final prefs = await SharedPreferences.getInstance();
+    final index = prefs.getInt(_keyOutputPrecision) ?? 0;
+    if (index < 0 || index >= OutputPrecisionPreference.values.length) {
+      return OutputPrecisionPreference.auto;
+    }
+    return OutputPrecisionPreference.values[index];
   }
 
   Future<void> initializeDeveloperModeCache() async {
@@ -814,6 +835,7 @@ class Uac2PreferencesService {
       await prefs.remove(_keyExclusiveDacModeEnabled);
 await prefs.remove(_keyAudioEnginePreference);
     await prefs.remove(_keyAndroidAudioApi);
+    await prefs.remove(_keyOutputPrecision);
     await prefs.remove(_keyDeveloperModeEnabled);
       await prefs.remove(_keyAudioFormatEnabled);
       await prefs.remove(_keyUsbSoftwareVolume);

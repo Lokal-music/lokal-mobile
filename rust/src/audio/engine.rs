@@ -565,6 +565,8 @@ pub struct AudioEngineHandle {
     /// The Android audio-API preference the engine was built with. Used to
     /// detect when a preference change must force a stream reopen.
     audio_api_pref: AudioApiPreference,
+    /// Persisted Android PCM precision at stream creation (0=Auto, 1=i16, 2=f32).
+    output_precision_pref: u8,
     /// Active decoder threads (kept alive for the duration of playback)
     #[allow(dead_code)]
     decoders: Arc<Mutex<Vec<DecoderHandle>>>,
@@ -896,6 +898,10 @@ impl AudioEngineHandle {
         self.audio_api_pref
     }
 
+    pub fn output_precision_pref(&self) -> u8 {
+        self.output_precision_pref
+    }
+
     /// Shutdown the engine.
     pub fn shutdown(&self) -> Result<(), String> {
         self.shutdown.store(true, Ordering::Release);
@@ -1089,6 +1095,7 @@ pub fn create_audio_engine(
             active_audio_api: None,
         },
         audio_api_pref,
+        output_precision_pref: 0,
         decoders,
         shutdown,
         _audio_thread: parking_lot::Mutex::new(Some(audio_thread)),
@@ -2388,6 +2395,7 @@ pub fn create_audio_engine(
         output_signature,
         output_runtime,
         audio_api_pref,
+        output_precision_pref: crate::audio::device::output_precision_preference(),
         decoders,
         shutdown,
         _audio_thread: parking_lot::Mutex::new(Some(audio_thread)),
@@ -2901,6 +2909,9 @@ fn open_android_output_stream(
         &[SharingMode::Shared]
     };
     let attempts: Vec<AudioApi> = audio_api_attempts(audio_api_pref, is_bluetooth);
+    // Only the managed PCM stream is configurable. Exclusive DAP/DoP and
+    // direct USB retain their existing lossless transport negotiations.
+    let precision = crate::audio::device::output_precision_preference();
     let performance_mode = if is_bluetooth {
         PerformanceMode::None
     } else {
@@ -2922,19 +2933,24 @@ fn open_android_output_stream(
             // (mixer-bypassing) output to a PCM_32 request at the native
             // rate — exactly how UAPP does it — with i16 as a second chance
             // for PCM_16-only HALs.
-            let try_formats: &[ManagedPcmFormat] = if bit_perfect_route
-                && !use_integer_format
-                && sharing_mode == SharingMode::Exclusive
-            {
-                &[
-                    ManagedPcmFormat::S32,
-                    ManagedPcmFormat::S16,
-                    ManagedPcmFormat::F32,
-                ]
-            } else {
+            let try_formats: &[ManagedPcmFormat] = if use_integer_format {
+                // DSD DoP requires an integer carrier; never convert it to float.
+                &[ManagedPcmFormat::F32] // handled by the use_integer_format branch
+            } else if bit_perfect_route && sharing_mode == SharingMode::Exclusive {
+                // Preserve native DAP direct-PCM priority irrespective of UI preference.
+                &[ManagedPcmFormat::S32, ManagedPcmFormat::S16, ManagedPcmFormat::F32]
+            } else if bit_perfect_route {
                 &[ManagedPcmFormat::F32]
+            } else {
+                match precision {
+                    1 => &[ManagedPcmFormat::S16, ManagedPcmFormat::F32],
+                    // Last attempt restores normal Android conversion so an
+                    // unsupported forced format never leaves playback silent.
+                    2 => &[ManagedPcmFormat::F32, ManagedPcmFormat::S16, ManagedPcmFormat::F32],
+                    _ => &[ManagedPcmFormat::F32],
+                }
             };
-            for &attempt_fmt in try_formats {
+            for (attempt_index, &attempt_fmt) in try_formats.iter().enumerate() {
                 let result: Result<AndroidManagedStreamKind, String> = if use_integer_format {
                     let builder = oboe::AudioStreamBuilder::default()
                         .set_stereo()
@@ -3057,7 +3073,12 @@ fn open_android_output_stream(
                         .set_usage(Usage::Media)
                         .set_content_type(ContentType::Music)
                         .set_channel_conversion_allowed(false)
-                        .set_format_conversion_allowed(true)
+                        .set_format_conversion_allowed(
+                            bit_perfect_route
+                                || precision == 0
+                                || (precision == 1 && attempt_fmt == ManagedPcmFormat::F32)
+                                || (precision == 2 && attempt_index == 2)
+                        )
                         .set_sample_rate_conversion_quality(if bit_perfect_route {
                             SampleRateConversionQuality::None
                         } else {
@@ -3140,7 +3161,8 @@ fn open_android_output_stream(
                         // was not granted; it would silently resample through
                         // the mixer like a shared f32 stream. Close it and
                         // keep looking (exclusive integer is the only prize).
-                        if attempt_fmt != ManagedPcmFormat::F32
+                        if (bit_perfect_route || use_integer_format)
+                            && attempt_fmt != ManagedPcmFormat::F32
                             && sharing_label(actual_sharing) == "shared"
                         {
                             let note = format!(
@@ -3199,6 +3221,15 @@ fn open_android_output_stream(
                             AndroidManagedStreamKind::I32Pcm(_) => "s32",
                             AndroidManagedStreamKind::I16(_) => "s16",
                         };
+                        if !bit_perfect_route && !use_integer_format && precision != 0 {
+                            let wanted = if precision == 1 { "i16" } else { "f32" };
+                            if sample_format != wanted || (precision == 2 && attempt_index == 2) {
+                                log::warn!(
+                                    "[AUDIO] Requested PCM precision {} unavailable; using managed output {} (compatibility fallback)",
+                                    wanted, sample_format
+                                );
+                            }
+                        }
                         let exclusive_error = if sharing_label(actual_sharing) == "exclusive" {
                             None
                         } else {
