@@ -45,6 +45,48 @@ final _aliases = () {
   return names;
 }();
 
+/// Conservative word-boundary classification for real subgenres absent from
+/// the exact aliases. Examples: "melodic deep techno" → Electronic and
+/// "experimental jazz quartet" → Jazz. A phrase pointing to two families
+/// remains Other unless a specific exact alias resolves the hybrid.
+String _genreWords(String value) {
+  final lower = value.toLowerCase();
+  final folded = lower.split('').map((ch) => _latinFolds[ch] ?? ch).join();
+  return folded
+      .replaceAll(_marks, '')
+      .replaceAll(_nonLetterOrDigit, ' ')
+      .trim()
+      .replaceAll(_whitespace, ' ');
+}
+
+final _normalizedFamilyHints = [
+  for (final family in lokalDesktopGenreHints)
+    (
+      family.$1,
+      [for (final hint in family.$2) _genreWords(hint)],
+    ),
+];
+
+String? _inferGenreFamily(String raw) {
+  final words = _genreWords(raw);
+  if (words.isEmpty) return null;
+  final padded = ' $words ';
+  String? found;
+  for (final family in _normalizedFamilyHints) {
+    if (!family.$2.any((hint) => padded.contains(' $hint '))) continue;
+    // "Indie" and "Alternative" are modifiers when another clear style
+    // is present. E.g. indie shoegaze remains Rock, not Other.
+    if (family.$1 == 'Indie / Alternative' && found != null) continue;
+    if (found == 'Indie / Alternative') {
+      found = family.$1;
+      continue;
+    }
+    if (found != null && found != family.$1) return null;
+    found = family.$1;
+  }
+  return found;
+}
+
 /// Raw tag identity (also used by radio). The grouping layer maps these tags
 /// to broad canonical categories but never rewrites the song's stored genre.
 String lokalGenreKey(String name) => _taxonomyKey(name);
@@ -57,9 +99,9 @@ String? lokalNormalizeGenreName(String? value) {
       lokalDesktopGenreNoise.contains(key)) {
     return null;
   }
-  // Keep meaningful unfamiliar tags intact; repeated tags can become their
-  // own categories instead of automatically entering Other.
-  return _aliases[key] ?? raw;
+  // Never create a standalone category for an unfamiliar string. Infer a
+  // familiar broad family when unambiguous; otherwise use Other.
+  return _aliases[key] ?? _inferGenreFamily(raw) ?? _other;
 }
 
 /// Split a file's raw multi-genre tag without changing what is on disk.
@@ -124,9 +166,10 @@ List<String> _visibleGenres(List<String> genres, Set<String> rare) {
 ///  * classify aliases and subgenres into broad categories;
 ///  * count each track only once per category;
 ///  * keep every recognized category, even when it has only one song;
-///  * allow unknown but repeatedly-used labels to form custom genres;
-///  * put only one-off unknown tags in Other, suppressing a one-track
-///    Other card in favor of No genre;
+///  * infer broad genres from distinct musical style words, with strict
+///    boundaries and explicit aliases taking precedence;
+///  * keep genuinely unknown/ambiguous tags in Other even if repeated;
+///  * suppress a one-track Other card in favor of No genre;
 ///  * keep order newest-first for cover art and count-desc for the grid.
 /// Ghost/pending catalogue placeholders are not real library recordings.
 LokalGenreSummary lokalGenreSummary(Iterable<Song> library) {
@@ -206,8 +249,8 @@ final lokalGenresProvider = Provider<AsyncValue<List<LokalGenre>>>(
   (ref) => ref.watch(lokalGenreSummaryProvider).whenData((data) => data.genres),
 );
 
-/// Library › Genres: canonical and repeated custom categories match desktop,
-/// plus No genre and a search across the visible labels.
+/// Library › Genres: desktop's canonical broad categories (no custom genre
+/// cards), plus Other, No genre, and search over visible family labels.
 class LokalGenresPage extends ConsumerStatefulWidget {
   const LokalGenresPage({super.key});
 
