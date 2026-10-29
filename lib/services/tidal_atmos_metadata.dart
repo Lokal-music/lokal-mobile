@@ -4,8 +4,12 @@
 bool tidalAtmosAvailable(Map<dynamic, dynamic> track) {
   bool isMode(Object? value) {
     if (value is! String) return false;
-    final mode = value.trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
-    return mode == 'DOLBY_ATMOS' || mode == 'ATMOS';
+    // Amazon's metadata sometimes combines modes in one comma-separated string.
+    // AC-4 alone is a codec, not proof that the track advertises Atmos.
+    return value.split(RegExp(r'[,;|]')).any((part) {
+      final mode = part.trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
+      return mode == 'DOLBY_ATMOS' || mode == 'ATMOS';
+    });
   }
 
   for (final key in const [
