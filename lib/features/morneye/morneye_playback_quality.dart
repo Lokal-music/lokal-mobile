@@ -1,14 +1,17 @@
 /// A codec/quality identifier is not catalogue evidence of Dolby Atmos.
 /// Atmos playback requires an explicit user action; ordinary playback must
 /// always choose a stereo or lossless tier from the installed addon manifest.
-bool isMorneyeAtmosQuality(String? value) =>
-    RegExp(r'^(?:DOLBY[_ -]?ATMOS|ATMOS|AC-?4)$', caseSensitive: false)
-        .hasMatch(value?.trim() ?? '');
+bool isMorneyeAtmosQuality(String? value) => RegExp(
+  r'^(?:DOLBY[_ -]?ATMOS|ATMOS|AC-?4)$',
+  caseSensitive: false,
+).hasMatch(value?.trim() ?? '');
 
 /// The Amazon extension also exposes E-AC-3 as a spatial tier, but E-AC-3
 /// alone is NOT Atmos. Never inherit either spatial option for normal play.
-bool morneyeSpatialOption(Map option) =>
+bool morneyeSpatialOption(Map option, {String? provider}) =>
     option['kind']?.toString().toLowerCase() == 'spatial' ||
+    (provider?.toLowerCase().startsWith('amazon') == true &&
+        option['id']?.toString().trim().toLowerCase() == 'eac3') ||
     isMorneyeAtmosQuality(option['id']?.toString()) ||
     isMorneyeAtmosQuality(option['name']?.toString()) ||
     isMorneyeAtmosQuality(option['label']?.toString());
@@ -23,18 +26,24 @@ String chooseMorneyeDownloadQuality({
   // download call. In particular, the Amazon Atmos action requests 'ac4'.
   if (requested != null && requested.isNotEmpty) return requested;
 
-  final configuredSpatial = isMorneyeAtmosQuality(configured) ||
-      options.any((option) =>
-          option is Map &&
-          option['id'] == configured &&
-          morneyeSpatialOption(option));
-  if (configured != null &&
-      configured.isNotEmpty &&
-      !configuredSpatial) return configured;
+  final configuredSpatial =
+      morneyeSpatialOption({'id': configured}, provider: provider) ||
+      options.any(
+        (option) =>
+            option is Map &&
+            option['id']?.toString().toLowerCase() ==
+                configured?.toLowerCase() &&
+            morneyeSpatialOption(option, provider: provider),
+      );
+  if (configured != null && configured.isNotEmpty && !configuredSpatial) {
+    return configured;
+  }
 
   final candidates = <String>[];
   for (final option in options) {
-    if (option is! Map || morneyeSpatialOption(option)) continue;
+    if (option is! Map || morneyeSpatialOption(option, provider: provider)) {
+      continue;
+    }
     final id = option['id']?.toString() ?? '';
     if (id.isNotEmpty) candidates.add(id);
   }
@@ -53,7 +62,9 @@ String chooseMorneyeDownloadQuality({
   }
 
   for (final option in options) {
-    if (option is! Map || morneyeSpatialOption(option)) continue;
+    if (option is! Map || morneyeSpatialOption(option, provider: provider)) {
+      continue;
+    }
     if (option['kind'] == 'lossless') {
       final id = option['id']?.toString() ?? '';
       if (id.isNotEmpty) return id;
@@ -89,12 +100,11 @@ String resolveMorneyeRequestQuality({
 String? explicitMorneyePlaybackTier({
   required bool atmosRequested,
   String? provider,
-}) =>
-    !atmosRequested
-        ? null
-        : (provider?.toLowerCase().startsWith('amazon') == true
-            ? 'ac4'
-            : 'DOLBY_ATMOS');
+}) => !atmosRequested
+    ? null
+    : (provider?.toLowerCase().startsWith('amazon') == true
+          ? 'ac4'
+          : 'DOLBY_ATMOS');
 
 /// The catalogue can advertise a different maximum tier from the requested
 /// stereo playback quality. Do not misrepresent either as verified audio.

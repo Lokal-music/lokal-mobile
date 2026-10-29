@@ -110,6 +110,33 @@ void main() {
       ), 'HI_RES_LOSSLESS');
     });
 
+    test('Amazon E-AC-3 stays opt-in with incomplete manifest metadata', () {
+      const incomplete = <dynamic>[
+        {'id': 'eac3', 'label': 'Dolby Digital Plus'},
+        {'id': 'best', 'kind': 'lossless'},
+      ];
+      for (final provider in ['amazon', 'amazon-web']) {
+        for (final configured in ['eac3', 'EAC3', null]) {
+          expect(chooseMorneyeDownloadQuality(
+            requested: null, configured: configured,
+            options: incomplete, provider: provider,
+          ), 'best');
+        }
+        expect(chooseMorneyeDownloadQuality(
+          requested: null, configured: 'eac3', options: [], provider: provider,
+        ), 'default');
+        expect(chooseMorneyeDownloadQuality(
+          requested: null, configured: null,
+          options: [{'id': 'eac3'}], provider: provider,
+        ), 'default');
+      }
+      expect(isMorneyeAtmosQuality('eac3'), isFalse);
+      expect(chooseMorneyeDownloadQuality(
+        requested: null, configured: 'eac3',
+        options: incomplete, provider: 'other',
+      ), 'eac3', reason: 'The E-AC-3 exclusion is Amazon-specific');
+    });
+
     test('only explicit Atmos requests choose JOC', () {
       expect(chooseMorneyeDownloadQuality(
         requested: 'DOLBY_ATMOS', configured: 'LOSSLESS',

@@ -169,6 +169,23 @@ void main() {
     expect(covers, isEmpty, reason: 'Do not embed artwork into the Atmos container');
   });
 
+  test('AC-4 saves preserve bytes and a rescan-safe codec suffix', () async {
+    cached = await cached.rename(p.setExtension(cached.path, '.mp4'));
+    final original = await cached.readAsBytes();
+    final music = Directory(p.join(root.path, 'Library'))..createSync();
+    final ac4 = prepared().copyWith(fileType: 'AC-4', atmosEncoded: true);
+    final folders = [
+      LibraryDownloadFolder(uri: 'u', name: 'Music', path: music.path),
+    ];
+    await downloader(folders).save(ac4);
+    final saved = await downloader(folders).save(ac4);
+    expect(saved.path, endsWith(' (2).ac4.atmos.mp4'));
+    expect(await File(saved.path).readAsBytes(), original);
+    expect(upserts.last.fileType, 'AC-4');
+    expect(tags, isEmpty);
+    expect(covers, isEmpty);
+  });
+
   test('copies into the first writable library folder and adds it', () async {
     final music = Directory(p.join(root.path, 'Library'))..createSync();
     final saved = await downloader([
