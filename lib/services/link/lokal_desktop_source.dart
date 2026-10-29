@@ -1,6 +1,7 @@
 import '../lyrics_service.dart';
 import 'desktop_music_storage.dart';
 import 'desktop_catalogue_import.dart';
+import 'desktop_genre_reconciliation.dart';
 
 import 'package:path/path.dart' as p;
 
@@ -477,19 +478,7 @@ class LokalDesktopSource extends NetworkSourceService {
     return value;
   }
 
-  String? _genre(Map<String, dynamic> track) {
-    final tag = track['genre']?.toString().trim();
-    if (tag != null && tag.isNotEmpty) return tag;
-    var genres = track['genres'];
-    if (genres is String) {
-      try {
-        genres = jsonDecode(genres);
-      } catch (_) {
-        return genres;
-      }
-    }
-    return genres is List ? genres.whereType<String>().join('; ') : null;
-  }
+  String? _genre(Map<String, dynamic> track) => desktopLinkGenres(track);
 
   Map<String, String> _headers(LokalRemoteCredentials credentials) => {
     'x-remote-token': credentials.remoteToken,
@@ -712,7 +701,7 @@ class LokalDesktopSource extends NetworkSourceService {
         .findFirst();
     if (entity != null && isDownloadedDesktopOriginal(entity)) {
       final genre = _genre(track);
-      if (entity.genre?.trim().isNotEmpty != true &&
+      if (isUnclassifiedLinkGenre(entity.genre) &&
           genre?.isNotEmpty == true) {
         entity.genre = genre;
         final localRow = entity;
@@ -729,7 +718,7 @@ class LokalDesktopSource extends NetworkSourceService {
       final row = await Database.songs.get(int.parse(local.id));
       final genre = _genre(track);
       if (row != null &&
-          row.genre?.trim().isNotEmpty != true &&
+          isUnclassifiedLinkGenre(row.genre) &&
           genre?.isNotEmpty == true) {
         row.genre = genre;
         await Database.instance.writeTxn(() => Database.songs.put(row));
@@ -1008,6 +997,78 @@ class LokalDesktopSource extends NetworkSourceService {
         await Database.instance.writeTxn(() => Database.songs.put(row));
       },
     );
+  }
+
+  /// Repair genres missed by the one-time catalogue import or journal replay.
+  /// Sync Now reads desktop's current tags using the existing authenticated
+  /// catalogue API; no audio files are downloaded or rewritten. Only missing
+  /// or placeholder phone genres are filled, preserving real local edits.
+  Future<int> reconcileMissingGenres(NetworkServerEntity server) async {
+    final credentials = await _credentials(server);
+    final rows = await Database.songs.where().findAll();
+    final matcher = DesktopGenreMatcher([
+      for (final row in rows)
+        DesktopGenreIdentity(
+          id: row.id,
+          title: row.title,
+          artist: row.artist,
+          album: row.album,
+          durationMs: row.durationMs ?? 0,
+          remoteServerId: row.remoteServerId,
+          remoteId: row.remoteId,
+          isLocalFile: row.sourceType == null &&
+              !row.filePath.startsWith('ghost://') &&
+              !row.filePath.startsWith('lokal://'),
+        ),
+    ]);
+    final existing = {for (final row in rows) row.id: row};
+    final changes = <int, String>{};
+    var offset = 0;
+    // Desktop caps this endpoint at 50 records/page, regardless of requested
+    // limit. Progress by the actual number received, never by the hint.
+    while (true) {
+      final response = await http
+          .get(
+            credentials.origin.replace(
+              path: '/api/remote/library/tracks',
+              queryParameters: {'offset': '$offset', 'limit': '50'},
+            ),
+            headers: _headers(credentials),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        throw const HttpException('Desktop genres are unavailable.');
+      }
+      final body = jsonDecode(response.body) as Map;
+      final items = body['items'] as List;
+      for (final raw in items) {
+        final track = Map<String, dynamic>.from(raw as Map);
+        final genre = desktopLinkGenres(track);
+        if (genre == null) continue;
+        for (final id in matcher.matchingIds(server.id, track)) {
+          final local = existing[id];
+          if (local != null && isUnclassifiedLinkGenre(local.genre)) {
+            changes[id] = genre;
+          }
+        }
+      }
+      offset += items.length;
+      if (body['hasMore'] != true || items.isEmpty) break;
+    }
+    if (changes.isEmpty) return 0;
+    var updated = 0;
+    // Re-read under the write transaction: user edits or scanning may have
+    // filled a genre while the paginated desktop snapshot was being fetched.
+    await Database.instance.writeTxn(() async {
+      for (final update in changes.entries) {
+        final row = await Database.songs.get(update.key);
+        if (row == null || !isUnclassifiedLinkGenre(row.genre)) continue;
+        row.genre = update.value;
+        await Database.songs.put(row);
+        updated++;
+      }
+    });
+    return updated;
   }
 
   @override
