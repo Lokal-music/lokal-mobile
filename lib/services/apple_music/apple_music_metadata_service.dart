@@ -640,6 +640,74 @@ class AppleMusicMetadataService {
         const [];
   }
 
+  /// Releases belonging to an exact Apple Music artist ID, not a relevance-
+  /// ranked text search. Query several storefronts because an album, EP or
+  /// single can be missing from the device region even when it is available
+  /// elsewhere. The calls are bounded and the merged discography is cached.
+  Future<List<AppleMusicAlbumMatch>> getArtistReleases(
+    String name, {
+    String? storefront,
+    bool refresh = false,
+  }) async {
+    final artist = await resolveArtist(name, storefront: storefront, refresh: refresh);
+    if (artist == null || artist.artistId.isEmpty) return const [];
+    final sf = _primaryStorefront(storefront);
+    return await _cache.fetch<List<AppleMusicAlbumMatch>>(
+          key: _key('artist-releases-v2', '${artist.artistId}|$sf'),
+          refresh: refresh,
+          loader: () async {
+            final regions = <String>{sf, 'us', 'ng', 'gb'};
+            var successful = 0;
+            final pages = await Future.wait([
+              for (final region in regions)
+                () async {
+                  try {
+                    final rows = await _itunesLookup(
+                      id: artist.artistId,
+                      entity: 'album',
+                      limit: _albumLookupLimit,
+                      storefront: region,
+                    );
+                    successful++;
+                    return (region: region, rows: rows);
+                  } catch (_) {
+                    return (region: region, rows: <Map<String, dynamic>>[]);
+                  }
+                }(),
+            ]);
+            // Do not cache a network outage as a seven-day empty discography.
+            if (successful == 0) {
+              throw const AppleMusicTransientException('artist release lookup unavailable');
+            }
+            final seen = <String>{};
+            final releases = <AppleMusicAlbumMatch>[];
+            for (final page in pages) {
+              for (final row in page.rows) {
+                if (row['wrapperType'] != 'collection') continue;
+                final release = _albumFromJson(row, page.region);
+                if (release.collectionId.isEmpty ||
+                    !seen.add(release.collectionId)) continue;
+                releases.add(release);
+              }
+            }
+            return releases;
+          },
+          encode: (matches) => {
+            'albums': [for (final match in matches) match.toJson()],
+          },
+          decode: (json) =>
+              (json['albums'] as List?)
+                  ?.whereType<Map<String, dynamic>>()
+                  .map(AppleMusicAlbumMatch.fromJson)
+                  .toList() ??
+              const <AppleMusicAlbumMatch>[],
+          ttl: _infoTtl,
+          negativeTtl: _negativeTtl,
+          transientTtl: _transientTtl,
+        ) ??
+        const <AppleMusicAlbumMatch>[];
+  }
+
   /// Free-text album search returning every plausible release, used by the
   /// identification flow where a single best match is not enough.
   Future<List<AppleMusicAlbumMatch>> searchAlbums(
