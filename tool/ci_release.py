@@ -155,6 +155,53 @@ def package_apk(apk, destination, flavor, version, code, env, certificate):
     }, indent=2) + "\n")
 
 
+
+def package_play_bundle(bundle, destination, version, code, env, certificate):
+    """Verify a Play-uploadable AAB without changing the GitHub APK releases."""
+    safe_env = {key: value for key, value in env.items() if key not in SECRETS}
+    verification = subprocess.check_output(
+        ["jarsigner", "-verify", "-verbose", str(bundle)], env=safe_env, text=True)
+    if "jar verified." not in verification:
+        raise ValueError("Play app bundle failed JAR signature verification")
+    certificates = subprocess.check_output(
+        ["keytool", "-printcert", "-jarfile", str(bundle)], env=safe_env, text=True)
+    fingerprints = re.findall(
+        r"(?m)^\s*SHA256:\s*((?:[0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2}|[0-9a-fA-F]{64})\s*$",
+        certificates)
+    if [value.replace(":", "").lower() for value in fingerprints] != [certificate]:
+        raise ValueError("Play app bundle was not signed exclusively by the supplied release key")
+
+    with zipfile.ZipFile(bundle) as archive:
+        bad_entry = archive.testzip()
+        if bad_entry is not None:
+            raise ValueError(f"Play app bundle has a corrupt ZIP entry: {bad_entry}")
+        entries = set(archive.namelist())
+        if not {"BundleConfig.pb", "base/manifest/AndroidManifest.xml"} <= entries:
+            raise ValueError("Play app bundle is missing required bundle metadata")
+        native_entries = [entry for entry in entries
+                          if entry.startswith("base/lib/") and entry.endswith(".so")]
+        packaged_abis = {entry.split("/")[2] for entry in native_entries}
+        if packaged_abis != {"arm64-v8a"}:
+            raise ValueError(f"Play app bundle must contain only arm64-v8a: {sorted(packaged_abis)}")
+        for library in ("librust_lib_flick_player.so", "libflutter.so", "libapp.so",
+                        "libmornye_discord.so", "libdiscord_partner_sdk.so"):
+            if f"base/lib/arm64-v8a/{library}" not in entries:
+                raise ValueError(f"Play app bundle is missing arm64-v8a/{library}")
+
+    # The corresponding Play APK was built in the same invocation with the
+    # same release signing key, package identity, version name and code.
+    destination.mkdir(exist_ok=True)
+    name = f"Lokal-{version}-Play.aab"
+    output = destination / name
+    shutil.copyfile(bundle, output)
+    with output.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    # Different filename pattern from SHA256SUMS-*.txt: GitHub release notes
+    # currently publish APKs only. The AAB is an Actions artifact for Play Console.
+    (destination / f"{name}.sha256").write_text(f"{digest}  {name}\n")
+
+
+
 def build():
     env = dict(os.environ)
     flavor = env["RELEASE_FLAVOR"]
@@ -163,8 +210,9 @@ def build():
     version = semantic_version(env["RELEASE_VERSION"])
     code = positive_number(env["RELEASE_BUILD_NUMBER"])
     apk = Path(f"build/app/outputs/flutter-apk/app-{flavor}-release.apk")
-    if apk.exists():
-        raise ValueError("Refusing to reuse an existing release APK; start from a clean checkout")
+    bundle = Path("build/app/outputs/bundle/playRelease/app-play-release.aab")
+    if apk.exists() or (flavor == "play" and bundle.exists()):
+        raise ValueError("Refusing to reuse an existing release artifact; start from a clean checkout")
     with signing_material(env, signing_directory()) as child_env:
         certificate = hashlib.sha256(subprocess.check_output([
             "keytool", "-exportcert", "-keystore", child_env["ANDROID_KEYSTORE_PATH"],
@@ -179,9 +227,19 @@ def build():
             "--target-platform", "android-arm64",
             "--build-name", version, "--build-number", str(code),
         ], env=child_env, check=True)
+        if flavor == "play":
+            # A GitHub-hosted Play APK is still sideloaded. Only an app installed
+            # via a trusted Google Play track avoids Android Auto's Unknown sources.
+            subprocess.run([
+                "flutter", "build", "appbundle", "--release", "--flavor", "play",
+                "--target-platform", "android-arm64",
+                "--build-name", version, "--build-number", str(code),
+            ], env=child_env, check=True)
     # Secrets are no longer needed by verification or packaging.
-    package_apk(apk, Path(env["RUNNER_TEMP"]) / "konnekted-release",
-                flavor, version, code, env, certificate)
+    destination = Path(env["RUNNER_TEMP"]) / "konnekted-release"
+    package_apk(apk, destination, flavor, version, code, env, certificate)
+    if flavor == "play":
+        package_play_bundle(bundle, destination, version, code, env, certificate)
 
 
 def main():
