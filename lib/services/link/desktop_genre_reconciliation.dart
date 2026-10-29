@@ -58,6 +58,7 @@ class DesktopGenreIdentity {
     required this.durationMs,
     this.remoteServerId,
     this.remoteId,
+    this.isLocalFile = true,
   });
 
   final int id;
@@ -67,6 +68,7 @@ class DesktopGenreIdentity {
   final int durationMs;
   final int? remoteServerId;
   final String? remoteId;
+  final bool isLocalFile;
 }
 
 /// Prioritize the stable desktop ID for copied and streamed desktop originals.
@@ -91,27 +93,42 @@ class DesktopGenreMatcher {
 
   List<int> matchingIds(int serverId, Map<String, dynamic> desktop) {
     final remoteId = desktop['id']?.toString();
-    if (remoteId != null && remoteId.isNotEmpty) {
-      final linked = _remote['$serverId:$remoteId'];
-      if (linked != null && linked.isNotEmpty) {
-        return [for (final row in linked) row.id];
-      }
-    }
+    final linked = remoteId != null && remoteId.isNotEmpty
+        ? _remote['$serverId:$remoteId'] ?? const <DesktopGenreIdentity>[]
+        : const <DesktopGenreIdentity>[];
 
     final title = desktop['title']?.toString() ?? '';
     final artist = desktop['artist']?.toString() ?? '';
-    if (title.trim().isEmpty || artist.trim().isEmpty) return const [];
+    if (title.trim().isEmpty || artist.trim().isEmpty) {
+      return [for (final row in linked) row.id];
+    }
     final duration = (desktop['duration'] as num?)?.toDouble();
-    if (duration == null || !duration.isFinite || duration <= 0) return const [];
+    if (duration == null || !duration.isFinite || duration <= 0) {
+      return [for (final row in linked) row.id];
+    }
     final album = _normalizeLinkName(desktop['album']?.toString());
     final matching = (_titles[_key(artist, title)] ?? const <DesktopGenreIdentity>[])
         .where((row) =>
+            (row.remoteServerId == null ||
+                row.remoteServerId == serverId ||
+                row.isLocalFile) &&
             (row.durationMs / 1000 - duration).abs() <= 2 &&
             (album.isEmpty || _normalizeLinkName(row.album).isEmpty ||
                 _normalizeLinkName(row.album) == album))
         .toList();
-    // A recording with two equally plausible matches should never propagate
-    // metadata to an unrelated version or remaster.
-    return matching.length == 1 ? [matching.single.id] : const [];
+    final local = matching.where((row) => row.isLocalFile).toList();
+    // A cached desktop catalogue placeholder must not prevent a matching
+    // physical local copy from receiving the genre too. Never select an
+    // ambiguous local version (e.g. two otherwise identical remasters).
+    final chosen = local.length == 1
+        ? local.single
+        : local.isEmpty && matching.length == 1 ? matching.single : null;
+    if (linked.isNotEmpty) {
+      return {
+        for (final row in linked) row.id,
+        if (chosen != null) chosen.id,
+      }.toList();
+    }
+    return chosen == null ? const [] : [chosen.id];
   }
 }
