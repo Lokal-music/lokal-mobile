@@ -197,6 +197,10 @@ final androidAudioApiProvider = FutureProvider<AudioApiPreference>((ref) async {
   return service.getAndroidAudioApi();
 });
 
+final outputPrecisionProvider = FutureProvider<OutputPrecisionPreference>((ref) {
+  return ref.watch(uac2PreferencesServiceProvider).getOutputPrecision();
+});
+
 final developerModeEnabledProvider = FutureProvider<bool>((ref) async {
   final service = ref.watch(uac2PreferencesServiceProvider);
   return service.getDeveloperModeEnabled();
