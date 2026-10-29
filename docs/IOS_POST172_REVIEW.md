@@ -1,6 +1,6 @@
 # iPhone review of mobile PRs after #172
 
-Current review: **118 merged product PRs after #172 through #331**. The newest
+Current review: **119 merged product PRs after #172 through #332**. The newest
 continuation includes on-demand large queues, provider resolution, subtitle
 alignment, smooth player expansion, per-minor release notes and direct Help
 navigation. Reviewed
@@ -1280,3 +1280,22 @@ inspect the compiled production shader, not just the CPU reference. New swipe,
 genre and resolution-stage phrases have translations in all shipped locales.
 Apple acceptance of this newer source is pending; build 82 covers the earlier
 through-#311 source only. Widgets remain excluded from release.
+
+
+## Follow-up: PR #332 broad genre classification
+
+Merged `11ff89a8bcdedbfe4bf93c90381a542f6670b87e` supersedes #331's
+repeated-custom-label approach. The review now covers 119 merged product PRs
+after #172. The iPhone source uses the same 21 broad families, curated exact
+aliases and word-boundary family hints as the updated desktop taxonomy
+(reference blob `05aa4f0a3d786d2d1dcdf676f9786d67e408e571`). Exact aliases win;
+unambiguous styles such as Future Jazz and Future Soul map into Jazz and
+R&B / Soul. Generic Indie/Alternative modifiers yield to a specific family.
+Unrecognized or ambiguous tags remain Other even when repeated; no arbitrary
+custom cards are created. Stored music metadata, multi-tag deduplication,
+No genre, search, live browsing and playback remain unchanged.
+
+All 11 focused genre tests pass, covering boundary/ambiguity cases, ignored tags,
+known singletons, repeated unknown labels, metadata preservation and live page
+search. Strict analysis of the three changed genre files is clean. This is later
+source than build83; no Apple app acceptance is claimed for these changes yet.

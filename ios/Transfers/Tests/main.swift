@@ -94,7 +94,7 @@ do {
       testingCommitBoundary: { if $0 == boundary { exit(98) } })
     throw TestFailure.failed("migration crash boundary was not reached")
   }
-  if CommandLine.arguments.count == 6 && CommandLine.arguments[1] == "--library-copy" {
+  if [6, 7].contains(CommandLine.arguments.count) && CommandLine.arguments[1] == "--library-copy" {
     let container = URL(fileURLWithPath: CommandLine.arguments[2])
     let root = URL(fileURLWithPath: CommandLine.arguments[3])
     let job = try LokalTransferJob.decodeDocument(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[4])))
@@ -103,6 +103,10 @@ do {
     do {
       let library = try LokalTransferLibrary(root: root, testingBoundary: {
         trace.record($0)
+        if $0 == "initializeWriter", CommandLine.arguments.count == 7 {
+          do { try libraryConstructorRendezvous(URL(fileURLWithPath: CommandLine.arguments[6])) }
+          catch { FileHandle.standardError.write(Data("Native constructor rendezvous failed\n".utf8)); exit(99) }
+        }
         if $0 == boundary { exit(96) }
       })
       let files = try LokalTransferFiles(container: container)

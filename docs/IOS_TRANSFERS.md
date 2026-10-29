@@ -596,3 +596,24 @@ of source IDs, Unicode/case aliases, stale scans after completion and historical
 deletion. The additional real iOS repository probe uses its own disposable
 database; it is source/analyzer checked and awaits the next Apple app batch.
 These guards do not enable product native imports or qualify file publication.
+
+
+### Writer lock construction follow-up
+
+Build83 and native run8 passed both actual iOS16 SDK/Flutter bridge checks, then
+both failed in native round2 at `initializeWriter: unsafeFile`, before app
+compilation. This localizes the old intermittent refusal to lock initialization;
+it does not identify whether the old open, stat or metadata check failed.
+
+Later source makes creation explicit: try one exclusive no-follow creation;
+only EEXIST opens the existing name, without O_CREAT. It never unlinks or
+recreates an existing lock. Open/stat failures retain their exact POSIX codes;
+unsafe metadata emits only finite type/link-count diagnostics. The opened
+regular, single-link inode must also match the named regular, single-link inode.
+All root, inode, hash, timestamp, no-overwrite and cancellation checks remain.
+
+Three full portable Swift rounds pass with six real constructors released
+together at the creation boundary, six promotions, all existing crash/copy/HTTP
+contracts, and refusal of symlink, unrelated hard-link, FIFO, directory and
+replaced-inode lock nodes. This is a construction correction awaiting Apple
+confirmation, not a claim that the previous failure's exact errno is known.

@@ -1,4 +1,23 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
+
+/// Release six real constructors together at the lock-creation boundary.
+/// No fixed sleep determines the outcome; the parent observes ready markers.
+func libraryConstructorRendezvous(_ gate: URL) throws {
+  let ready = gate.appendingPathComponent("\(ProcessInfo.processInfo.processIdentifier).ready")
+  try Data().write(to: ready)
+  let deadline = ProcessInfo.processInfo.systemUptime + 10
+  while !FileManager.default.fileExists(atPath: gate.appendingPathComponent("go").path) {
+    guard ProcessInfo.processInfo.systemUptime < deadline else {
+      throw TestFailure.failed("constructor rendezvous timed out")
+    }
+    Thread.sleep(forTimeInterval: 0.005)
+  }
+}
 
 /// Finite implementation boundary names only: no paths, music or credentials.
 final class LibraryChildTrace: @unchecked Sendable {
@@ -36,10 +55,11 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
     try manager.createDirectory(at: root, withIntermediateDirectories: false)
     return root
   }
-  func child(_ root: URL, boundary: String = "none") throws -> Process {
+  func child(_ root: URL, boundary: String = "none", gate: URL? = nil) throws -> Process {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
     process.arguments = ["--library-copy", container.path, root.path, jobDocument.path, boundary]
+    if let gate { process.arguments!.append(gate.path) }
     try process.run()
     return process
   }
@@ -152,7 +172,17 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
   }
 
   let concurrentRoot = try music("concurrent")
-  let children = try (0..<6).map { _ in try child(concurrentRoot) }
+  let gate = container.appendingPathComponent("library-constructor-gate")
+  try manager.createDirectory(at: gate, withIntermediateDirectories: false)
+  let children = try (0..<6).map { _ in try child(concurrentRoot, gate: gate) }
+  let deadline = ProcessInfo.processInfo.systemUptime + 10
+  var readyCount = 0
+  repeat {
+    readyCount = try manager.contentsOfDirectory(atPath: gate.path).filter { $0.hasSuffix(".ready") }.count
+    if readyCount == 6 { break }
+    Thread.sleep(forTimeInterval: 0.005)
+  } while ProcessInfo.processInfo.systemUptime < deadline
+  try Data().write(to: gate.appendingPathComponent("go"))
   var statuses: [Int32] = []
   for process in children {
     process.waitUntilExit()
@@ -160,7 +190,8 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
   }
   // Drain every child before reporting failure. Otherwise parent cleanup can
   // remove the fixture beneath the other writers and mask the original error.
-  try require(statuses.allSatisfy { $0 == 0 }, "six concurrent promotions succeed; statuses \(statuses)")
+  try require(readyCount == 6 && statuses.allSatisfy { $0 == 0 },
+    "six synchronized constructors/promotions succeed; ready=\(readyCount); statuses \(statuses)")
   let concurrent = try LokalTransferLibrary(root: concurrentRoot).install(job, from: files)
   let names = try manager.contentsOfDirectory(atPath: concurrentRoot.appendingPathComponent(LokalTransferLibrary.directoryName).path)
   try require(names.filter { !$0.hasPrefix(".") } == [URL(fileURLWithPath: concurrent.relativePath).lastPathComponent],
@@ -172,6 +203,37 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
   let target = unsafeRoot.appendingPathComponent(LokalTransferLibrary.directoryName).appendingPathComponent(name)
   let userOriginal = container.appendingPathComponent("library-user-original")
   try Data("preserve user audio".utf8).write(to: userOriginal)
+  for kind in ["symlink", "hardlink", "fifo", "directory"] {
+    let lockRoot = try music("unsafe-writer-" + kind)
+    let owned = lockRoot.appendingPathComponent(LokalTransferLibrary.directoryName)
+    try manager.createDirectory(at: owned, withIntermediateDirectories: false)
+    let lockPath = owned.appendingPathComponent(".lokal-import.lock")
+    switch kind {
+    case "symlink": try manager.createSymbolicLink(at: lockPath, withDestinationURL: userOriginal)
+    case "hardlink": try manager.linkItem(at: userOriginal, to: lockPath)
+    case "fifo": try require(mkfifo(lockPath.path, 0o600) == 0, "create actual FIFO lock fixture")
+    default: try manager.createDirectory(at: lockPath, withIntermediateDirectories: false)
+    }
+    try rejects("unsafe writer node is refused without blocking or replacement: " + kind) {
+      _ = try LokalTransferLibrary(root: lockRoot)
+    }
+    try require(String(contentsOf: userOriginal, encoding: .utf8) == "preserve user audio",
+      "writer refusal preserves unrelated user content")
+    try manager.removeItem(at: lockPath)
+  }
+  let swappedRoot = try music("swapped-writer")
+  let swappedLock = swappedRoot.appendingPathComponent(LokalTransferLibrary.directoryName)
+    .appendingPathComponent(".lokal-import.lock")
+  try rejects("a writer replaced between open and validation is not adopted") {
+    _ = try LokalTransferLibrary(root: swappedRoot, testingBoundary: { stage in
+      if stage == "writerOpened" {
+        try? FileManager.default.removeItem(at: swappedLock)
+        try? Data("preserve replacement".utf8).write(to: swappedLock)
+      }
+    })
+  }
+  try require(String(contentsOf: swappedLock, encoding: .utf8) == "preserve replacement",
+    "constructor never removes a replacement lock name on failure")
   try manager.createSymbolicLink(at: target, withDestinationURL: userOriginal)
   try rejects("symlink destination never receives bytes") { _ = try unsafeLibrary.install(job, from: files) }
   try manager.removeItem(at: target)
@@ -194,5 +256,5 @@ func runLibraryContracts(container: URL, job: LokalTransferJob, files: LokalTran
   try manager.createDirectory(at: unsafeRoot, withIntermediateDirectories: false)
   try rejects("replaced Music root cannot redirect an owned promotion") { _ = try unsafeLibrary.install(job, from: files) }
   try require(manager.contentsOfDirectory(atPath: unsafeRoot.path).isEmpty, "replacement root remains untouched")
-  print("Native library-file contracts passed: actual hashes, idempotent no-overwrite promotion, cancellation during actual copy and around publication, three crash boundaries, six process writers and unsafe-file refusal. No media/Isar/import acceptance claim.")
+  print("Native library-file contracts passed: actual hashes, idempotent no-overwrite promotion, cancellation during actual copy and around publication, three crash boundaries, six synchronized constructors/process writers, unsafe writer-node/replacement refusal and unsafe-file refusal. No media/Isar/import acceptance claim.")
 }
