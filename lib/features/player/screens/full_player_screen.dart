@@ -1584,14 +1584,25 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                         ),
                         borderRadius: BorderRadius.circular(5),
                       ),
-                      child: Text(
-                        _fullPlayerAudioLabel(song, tier),
-                        style: const TextStyle(
-                          fontFamily: _font,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .6,
-                          color: FullPlayerVisuals.primaryText,
+                      child: Tooltip(
+                        message: _fullPlayerAudioLabel(song, tier),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: (MediaQuery.sizeOf(context).width * .52)
+                                .clamp(110.0, 210.0).toDouble(),
+                          ),
+                          child: Text(
+                            _fullPlayerAudioLabel(song, tier),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: _font,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: .6,
+                              color: FullPlayerVisuals.primaryText,
+                            ),
+                          ),
                         ),
                       ),
                     ),
