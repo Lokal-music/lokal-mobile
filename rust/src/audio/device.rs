@@ -956,3 +956,41 @@ mod tests {
         crate::audio::dsd_native_jni::set_dsd_encoding_available(false);
     }
 }
+
+
+/// Read the Flutter legacy SharedPreferences key without involving the audio
+/// callback or a generated Dart bridge. Called only during stream negotiation.
+#[cfg(target_os = "android")]
+pub fn output_precision_preference() -> u8 {
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) };
+    let result = vm.attach_current_thread(|env| {
+        let context = unsafe {
+            JObject::from_raw(env, ctx.context() as jni::sys::jobject)
+        };
+        let store_name = env.new_string("FlutterSharedPreferences")?;
+        let store = env.call_method(
+            &context,
+            jni_str!("getSharedPreferences"),
+            jni_sig!("(Ljava/lang/String;I)Landroid/content/SharedPreferences;"),
+            &[JValue::Object(&store_name), JValue::Int(0)],
+        )?.l()?;
+        let key = env.new_string("flutter.output_precision")?;
+        let value = env.call_method(
+            &store,
+            jni_str!("getLong"),
+            jni_sig!("(Ljava/lang/String;J)J"),
+            &[JValue::Object(&key), JValue::Long(0)],
+        )?.j()?;
+        Ok::<i64, jni::errors::Error>(value)
+    });
+    match result {
+        Ok(1) => 1, // 16-bit PCM
+        Ok(2) => 2, // 32-bit float
+        Ok(_) => 0, // Auto, including unrecognised values
+        Err(error) => {
+            log::warn!("[AUDIO] Could not read output precision; using Auto: {}", error);
+            0
+        }
+    }
+}
