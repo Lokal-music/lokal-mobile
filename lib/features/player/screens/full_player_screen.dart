@@ -1658,6 +1658,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
       onDoubleTap: current && progress == 0 ? _likeFromArtwork : null,
       child: LokalPlayerArtwork(
         enabled: current,
+        // The panel paints a 20px cover at rest (12px in queue mode).
+        // The flying artwork must land at the SAME radius; the old 28px
+        // endpoint produced a visible corner snap when the portal released it.
+        expandedRadius: lerpDouble(20, 12, progress)!,
         child: SizedBox(
           width: side,
           height: side,
@@ -1684,7 +1688,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                             borderRadius: BorderRadius.circular(
                               lerpDouble(
                                 21,
-                                28,
+                                20,
                                 Curves.easeInOutCubic.transform(
                                   animation.value,
                                 ),
