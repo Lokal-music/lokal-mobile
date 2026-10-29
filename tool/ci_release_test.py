@@ -212,5 +212,76 @@ class PackagingTests(unittest.TestCase):
         self.assertFalse(self.dest.exists())
 
 
+class PlayBundlePackagingTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.bundle = self.root / "app-play-release.aab"
+        self.output = self.root / "output"
+        self.signer = "a" * 64
+        self.env = {"ANDROID_KEYSTORE_PASSWORD": "private-value"}
+        self.outputs = ["jar verified.\n", "Signer #1:\n SHA256: " +
+                        ":".join(["aa"] * 32) + "\n"]
+
+    def write_bundle(self, abis=("arm64-v8a",), include_manifest=True):
+        with zipfile.ZipFile(self.bundle, "w") as archive:
+            archive.writestr("BundleConfig.pb", b"fixture")
+            if include_manifest:
+                archive.writestr("base/manifest/AndroidManifest.xml", b"fixture")
+            for abi in abis:
+                for library in ("librust_lib_flick_player.so", "libflutter.so", "libapp.so",
+                                "libmornye_discord.so", "libdiscord_partner_sdk.so"):
+                    archive.writestr(f"base/lib/{abi}/{library}", b"fixture")
+
+    def package(self):
+        release.package_play_bundle(
+            self.bundle, self.output, "0.1.0", 123, self.env, self.signer)
+
+    def test_valid_bundle_is_available_for_play_console_with_checksum(self):
+        self.write_bundle()
+        with patch.object(release.subprocess, "check_output", side_effect=self.outputs) as tool:
+            self.package()
+            for call in tool.call_args_list:
+                self.assertNotIn("ANDROID_KEYSTORE_PASSWORD", call.kwargs["env"])
+        bundle = self.output / "Lokal-0.1.0-Play.aab"
+        self.assertEqual(bundle.read_bytes(), self.bundle.read_bytes())
+        self.assertEqual(
+            (self.output / f"{bundle.name}.sha256").read_text(),
+            f"{hashlib.sha256(bundle.read_bytes()).hexdigest()}  {bundle.name}\n")
+        self.assertEqual(len(list(self.output.iterdir())), 2)
+
+    def test_unsigned_bundle_is_not_published(self):
+        self.write_bundle()
+        with patch.object(release.subprocess, "check_output",
+                          side_effect=subprocess.CalledProcessError(1, "jarsigner")):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.package()
+        self.assertFalse(self.output.exists())
+
+    def test_unexpected_certificate_is_not_published(self):
+        self.write_bundle()
+        self.outputs[1] = "SHA256: " + ":".join(["bb"] * 32)
+        with patch.object(release.subprocess, "check_output", side_effect=self.outputs):
+            with self.assertRaisesRegex(ValueError, "supplied release key"):
+                self.package()
+        self.assertFalse(self.output.exists())
+
+    def test_missing_manifest_is_not_published(self):
+        self.write_bundle(include_manifest=False)
+        with patch.object(release.subprocess, "check_output", side_effect=self.outputs):
+            with self.assertRaisesRegex(ValueError, "metadata"):
+                self.package()
+        self.assertFalse(self.output.exists())
+
+    def test_extra_abi_is_not_published(self):
+        self.write_bundle(abis=("arm64-v8a", "x86_64"))
+        with patch.object(release.subprocess, "check_output", side_effect=self.outputs):
+            with self.assertRaisesRegex(ValueError, "only arm64-v8a"):
+                self.package()
+        self.assertFalse(self.output.exists())
+
+
+
 if __name__ == "__main__":
     unittest.main()
