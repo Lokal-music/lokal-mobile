@@ -75,6 +75,26 @@ void main() {
     );
     expect(horizontalList.scrollDirection, Axis.horizontal);
 
+    // The shell has already reserved the dock height in MediaQuery. The
+    // Library must not add the old 150px spacer on top of that clearance.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('library-bottom-clearance')),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final clearance = find.byKey(const Key('library-bottom-clearance'));
+    final bottomInsets = MediaQuery.paddingOf(tester.element(clearance)).bottom;
+    expect(
+      tester.widget<SizedBox>(clearance).height,
+      12 + bottomInsets,
+    );
+
+    await tester.scrollUntilVisible(
+      recentShelf,
+      -180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(of: recentShelf, matching: find.text('See all')),
     );
