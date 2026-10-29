@@ -556,24 +556,21 @@ void main() {
       });
     });
 
-    test('availability-first enrichment fallback is provider-neutral', () {
+    test('all failed provider lookups can retry enrichment once', () {
       for (final provider in ['tidal-web', 'qobuz-web', 'deezer', 'amazon']) {
-        expect(morneyeNeedsCrossProviderEnrichment(
-          addonName: provider,
-          track: {
-            'id': 'canonical-track', 'name': 'Song',
-            'provider_id': provider.replaceFirst(RegExp(r'-web$'), ''),
-          },
-        ), isFalse, reason: provider);
+        expect(morneyeShouldRetryEnrichment(
+          available: {'available': false, 'reason': '$provider unavailable'},
+          hasEnrichment: true,
+        ), isTrue, reason: provider);
       }
-      expect(morneyeNeedsCrossProviderEnrichment(
-        addonName: 'tidal-web',
-        track: {'id': 'another-id', 'name': 'Song', 'provider_id': 'spotify'},
-      ), isTrue);
-      expect(morneyeNeedsCrossProviderEnrichment(
-        addonName: 'qobuz-web',
-        track: {'id': '123', 'name': 'Song'},
-      ), isTrue);
+      expect(morneyeShouldRetryEnrichment(
+        available: {'available': true, 'track_id': 't1'},
+        hasEnrichment: true,
+      ), isFalse);
+      expect(morneyeShouldRetryEnrichment(
+        available: {'available': false},
+        hasEnrichment: false,
+      ), isFalse);
     });
   });
 
@@ -906,6 +903,36 @@ void main() {
       expect(checked, 1,
           reason: 'metadata and authorization are separate stages');
       await file.cleanup();
+    });
+
+    test('native Tidal lookup also retries after failed availability', () async {
+      final steps = <String>[];
+      engine.scripts['tidal-retry'] = {
+        ...downloader(),
+        'searchTracks': (args, call) async => [{
+          'id': 't1', 'name': 'Song', 'artists': 'Artist',
+          'provider_id': 'tidal', 'duration_ms': 180000,
+        }],
+        'checkAvailability': (args, call) async {
+          steps.add('availability');
+          return steps.length >= 3
+              ? {'available': true, 'track_id': 't1'}
+              : {'available': false, 'reason': 'Refresh metadata'};
+        },
+        'enrichTrack': (args, call) async {
+          steps.add('enrichment');
+          return {'name': 'Song', 'tidal_id': 't1'};
+        },
+      };
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('tidal-web'), 'tidal-retry'),
+      );
+      await packages.search(addon.key, 'Song');
+      final downloaded = await packages.download(
+        addon.key, 't1', forPlayback: true,
+      );
+      expect(steps, ['availability', 'enrichment', 'availability']);
+      await downloaded.cleanup();
     });
 
     test('failed cross-catalogue availability enriches and retries once', () async {
