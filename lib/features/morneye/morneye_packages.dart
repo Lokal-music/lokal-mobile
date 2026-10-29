@@ -492,6 +492,8 @@ class MorneyeTrack {
       codec: _codec(track),
       bitDepth: _bitDepth(track),
       sampleRate: _sampleRate(track),
+      // Tidal audio_modes or Amazon's per-track audioQualities=ATMOS,
+      // never addon-wide AC-4 qualityOptions, may certify catalogue Atmos.
       atmosAvailable: tidalAtmosAvailable(track),
     );
   }
