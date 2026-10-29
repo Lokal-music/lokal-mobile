@@ -297,10 +297,9 @@ class KonnektedHomeTopBar extends StatelessWidget {
   }
 }
 
-/// Three Home modes share the top header with the logo and the two actions.
-///
-/// Narrow screens keep 44dp tap targets and allow the center segment to scroll
-/// rather than scaling text or moving the switch below the greeting.
+/// A single balanced Home mode control. Discovery's longer label receives
+/// more width, while a truly narrow header scrolls instead of squeezing all
+/// three labels into indistinguishable boxes.
 class _HomeModeSelector extends StatefulWidget {
   const _HomeModeSelector({
     required this.selectedTab,
@@ -315,42 +314,98 @@ class _HomeModeSelector extends StatefulWidget {
 }
 
 class _HomeModeSelectorState extends State<_HomeModeSelector> {
-  double _modeTabFontSize(double width) {
-    // The logo and fixed action buttons leave a fairly narrow selector on
-    // phones, so keep the labels comfortably readable there too.
-    if (width < 220) return 11;
-    if (width < 260) return 12;
-    if (width < 310) return 13;
-    return 14;
+  static const _selectorMinWidth = 196.0;
+  static const _segmentGap = 4.0;
+
+  final _segmentKeys = {
+    for (final tab in KonnektedHomeTab.values) tab: GlobalKey(),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _revealSelection();
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SizedBox(
-      width: constraints.maxWidth,
-      child: LokalGlass.capsule(
-        thickness: LokalGlassThickness.thin,
-        shadow: false,
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        // Spread the tabs across the whole capsule so neither end has
-        // a large unused gap. Each label is kept on one line and scales down
-        // only if its own slot is too narrow.
-        child: Row(
-          children: [
-            for (final tab in KonnektedHomeTab.values)
-              Expanded(
-                child: _ShelfChip(
-                  label: lokalText(tab.label),
-                  selected: tab == widget.selectedTab,
-                  compact: true,
-                  fontSize: _modeTabFontSize(constraints.maxWidth),
-                  onTap: () => widget.onTabChanged?.call(tab),
-                ),
-              ),
-          ],
+  void didUpdateWidget(covariant _HomeModeSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedTab != widget.selectedTab) _revealSelection();
+  }
+
+  void _revealSelection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final selected = _segmentKeys[widget.selectedTab]?.currentContext;
+      if (selected == null) return;
+      // Only scroll the compact horizontal control; never shift the Home page
+      // vertically when the user changes modes.
+      final scrollable = Scrollable.maybeOf(selected);
+      final object = selected.findRenderObject();
+      if (scrollable == null ||
+          scrollable.position.axis != Axis.horizontal ||
+          object == null) {
+        return;
+      }
+      scrollable.position.ensureVisible(
+        object,
+        alignment: .5,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  Widget _segments() => Row(
+    children: [
+      for (final tab in KonnektedHomeTab.values) ...[
+        if (tab != KonnektedHomeTab.values.first)
+          const SizedBox(width: _segmentGap),
+        Expanded(
+          // "Discovery" has almost twice as many letters as "Local".
+          // Equal slots were pinching its label against the selected pill.
+          flex: tab == KonnektedHomeTab.discovery ? 16 : 10,
+          child: _ShelfChip(
+            key: _segmentKeys[tab],
+            indicatorKey: ValueKey('home-mode-indicator-${tab.name}'),
+            label: lokalText(tab.label),
+            selected: tab == widget.selectedTab,
+            onTap: () => widget.onTabChanged?.call(tab),
+          ),
         ),
-      ),
-    ),
+      ],
+    ],
+  );
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final textScale =
+          MediaQuery.textScalerOf(context).scale(11.0) / 11.0;
+      final minWidth = _selectorMinWidth * textScale;
+      final needsScroll = constraints.maxWidth < minWidth;
+      return SizedBox(
+        width: constraints.maxWidth,
+        height: 44,
+        child: LokalGlass.capsule(
+          thickness: LokalGlassThickness.thin,
+          shadow: false,
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: needsScroll
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const ClampingScrollPhysics(),
+                  child: SizedBox(
+                    width: minWidth - 6,
+                    child: _segments(),
+                  ),
+                )
+              : _segments(),
+        ),
+      );
+    },
   );
 }
 
@@ -416,20 +471,21 @@ class _KonnektedCoverFlowSectionState
   }
 }
 
+/// Hit targets occupy the full header height. Only the inset selected lens
+/// is tinted, and its fully rounded ends follow the outer capsule geometry.
 class _ShelfChip extends StatelessWidget {
   const _ShelfChip({
+    super.key,
+    required this.indicatorKey,
     required this.label,
     required this.selected,
     required this.onTap,
-    this.compact = false,
-    this.fontSize,
   });
 
+  final Key indicatorKey;
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final bool compact;
-  final double? fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -441,31 +497,44 @@ class _ShelfChip extends StatelessWidget {
       onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          constraints: BoxConstraints(minHeight: 44, minWidth: compact ? 0 : 56),
-          alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 1 : 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? (t.isLight
-                      ? Colors.black.withValues(alpha: .06)
-                      : Colors.white.withValues(alpha: .12))
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label.toUpperCase(),
-              maxLines: 1,
-              softWrap: false,
-              style: LokalTheme.label(
-                t,
-                size: fontSize ?? (compact ? 9 : 10),
-                color: selected ? t.text : t.muted,
+        child: SizedBox(
+          height: 44,
+          child: Center(
+            child: AnimatedContainer(
+              key: indicatorKey,
+              height: 36,
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: selected
+                    ? (t.isLight
+                        ? Colors.black.withValues(alpha: .08)
+                        : Colors.white.withValues(alpha: .14))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                label.toUpperCase(),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+                textAlign: TextAlign.center,
+                style: LokalTheme.label(
+                  t,
+                  size: 11,
+                  color: selected ? t.text : t.muted,
+                ).copyWith(
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  letterSpacing: .6,
+                ),
               ),
             ),
           ),
