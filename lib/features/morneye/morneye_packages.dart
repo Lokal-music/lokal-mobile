@@ -1723,18 +1723,23 @@ class MorneyePackages {
       _code(key),
       grants: [staged.path],
       onProgress: ({double? percent, String? message}) {
-        if (percent != null && percent > lastPercent) {
+        // Percent can restart from zero on a failed segment retry.
+        // Compare with the preceding callback, not the highest old value.
+        if (percent != null) {
+          if (percent > lastPercent) recordActivity();
           lastPercent = percent;
-          recordActivity();
         }
         onProgress?.call(percent: percent, message: message);
       },
       onTransfer: hooks ? null : (transfer) {
-        if (transfer.part != lastPart || transfer.written > lastWritten) {
-          lastPart = transfer.part;
-          lastWritten = transfer.written;
+        // A header-only transfer restart isn't progress. Once real bytes
+        // resume, even below the previous attempt's total, reset watchdog.
+        if (transfer.written > 0 &&
+            (transfer.part != lastPart || transfer.written > lastWritten)) {
           recordActivity();
         }
+        lastPart = transfer.part;
+        lastWritten = transfer.written;
         if (!sawFirstByte && transfer.written > 0) {
           sawFirstByte = true;
           phase('first_byte');
