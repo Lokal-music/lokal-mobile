@@ -22,6 +22,7 @@ class SongStageCarousel extends StatefulWidget {
     this.enabled = true,
     this.buttonDissolve = false,
     this.animateButtonDissolve = true,
+    this.maskOutgoingOnDissolve = false,
     this.onDragStateChanged,
   });
   final Song currentSong;
@@ -33,6 +34,10 @@ class SongStageCarousel extends StatefulWidget {
   final bool buttonDissolve;
   /// Disabling animations makes buttons switch immediately, not slide.
   final bool animateButtonDissolve;
+  /// The fullscreen still-art banner has a transparent lower edge. Mask its
+  /// outgoing artwork with the inverse cloud so no rectangular remnant hangs
+  /// around underneath the incoming banner until the animation completes.
+  final bool maskOutgoingOnDissolve;
   final ValueChanged<bool>? onDragStateChanged;
 
   @override
@@ -310,10 +315,19 @@ class SongStageCarouselState extends State<SongStageCarousel>
             fit: StackFit.expand,
             children: [
               if (_dissolveFrom case final oldSong?)
-                // Only two stationary stages during button navigation. The
-                // old art stays painted behind a single clipped incoming art;
-                // no repeated full-player builds or slide transforms.
-                stage(oldSong, 0, 'outgoing')
+                // On fullscreen still covers the banner's lower edge is
+                // intentionally transparent. Without an inverse mask the old
+                // banner bleeds through it and disappears in a hard rectangle
+                // only at the very end of the transport animation.
+                widget.maskOutgoingOnDissolve
+                    ? CloudCoverReveal(
+                        progress: _dissolve,
+                        seed: _current.id.hashCode,
+                        inverted: true,
+                        blur: false,
+                        child: stage(oldSong, 0, 'outgoing'),
+                      )
+                    : stage(oldSong, 0, 'outgoing')
               else ...[
                 if (_previous != null)
                   stage(_previous!, -width + _offset, 'previous'),
