@@ -28,6 +28,8 @@ import 'morneye_playback_quality.dart';
 
 const morneyeRegistry =
     'https://raw.githubusercontent.com/mornyeapp/Mornye-Extension/refs/heads/main/registry.json';
+const morneyeAmazonNewRegistry =
+    'https://raw.githubusercontent.com/CHEYCKIT/Mornye-Extension/refs/heads/feature/amazon-new-release-20261029/amazon-new-registry.json';
 const morneyeCompatVersion = '5.1.0';
 /// Mornye's documented .spotiflac-ext format and its legacy/newer archives.
 bool morneyeIsPackageFileName(String filename) => RegExp(
@@ -779,8 +781,20 @@ class MorneyePackages {
         }
       }
     }
+    // The bundled Amazon (New) package has a separate update feed; official
+    // Morneye sources remain on their original registry.
+    final needsAmazonNewRepo =
+        !_repos.any((repository) => repository.url == morneyeAmazonNewRegistry);
+    if (needsAmazonNewRepo) {
+      _repos.add(MorneyeRepository(
+        id: _sha256(utf8.encode(morneyeAmazonNewRegistry)).substring(0, 16),
+        url: morneyeAmazonNewRegistry,
+        name: 'Amazon (New) updates',
+      ));
+    }
     _loaded = true;
-    if (oldDefaultId != null || migratedAddonRepositoryIds) _save();
+    if (oldDefaultId != null || migratedAddonRepositoryIds ||
+        currentDefaultId != null && needsAmazonNewRepo) _save();
   }
 
   void _save() => morneyeAtomicWrite(
