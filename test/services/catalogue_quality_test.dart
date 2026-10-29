@@ -38,6 +38,38 @@ void main() {
     ), 'DOLBY_ATMOS');
   });
 
+  test('Amazon per-track ATMOS audioQualities earns the purple catalogue badge', () {
+    final atmos = MorneyeTrack.of({
+      'id': 'amazon-atmos',
+      'name': 'A genuine spatial edition',
+      'artists': ['Artist'],
+      'audioQualities': ['HD', 'UHD', 'ATMOS'],
+    }, 'a-amazon');
+    expect(atmos.atmosAvailable, isTrue);
+    final alias = MorneyeTrack.of({
+      'id': 'amazon-alias',
+      'name': 'Another spatial edition',
+      'artists': ['Artist'],
+      'audio_qualities': ['UHD', 'ATMOS'],
+    }, 'a-amazon');
+    expect(alias.atmosAvailable, isTrue);
+    final noAtmos = MorneyeTrack.of({
+      'id': 'amazon-stereo',
+      'name': 'No spatial option in this catalogue',
+      'artists': ['Artist'],
+      'audioQualities': ['HD', 'UHD', '360RA'],
+      'audio_quality': 'AC-4',
+    }, 'a-amazon');
+    expect(noAtmos.atmosAvailable, isFalse,
+        reason: 'A codec name, another spatial format, or Amazon global tier is not an Atmos badge');
+    final noMetadata = MorneyeTrack.of({
+      'id': 'amazon-unknown',
+      'name': 'Unreported',
+      'artists': ['Artist'],
+    }, 'a-amazon');
+    expect(noMetadata.atmosAvailable, isFalse);
+  });
+
   test('Amazon Search shows the selected normal tier, never a universal AC-4 badge', () {
     const amazonOptions = [
       {'id': 'best', 'label': 'FLAC Best Available', 'kind': 'lossless'},
