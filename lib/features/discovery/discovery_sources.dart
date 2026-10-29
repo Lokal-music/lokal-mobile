@@ -92,13 +92,49 @@ class YoutubeMusicCatalog {
     return response;
   }
 
-  /// Guest YouTube Music browse endpoint. Uses the same public WEB_REMIX
-  /// context as search; artist catalogue pages need no account cookies.
-  Future<Map<String, dynamic>> rawBrowse(
-    String browseId, {
-    String? params,
-  }) async {
-    if (!RegExp(r'^(UC[A-Za-z0-9_-]{10,}|MPRE[A-Za-z0-9_-]+|VL[A-Za-z0-9_-]+)
+  /// Anonymous artist-channel browse using the existing guest catalogue client.
+  Future<Map<String, dynamic>> rawBrowse(String browseId, {String? params}) async {
+    final valid = RegExp(r'^(UC|MPRE|MPLA|MPLY|VL|FEmusic)[A-Za-z0-9_-]{4,}$');
+    if (!valid.hasMatch(browseId)) {
+      throw const DiscoveryException('Unsupported YouTube Music browse id.');
+    }
+    final config = refreshClientContext
+        ? await (_pageContext ??= _loadPageContext())
+        : <String, dynamic>{};
+    final embedded = config['INNERTUBE_CONTEXT'];
+    final client = embedded is Map && embedded['client'] is Map
+        ? (embedded['client'] as Map).cast<String, Object?>()
+        : <String, Object?>{};
+    final version =
+        config['INNERTUBE_CLIENT_VERSION']?.toString() ?? '1.20250101.01.00';
+    return http.json(
+      Uri.https('music.youtube.com', '/youtubei/v1/browse', {
+        'prettyPrint': 'false',
+      }),
+      headers: {
+        'Origin': 'https://music.youtube.com',
+        'X-YouTube-Client-Name': '67',
+        'X-YouTube-Client-Version': version,
+      },
+      body: {
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            ...client,
+            'clientVersion': version,
+            if (config['VISITOR_DATA'] != null)
+              'visitorData': config['VISITOR_DATA'],
+            'hl': 'en',
+            'gl': 'US',
+          },
+        },
+        'browseId': browseId,
+        if (params != null) 'params': params,
+      },
+    );
+  }
+
+  static List<DiscoveryTrack> parse(Map<String, dynamic> response) {
     if (response['error'] != null || response['contents'] is! Map) {
       throw const DiscoveryException(
         'YouTube Music returned an unsupported catalog response.',
