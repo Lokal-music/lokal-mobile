@@ -835,6 +835,7 @@ class Uac2PreferencesService {
       await prefs.remove(_keyExclusiveDacModeEnabled);
 await prefs.remove(_keyAudioEnginePreference);
     await prefs.remove(_keyAndroidAudioApi);
+    await prefs.remove(_keyOutputPrecision);
     await prefs.remove(_keyDeveloperModeEnabled);
       await prefs.remove(_keyAudioFormatEnabled);
       await prefs.remove(_keyUsbSoftwareVolume);
