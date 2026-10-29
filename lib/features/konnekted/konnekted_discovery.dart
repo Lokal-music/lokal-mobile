@@ -1056,6 +1056,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       // correctly probed download when the early reader fails.
                       final cached = await cache().adopt(
                         found, completed.file, sourceInfo: completed.info,
+                        fastPlayback: true,
                       );
                       final path = cached.filePath;
                       if (path == null) {
@@ -1211,12 +1212,17 @@ Future<List<_PlaybackSource>> _morneyeSources(
               'encoded': download.atmosEncoded,
               'mode': found.atmosDownload ? 'download' : 'playback',
             });
+            final adoptionTimer = Stopwatch()..start();
             final adopted = await cache().adopt(
               found,
               download.file,
               atmosEncoded: download.atmosEncoded,
               sourceInfo: download.info,
+              fastPlayback: !forDownload && !found.atmosDownload && !tryAtmos,
             );
+            AppLog.instance.add('[Mornye] cache adoption elapsedMs='
+                '${adoptionTimer.elapsedMilliseconds} '
+                'mode=${forDownload ? 'save' : 'playback'}');
             if (tryAtmos) AtmosDiagnostics.record('cache_adopt_done', {
               'encoded': adopted.atmosEncoded,
               'outcome': 'ready',
