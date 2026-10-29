@@ -1694,6 +1694,23 @@ class MorneyePackages {
             .any((h) => h is Map && h['defaultEnabled'] == true);
     final preparation = Stopwatch()..start();
     var sawFirstByte = false;
+    MorneyeRuntime? activeRuntime;
+    Timer? inactivityTimer;
+    var monitoringTransfer = false;
+    var transferStalled = false;
+    double lastPercent = -1;
+    String? lastPart;
+    var lastWritten = 0;
+    void recordActivity() {
+      if (!monitoringTransfer) return;
+      inactivityTimer?.cancel();
+      inactivityTimer = Timer(const Duration(seconds: 90), () {
+        transferStalled = true;
+        // End only an inactive *download*, never an interactive account or
+        // verification step. Closing the guest rejects its pending invoke.
+        activeRuntime?.close();
+      });
+    }
     void phase(String stage) {
       onResolutionStage?.call(stage);
       // Private IDs, signed URLs, tokens and track names are never logged.
@@ -1705,8 +1722,19 @@ class MorneyePackages {
       addon,
       _code(key),
       grants: [staged.path],
-      onProgress: onProgress,
+      onProgress: ({double? percent, String? message}) {
+        if (percent != null && percent > lastPercent) {
+          lastPercent = percent;
+          recordActivity();
+        }
+        onProgress?.call(percent: percent, message: message);
+      },
       onTransfer: hooks ? null : (transfer) {
+        if (transfer.part != lastPart || transfer.written > lastWritten) {
+          lastPart = transfer.part;
+          lastWritten = transfer.written;
+          recordActivity();
+        }
         if (!sawFirstByte && transfer.written > 0) {
           sawFirstByte = true;
           phase('first_byte');
@@ -1717,6 +1745,7 @@ class MorneyePackages {
       // Browsing stays at 64 MiB. Native code caps this at 256 MiB.
       heapMb: 256,
     );
+    activeRuntime = runtime;
     unawaited(cancel?.then((_) => runtime.close()));
     try {
       phase('initializing');
@@ -1838,12 +1867,27 @@ class MorneyePackages {
         'quality': 'DOLBY_ATMOS',
       });
       phase('preparing_media');
-      final result = await runtime.invoke('download', [
-        '${available['track_id'] ?? available['trackId'] ?? id}',
-        chosen,
-        p.join(staged.path, 'audio.flac'),
-        {'preparedContext': prepared, 'resolutionTimeoutMs': 60000},
-      ], const Duration(hours: 24));
+      monitoringTransfer = true;
+      recordActivity();
+      dynamic result;
+      try {
+        result = await runtime.invoke('download', [
+          '${available['track_id'] ?? available['trackId'] ?? id}',
+          chosen,
+          p.join(staged.path, 'audio.flac'),
+          {'preparedContext': prepared, 'resolutionTimeoutMs': 60000},
+        ], const Duration(hours: 24));
+      } catch (error) {
+        if (transferStalled) {
+          throw const MorneyePackageError(
+            'The provider stopped delivering audio for 90 seconds. Retry the track.',
+          );
+        }
+        rethrow;
+      } finally {
+        monitoringTransfer = false;
+        inactivityTimer?.cancel();
+      }
       phase('download_complete');
       if (result is! Map || result['success'] != true) {
         if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('addon_download_failed', {
@@ -2062,6 +2106,7 @@ class MorneyePackages {
       if (staged.existsSync()) await staged.delete(recursive: true);
       rethrow;
     } finally {
+      inactivityTimer?.cancel();
       runtime.close();
     }
   }
