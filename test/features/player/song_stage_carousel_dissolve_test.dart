@@ -92,6 +92,8 @@ void main() {
     required void Function(int) changed,
     bool buttonDissolve = true,
     bool animate = true,
+    bool maskOutgoingOnDissolve = false,
+    double height = 320,
     int initial = 0,
   }) async {
     final key = GlobalKey<SongStageCarouselState>();
@@ -100,7 +102,7 @@ void main() {
       home: Scaffold(
         body: Center(child: SizedBox(
           width: 320,
-          height: 320,
+          height: height,
           child: StatefulBuilder(
             builder: (context, update) => SongStageCarousel(
               key: key,
@@ -109,6 +111,7 @@ void main() {
               nextSong: index == tracks.length - 1 ? null : tracks[index + 1],
               buttonDissolve: buttonDissolve,
               animateButtonDissolve: animate,
+              maskOutgoingOnDissolve: maskOutgoingOnDissolve,
               onNext: () async {
                 if (index == tracks.length - 1) return;
                 update(() => index++);
@@ -158,6 +161,71 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2400));
     await tester.pump();
     expect(find.byType(CloudCoverReveal), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('outgoing mask is the complement of the incoming fullscreen reveal', () {
+    final blobs = createCloudCoverBlobs(812);
+    const portrait = Size(350, 740);
+    // Verify the lower banner/centre and all edges, not only the cloud cores.
+    // The old cover must no longer become invisible in one abrupt final frame.
+    for (final p in [0.0, .25, .5, .82, .9, .99, 1.0]) {
+      for (final x in [0.0, .25, .5, .75, 1.0]) {
+        for (final y in [0.0, .4, .7, 1.0]) {
+          final incoming = cloudCoverAlphaAt(
+            blobs, p, x, y, size: portrait,
+          );
+          final outgoing = cloudCoverAlphaAt(
+            blobs, p, x, y, size: portrait, inverted: true,
+          );
+          expect(incoming + outgoing, closeTo(1, .000001));
+          if (p == 1) expect(outgoing, 0);
+          if (p == .99) {
+            expect(outgoing, lessThan(.057),
+                reason: 'No previous-cover rectangle may survive the last frame');
+          }
+        }
+      }
+    }
+  });
+
+  testWidgets('fullscreen cover dissolves outgoing art before its final unmount',
+      (tester) async {
+    var current = 0;
+    final key = await mount(
+      tester,
+      changed: (i) => current = i,
+      maskOutgoingOnDissolve: true,
+      height: 700, // Tall full-bleed banner, not a square sleeve
+    );
+    await key.currentState!.animateToNext();
+    await tester.pump();
+    expect(current, 1);
+    final outgoing = find.ancestor(
+      of: find.byKey(const ValueKey('art-a')),
+      matching: find.byType(CloudCoverReveal),
+    );
+    final incoming = find.ancestor(
+      of: find.byKey(const ValueKey('art-b')),
+      matching: find.byType(CloudCoverReveal),
+    );
+    expect(outgoing, findsOneWidget);
+    expect(incoming, findsOneWidget);
+    expect(tester.widget<CloudCoverReveal>(outgoing).inverted, isTrue);
+    expect(tester.widget<CloudCoverReveal>(outgoing).blur, isFalse);
+    expect(tester.widget<CloudCoverReveal>(incoming).inverted, isFalse);
+
+    await tester.pump(const Duration(milliseconds: 2300));
+    // The outgoing widget is still mounted, but its *mask* is almost fully
+    // transparent rather than showing a solid rectangle until teardown.
+    expect(outgoing, findsOneWidget);
+    final outgoingMask = tester.widget<CloudCoverReveal>(outgoing);
+    expect(outgoingMask.inverted, isTrue);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('art-a')), findsNothing);
+    expect(find.byType(CloudCoverReveal), findsNothing);
+    expect(find.byKey(const ValueKey('art-b')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

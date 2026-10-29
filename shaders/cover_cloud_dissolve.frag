@@ -23,6 +23,10 @@ uniform vec4 u_blob10;
 uniform vec4 u_blob11;
 uniform vec4 u_blob12;
 uniform vec4 u_blob13;
+// Fullscreen album sleeves have a transparent lower gradient. Fade the old
+// artwork with the complement of the incoming cloud, not by removing its
+// banner abruptly when the transport animation finishes.
+uniform float u_invert;
 
 out vec4 frag_color;
 
@@ -81,5 +85,5 @@ void main() {
   // Desktop's final translucent linear-gradient alpha layer.
   float fill = clamp((u_progress - 0.82) / 0.18, 0.0, 1.0);
   alpha = 1.0 - (1.0 - alpha) * (1.0 - fill);
-  frag_color = vec4(alpha);
+  frag_color = vec4(mix(alpha, 1.0 - alpha, u_invert));
 }

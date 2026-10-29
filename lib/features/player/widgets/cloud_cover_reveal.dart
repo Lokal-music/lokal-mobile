@@ -70,6 +70,7 @@ double cloudCoverAlphaAt(
   double x,
   double y, {
   Size size = const Size(1, 1),
+  bool inverted = false,
 }) {
   final p = _clamp(progress);
   // Both axes are measured in physical pixel space. In particular, a
@@ -100,7 +101,8 @@ double cloudCoverAlphaAt(
   }
   // Exactly desktop's translucent full-frame final 18%; not a growing oval.
   final fill = _clamp((p - .82) / .18);
-  return 1 - (1 - alpha) * (1 - fill);
+  final composed = 1 - (1 - alpha) * (1 - fill);
+  return inverted ? 1 - composed : composed;
 }
 
 /// GPU cloud handover for transport-button transitions. The outgoing stage is
@@ -112,11 +114,19 @@ class CloudCoverReveal extends StatefulWidget {
     required this.progress,
     required this.seed,
     required this.child,
+    this.inverted = false,
+    this.blur = true,
   });
 
   final Animation<double> progress;
   final int seed;
   final Widget child;
+  /// The outgoing fullscreen sleeve uses the inverse cloud mask. Otherwise
+  /// its intentionally translucent lower edge retains an old rectangular
+  /// banner until the old stage is unmounted on the final animation frame.
+  final bool inverted;
+  /// Only the incoming artwork needs the desktop's soft-to-sharp blur.
+  final bool blur;
 
   @override
   State<CloudCoverReveal> createState() => _CloudCoverRevealState();
@@ -174,7 +184,7 @@ class _CloudCoverRevealState extends State<CloudCoverReveal> {
     if (program == null) {
       // Do not show hard-edged vector shapes if the shader is unavailable.
       // Keep this transition a stable crossfade, then retry on the next song.
-      return Opacity(opacity: p, child: artwork);
+      return Opacity(opacity: widget.inverted ? 1 - p : p, child: artwork);
     }
 
     Widget incoming = ShaderMask(
@@ -193,6 +203,7 @@ class _CloudCoverRevealState extends State<CloudCoverReveal> {
             ..setFloat(at + 2, blob.delay)
             ..setFloat(at + 3, blob.size);
         }
+        shader.setFloat(59, widget.inverted ? 1.0 : 0.0);
         return shader;
       },
       child: artwork,
@@ -202,7 +213,7 @@ class _CloudCoverRevealState extends State<CloudCoverReveal> {
     // Blur after ShaderMask so both the new picture and cloud edges soften
     // together, then sharpen progressively to the full-resolution cover.
     final blur = cloudCoverBlur(p);
-    if (blur > .05) {
+    if (widget.blur && blur > .05) {
       incoming = ImageFiltered(
         imageFilter: ui.ImageFilter.blur(
           sigmaX: blur,
