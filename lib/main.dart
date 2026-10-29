@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/widgets/lokal/lokal_glass.dart';
+import 'package:flick/features/player/widgets/cloud_cover_reveal.dart';
 import 'package:flick/src/rust/frb_generated.dart';
 import 'package:flick/app/app.dart';
 import 'package:flick/data/database.dart';
