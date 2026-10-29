@@ -9,7 +9,20 @@ precision highp float;
 uniform vec2 u_size;
 uniform float u_progress;
 // x,y normalized center; z stagger delay; w full-grown radius fraction.
-uniform vec4 u_blobs[14];
+uniform vec4 u_blob0;
+uniform vec4 u_blob1;
+uniform vec4 u_blob2;
+uniform vec4 u_blob3;
+uniform vec4 u_blob4;
+uniform vec4 u_blob5;
+uniform vec4 u_blob6;
+uniform vec4 u_blob7;
+uniform vec4 u_blob8;
+uniform vec4 u_blob9;
+uniform vec4 u_blob10;
+uniform vec4 u_blob11;
+uniform vec4 u_blob12;
+uniform vec4 u_blob13;
 
 out vec4 frag_color;
 
@@ -33,23 +46,36 @@ float blob_alpha(float distance) {
   return 0.0;
 }
 
+float paint_blob(vec2 uv, float alpha, vec4 blob) {
+  float t = clamp(
+    (u_progress - blob.z) / (1.0 - blob.z), 0.0, 1.0
+  );
+  float growth = 0.65 * ease_out(t) + 0.35 * ease_in_out(t);
+  float radius = blob.w * growth;
+  if (radius <= 0.000001) return alpha;
+  float distance = length((uv - blob.xy) / radius);
+  float layer = blob_alpha(distance);
+  return 1.0 - (1.0 - alpha) * (1.0 - layer);
+}
+
 void main() {
   vec2 uv = FlutterFragCoord().xy / max(u_size, vec2(1.0));
   float alpha = 0.0;
-  for (int i = 0; i < 14; i++) {
-    vec4 blob = u_blobs[i];
-    float t = clamp(
-      (u_progress - blob.z) / (1.0 - blob.z), 0.0, 1.0
-    );
-    float growth = 0.65 * ease_out(t) + 0.35 * ease_in_out(t);
-    float radius = blob.w * growth;
-    if (radius <= 0.000001) continue;
-    // The normalized ellipse exactly mirrors CSS's width%/height% radii.
-    float distance = length((uv - blob.xy) / radius);
-    float layer = blob_alpha(distance);
-    alpha = 1.0 - (1.0 - alpha) * (1.0 - layer);
-  }
-  // Desktop's final linear-gradient alpha layer, not an oversized oval.
+  alpha = paint_blob(uv, alpha, u_blob0);
+  alpha = paint_blob(uv, alpha, u_blob1);
+  alpha = paint_blob(uv, alpha, u_blob2);
+  alpha = paint_blob(uv, alpha, u_blob3);
+  alpha = paint_blob(uv, alpha, u_blob4);
+  alpha = paint_blob(uv, alpha, u_blob5);
+  alpha = paint_blob(uv, alpha, u_blob6);
+  alpha = paint_blob(uv, alpha, u_blob7);
+  alpha = paint_blob(uv, alpha, u_blob8);
+  alpha = paint_blob(uv, alpha, u_blob9);
+  alpha = paint_blob(uv, alpha, u_blob10);
+  alpha = paint_blob(uv, alpha, u_blob11);
+  alpha = paint_blob(uv, alpha, u_blob12);
+  alpha = paint_blob(uv, alpha, u_blob13);
+  // Desktop's final translucent linear-gradient alpha layer.
   float fill = clamp((u_progress - 0.82) / 0.18, 0.0, 1.0);
   alpha = 1.0 - (1.0 - alpha) * (1.0 - fill);
   frag_color = vec4(alpha);
