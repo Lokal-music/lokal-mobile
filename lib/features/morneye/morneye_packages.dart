@@ -661,7 +661,8 @@ class MorneyeDownload {
   final Map<String, Object?> metadata;
   final Map<String, Object?> info;
   final Directory _staging;
-  /// True only after Android MediaExtractor identified an E-AC-3 JOC stream.
+  /// True only after native/FFprobe identified an original AC-4 or JOC stream.
+  /// This does not imply that AC-4's immersive presentation was verified.
   final bool atmosEncoded;
   final String? atmosCodec; // Verified encoded source, AC-4 or E-AC-3 JOC.
 
@@ -1871,7 +1872,7 @@ class MorneyePackages {
       final explicitAtmos = isMorneyeAtmosQuality(quality);
       if (explicitAtmos) AtmosDiagnostics.record('addon_download_start', {
         'source': provider == 'tidal' ? 'tidal' : 'other',
-        'quality': 'DOLBY_ATMOS',
+        'quality': chosen,
       });
       phase('preparing_media');
       monitoringTransfer = true;
@@ -1916,7 +1917,7 @@ class MorneyePackages {
             .trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
         final extension = p.extension(file).toLowerCase();
         AtmosDiagnostics.record('addon_response', {
-          'quality': 'DOLBY_ATMOS',
+          'quality': chosen,
           'reason': claimed == 'DOLBY_ATMOS'
               ? 'provider_claimed_atmos'
               : claimed == 'HI_RES_LOSSLESS' || claimed == 'LOSSLESS' || claimed == 'HIGH'
