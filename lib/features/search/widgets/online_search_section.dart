@@ -607,6 +607,8 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
                               onAtmos: () => _play(source, result, atmos: true, results: results),
                               onMore: () => _actions(source, result, results),
                               onQueue: () => _enqueue(source, result, next: false),
+                            onNext: () => _enqueue(source, result, next: true),
+                              onNext: () => _enqueue(source, result, next: true),
                             ),
                           )
                         else
@@ -696,6 +698,7 @@ class _OnlineTile extends StatelessWidget {
     required this.onTap,
     required this.onAtmos,
     required this.onQueue,
+    required this.onNext,
     required this.onMore,
     this.verifiedQuality,
   });
@@ -706,6 +709,7 @@ class _OnlineTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onAtmos;
   final Future<void> Function() onQueue;
+  final Future<void> Function() onNext;
   final VoidCallback onMore;
 
   @override
@@ -724,6 +728,7 @@ class _OnlineTile extends StatelessWidget {
     final displayQuality = badge.label;
     return LokalSwipeToQueue(
       onQueue: onQueue,
+      onNext: onNext,
       enabled: !busy,
       child: InkWell(
         onTap: busy ? null : onTap,
