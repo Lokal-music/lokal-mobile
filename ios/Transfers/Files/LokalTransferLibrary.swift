@@ -89,11 +89,24 @@ struct LokalTransferLibraryPublication: Codable, Equatable, Sendable {
   }
 
   func verify(_ fd: Int32) throws -> stat {
+    let info = try verifyIdentity(fd)
+    guard Self(info: info, nonce: nonce) == self else { throw LokalTransferError.unsafeFile }
+    return info
+  }
+
+  /// Private-link retirement may preserve an edited public hard link. It needs
+  /// the durable inode/birth/marker identity, never permission to delete public
+  /// bytes. All public adoption/deletion continues to use strict verify/hash.
+  func verifyIdentity(_ fd: Int32) throws -> stat {
     try validate()
     var info = stat()
     guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
-          info.st_nlink == 1 || info.st_nlink == 2,
-          Self(info: info, nonce: nonce) == self else { throw LokalTransferError.unsafeFile }
+          info.st_nlink == 1 || info.st_nlink == 2 else { throw LokalTransferError.unsafeFile }
+    let identity = Self(info: info, nonce: nonce)
+    guard identity.device == device, identity.inode == inode, identity.generation == generation,
+          identity.birthSeconds == birthSeconds, identity.birthNanos == birthNanos else {
+      throw LokalTransferError.unsafeFile
+    }
     var bytes = [UInt8](repeating: 0, count: 37)
     let count = Self.marker.withCString { name in bytes.withUnsafeMutableBytes { value in
       #if canImport(Darwin)

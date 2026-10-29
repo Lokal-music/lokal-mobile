@@ -869,7 +869,29 @@ native rounds pass real SQLite resolution process exits before/after commit,
 reopen preservation, unchanged live jobs, conflicting-decision refusal and
 idempotent lost replies without another observable generation. File-cleanup
 completion in those journal contracts is explicitly a caller fixture. Separate
-cleanup leases, private-part drainage, channel/root integration and actual Apple
+runtime ownership of cleanup leases, integrated private-part drainage, channel/root integration and actual Apple
 coordinated deletion remain pending. Ordinary cancellation still refuses the
 uncertain importing boundary: cancellation there needs the Isar decision first,
 then a separately authorized retired revision; weakening `cancel` is unsafe.
+
+### Cleanup authority and private-link continuation
+
+The registry now has a distinct cleanup permission and direct revocable guard.
+It refuses publication tokens, ordinary write/reconciliation guards, foreign
+clients and upgrades from an active cleanup claim. Twelve concurrent cleanup
+claims coalesce; clear retires their token and queued ticket immediately. The
+journal has a separate exact-custody retirement comparison for a prepared import
+after the Isar barrier. Ordinary `cancel` still refuses importing, and a private
+retirement without the journal comparison is also refused. This native boundary
+preserves the frozen proof and received integrity while retiring the live revision;
+the Isar decision is still an explicit fixture in these native contracts.
+
+The private-file helper can now drain an interrupted partial, a stamped private
+copy or its exact private/public two-link pair. It checks the native inode/birth/
+marker identity when proof exists and never unlinks a public name. Editing public
+audio does not prevent removal of our private hard link; strict public hash/mtime
+checks remain unchanged. Actual process-exit contracts pass cancellation,
+idempotent private drainage, preservation of edited public bytes, and refusal of
+replacement private inodes and symlinks. All three complete portable native rounds
+pass. Runtime/Runner/Dart cleanup integration and Apple execution of this newer
+source remain pending; native product import/upload are still disabled.

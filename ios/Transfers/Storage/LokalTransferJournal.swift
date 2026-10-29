@@ -433,6 +433,7 @@ final class LokalTransferJournal: @unchecked Sendable {
   @discardableResult
   func update(id: String, revision: Int, pausingScope: LokalTransferPause? = nil,
               acknowledging expectedCustody: LokalTransferImportCustody? = nil,
+              retiring expectedRetirement: LokalTransferImportCustody? = nil,
               _ operation: (inout LokalTransferJob) throws -> Void) throws -> LokalTransferJob {
     try transaction { current in
       let select = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
@@ -452,8 +453,27 @@ final class LokalTransferJournal: @unchecked Sendable {
           throw LokalTransferError.staleRevision
         }
       }
+      if let expectedRetirement {
+        guard expectedCustody == nil,
+              let (stored, _) = try selectCustody(id: id, revision: revision),
+              stored == expectedRetirement, stored.matches(previous),
+              stored.resolution == nil, [.validating, .importing].contains(previous.phase),
+              previous.phase != .importing || stored.publication != nil else {
+          throw LokalTransferError.staleRevision
+        }
+      }
       var job = previous
       try operation(&job)
+      if previous.phase == .importing && job.phase == .cancelled && expectedRetirement == nil {
+        throw LokalTransferError.invalidTransition
+      }
+      if expectedRetirement != nil {
+        guard job.phase == .cancelled, job.revision == previous.revision + 1,
+              job.taskID == nil, job.receivedBytes == previous.receivedBytes,
+              job.receivedSHA256 == previous.receivedSHA256 else {
+          throw LokalTransferError.invalidTransition
+        }
+      }
       guard job.id == previous.id, job.direction == previous.direction,
             job.identity == previous.identity, job.metadata == previous.metadata,
             job.createdMs == previous.createdMs, job.expectedBytes == previous.expectedBytes,

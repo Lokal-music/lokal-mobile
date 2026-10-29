@@ -39,7 +39,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     let owner: Owner
     fileprivate let barrier: UUID
   }
-  enum Permission: Equatable, Sendable { case write, reconcileOnly }
+  enum Permission: Equatable, Sendable { case write, reconcileOnly, cleanup }
   struct Lease: Sendable {
     let id: String
     let jobID: String
@@ -160,7 +160,8 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
                 requiresWrite: Bool) throws {
     try locked {
       let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
-      guard !requiresWrite || lease.permission == .write else {
+      guard lease.permission != .cleanup,
+            !requiresWrite || lease.permission == .write else {
         throw LokalTransferError.invalidTransition
       }
       try lease.cancellation.check()
@@ -174,6 +175,24 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     try locked {
       let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
       guard lease.permission == .write else { throw LokalTransferError.invalidTransition }
+      try lease.cancellation.check()
+      return lease.cancellation
+    }
+  }
+
+  /// Cleanup authority cannot be passed to the publication/receipt guards.
+  /// Runtime must separately prove frozen custody, drainage and the app's Isar
+  /// retiring/committed decision before any filesystem cleanup is submitted.
+  func validateCleanup(_ owner: Owner, jobID: String, revision: Int,
+                       leaseID: String) throws {
+    _ = try cleanupCancellation(owner, jobID: jobID, revision: revision, leaseID: leaseID)
+  }
+
+  func cleanupCancellation(_ owner: Owner, jobID: String, revision: Int,
+                           leaseID: String) throws -> LokalTransferCopyCancellation {
+    try locked {
+      let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
+      guard lease.permission == .cleanup else { throw LokalTransferError.invalidTransition }
       try lease.cancellation.check()
       return lease.cancellation
     }
