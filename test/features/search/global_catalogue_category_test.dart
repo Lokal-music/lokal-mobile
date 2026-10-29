@@ -109,24 +109,18 @@ void main() {
         expect(songArtwork.artist, 'Singer');
         expect(songArtwork.url, isEmpty);
 
-        expect(find.text('Online songs'), findsOneWidget);
+        expect(find.text('Online songs'), findsNothing);
         expect(find.text('$catalogue'), findsNothing);
-        expect(find.text('${catalogue == 'spotify' ? 'Spotify' : 'Apple Music'} catalogue · plays through your configured sources'), findsOneWidget);
+        expect(find.text('${catalogue == 'spotify' ? 'Spotify' : 'Apple Music'} catalogue · plays through your configured sources'), findsNothing);
         expect(find.text('Global'), findsNothing);
-        expect(find.text('Songs'), findsNothing); // No redundant subheading
-        final headingPadding = tester.widget<Padding>(
-          find.ancestor(
-            of: find.text('Online songs'), matching: find.byType(Padding),
-          ).first,
-        );
-        expect(headingPadding.padding, const EdgeInsets.all(16));
+        expect(find.text('Songs'), findsNothing); // Category tabs are the header.
         expect(find.text('Unrelated album'), findsNothing);
         expect(find.text('Unrelated artist'), findsNothing);
         expect(find.text('Albums'), findsNothing);
         expect(find.text('Artists'), findsNothing);
         await tester.pumpWidget(section(false));
         await tester.pumpAndSettle();
-        expect(find.text('Global'), findsOneWidget);
+        expect(find.text('Global'), findsNothing);
         expect(find.text('Online songs'), findsNothing);
         expect(find.text('Unrelated album'), findsOneWidget);
         final albumArtwork = tester.widgetList<DiscoveryArtwork>(
@@ -202,7 +196,7 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-testWidgets('Online artists and albums use selected catalogue subtitles and artist portrait widgets', (tester) async {
+testWidgets('Online artists and albums omit redundant titles but keep artist portraits', (tester) async {
   final c = ProviderContainer(overrides: [
     ..._quietArtwork,
     globalCatalogueSearchServiceProvider.overrideWithValue(_Catalogue('spotify')),
@@ -212,16 +206,16 @@ testWidgets('Online artists and albums use selected catalogue subtitles and arti
     child: OnlineCatalogueSearchSection(query: 'Wanted', category: SearchCategory.artists),
   )));
   await tester.pumpAndSettle();
-  expect(find.text('Online artists'), findsOneWidget);
-  expect(find.text('Spotify catalogue · plays through your configured sources'), findsOneWidget);
+  expect(find.text('Online artists'), findsNothing);
+  expect(find.text('Spotify catalogue · plays through your configured sources'), findsNothing);
   expect(find.byType(ArtistSearchPortrait), findsOneWidget);
 
   await tester.pumpWidget(_app(c, const SingleChildScrollView(
     child: OnlineCatalogueSearchSection(query: 'Wanted', category: SearchCategory.albums),
   )));
   await tester.pumpAndSettle();
-  expect(find.text('Online albums'), findsOneWidget);
-  expect(find.text('Spotify catalogue · plays through your configured sources'), findsOneWidget);
+  expect(find.text('Online albums'), findsNothing);
+  expect(find.text('Spotify catalogue · plays through your configured sources'), findsNothing);
   expect(find.text('Unrelated album'), findsOneWidget);
 });
 
