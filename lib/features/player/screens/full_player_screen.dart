@@ -1293,6 +1293,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                     nextSong: _player.peekNext,
                     prevSong: _player.peekPrevious,
                     buttonDissolve: true,
+                    maskOutgoingOnDissolve: true,
                     animateButtonDissolve:
                         ref.watch(appPreferencesProvider).animationsEnabled &&
                         !LokalPerformanceScope.of(context),
