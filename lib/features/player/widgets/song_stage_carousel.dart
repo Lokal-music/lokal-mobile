@@ -178,9 +178,15 @@ class SongStageCarouselState extends State<SongStageCarousel>
         );
       }
     } finally {
-      // A no-op (end of queue / failed skip) must not leave the next
-      // unrelated song change armed for a dissolve.
-      _buttonChangePending = false;
+      // A notifier can schedule the new song's widget rebuild *after* the
+      // playback Future completes (especially with an already-buffered
+      // track). Keep the request armed through that frame; otherwise fast
+      // skips randomly fail to animate. No-op skips clear on the next frame.
+      if (_buttonChangePending) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _buttonChangePending = false;
+        });
+      }
     }
   }
 
