@@ -1292,6 +1292,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                     currentSong: song,
                     nextSong: _player.peekNext,
                     prevSong: _player.peekPrevious,
+                    buttonDissolve: true,
+                    animateButtonDissolve:
+                        ref.watch(appPreferencesProvider).animationsEnabled &&
+                        !LokalPerformanceScope.of(context),
                     enabled: progress == 0 && !_showLyrics && !_queue.isOpen && !_immersiveLyrics,
                     onDragStateChanged: (value) {
                       _carouselDragging = value;
@@ -1479,6 +1483,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   currentSong: song,
                   nextSong: _player.peekNext,
                   prevSong: _player.peekPrevious,
+                  buttonDissolve: true,
+                  animateButtonDissolve:
+                      ref.watch(appPreferencesProvider).animationsEnabled &&
+                      !LokalPerformanceScope.of(context),
                   enabled: atRest,
                   onDragStateChanged: (v) => _carouselDragging = v,
                   onNext: _player.next,
@@ -2017,8 +2025,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
               return;
             }
             // A transport-button tap restarts the current song once it has
-            // played for ten seconds. Only early taps animate to the
-            // preceding artwork; a cover swipe still always changes tracks.
+            // played for ten seconds. An early tap uses the desktop-style
+            // cover dissolve; swiping the artwork still slides as before.
             if (shouldRestartCurrentTrackOnPrevious(
               _player.positionNotifier.value,
             )) {
