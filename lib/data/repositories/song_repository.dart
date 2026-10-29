@@ -577,7 +577,7 @@ class SongRepository {
       albumArt: entity.albumArtPath,
       duration: Duration(milliseconds: entity.durationMs ?? 0),
       fileType: ac4 ? 'AC-4' : (atmos ? 'E-AC-3 JOC' : entity.fileType ?? 'unknown'),
-      atmosAvailable: atmos,
+      atmosAvailable: atmos && !ac4,
       atmosEncoded: atmos,
       resolution: _buildResolutionString(entity),
       sampleRate: entity.sampleRate,
