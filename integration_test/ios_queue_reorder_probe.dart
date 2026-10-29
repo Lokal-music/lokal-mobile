@@ -94,15 +94,21 @@ Future<void> probeIosQueueReorder(
     2654,
     (index) => source.copyWith(id: 'ios-large-library-$index'),
   );
-  await player.play(large[1730], playlist: large, playlistIndex: 1730)
+  await player
+      .play(large[1730], playlist: large, playlistIndex: 1730)
       .timeout(const Duration(seconds: 30));
   final baseline = player.positionNotifier.value;
   for (var i = 0; i < 24; i++) {
     await tester.pump(const Duration(milliseconds: 250));
-    if (player.positionNotifier.value - baseline > const Duration(milliseconds: 300)) break;
+    if (player.positionNotifier.value - baseline >
+        const Duration(milliseconds: 300))
+      break;
   }
   expect(player.isPlayingNotifier.value, true);
-  expect(player.positionNotifier.value - baseline, greaterThan(const Duration(milliseconds: 300)));
+  expect(
+    player.positionNotifier.value - baseline,
+    greaterThan(const Duration(milliseconds: 300)),
+  );
   expect(player.currentIndex, 1730);
   expect(player.playlist.map((song) => song.id), large.map((song) => song.id));
   expect(player.debugNativeSequenceLength, 1);
@@ -112,6 +118,32 @@ Future<void> probeIosQueueReorder(
     'native_sources': player.debugNativeSequenceLength,
     'progress_ms': (player.positionNotifier.value - baseline).inMilliseconds,
   };
+  try {
+    await player.setPlaybackSpeed(1.01).timeout(const Duration(seconds: 10));
+    expect(player.playbackSpeedNotifier.value, 1.01);
+    final beforeSpeedProgress = player.positionNotifier.value;
+    for (var i = 0; i < 24; i++) {
+      await tester.pump(const Duration(milliseconds: 250));
+      if (player.positionNotifier.value - beforeSpeedProgress >
+          const Duration(milliseconds: 300))
+        break;
+    }
+    final advanced = player.positionNotifier.value - beforeSpeedProgress;
+    expect(advanced, greaterThan(const Duration(milliseconds: 300)));
+    await player.pause();
+    await player.setPlaybackSpeed(1.02).timeout(const Duration(seconds: 10));
+    expect(player.playbackSpeedNotifier.value, 1.02);
+    expect(player.isPlayingNotifier.value, false);
+    binding.reportData!['native_fractional_playback_speed'] = {
+      'scope': 'Actual AVFoundation-backed just_audio command acknowledgements and playback; no acoustic rate or pitch measurement',
+      'playing_speed': 1.01,
+      'paused_speed': 1.02,
+      'progress_ms': advanced.inMilliseconds,
+      'paused_adjustment_did_not_resume': true,
+    };
+  } finally {
+    await player.setPlaybackSpeed(1.0);
+  }
   await player.pause();
   await player.seek(Duration.zero);
   await player.previousBySwipe();
@@ -124,7 +156,10 @@ Future<void> probeIosQueueReorder(
   expect(player.currentSongNotifier.value?.id, large[1729].id);
   expect(player.debugNativeSequenceLength, 1);
   expect(player.isPlayingNotifier.value, false);
-  expect((player.positionNotifier.value - pausedAt).abs(), lessThan(const Duration(milliseconds: 250)));
+  expect(
+    (player.positionNotifier.value - pausedAt).abs(),
+    lessThan(const Duration(milliseconds: 250)),
+  );
   await player.setShuffleMode(ShuffleMode.off);
   await player.addToQueue(source.copyWith(id: 'ios-large-manual'));
   expect(player.queueNotifier.value.single.id, 'ios-large-manual');

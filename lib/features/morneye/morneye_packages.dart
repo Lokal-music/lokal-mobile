@@ -29,6 +29,7 @@ import 'morneye_playback_quality.dart';
 const morneyeRegistry =
     'https://raw.githubusercontent.com/mornyeapp/Mornye-Extension/refs/heads/main/registry.json';
 const morneyeCompatVersion = '5.1.0';
+
 /// Mornye's documented .spotiflac-ext format and its legacy/newer archives.
 bool morneyeIsPackageFileName(String filename) => RegExp(
   r'\.(?:sflx|morneye-ext|spotiflac-ext)$',
@@ -60,8 +61,8 @@ Map<String, Object?>? morneyeSelectedTrackHint({
   required String artist,
   required int? durationMs,
 }) {
-  if (id.trim().isEmpty || title.trim().isEmpty ||
-      artist.trim().isEmpty) return null;
+  if (id.trim().isEmpty || title.trim().isEmpty || artist.trim().isEmpty)
+    return null;
   return {
     'id': id,
     'name': title,
@@ -70,28 +71,13 @@ Map<String, Object?>? morneyeSelectedTrackHint({
   };
 }
 
-/// An addon-owned native Search row already has its canonical provider ID.
-/// For direct playback, checkAvailability still validates the recording and
-/// returns fresh authorization/metadata. This skips only a *second metadata
-/// enrichment request*, never availability checks, and never for a different
-/// provider's cross-catalogue match or explicit download/save.
-bool morneyeMaySkipDuplicateEnrichment({
-  required String addonName,
-  required Map track,
-  required bool forPlayback,
-  required bool nativeSearchResult,
-  required bool hasAvailabilityCheck,
-}) {
-  if (!forPlayback || !nativeSearchResult || !hasAvailabilityCheck) {
-    return false;
-  }
-  final provider = '${track['provider_id'] ?? ''}'.trim().toLowerCase();
-  final addon = addonName.trim().toLowerCase();
-  final id = '${track['id'] ?? ''}'.trim();
-  final title = '${track['name'] ?? ''}'.trim();
-  return provider.isNotEmpty && id.isNotEmpty && title.isNotEmpty &&
-      (provider == addon || provider == addon.replaceFirst(RegExp(r'-web$'), ''));
-}
+/// A negative first availability result can be retried once after
+/// enrichment, for any provider. Tidal and other native catalogue matches
+/// are not exempt. Authorization is still checked again on the retry.
+bool morneyeShouldRetryEnrichment({
+  required Object? available,
+  required bool hasEnrichment,
+}) => hasEnrichment && (available is! Map || available['available'] != true);
 
 /// The installed package's stable key (also its storage namespace).
 String morneyeKeyOf(String name) =>
@@ -311,8 +297,11 @@ String morneyeAlbumArtworkUrl(String original) {
     RegExp(r'\._[^/.]+_\.(?=(?:jpg|jpeg|png|webp)$)', caseSensitive: false),
     '.',
   );
-  return upgraded == uri.path ? original : uri.replace(path: upgraded).toString();
+  return upgraded == uri.path
+      ? original
+      : uri.replace(path: upgraded).toString();
 }
+
 /// A song an add-on found.
 class MorneyeTrack {
   const MorneyeTrack({
@@ -359,12 +348,20 @@ class MorneyeTrack {
   }
 
   static int? _sampleRate(Map track) {
-    final raw = track['sample_rate'] ?? track['sampleRate'] ??
-        track['sampling_rate'] ?? track['samplingRate'] ??
-        track['maximum_sampling_rate'] ?? track['maxSampleRate'];
+    final raw =
+        track['sample_rate'] ??
+        track['sampleRate'] ??
+        track['sampling_rate'] ??
+        track['samplingRate'] ??
+        track['maximum_sampling_rate'] ??
+        track['maxSampleRate'];
     final value = raw is num
         ? raw.toDouble()
-        : double.tryParse('$raw'.replaceAll(RegExp(r'\s*k(?:hz)?', caseSensitive: false), '').trim());
+        : double.tryParse(
+            '$raw'
+                .replaceAll(RegExp(r'\s*k(?:hz)?', caseSensitive: false), '')
+                .trim(),
+          );
     if (value == null || !value.isFinite || value <= 0) return null;
     // Preserve 44.1 / 88.2 kHz exactly; don't truncate to 44 / 88.
     final hz = (value <= 384 ? value * 1000 : value).round();
@@ -372,16 +369,25 @@ class MorneyeTrack {
   }
 
   static int? _bitDepth(Map track) {
-    final bits = _positiveInt(track['bit_depth'] ?? track['bitDepth'] ??
-        track['bits_per_sample'] ?? track['bitsPerSample'] ??
-        track['maximum_bit_depth'] ?? track['maxBitDepth']);
+    final bits = _positiveInt(
+      track['bit_depth'] ??
+          track['bitDepth'] ??
+          track['bits_per_sample'] ??
+          track['bitsPerSample'] ??
+          track['maximum_bit_depth'] ??
+          track['maxBitDepth'],
+    );
     return bits != null && bits <= 64 ? bits : null;
   }
 
   static String? _codec(Map track) {
-    final raw = track['codec'] ?? track['audio_codec'] ??
-        track['audioCodec'] ?? track['audio_format'] ??
-        track['audioFormat'] ?? track['format'];
+    final raw =
+        track['codec'] ??
+        track['audio_codec'] ??
+        track['audioCodec'] ??
+        track['audio_format'] ??
+        track['audioFormat'] ??
+        track['format'];
     final text = raw?.toString().toLowerCase() ?? '';
     if (text.contains('flac')) return 'FLAC';
     if (text.contains('alac')) return 'ALAC';
@@ -398,28 +404,43 @@ class MorneyeTrack {
   /// and promote Amazon CDN thumbnails to their unsized original asset.
   static String? _artwork(Map track) {
     double sizeOf(Map value) {
-      double dimension(Object? raw) => raw is num ? raw.toDouble() :
-          double.tryParse(raw?.toString() ?? '') ?? 0;
+      double dimension(Object? raw) => raw is num
+          ? raw.toDouble()
+          : double.tryParse(raw?.toString() ?? '') ?? 0;
       final width = dimension(value['width']);
       final height = dimension(value['height']);
-      return width > 0 && height > 0 ? width * height : width * width + height * height;
+      return width > 0 && height > 0
+          ? width * height
+          : width * width + height * height;
     }
+
     double urlSize(String url) {
       final uri = Uri.tryParse(url);
-      if (uri == null || !PlayerArtworkQuality.isAmazonArtworkHost(uri.host)) return 0;
-      final sizes = RegExp(r'_(?:SX|SY|SL|UX|UY)(\d+)').allMatches(uri.path)
+      if (uri == null || !PlayerArtworkQuality.isAmazonArtworkHost(uri.host))
+        return 0;
+      final sizes = RegExp(r'_(?:SX|SY|SL|UX|UY)(\d+)')
+          .allMatches(uri.path)
           .map((m) => double.parse(m[1]!));
       if (sizes.isEmpty) return 0;
       final largest = sizes.reduce((a, b) => a > b ? a : b);
       return largest * largest;
     }
+
     ({String url, double size})? getImage(Object? value) {
       if (value is String && Uri.tryParse(value)?.hasScheme == true) {
         return (url: value, size: urlSize(value));
       }
       if (value is Map) {
-        for (final field in ['url', 'src', 'cover_url', 'coverUrl', 'original',
-            'large', 'medium', 'small']) {
+        for (final field in [
+          'url',
+          'src',
+          'cover_url',
+          'coverUrl',
+          'original',
+          'large',
+          'medium',
+          'small',
+        ]) {
           final found = getImage(value[field]);
           if (found != null) {
             final explicit = sizeOf(value);
@@ -431,7 +452,8 @@ class MorneyeTrack {
         ({String url, double size})? best;
         for (final image in value) {
           final found = getImage(image);
-          if (found != null && (best == null || found.size >= best.size)) best = found;
+          if (found != null && (best == null || found.size >= best.size))
+            best = found;
         }
         return best;
       }
@@ -445,7 +467,9 @@ class MorneyeTrack {
       // a separate album images array with much larger artwork.
       track['images'], track['image'],
       if (album is Map) ...[
-        album['images'], album['image'], album['cover_art'],
+        album['images'],
+        album['image'],
+        album['cover_art'],
         album['cover_url'],
       ],
       track['artwork_url'], track['artworkUrl'],
@@ -454,7 +478,8 @@ class MorneyeTrack {
       track['cover_url'], track['coverUrl'], track['thumbnail'],
     ]) {
       final found = getImage(value);
-      if (found != null && (best == null || found.size > best.size)) best = found;
+      if (found != null && (best == null || found.size > best.size))
+        best = found;
     }
     // Keep the provider URL, so every renderer/downloader can try the master
     // and still fall back to this known working variant.
@@ -495,7 +520,9 @@ class MorneyeTrack {
       year: int.tryParse(
         '${track['release_date'] ?? ''}'.padRight(4).substring(0, 4).trim(),
       ),
-      quality: (track['audio_quality'] ?? track['audioQuality'] ?? track['quality'])?.toString(),
+      quality:
+          (track['audio_quality'] ?? track['audioQuality'] ?? track['quality'])
+              ?.toString(),
       codec: _codec(track),
       bitDepth: _bitDepth(track),
       sampleRate: _sampleRate(track),
@@ -670,12 +697,19 @@ class MorneyeAccess {
 
 /// The finished download.
 class MorneyeDownload {
-  MorneyeDownload(this.file, this.metadata, this.info, this._staging, {this.atmosEncoded = false});
+  MorneyeDownload(
+    this.file,
+    this.metadata,
+    this.info,
+    this._staging, {
+    this.atmosEncoded = false,
+  });
 
   final File file;
   final Map<String, Object?> metadata;
   final Map<String, Object?> info;
   final Directory _staging;
+
   /// True only after Android MediaExtractor identified an E-AC-3 JOC stream.
   final bool atmosEncoded;
 
@@ -1685,8 +1719,10 @@ class MorneyePackages {
     String id, {
     String? quality,
     bool forPlayback = false,
+
     /// Exact user-selected catalogue metadata; never replaces authorization.
     Map<String, Object?>? trackHint,
+
     /// Host-side phase callback, distinct from guest-reported download percent.
     void Function(String stage)? onResolutionStage,
     void Function({double? percent, String? message})? onProgress,
@@ -1708,23 +1744,71 @@ class MorneyePackages {
                 const [])
             .any((h) => h is Map && h['defaultEnabled'] == true);
     final preparation = Stopwatch()..start();
+    var sawFirstByte = false;
+    MorneyeRuntime? activeRuntime;
+    Timer? inactivityTimer;
+    var monitoringTransfer = false;
+    var transferStalled = false;
+    double lastPercent = -1;
+    String? lastPart;
+    var lastWritten = 0;
+    void recordActivity() {
+      if (!monitoringTransfer) return;
+      inactivityTimer?.cancel();
+      inactivityTimer = Timer(const Duration(seconds: 90), () {
+        transferStalled = true;
+        // End only an inactive *download*, never an interactive account or
+        // verification step. Closing the guest rejects its pending invoke.
+        activeRuntime?.close();
+      });
+    }
+
     void phase(String stage) {
       onResolutionStage?.call(stage);
       // Private IDs, signed URLs, tokens and track names are never logged.
-      AppLog.instance.add('[Morneye] resolve stage=$stage '
-          'elapsedMs=${preparation.elapsedMilliseconds}');
+      AppLog.instance.add(
+        '[Morneye] resolve stage=$stage '
+        'elapsedMs=${preparation.elapsedMilliseconds}',
+      );
     }
+
     phase('worker_start');
     final runtime = await _createRuntime(
       addon,
       _code(key),
       grants: [staged.path],
-      onProgress: onProgress,
-      onTransfer: hooks ? null : onTransfer,
+      onProgress: ({double? percent, String? message}) {
+        // Percent can restart from zero on a failed segment retry.
+        // Compare with the preceding callback, not the highest old value.
+        if (percent != null) {
+          if (percent > lastPercent) recordActivity();
+          lastPercent = percent;
+        }
+        onProgress?.call(percent: percent, message: message);
+      },
+      onTransfer: hooks
+          ? null
+          : (transfer) {
+              // A header-only transfer restart isn't progress. Once real bytes
+              // resume, even below the previous attempt's total, reset watchdog.
+              if (transfer.written > 0 &&
+                  (transfer.part != lastPart ||
+                      transfer.written > lastWritten)) {
+                recordActivity();
+              }
+              lastPart = transfer.part;
+              lastWritten = transfer.written;
+              if (!sawFirstByte && transfer.written > 0) {
+                sawFirstByte = true;
+                phase('first_byte');
+              }
+              onTransfer?.call(transfer);
+            },
       // Isolated download workers need headroom for segments/decryption.
       // Browsing stays at 64 MiB. Native code caps this at 256 MiB.
       heapMb: 256,
     );
+    activeRuntime = runtime;
     unawaited(cancel?.then((_) => runtime.close()));
     try {
       phase('initializing');
@@ -1736,10 +1820,12 @@ class MorneyePackages {
           trackHint != null &&
           '${trackHint['id'] ?? ''}' == id &&
           morneyeSelectedTrackHint(
-            id: id, title: '${trackHint['name'] ?? ''}',
-            artist: '${trackHint['artists'] ?? ''}',
-            durationMs: (trackHint['duration_ms'] as num?)?.toInt(),
-          ) != null) {
+                id: id,
+                title: '${trackHint['name'] ?? ''}',
+                artist: '${trackHint['artists'] ?? ''}',
+                durationMs: (trackHint['duration_ms'] as num?)?.toInt(),
+              ) !=
+              null) {
         // A verified selection avoids getTrack when the saved search cache
         // was evicted. checkAvailability is still mandatory.
         track = Map.of(trackHint);
@@ -1758,93 +1844,61 @@ class MorneyePackages {
         };
       }
       track = Map.of(track);
-      // Some providers (notably Qobuz) explicitly advertise that search
-      // results already carry the canonical metadata. Their enrichment does
-      // another remote lookup before checkAvailability performs verification;
-      // don't serialize two expensive requests before playback can start.
-      // Other providers, including Amazon, still require enrichment.
-      final nativeSearchResult = _tracks.containsKey('$key:$id') &&
-          (track['id']?.toString().isNotEmpty ?? false) &&
-          (track['name']?.toString().isNotEmpty ?? false);
-      final hasCanonicalIdentity =
-          (track['id']?.toString().isNotEmpty ?? false) &&
-          (track['name']?.toString().isNotEmpty ?? false);
-      final amazonNativeTrack = forPlayback &&
-          providerIdentityIsAmazon(addon.name, track) &&
-          nativeSearchResult;
-      final deezerNativeTrack = forPlayback &&
-          nativeSearchResult && providerIdentityIsDeezer(addon.name, track);
-      final skipEnrichment =
-          morneyeMaySkipDuplicateEnrichment(
-            addonName: addon.name,
-            track: track,
-            forPlayback: forPlayback,
-            nativeSearchResult: nativeSearchResult,
-            hasAvailabilityCheck: runtime.methods.contains('checkAvailability'),
-          ) ||
-          // Only the remembered native Deezer Search row avoids enrichTrack;
-          // cross-provider matches, saving and noncanonical IDs still verify.
-          deezerNativeTrack ||
-          // A native Amazon Search result already has its canonical ASIN.
-          // enrichTrack() performs unnecessary network requests before
-          // checkAvailability can hand back the same ASIN. Keep enrichment
-          // for non-native/fallback matches where an ID must be resolved.
-          amazonNativeTrack ||
-          // Respect the extension manifest even if this by-ID track came
-          // from getTrack rather than a remembered Search result.
-          (addon.manifest['skipMetadataEnrichment'] == true &&
-              hasCanonicalIdentity) ||
-          // Tidal's enrichTrack fetches the same remote track record that
-          // checkAvailability fetches again to validate the direct Tidal ID.
-          // Only skip this extra request for its own remembered Search row.
-          (addon.name.toLowerCase().startsWith('tidal') &&
-              nativeSearchResult);
-      if (!skipEnrichment && runtime.methods.contains('enrichTrack')) {
-        try {
-          final enriched = await runtime.invoke('enrichTrack', [
-            track,
-          ], const Duration(seconds: 60));
-          if (enriched is Map) {
-            enriched.forEach((field, value) {
-              if (value != null &&
-                  value != '' &&
-                  value != 0 &&
-                  !(value is String && value.trim().isEmpty) &&
-                  !(value is List && value.isEmpty)) {
-                track[field] = value;
-              }
-            });
-          }
-        } catch (error) {
-          if (runtime.closed) rethrow;
-        }
-      }
       final provider = addon.name.replaceFirst(RegExp(r'-web$'), '');
-      final options = <String, Object?>{
-        'track': track,
-        'duration_ms': track['duration_ms'] ?? 0,
-      };
-      const directFields = {
-        'qobuz': 'qobuz_id',
-        'tidal': 'tidal_id',
-        'deezer': 'deezer_id',
-        'soundcloud': 'spotify_id',
-        'amazon': 'spotify_id',
-      };
-      final directField = directFields[provider];
-      if (directField != null) {
-        options[directField] =
-            '${track[directField] ?? (provider == 'amazon' || provider == 'soundcloud' ? track['id'] : id)}';
+      // First request is always the provider's own availability/download
+      // ticket, regardless of Play vs Save or Tidal/Deezer/Qobuz identity.
+      // This removes redundant enrichment before a source can transfer bytes.
+      Future<dynamic> checkAvailability() {
+        final options = <String, Object?>{
+          'track': track,
+          'duration_ms': track['duration_ms'] ?? 0,
+        };
+        const directFields = {
+          'qobuz': 'qobuz_id',
+          'tidal': 'tidal_id',
+          'deezer': 'deezer_id',
+          'soundcloud': 'spotify_id',
+          'amazon': 'spotify_id',
+        };
+        final directField = directFields[provider];
+        if (directField != null) {
+          options[directField] =
+              '${track[directField] ?? (provider == 'amazon' || provider == 'soundcloud' ? track['id'] : id)}';
+        }
+        return runtime.methods.contains('checkAvailability')
+            ? runtime.invoke('checkAvailability', [
+                track['isrc'] ?? '',
+                track['name'] ?? '',
+                track['artists'] ?? '',
+                options,
+              ], const Duration(seconds: 25))
+            : Future.value({'available': true, 'track_id': id});
       }
+
       phase('availability');
-      final available = runtime.methods.contains('checkAvailability')
-          ? await runtime.invoke('checkAvailability', [
-              track['isrc'] ?? '',
-              track['name'] ?? '',
-              track['artists'] ?? '',
-              options,
-            ])
-          : {'available': true, 'track_id': id};
+      var available = await checkAvailability();
+      if (morneyeShouldRetryEnrichment(
+        available: available,
+        hasEnrichment: runtime.methods.contains('enrichTrack'),
+      )) {
+        phase('cross_provider_enrichment');
+        final enriched = await runtime.invoke('enrichTrack', [
+          track,
+        ], const Duration(seconds: 20));
+        if (enriched is Map) {
+          enriched.forEach((field, value) {
+            if (value != null &&
+                value != '' &&
+                value != 0 &&
+                !(value is String && value.trim().isEmpty) &&
+                !(value is List && value.isEmpty)) {
+              track[field] = value;
+            }
+          });
+        }
+        phase('availability_retry');
+        available = await checkAvailability();
+      }
       if (available is! Map || available['available'] != true) {
         throw MorneyePackageError(
           available is Map && available['reason'] != null
@@ -1870,27 +1924,46 @@ class MorneyePackages {
         options: addon.qualityOptions,
         provider: provider,
       );
-      if (forPlayback && quality != 'DOLBY_ATMOS' &&
+      if (forPlayback &&
+          quality != 'DOLBY_ATMOS' &&
           isMorneyeAtmosQuality(chosen)) {
         throw const MorneyePackageError(
           'Normal playback unexpectedly selected a Dolby Atmos download tier.',
         );
       }
-      if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('addon_download_start', {
-        'source': provider == 'tidal' ? 'tidal' : 'other',
-        'quality': 'DOLBY_ATMOS',
-      });
-      phase('preparing_media');
-      final result = await runtime.invoke('download', [
-        '${available['track_id'] ?? available['trackId'] ?? id}',
-        chosen,
-        p.join(staged.path, 'audio.flac'),
-        {'preparedContext': prepared, 'resolutionTimeoutMs': 60000},
-      ], const Duration(hours: 24));
-      if (result is! Map || result['success'] != true) {
-        if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('addon_download_failed', {
-          'reason': 'addon_returned_failure',
+      if (quality == 'DOLBY_ATMOS')
+        AtmosDiagnostics.record('addon_download_start', {
+          'source': provider == 'tidal' ? 'tidal' : 'other',
+          'quality': 'DOLBY_ATMOS',
         });
+      phase('preparing_media');
+      monitoringTransfer = true;
+      recordActivity();
+      dynamic result;
+      try {
+        result = await runtime.invoke('download', [
+          '${available['track_id'] ?? available['trackId'] ?? id}',
+          chosen,
+          p.join(staged.path, 'audio.flac'),
+          {'preparedContext': prepared, 'resolutionTimeoutMs': 60000},
+        ], const Duration(hours: 24));
+      } catch (error) {
+        if (transferStalled) {
+          throw const MorneyePackageError(
+            'The provider stopped delivering audio for 90 seconds. Retry the track.',
+          );
+        }
+        rethrow;
+      } finally {
+        monitoringTransfer = false;
+        inactivityTimer?.cancel();
+      }
+      phase('download_complete');
+      if (result is! Map || result['success'] != true) {
+        if (quality == 'DOLBY_ATMOS')
+          AtmosDiagnostics.record('addon_download_failed', {
+            'reason': 'addon_returned_failure',
+          });
         final message = result is Map
             ? (result['error_message'] ?? result['error'])
             : null;
@@ -1903,26 +1976,32 @@ class MorneyePackages {
       if (quality == 'DOLBY_ATMOS') {
         // Diagnose provider tier negotiation without logging track IDs,
         // filesystem paths, signed URLs, manifest credentials or raw results.
-        final claimed = '${result['audio_quality'] ?? result['audioQuality'] ?? result['quality'] ?? ''}'
-            .trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
+        final claimed =
+            '${result['audio_quality'] ?? result['audioQuality'] ?? result['quality'] ?? ''}'
+                .trim()
+                .toUpperCase()
+                .replaceAll(RegExp(r'[ -]'), '_');
         final extension = p.extension(file).toLowerCase();
         AtmosDiagnostics.record('addon_response', {
           'quality': 'DOLBY_ATMOS',
           'reason': claimed == 'DOLBY_ATMOS'
               ? 'provider_claimed_atmos'
-              : claimed == 'HI_RES_LOSSLESS' || claimed == 'LOSSLESS' || claimed == 'HIGH'
-                  ? 'provider_claimed_stereo'
-                  : 'provider_quality_unspecified',
-          'container': {'.flac', '.m4a', '.mp4', '.ec3', '.eac3'}
-                  .contains(extension)
+              : claimed == 'HI_RES_LOSSLESS' ||
+                    claimed == 'LOSSLESS' ||
+                    claimed == 'HIGH'
+              ? 'provider_claimed_stereo'
+              : 'provider_quality_unspecified',
+          'container':
+              {'.flac', '.m4a', '.mp4', '.ec3', '.eac3'}.contains(extension)
               ? extension.replaceFirst('.', '')
               : 'other',
         });
       }
       if (!File(file).existsSync() || File(file).lengthSync() == 0) {
-        if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('addon_download_failed', {
-          'reason': 'empty_file',
-        });
+        if (quality == 'DOLBY_ATMOS')
+          AtmosDiagnostics.record('addon_download_failed', {
+            'reason': 'empty_file',
+          });
         throw const MorneyePackageError('Addon produced an empty file');
       }
       final decryption =
@@ -1932,9 +2011,8 @@ class MorneyePackages {
               ? {'strategy': 'ffmpeg.mov_key', 'key': result['decryption_key']}
               : null);
       if (decryption != null) {
-        if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('postprocess_start', {
-          'stage': 'decrypt',
-        });
+        if (quality == 'DOLBY_ATMOS')
+          AtmosDiagnostics.record('postprocess_start', {'stage': 'decrypt'});
         if (decryption is! Map ||
             decryption['strategy'] != 'ffmpeg.mov_key' ||
             !RegExp(r'^[a-fA-F0-9]{32}$')
@@ -1980,12 +2058,14 @@ class MorneyePackages {
       // before the FLAC conversion/probe (both would discard Atmos objects).
       // If Tidal fell back to stereo, this returns false and normal handling
       // remains unchanged.
-      final verifiedAtmos = quality == 'DOLBY_ATMOS' &&
+      final verifiedAtmos =
+          quality == 'DOLBY_ATMOS' &&
           await AtmosPlaybackSupport.isJocFile(file);
-      if (quality == 'DOLBY_ATMOS') AtmosDiagnostics.record('joc_validation', {
-        'encoded': verifiedAtmos,
-        'outcome': verifiedAtmos ? 'confirmed' : 'rejected',
-      });
+      if (quality == 'DOLBY_ATMOS')
+        AtmosDiagnostics.record('joc_validation', {
+          'encoded': verifiedAtmos,
+          'outcome': verifiedAtmos ? 'confirmed' : 'rejected',
+        });
       if (quality == 'DOLBY_ATMOS' && !verifiedAtmos) {
         // Refuse the unverified source *before* ordinary postprocessors or
         // transcoding can rewrite its container and obscure the failure.
@@ -2104,6 +2184,7 @@ class MorneyePackages {
       if (staged.existsSync()) await staged.delete(recursive: true);
       rethrow;
     } finally {
+      inactivityTimer?.cancel();
       runtime.close();
     }
   }

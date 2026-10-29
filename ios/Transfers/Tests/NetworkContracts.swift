@@ -288,15 +288,18 @@ private func runRuntimeImportContracts(origin: String, length: Int64, checksum: 
   let staged: LokalTransferJob = try native { runtime.verify(id: job.id, revision: 1, reply: $0) }
   let engine = ownership.attachEngine()
   let owner = try ownership.attachClient(engineID: engine, clientID: UUID().uuidString.lowercased())
-  let write = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1, reconcileOnly: false)
-  let recovery = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1, reconcileOnly: true)
+  let write = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1, reconcileOnly: false, clientID: owner.clientID)
+  let recovery = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1, reconcileOnly: true, clientID: owner.clientID)
   func claim(_ request: LokalTransferProtocol.ImportClaim,
              _ owner: LokalTransferImportOwnership.Owner) throws -> LokalTransferImportClaim {
     let ticket = try ownership.capture(owner)
-    return try native { runtime.claimImport(request, ticket: ticket, reply: $0) }
+    let bound = LokalTransferProtocol.ImportClaim(id: request.id, revision: request.revision,
+      reconcileOnly: request.reconcileOnly, clientID: owner.clientID)
+    return try native { runtime.claimImport(bound, ticket: ticket, reply: $0) }
   }
   func control(_ claim: LokalTransferImportClaim) -> LokalTransferProtocol.ImportLease {
-    LokalTransferProtocol.ImportLease(id: claim.job.id, revision: claim.job.revision, leaseID: claim.leaseID)
+    LokalTransferProtocol.ImportLease(id: claim.job.id, revision: claim.job.revision,
+      leaseID: claim.leaseID, clientID: claim.clientID)
   }
   try rejects("read-only recovery cannot move a staged job into validation") { _ = try claim(recovery, owner) }
   let queuedEntered = DispatchSemaphore(value: 0), queuedResume = DispatchSemaphore(value: 0)
@@ -347,6 +350,15 @@ private func runRuntimeImportContracts(origin: String, length: Int64, checksum: 
   let newEngine = ownership.attachEngine()
   let replacement = try ownership.attachClient(engineID: newEngine, clientID: UUID().uuidString.lowercased())
   let current = try claim(write, replacement)
+  let replacementTicket = try ownership.capture(replacement)
+  try rejects("an old client cannot inherit the replacement's ticket or coalesced lease") {
+    let _: LokalTransferImportClaim = try native { runtime.claimImport(write, ticket: replacementTicket, reply: $0) }
+  }
+  let foreignRelease = LokalTransferProtocol.ImportLease(id: job.id, revision: 1,
+    leaseID: current.leaseID, clientID: owner.clientID)
+  try rejects("even a known lease ID cannot let another client cancel its replacement") {
+    let _: Bool = try native { runtime.releaseImport(foreignRelease, owner: replacement, reply: $0) }
+  }
   ownership.detachEngine(engine)
   try rejects("old runtime client cannot release the new engine's import") {
     let _: Bool = try native { runtime.releaseImport(control(second), owner: owner, reply: $0) }
@@ -371,7 +383,9 @@ private func runRuntimeImportContracts(origin: String, length: Int64, checksum: 
       leaseID: beforeRecovery.leaseID, requiresWrite: true)
   }
   try rejects("durable recovery rejects an earlier queued claim") {
-    let _: LokalTransferImportClaim = try native { runtime.claimImport(write, ticket: oldTicket, reply: $0) }
+    let bound = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1,
+      reconcileOnly: false, clientID: replacement.clientID)
+    let _: LokalTransferImportClaim = try native { runtime.claimImport(bound, ticket: oldTicket, reply: $0) }
   }
   let beforeCancel = try claim(write, replacement)
   let cancelled: LokalTransferJob = try native { runtime.cancel(id: job.id, revision: 1, reply: $0) }

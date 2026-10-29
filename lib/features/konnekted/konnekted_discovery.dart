@@ -786,7 +786,9 @@ String morneyeResolutionStageLabel(String stage, String source) {
     'initializing' => 'Starting {source}…',
     'metadata' => 'Checking metadata on {source}…',
     'availability' => 'Verifying recording on {source}…',
-    'preparing_media' => 'Resolving audio from {source}…',
+    'cross_provider_enrichment' => 'Matching recording on {source}…',
+    'availability_retry' => 'Checking matched recording on {source}…',
+    'preparing_media' => 'Fetching audio from {source}…',
     _ => 'Preparing {source}…',
   };
   return lokalText(phrase, args: {'source': source});
@@ -956,7 +958,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
           // host's growing media file. DASH segments, encrypted Amazon
           // containers and conversions are not exposed as live sources.
           // Explicit Save/Atmos still require full-file validation.
-          final live = !forDownload && !tryAtmos && !found.atmosDownload
+          final live = !forDownload && !tryAtmos &&
+                  !found.atmosDownload &&
+                  morneyeCanPlayWhileDownloading(addon.name)
               ? MorneyeLiveSession()
               : null;
           if (tryAtmos && !found.atmosDownload && !await AtmosPlaybackSupport.available) {
@@ -1020,10 +1024,10 @@ Future<List<_PlaybackSource>> _morneyeSources(
                         // callbacks so there is only one stable toast.
                         final text = progress.update(
                           message: qobuz
-                              ? 'Resolving Qobuz stream…'
+                              ? 'Connecting to Qobuz audio…'
                               : tidal
-                                  ? 'Resolving Tidal stream…'
-                                  : 'Resolving Deezer stream…',
+                                  ? 'Downloading Tidal audio…'
+                                  : 'Downloading Deezer audio…',
                         );
                         if (text != null) onStatus?.call(text);
                       }
@@ -1070,6 +1074,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
                       // correctly probed download when the early reader fails.
                       final cached = await cache().adopt(
                         found, completed.file, sourceInfo: completed.info,
+                        fastPlayback: true,
                       );
                       final path = cached.filePath;
                       if (path == null) {
@@ -1225,12 +1230,17 @@ Future<List<_PlaybackSource>> _morneyeSources(
               'encoded': download.atmosEncoded,
               'mode': found.atmosDownload ? 'download' : 'playback',
             });
+            final adoptionTimer = Stopwatch()..start();
             final adopted = await cache().adopt(
               found,
               download.file,
               atmosEncoded: download.atmosEncoded,
               sourceInfo: download.info,
+              fastPlayback: !forDownload && !found.atmosDownload && !tryAtmos,
             );
+            AppLog.instance.add('[Mornye] cache adoption elapsedMs='
+                '${adoptionTimer.elapsedMilliseconds} '
+                'mode=${forDownload ? 'save' : 'playback'}');
             if (tryAtmos) AtmosDiagnostics.record('cache_adopt_done', {
               'encoded': adopted.atmosEncoded,
               'outcome': 'ready',
@@ -1627,6 +1637,7 @@ Future<Song> playOnlineTrack(
   }
   final owned = client == null;
   final transport = client ?? GracefulHttpClient();
+  final acquisitionTimer = Stopwatch()..start();
   try {
     final web = DiscoveryHttp(transport);
     final canonicalId = _canonicalOnlineSourceId(sourceId, track);
@@ -1649,6 +1660,9 @@ Future<Song> playOnlineTrack(
       );
     }
     final resolved = await source.play(track);
+    AppLog.instance.add('[OnlineSource] acquisition source=${onlineSourceLogLabel(canonicalId)} '
+        'mode=${forDownload ? 'download' : 'playback'} '
+        'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
     final song = resolved.copyWith(
       sourceDisplayName: source.id == 'sc'
           ? (resolved.sourceDisplayName ?? source.name)
@@ -1667,7 +1681,9 @@ Future<Song> playOnlineTrack(
   } catch (error) {
     AppLog.instance.add(
       '[OnlineSource] playback failed source=${onlineSourceLogLabel(sourceId)} '
-      'stage=prepare reason=${_onlineFailureKind(error)}',
+      'stage=prepare mode=${forDownload ? 'download' : 'playback'} '
+      'elapsedMs=${acquisitionTimer.elapsedMilliseconds} '
+      'reason=${_onlineFailureKind(error)}',
     );
     rethrow;
   } finally {
@@ -1930,7 +1946,10 @@ Future<Song?> findDiscoverySong(
       onStatus?.call('Getting ${track.title} from ${source.name}…');
       try {
         final selected = found.withArtwork(_artworkOf(track));
+        final acquisitionTimer = Stopwatch()..start();
         final resolved = await source.play(selected);
+        AppLog.instance.add('[OnlineSource] discovery acquired source=${onlineSourceLogLabel(source.id)} '
+            'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
         final song = resolved.copyWith(sourceDisplayName: source.name);
         if (source.id.startsWith('a-')) {
           _rememberOnlineAddon(song, source.id.substring(2), selected);

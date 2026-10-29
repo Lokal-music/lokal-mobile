@@ -18,7 +18,9 @@ class _Api extends GlobalCatalogueSearchService {
 
   @override
   Future<GlobalCatalogueMatches> search(
-    String query, {String? selected, bool refresh = false,
+    String query, {
+    String? selected,
+    bool refresh = false,
     bool songsOnly = false,
   }) async {
     refreshes.add(refresh);
@@ -70,7 +72,9 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final api = _Api();
       final c = ProviderContainer(
-        overrides: [globalCatalogueSearchServiceProvider.overrideWithValue(api)],
+        overrides: [
+          globalCatalogueSearchServiceProvider.overrideWithValue(api),
+        ],
       );
       addTearDown(c.dispose);
       await tester.pumpWidget(
@@ -111,7 +115,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Toutes les sources'), findsNothing);
       expect(find.text('En ligne'), findsOneWidget);
-      expect(find.text('Albums en ligne'), findsOneWidget);
+      expect(find.text('Albums en ligne'), findsNothing);
+      expect(
+        find.text('Search online catalogues and playback sources'),
+        findsNothing,
+      );
       await tester.tap(find.text('Recherche impossible. Réessayer'));
       await tester.pumpAndSettle();
       expect(api.refreshes, [false, true]);

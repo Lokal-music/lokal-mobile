@@ -1,5 +1,12 @@
 # iPhone widgets: shared data and implementation gates
 
+**Archived research — excluded from the iOS release by user request on
+29 October 2026 (Europe/Paris).** The following implementation/evidence history
+is retained for reference. WidgetKit rendering, provisioning and actions are
+not release gates. The app does not start the iOS publisher/sampler or register
+its widget publication channel; the research workflow is manual-only. Android
+widgets and iPhone system media controls remain separate and unchanged.
+
 Status: native publication/sampler contracts and standalone extension linkage accepted; rendering candidate, 27 October 2026 (Europe/Paris).
 The canonical-state builder and Swift/Foundation reader pass the hosted Swift 6
 [shared contract run](https://github.com/lokal-music/lokal-mobile/actions/runs/40447057390):

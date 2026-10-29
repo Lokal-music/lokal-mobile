@@ -19,6 +19,7 @@ import 'package:flick/data/entities/song_entity.dart';
 import 'package:flick/models/ios_transfer_import.dart';
 import 'package:flick/models/ios_transfer_models.dart';
 import 'package:flick/services/ios_transfer_import_store.dart';
+import 'package:flick/services/ios_transfer_scan_guard.dart';
 
 void require(bool condition, String message) {
   if (!condition) throw StateError(message);
@@ -421,6 +422,105 @@ Future<void> main(List<String> arguments) async {
         'Committed deletion never resurrects its recording',
       );
     });
+    await scenario('scanner-serialization', (fixture) async {
+      final guard = IosTransferScanGuard(fixture.db);
+      final path = fixture.store().absolutePath(fixture.target);
+      SongEntity scanned(String path, {int? id}) => SongEntity()
+        ..id = id ?? Isar.autoIncrement
+        ..filePath = path
+        ..title = 'Stale scanned title'
+        ..artist = 'Scanned artist';
+      final stale = scanned(path);
+      require(
+        await fixture.db.writeTxn(() => guard.allowsUpsertInTransaction(stale)),
+        'Initial scan sees no reservation',
+      );
+      final entered = Completer<void>(), release = Completer<void>();
+      final preparing = fixture.prepare(
+        boundary: (stage) async {
+          if (stage == 'prepare:beforeCommit') {
+            entered.complete();
+            await release.future;
+          }
+        },
+      );
+      await entered.future;
+      var scanFinished = false;
+      final scanning = fixture.db.writeTxn(() async {
+        if (await guard.allowsUpsertInTransaction(stale)) {
+          await fixture.db.songEntitys.put(stale);
+        }
+        scanFinished = true;
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      require(!scanFinished, 'Scanner waits behind actual preparing writer');
+      release.complete();
+      await preparing;
+      await scanning;
+      require(
+        await fixture.db.songEntitys.count() == 1 &&
+            (await fixture.db.songEntitys.get(42))!.title ==
+                'Current library title',
+        'In-writer reservation check prevents duplicate row and stale overwrite',
+      );
+      for (final alias in [
+        path.toUpperCase(),
+        path.replaceFirst('Verified fixture', 'Cafe\u0301'),
+        path.replaceFirst('Verified fixture', 'Café'),
+        '/private/var/example/Music/Desktop Copies/Another title - ${fixture.job().id.toUpperCase()}-r1.WAV',
+      ]) {
+        require(
+          !await fixture.db.writeTxn(
+            () => guard.allowsUpsertInTransaction(scanned(alias)),
+          ),
+          'ASCII job suffix protects case/Unicode/root aliases without filesystem I/O',
+        );
+      }
+      require(
+        !await fixture.db.writeTxn(() => guard.allowsRemovalInTransaction(42)),
+        'Scanner deletion cannot remove the prepared source identity',
+      );
+      require(
+        await fixture.db.writeTxn(
+          () => guard.allowsUpsertInTransaction(scanned('/other/music.wav')),
+        ),
+        'Unrelated recordings stay available to the scanner',
+      );
+      await fixture.publishFixture();
+      await fixture.commit();
+      require(
+        !await fixture.db.writeTxn(
+          () => guard.allowsUpsertInTransaction(stale),
+        ),
+        'Scan captured before commit cannot overwrite newly imported recording',
+      );
+      require(
+        !await fixture.db.writeTxn(() => guard.allowsRemovalInTransaction(42)),
+        'Automatic deletion/CUE replacement retains committed import anchor',
+      );
+      final current = (await fixture.db.songEntitys.get(42))!;
+      require(
+        await fixture.db.writeTxn(
+          () => guard.allowsUpsertInTransaction(current),
+        ),
+        'Later scan of current canonical recording may refresh metadata',
+      );
+      require(
+        !await fixture.db.writeTxn(
+          () => guard.allowsUpsertInTransaction(
+            scanned(path.toUpperCase(), id: 42),
+          ),
+        ),
+        'Alias cannot change the canonical committed path',
+      );
+      await fixture.db.writeTxn(() => fixture.db.songEntitys.delete(42));
+      require(
+        !await fixture.db.writeTxn(
+          () => guard.allowsUpsertInTransaction(current),
+        ),
+        'Scanner cannot resurrect a deleted completed recording',
+      );
+    });
     await scenario('prepared-deletion', (fixture) async {
       await fixture.prepare();
       await fixture.db.writeTxn(() => fixture.db.songEntitys.delete(42));
@@ -727,7 +827,7 @@ Future<void> main(List<String> arguments) async {
       );
     }, existing: false);
     stdout.writeln(
-      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, writer barrier, atomic rollback, six commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
+      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, six commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
     );
   } catch (error, stack) {
     stderr.writeln('Isar import contracts failed at $stage: $error\n$stack');

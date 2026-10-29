@@ -1,6 +1,7 @@
 import 'package:flick/features/flow/flow_screen.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/utils/responsive.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/features/konnekted/lokal_home_greeting.dart';
@@ -180,24 +181,13 @@ class _KonnektedHomeState extends ConsumerState<KonnektedHome> {
                   onPlay: onPlay,
                 ),
               ),
-              SliverToBoxAdapter(
-                child: KonnektedSongShelf(
-                  title: lokalText('Fresh in your library'),
-                  songs: ref.watch(konnektedRecentlyAddedProvider),
-                  emptyTitle: 'A collection that’s yours',
-                  emptyMessage:
-                      'Newly added music appears here after you scan a folder.',
-                  onSeeAll: () =>
-                      onNavigate(KonnektedDestination.recentlyAdded),
-                  onRetry: () => ref.invalidate(songsProvider),
-                  onPlay: onPlay,
-                ),
-              ),
             ],
-            // The floating dock reserves its height as bottom padding.
+            // The shell already provides the dock's full clearance through
+            // MediaQuery.padding.bottom. Add only a small visual margin.
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 28 + MediaQuery.paddingOf(context).bottom,
+                key: const Key('home-bottom-clearance'),
+                height: 12 + MediaQuery.paddingOf(context).bottom,
               ),
             ),
           ],
@@ -283,7 +273,7 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 (greeting ?? lokalHomeMessages(const [], now: at)).headline,
               ),
               style: TextStyle(
-                fontSize: 34,
+                fontSize: context.responsiveText(34),
                 fontWeight: FontWeight.w600,
                 letterSpacing: -.7,
                 color: context.lokal.text,
@@ -298,7 +288,10 @@ class KonnektedHomeTopBar extends StatelessWidget {
                 (greeting ?? lokalHomeMessages(const [], now: at)).subheader,
               ),
               key: ValueKey(greeting),
-              style: TextStyle(fontSize: 15, color: context.lokal.muted),
+              style: TextStyle(
+                fontSize: context.responsiveText(15),
+                color: context.lokal.muted,
+              ),
             ),
           ),
         ],
@@ -307,10 +300,9 @@ class KonnektedHomeTopBar extends StatelessWidget {
   }
 }
 
-/// Three Home modes share the top header with the logo and the two actions.
-///
-/// Narrow screens keep 44dp tap targets and allow the center segment to scroll
-/// rather than scaling text or moving the switch below the greeting.
+/// A single balanced Home mode control. Discovery's longer label receives
+/// more width, while a truly narrow header scrolls instead of squeezing all
+/// three labels into indistinguishable boxes.
 class _HomeModeSelector extends StatefulWidget {
   const _HomeModeSelector({
     required this.selectedTab,
@@ -325,104 +317,127 @@ class _HomeModeSelector extends StatefulWidget {
 }
 
 class _HomeModeSelectorState extends State<_HomeModeSelector> {
-  final _scrollController = ScrollController();
+  static const _selectorMinWidth = 196.0;
+  static const _segmentGap = 4.0;
+
   bool _revealScheduled = false;
-  final _viewportKey = GlobalKey();
-  final _tabKeys = {
+  final _segmentKeys = {
     for (final tab in KonnektedHomeTab.values) tab: GlobalKey(),
   };
 
   @override
   void initState() {
     super.initState();
-    _revealSelected();
+    _revealSelection();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _revealSelected();
+    _revealSelection();
   }
 
   @override
   void didUpdateWidget(covariant _HomeModeSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedTab != widget.selectedTab) _revealSelected();
+    if (oldWidget.selectedTab != widget.selectedTab) _revealSelection();
   }
 
-  void _revealSelected() {
+  void _revealSelection() {
     if (_revealScheduled) return;
     _revealScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _revealScheduled = false;
-      if (!mounted || !_scrollController.hasClients) return;
-      final tab = _tabKeys[widget.selectedTab]?.currentContext
-          ?.findRenderObject();
-      final viewport = _viewportKey.currentContext?.findRenderObject();
-      if (tab is! RenderBox ||
-          viewport is! RenderBox ||
-          !tab.attached ||
-          !viewport.attached) {
+      if (!mounted) return;
+      final selected = _segmentKeys[widget.selectedTab]?.currentContext;
+      if (selected == null) return;
+      // Only scroll the compact horizontal control; never shift the Home page
+      // vertically when the user changes modes.
+      final scrollable = Scrollable.maybeOf(selected);
+      final object = selected.findRenderObject();
+      if (scrollable == null ||
+          scrollable.position.axis != Axis.horizontal ||
+          object == null) {
         return;
       }
-      final left = tab.localToGlobal(Offset.zero, ancestor: viewport).dx;
-      final offset =
-          (_scrollController.offset +
-                  left +
-                  tab.size.width / 2 -
-                  viewport.size.width / 2)
-              .clamp(0.0, _scrollController.position.maxScrollExtent);
-      if ((offset - _scrollController.offset).abs() < 1) return;
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _scrollController.jumpTo(offset);
-      } else {
-        _scrollController.animateTo(
-          offset,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        );
-      }
+      scrollable.position.ensureVisible(
+        object,
+        alignment: .5,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
     });
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
+  Widget _segment(KonnektedHomeTab tab) => _ShelfChip(
+    key: _segmentKeys[tab],
+    indicatorKey: ValueKey('home-mode-indicator-${tab.name}'),
+    label: lokalText(tab.label),
+    selected: tab == widget.selectedTab,
+    onTap: () => widget.onTabChanged?.call(tab),
+  );
+
+  Widget _segments({Map<KonnektedHomeTab, double>? scrollWidths}) => Row(
+    mainAxisSize: scrollWidths == null ? MainAxisSize.max : MainAxisSize.min,
+    children: [
+      for (final tab in KonnektedHomeTab.values) ...[
+        if (tab != KonnektedHomeTab.values.first)
+          const SizedBox(width: _segmentGap),
+        if (scrollWidths != null)
+          SizedBox(width: scrollWidths[tab], child: _segment(tab))
+        else
+          Expanded(
+            flex: tab == KonnektedHomeTab.discovery ? 16 : 10,
+            child: _segment(tab),
+          ),
+      ],
+    ],
+  );
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      key: _viewportKey,
-      controller: _scrollController,
-      scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minWidth: constraints.maxWidth),
-        child: Align(
-          alignment: Alignment.center,
-          child: LokalGlass.capsule(
-            thickness: LokalGlassThickness.thin,
-            shadow: false,
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final tab in KonnektedHomeTab.values)
-                  KeyedSubtree(
-                    key: _tabKeys[tab],
-                    child: _ShelfChip(
-                      label: lokalText(tab.label),
-                      selected: tab == widget.selectedTab,
-                      onTap: () => widget.onTabChanged?.call(tab),
-                    ),
-                  ),
-              ],
-            ),
+    builder: (context, constraints) {
+      var minWidth = _selectorMinWidth;
+      final scrollWidths = <KonnektedHomeTab, double>{};
+      var contentWidth = 14.0;
+      for (final tab in KonnektedHomeTab.values) {
+        final painter = TextPainter(
+          text: TextSpan(
+            text: lokalText(tab.label).toUpperCase(),
+            style: LokalTheme.label(
+              context.lokal,
+              size: 11,
+            ).copyWith(fontWeight: FontWeight.w700, letterSpacing: .6),
           ),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout();
+        final required = (painter.width + 12).clamp(44.0, double.infinity);
+        scrollWidths[tab] = required;
+        contentWidth += required;
+        painter.dispose();
+      }
+      if (contentWidth > minWidth) minWidth = contentWidth;
+      final needsScroll = constraints.maxWidth < minWidth;
+      return SizedBox(
+        width: constraints.maxWidth,
+        height: 44,
+        child: LokalGlass.capsule(
+          thickness: LokalGlassThickness.thin,
+          shadow: false,
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: needsScroll
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const ClampingScrollPhysics(),
+                  child: _segments(scrollWidths: scrollWidths),
+                )
+              : _segments(),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -455,16 +470,13 @@ class _KonnektedCoverFlowSectionState
           initialIndex: list.length ~/ 2,
           albums: list,
           onPlay: widget.onPlay,
-          onSelect: (i) => widget.onPlay(
-            list[i].coverSong ?? list[i].songs.first,
-            [
-              // Cover Flow is a shelf of recommended tracks. Expanding each
-              // card's back must not turn a front-face tap into a queue of
-              // every album (nor duplicate songs across featured covers).
-              for (final entry in list)
-                entry.coverSong ?? entry.songs.first,
-            ],
-          ),
+          onSelect: (i) =>
+              widget.onPlay(list[i].coverSong ?? list[i].songs.first, [
+                // Cover Flow is a shelf of recommended tracks. Expanding each
+                // card's back must not turn a front-face tap into a queue of
+                // every album (nor duplicate songs across featured covers).
+                for (final entry in list) entry.coverSong ?? entry.songs.first,
+              ]),
           cover: (entry) {
             final placeholder = Container(
               color: t.surface3,
@@ -487,11 +499,14 @@ class _KonnektedCoverFlowSectionState
 
 class _ShelfChip extends StatelessWidget {
   const _ShelfChip({
+    super.key,
+    required this.indicatorKey,
     required this.label,
     required this.selected,
     required this.onTap,
   });
 
+  final Key indicatorKey;
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -506,27 +521,46 @@ class _ShelfChip extends StatelessWidget {
       onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(minHeight: 44, minWidth: 56),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? (t.isLight
-                      ? Colors.black.withValues(alpha: .06)
-                      : Colors.white.withValues(alpha: .12))
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            label.toUpperCase(),
-            style: LokalTheme.label(
-              t,
-              size: 10,
-              color: selected ? t.text : t.muted,
+        child: SizedBox(
+          height: 44,
+          child: Center(
+            child: AnimatedContainer(
+              key: indicatorKey,
+              height: 36,
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: selected
+                    ? (t.isLight
+                          ? Colors.black.withValues(alpha: .08)
+                          : Colors.white.withValues(alpha: .14))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                label.toUpperCase(),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+                textAlign: TextAlign.center,
+                style:
+                    LokalTheme.label(
+                      t,
+                      size: 11,
+                      color: selected ? t.text : t.muted,
+                    ).copyWith(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      letterSpacing: .6,
+                    ),
+              ),
             ),
           ),
         ),

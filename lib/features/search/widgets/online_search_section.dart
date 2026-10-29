@@ -1,5 +1,5 @@
 import 'package:flick/core/utils/online_source_log_label.dart';
-import '../providers/search_filter_provider.dart';
+
 import '../providers/recent_search_tracks.dart';
 
 import 'dart:async';
@@ -48,8 +48,8 @@ import 'package:flick/widgets/lokal/lokal_swipe_to_queue.dart';
   // Cap enormous provider responses, not the 15-item visual preview.
   final rows = results.take(100);
   for (final entry in rows) {
-    final isSelected = identical(entry, selected) ||
-        entry.track.key == selected.track.key;
+    final isSelected =
+        identical(entry, selected) || entry.track.key == selected.track.key;
     final track = isSelected && atmos
         ? entry.track.requestAtmos()
         : entry.track;
@@ -85,10 +85,12 @@ class OnlineSearchSection extends ConsumerStatefulWidget {
   final String query;
 
   /// Replaces native/network stream inspection in controlled widget tests.
-  final Future<String?> Function(String videoId, Future<void> cancel)? qualityLookup;
+  final Future<String?> Function(String videoId, Future<void> cancel)?
+  qualityLookup;
 
   @visibleForTesting
-  static void resetSourceSelection() => _OnlineSearchSectionState._remembered = null;
+  static void resetSourceSelection() =>
+      _OnlineSearchSectionState._remembered = null;
 
   /// Loads the sources; replaced in tests.
   final Future<List<OnlineSource>> Function(
@@ -121,9 +123,7 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
   static String? _remembered; // The chosen source, for the app's lifetime.
 
   final _client = GracefulHttpClient();
-  late final _progress = LokalStatusSnack(
-    () => mounted ? context : null,
-  );
+  late final _progress = LokalStatusSnack(() => mounted ? context : null);
   List<OnlineSource>? _sources;
   String? _chosen;
   Future<List<OnlineResult>>? _results;
@@ -154,37 +154,35 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
   Future<String?> _resolvedYoutubeQuality(String videoId) {
     if (_youtubeQualityPaused) return Future<String?>.value(null);
     return _youtubeQuality.putIfAbsent(videoId, () {
-        final gate = _youtubeLookupTail.catchError((Object _) {});
-        final cancelled = _youtubeQualityCancelled;
-        final lookup = gate.then((_) async {
-          if (!mounted || cancelled.isCompleted) return null;
-          try {
-            if (widget.qualityLookup != null) {
-              return await widget.qualityLookup!(videoId, cancelled.future);
-            }
-            final audio = await YoutubeAudio(DiscoveryHttp(_client))
-                .resolve(videoId, cancel: cancelled.future)
-                .timeout(const Duration(seconds: 55));
-            final codec = audio.codec;
-            final bitrate = audio.bitrate;
-            if (codec == null) return null;
-            return catalogueAudioDetails(
-              codec: codec,
-              sampleRate: audio.sampleRate,
-              quality: measuredLossyBitrate(
-                codec: codec, bitsPerSecond: bitrate,
-              ),
-            );
-          } catch (_) {
-            return null; // Unsupported/expired streams have no proven badge.
+      final gate = _youtubeLookupTail.catchError((Object _) {});
+      final cancelled = _youtubeQualityCancelled;
+      final lookup = gate.then((_) async {
+        if (!mounted || cancelled.isCompleted) return null;
+        try {
+          if (widget.qualityLookup != null) {
+            return await widget.qualityLookup!(videoId, cancelled.future);
           }
-        });
-        _youtubeLookupTail = lookup.then<void>((_) {});
-        while (_youtubeQuality.length > 64) {
-          _youtubeQuality.remove(_youtubeQuality.keys.first);
+          final audio = await YoutubeAudio(DiscoveryHttp(_client))
+              .resolve(videoId, cancel: cancelled.future)
+              .timeout(const Duration(seconds: 55));
+          final codec = audio.codec;
+          final bitrate = audio.bitrate;
+          if (codec == null) return null;
+          return catalogueAudioDetails(
+            codec: codec,
+            sampleRate: audio.sampleRate,
+            quality: measuredLossyBitrate(codec: codec, bitsPerSecond: bitrate),
+          );
+        } catch (_) {
+          return null; // Unsupported/expired streams have no proven badge.
         }
-        return lookup;
       });
+      _youtubeLookupTail = lookup.then<void>((_) {});
+      while (_youtubeQuality.length > 64) {
+        _youtubeQuality.remove(_youtubeQuality.keys.first);
+      }
+      return lookup;
+    });
   }
 
   @override
@@ -253,9 +251,9 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
       // mutable display labels. Do not silently switch a one-addon user back
       // to native YouTube when the old selection is restored or renamed.
       final label = wanted!.substring(2);
-      final byOldLabel = sources.where(
-        (s) => s.id.startsWith('w-') && s.name == label,
-      ).firstOrNull;
+      final byOldLabel = sources
+          .where((s) => s.id.startsWith('w-') && s.name == label)
+          .firstOrNull;
       if (byOldLabel != null) return byOldLabel;
       final httpSources = sources.where((s) => s.id.startsWith('w-')).toList();
       if (httpSources.length == 1) return httpSources.single;
@@ -331,7 +329,9 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         return;
       }
       if (!await AtmosPlaybackSupport.available) {
-        _say('This device does not report an E-AC-3 JOC decoder or direct Atmos output.');
+        _say(
+          'This device does not report an E-AC-3 JOC decoder or direct Atmos output.',
+        );
         return;
       }
     }
@@ -346,7 +346,8 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
             ),
           ),
     );
-    final createPending = widget.pendingSong ??
+    final createPending =
+        widget.pendingSong ??
         (OnlineSource source, DiscoveryTrack track) =>
             onlinePendingSong(source.id, track);
     final playback = buildOnlineSearchPlaybackQueue(
@@ -359,9 +360,9 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
     // shell's QueuePreResolver owns all ongoing progress; otherwise two
     // LokalStatusSnack owners continuously replace the global toast.
     _progress.clear();
-    await ref.read(playerProvider.notifier).play(
-      playback.selected, playlist: playback.queue,
-    );
+    await ref
+        .read(playerProvider.notifier)
+        .play(playback.selected, playlist: playback.queue);
     // Play has established the actual queue and current index now. Kick the
     // production four-ahead resolver explicitly: some Media3 handoffs don't
     // emit a separate queue mutation once the selected pending item swaps.
@@ -422,9 +423,15 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
 
   /// Desktop's "Save to library": downloads the song through the same
   /// source, then copies it into your music folder and library.
-  Future<void> _download(OnlineSource source, OnlineResult result, {bool atmos = false}) async {
+  Future<void> _download(
+    OnlineSource source,
+    OnlineResult result, {
+    bool atmos = false,
+  }) async {
     if (!await _verify(source)) return;
-    final track = atmos ? result.track.requestAtmos(downloadOnly: true) : result.track;
+    final track = atmos
+        ? result.track.requestAtmos(downloadOnly: true)
+        : result.track;
     final key = '${source.id}:${track.id}';
     if (!_saving.add(key)) return;
     setState(() {});
@@ -432,9 +439,12 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
     try {
       final prepare =
           widget.prepare ??
-          (source, track, onStatus) =>
-              playOnlineTrack(source.id, track, onStatus: onStatus,
-                forDownload: true);
+          (source, track, onStatus) => playOnlineTrack(
+            source.id,
+            track,
+            onStatus: onStatus,
+            forDownload: true,
+          );
       final song = await prepare(source, track, (message) {
         if (mounted && _saving.contains(key)) _progress.update(message);
       });
@@ -519,25 +529,6 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (ref.watch(searchScopeProvider) != SearchScope.online) ...[
-            Text(
-              'Not in your library',
-              style: TextStyle(
-                color: t.text,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 2),
-            ],
-            Text(
-              source == null
-                  ? 'Looking for places to search…'
-                  : source.addon
-                  ? 'From an add-on you installed'
-                  : 'Streams from YouTube Music',
-              style: TextStyle(color: t.muted, fontSize: 12),
-            ),
             if (_sources case final sources? when sources.length > 1) ...[
               const SizedBox(height: 10),
               SingleChildScrollView(
@@ -623,10 +614,19 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
                               busy: _saving.contains(
                                 '${source.id}:${result.track.id}',
                               ),
-                              onTap: () => _play(source, result, results: results),
-                              onAtmos: () => _play(source, result, atmos: true, results: results),
+                              onTap: () =>
+                                  _play(source, result, results: results),
+                              onAtmos: () => _play(
+                                source,
+                                result,
+                                atmos: true,
+                                results: results,
+                              ),
                               onMore: () => _actions(source, result, results),
-                              onQueue: () => _enqueue(source, result, next: false),
+                              onQueue: () =>
+                                  _enqueue(source, result, next: false),
+                              onNext: () =>
+                                  _enqueue(source, result, next: true),
                             ),
                           )
                         else
@@ -635,10 +635,18 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
                             busy: _saving.contains(
                               '${source.id}:${result.track.id}',
                             ),
-                            onTap: () => _play(source, result, results: results),
-                            onAtmos: () => _play(source, result, atmos: true, results: results),
+                            onTap: () =>
+                                _play(source, result, results: results),
+                            onAtmos: () => _play(
+                              source,
+                              result,
+                              atmos: true,
+                              results: results,
+                            ),
                             onMore: () => _actions(source, result, results),
-                            onQueue: () => _enqueue(source, result, next: false),
+                            onQueue: () =>
+                                _enqueue(source, result, next: false),
+                            onNext: () => _enqueue(source, result, next: true),
                           ),
                     ],
                   );
@@ -716,6 +724,7 @@ class _OnlineTile extends StatelessWidget {
     required this.onTap,
     required this.onAtmos,
     required this.onQueue,
+    required this.onNext,
     required this.onMore,
     this.verifiedQuality,
   });
@@ -726,6 +735,7 @@ class _OnlineTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onAtmos;
   final Future<void> Function() onQueue;
+  final Future<void> Function() onNext;
   final VoidCallback onMore;
 
   @override
@@ -744,6 +754,7 @@ class _OnlineTile extends StatelessWidget {
     final displayQuality = badge.label;
     return LokalSwipeToQueue(
       onQueue: onQueue,
+      onNext: onNext,
       enabled: !busy,
       child: InkWell(
         onTap: busy ? null : onTap,
@@ -786,30 +797,34 @@ class _OnlineTile extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         if (displayQuality.isNotEmpty)
-                        Tooltip(
-                          message: badge.tooltip,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: t.muted.withValues(alpha: .35)),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              displayQuality,
-                              style: TextStyle(color: t.muted, fontSize: 10),
-                            ),
-                          ),
-                        ),
-                          if (track.atmosAvailable)
-                            Tooltip(
-                              message: 'Play original Dolby Atmos (requires an Android E-AC-3 JOC decoder or direct output)',
-                              child: InkWell(
-                                onTap: busy ? null : onAtmos,
-                                borderRadius: BorderRadius.circular(6),
-                                child: const LokalAtmosPill(),
+                          Tooltip(
+                            message: badge.tooltip,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: t.muted.withValues(alpha: .35),
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                displayQuality,
+                                style: TextStyle(color: t.muted, fontSize: 10),
                               ),
                             ),
+                          ),
+                        if (track.atmosAvailable)
+                          Tooltip(
+                            message: 'Play original Dolby Atmos (requires an Android E-AC-3 JOC decoder or direct output)',
+                            child: InkWell(
+                              onTap: busy ? null : onAtmos,
+                              borderRadius: BorderRadius.circular(6),
+                              child: const LokalAtmosPill(),
+                            ),
+                          ),
                       ],
                     ),
                   ],

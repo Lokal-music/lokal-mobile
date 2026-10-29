@@ -6,14 +6,30 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+/// Observe outbound client identity while forwarding every call to real Swift.
+/// This does not replace the messenger, native handler or its response.
+class _ObservedTransferChannel extends MethodChannel {
+  _ObservedTransferChannel() : super('lokal/transfers');
+  String? observedClient;
+  @override
+  Future<T?> invokeMethod<T>(String method, [dynamic arguments]) {
+    if (method == 'observe' && arguments is Uint8List) {
+      observedClient =
+          (jsonDecode(utf8.decode(arguments)) as Map)['clientID'] as String;
+    }
+    return super.invokeMethod<T>(method, arguments);
+  }
+}
+
 /// Actual registered Swift channel in the isolated CI app. No paired desktop,
 /// user files or credentials are required for protocol/observation acceptance.
 Future<void> probeIosTransferTransport(
   WidgetTester tester,
   IntegrationTestWidgetsFlutterBinding binding,
 ) async {
-  final old = IosTransferTransport();
-  final current = IosTransferTransport();
+  final channel = _ObservedTransferChannel();
+  final old = IosTransferTransport(channel: channel);
+  final current = IosTransferTransport(channel: channel);
   StreamSubscription<void>? oldListener, currentListener;
   var oldEvents = 0, currentEvents = 0;
   try {
@@ -55,8 +71,11 @@ Future<void> probeIosTransferTransport(
 
     oldListener = old.changes.listen((_) => oldEvents++);
     await tester.pump(const Duration(milliseconds: 100));
+    final retiredClient = channel.observedClient;
     currentListener = current.changes.listen((_) => currentEvents++);
     await tester.pump(const Duration(milliseconds: 100));
+    final activeClient = channel.observedClient!;
+    expect(retiredClient, isNot(activeClient));
     final beforeImportGuards = await current.recover().timeout(
       const Duration(seconds: 10),
     );
@@ -67,6 +86,7 @@ Future<void> probeIosTransferTransport(
       Map<String, Object> payload,
       String code,
     ) async {
+      payload = {'clientID': activeClient, ...payload};
       await expectLater(
         const MethodChannel('lokal/transfers')
             .invokeMethod<Object?>(
@@ -91,6 +111,12 @@ Future<void> probeIosTransferTransport(
       'revision': 1,
       'reconcileOnly': false,
     }, 'TRANSFER_MISSING');
+    await rejectedControl('claimImport', {
+      'id': missingJobId,
+      'revision': 1,
+      'reconcileOnly': false,
+      'clientID': retiredClient!,
+    }, 'TRANSFER_CHANGED');
     for (final method in [
       'validateImport',
       'validateImportReconciliation',
@@ -127,6 +153,7 @@ Future<void> probeIosTransferTransport(
       'replacement_observer_survives_old_disposal': true,
       'private_import_control_rejects_injection': true,
       'unclaimed_import_guard_rejected_without_commit': true,
+      'retired_client_cannot_inherit_replacement_import_owner': true,
       'background_daemon_or_library_import_acceptance': false,
     };
   } finally {

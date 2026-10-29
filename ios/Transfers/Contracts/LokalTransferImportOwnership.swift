@@ -33,7 +33,7 @@ final class LokalTransferCopyCancellation: @unchecked Sendable {
 final class LokalTransferImportOwnership: @unchecked Sendable {
   struct Owner: Hashable, Sendable {
     fileprivate let engineID: String
-    fileprivate let clientID: String
+    let clientID: String
   }
   struct Ticket: Sendable {
     let owner: Owner

@@ -234,6 +234,7 @@ class _KonnektedDiscoveryViewState
             onTap: () => _play(track, entries),
             onMore: () => unawaited(_actions(track, entries)),
             onQueue: () => _enqueue(track),
+            onNext: () => _enqueue(track, next: true),
           ),
         if (category.mixes.isNotEmpty)
           _MixShelf(
@@ -578,6 +579,7 @@ class _KonnektedDiscoveryViewState
             onTap: () => _play(track, items),
             onMore: () => unawaited(_actions(track, items)),
             onQueue: () => _enqueue(track),
+            onNext: () => _enqueue(track, next: true),
           ),
       ],
     );
@@ -824,6 +826,7 @@ class _KonnektedDiscoveryViewState
             onTap: () => _play(track, items),
             onMore: () => unawaited(_actions(track, items)),
             onQueue: () => _enqueue(track),
+            onNext: () => _enqueue(track, next: true),
           ),
       ],
     );
@@ -854,7 +857,9 @@ class _KonnektedDiscoveryViewState
           onCustomize: (provider) => unawaited(_customize(provider)),
           onRefresh: () {
             HapticFeedback.selectionClick();
-            unawaited(ref.read(konnektedSpotifyDiscoveryProvider.notifier).refresh());
+            unawaited(
+              ref.read(konnektedSpotifyDiscoveryProvider.notifier).refresh(),
+            );
           },
         ),
         if (snapshot.hasError)
@@ -977,6 +982,7 @@ class _KonnektedDiscoveryViewState
                   onTap: () => _play(track, history),
                   onMore: () => unawaited(_actions(track, history)),
                   onQueue: () => _enqueue(track),
+                  onNext: () => _enqueue(track, next: true),
                 ),
               ),
             ],
@@ -1262,6 +1268,7 @@ class KonnektedDiscoveryRow extends StatelessWidget {
     required this.onTap,
     this.onMore,
     this.onQueue,
+    this.onNext,
     this.inLibrary = false,
     this.busy = false,
     this.trailing,
@@ -1271,6 +1278,7 @@ class KonnektedDiscoveryRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onMore;
   final Future<void> Function()? onQueue;
+  final Future<void> Function()? onNext;
   final bool inLibrary;
   final bool busy;
   final String? trailing;
@@ -1386,7 +1394,12 @@ class KonnektedDiscoveryRow extends StatelessWidget {
     );
     return onQueue == null
         ? row
-        : LokalSwipeToQueue(onQueue: onQueue, enabled: !busy, child: row);
+        : LokalSwipeToQueue(
+            onQueue: onQueue,
+            onNext: onNext,
+            enabled: !busy,
+            child: row,
+          );
   }
 }
 

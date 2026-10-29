@@ -6,6 +6,8 @@ import 'dart:collection';
 import 'package:flick/services/queue_pre_resolver.dart';
 import 'package:flick/features/discovery/discovery_artwork.dart';
 import 'package:flick/features/discovery/discovery_http.dart';
+import 'package:flick/features/discovery/discovery_sources.dart';
+import 'youtube_artist_releases.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:flick/features/discovery/discovery_models.dart';
@@ -134,9 +136,11 @@ class LokalOnlineCatalogue {
     AppleMusicMetadataService? apple,
     Future<List<OnlineSource>> Function(http.Client)? sources,
     Future<String> Function(String title, String artist)? albumArtwork,
+    Future<List<LokalCatalogueAlbum>> Function(String artist)? youtubeReleases,
   }) : _apple = apple ?? AppleMusicMetadataService.instance,
        _sources = sources ?? onlineSources,
-       _albumArtwork = albumArtwork;
+       _albumArtwork = albumArtwork,
+       _youtubeReleases = youtubeReleases;
   static final instance = LokalOnlineCatalogue();
   void invalidateArtist(String name) =>
       _cache.remove('artist:${recommendationKey(name)}');
@@ -144,6 +148,24 @@ class LokalOnlineCatalogue {
   final AppleMusicMetadataService _apple;
   final Future<List<OnlineSource>> Function(http.Client) _sources;
   final Future<String> Function(String, String)? _albumArtwork;
+  final Future<List<LokalCatalogueAlbum>> Function(String)? _youtubeReleases;
+
+  Future<List<LokalCatalogueAlbum>> _loadYoutubeReleases(String artist) async {
+    if (_youtubeReleases != null) return _youtubeReleases(artist);
+    final client = http.Client();
+    try {
+      return await loadYoutubeArtistReleases(
+        artist,
+        catalogue: YoutubeMusicCatalog(
+          DiscoveryHttp(client, timeout: const Duration(seconds: 9)),
+          refreshClientContext: true,
+        ),
+      );
+    } finally {
+      client.close();
+    }
+  }
+
   final _cache = LinkedHashMap<String, (DateTime, LokalCataloguePage)>();
   final _pending = <String, Future<LokalCataloguePage>>{};
 
@@ -183,55 +205,115 @@ class LokalOnlineCatalogue {
   }) => _load('artist:${recommendationKey(name)}', refresh, () async {
     AppleMusicArtistData? data;
     List<AppleMusicAlbumMatch> releases = const [];
-    // Independent metadata sections can still be shown when one endpoint fails.
+    List<AppleMusicAlbumMatch> artistReleases = const [];
+    List<LokalCatalogueAlbum> youtubeReleases = const [];
+    // A free-text search returns only the first 100 relevance-ranked albums,
+    // often omitting singles, EPs and older releases. Supplement it with the
+    // artist-ID discography (including other storefronts). Keep failures
+    // independent so a temporarily unavailable endpoint cannot blank the page.
     await Future.wait([
-      _apple
-          .getArtistData(name, topSongLimit: 25, refresh: refresh)
-          .then((value) {
-            data = value;
-          })
-          .catchError((Object _) {}),
-      _apple
-          .searchAlbums(name, limit: 100, refresh: refresh)
-          .then((value) {
-            releases = value;
-          })
-          .catchError((Object _) {}),
+      () async {
+        try {
+          data = await _apple.getArtistData(
+            name, topSongLimit: 25, refresh: refresh,
+          );
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          releases = await _apple.searchAlbums(
+            name, limit: 100, refresh: refresh,
+          );
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          artistReleases = await _apple.getArtistReleases(
+            name, refresh: refresh,
+          );
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          youtubeReleases = await _loadYoutubeReleases(name);
+        } catch (_) { /* Keep Apple Music releases if YouTube is offline. */ }
+      }(),
     ]);
     if (data != null &&
-        recommendationKey(data!.artist.name) != recommendationKey(name))
+        recommendationKey(data!.artist.name) != recommendationKey(name)) {
       data = null;
+    }
     final creditedAlbums = {
       for (final song in data?.topSongs ?? <AppleMusicTopSong>[])
         if (catalogueArtistCredit(song.artistName, name) &&
-            song.collectionName != null)
+            song.collectionName?.trim().isNotEmpty == true)
           recommendationKey(song.collectionName),
     };
-    final albums =
-        releases
-            .where(
-              (album) =>
-                  recommendationKey(album.artistName) ==
-                      recommendationKey(name) ||
-                  catalogueArtistCredit(album.artistName, name) ||
-                  creditedAlbums.contains(recommendationKey(album.name)),
-            )
-            .map(
-              (match) => LokalCatalogueAlbum(
-                id: match.collectionId,
-                title: match.name,
-                artist: match.artistName,
-                artwork: match.artworkUrl ?? '',
-                date: match.releaseDate,
-                trackCount: match.trackCount,
-                url: match.url,
-                releaseKind: !cataloguePrimaryArtist(match.artistName, name)
-                    ? LokalReleaseKind.feature
-                    : null,
-              ),
-            )
-            .toList()
-          ..sort((a, b) => (b.date ?? '').compareTo(a.date ?? ''));
+    final albums = <LokalCatalogueAlbum>[];
+    final knownIds = <String>{};
+    final knownReleases = <String>{};
+    void addAlbum(AppleMusicAlbumMatch match) {
+      if (match.name.trim().isEmpty) return;
+      // Across storefronts an identical release can carry a different ID.
+      // Preserve genuinely distinct editions with different titles/dates.
+      final identity = '${recommendationKey(match.name)}|'
+          '${recommendationKey(match.artistName)}|'
+          '${match.releaseDate ?? ''}';
+      if ((match.collectionId.isNotEmpty &&
+              !knownIds.add(match.collectionId)) ||
+          !knownReleases.add(identity)) return;
+      albums.add(LokalCatalogueAlbum(
+        id: match.collectionId,
+        title: match.name,
+        artist: match.artistName,
+        artwork: match.artworkUrl ?? '',
+        date: match.releaseDate,
+        trackCount: match.trackCount,
+        url: match.url,
+        releaseKind: !cataloguePrimaryArtist(match.artistName, name)
+            ? LokalReleaseKind.feature
+            : null,
+      ));
+    }
+
+    // An artist-ID lookup establishes attribution even if Apple lists a
+    // collaboration under its joint credit rather than the exact artist name.
+    for (final album in artistReleases) {
+      addAlbum(album);
+    }
+    for (final album in releases) {
+      if (catalogueArtistCredit(album.artistName, name) ||
+          creditedAlbums.contains(recommendationKey(album.name))) {
+        addAlbum(album);
+      }
+    }
+    // YouTube Music's own artist channel fills missing EPs, singles and
+    // albums not indexed by Apple. Do not replace verified Apple catalogue
+    // identities, but preserve distinct editions with different titles.
+    final existingTitles = albums.map((a) => recommendationKey(a.title)).toSet();
+    for (final release in youtubeReleases) {
+      if (existingTitles.add(recommendationKey(release.title))) {
+        albums.add(release);
+      }
+    }
+
+    // The popular-song list independently proves additional named releases.
+    // A metadata-only release remains navigable even without an iTunes ID.
+    final knownTitles = albums.map((a) => recommendationKey(a.title)).toSet();
+    for (final song in data?.topSongs ?? <AppleMusicTopSong>[]) {
+      final title = song.collectionName?.trim() ?? '';
+      if (title.isEmpty ||
+          !catalogueArtistCredit(song.artistName, name) ||
+          !knownTitles.add(recommendationKey(title))) continue;
+      albums.add(LokalCatalogueAlbum(
+        title: title,
+        artist: song.artistName,
+        releaseKind: !cataloguePrimaryArtist(song.artistName, name)
+            ? LokalReleaseKind.feature
+            : null,
+      ));
+    }
+    albums.sort((a, b) => (b.date ?? '').compareTo(a.date ?? ''));
     var tracks = [
       for (final song in data?.topSongs ?? <AppleMusicTopSong>[])
         LokalCatalogueTrack(
@@ -255,7 +337,10 @@ class LokalOnlineCatalogue {
           ),
         ),
     ];
-    String label = 'Apple Music';
+    String label = youtubeReleases.isEmpty
+        ? 'Apple Music'
+        : (data == null && releases.isEmpty && artistReleases.isEmpty
+            ? 'YouTube Music' : 'Apple Music + YouTube Music');
     if (tracks.isEmpty) {
       final found = await _search(name, artist: name);
       if (found.$1.isNotEmpty) {

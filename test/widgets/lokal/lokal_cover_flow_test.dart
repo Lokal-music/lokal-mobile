@@ -127,8 +127,6 @@ void main() {
       cover: (_) => const ColoredBox(color: Colors.blueGrey),
       onPlay: (_, _) {},
     )));
-    final size = math.min(250.0, tester.getSize(find.byType(LokalCoverFlow)).width * .60);
-
     Transform panel(String key) => tester.widget<Transform>(
       find.descendant(
         of: find.byKey(ValueKey(key)),
@@ -138,6 +136,7 @@ void main() {
     final left = panel('Second');
     final right = panel('Fourth');
     final selected = panel('Third');
+    final size = tester.getSize(find.byWidget(selected.child!)).width;
 
     // The first Transform in each Positioned cover applies the real
     // Matrix4 perspective. Project the actual local cover corners, including

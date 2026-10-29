@@ -1,47 +1,6 @@
-name: iPhone widget data contracts
+name: Archived iPhone widget research (manual only)
 
 on:
-  pull_request:
-    paths:
-      - 'ios/Runner/LokalWidgetBridge.swift'
-      - 'ios/Runner/LokalPlatform.swift'
-      - 'ios/Runner.xcodeproj/project.pbxproj'
-      - 'integration_test/ios_widget_transport_probe.dart'
-      - 'ios/Widgets/Contracts/**'
-      - 'ios/Widgets/Tests/**'
-      - 'ios/Widgets/Storage/**'
-      - 'ios/Widgets/StorageTests/**'
-      - 'ios/Widgets/Publication/**'
-      - 'ios/Widgets/PublicationTests/**'
-      - 'ios/Widgets/Presentation/**'
-      - 'ios/Widgets/PresentationTests/**'
-      - 'ios/Widgets/RenderHarness/**'
-      - 'tool/ios_widget_render.py'
-      - 'tool/test_ios_widget_render.py'
-      - 'tool/ios_widget_live_capture.py'
-      - 'tool/test_ios_widget_live_capture.py'
-      - 'ios/Widgets/Timeline/**'
-      - 'ios/Widgets/Extension/**'
-      - 'ios/Widgets/Resources/**'
-      - 'ios/Widgets/LokalWidgets.xcodeproj/**'
-      - 'lib/models/ios_widget_snapshot.dart'
-      - 'lib/services/ios_widget_snapshot_builder.dart'
-      - 'lib/services/ios_widget_publication_coordinator.dart'
-      - 'lib/services/ios_widget_method_channel_transport.dart'
-      - 'lib/services/ios_widget_state_sampler.dart'
-      - 'lib/services/ios_widget_owned_artwork.dart'
-      - 'lib/services/ios_widget_runtime.dart'
-      - 'lib/models/playback_state.dart'
-      - 'lib/providers/player_provider.dart'
-      - 'lib/services/player_service.dart'
-      - 'lib/services/album_art_service.dart'
-      - 'lib/services/widget_sync_service.dart'
-      - 'lib/services/android_audio_engine.dart'
-      - 'lib/services/rust_audio_engine.dart'
-      - 'test/widgets/ios/**'
-      - 'test/services/android_widget_contract_test.dart'
-      - 'test/fixtures/ios_widget/**'
-      - '.github/workflows/ios-widget-contracts.yml'
   workflow_dispatch:
 
 permissions:

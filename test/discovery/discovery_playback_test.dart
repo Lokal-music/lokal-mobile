@@ -109,6 +109,41 @@ void main() {
     },
   );
 
+  test('fast Morneye playback reuses verified download metadata without waiting for artwork', () async {
+    final source = File(p.join(directory.path, 'work', 'audio.flac'));
+    await source.create(recursive: true);
+    await source.writeAsBytes(flacHeader);
+    final coverReply = Completer<http.Response>();
+    var probes = 0;
+    final cache = DiscoveryPlaybackCache(
+      http: DiscoveryHttp(MockClient((_) => coverReply.future)),
+      directory: () async => Directory(p.join(directory.path, 'cache')),
+      probe: (_) async {
+        probes++;
+        throw StateError('the already-verified Morneye file was reprobed');
+      },
+    );
+    final song = await cache
+        .adopt(
+          fixtureTrack.withArtwork('https://img.example/cover.jpg'),
+          source,
+          fastPlayback: true,
+          sourceInfo: const {
+            'codec': 'flac',
+            'format': 'flac',
+            'sample_rate': 44100,
+            'channels': 2,
+            'bit_depth': 16,
+          },
+        )
+        .timeout(const Duration(seconds: 1));
+    expect(probes, 0);
+    expect(song.sampleRate, 44100);
+    expect(song.bitDepth, 16);
+    expect(song.albumArt, 'https://img.example/cover.jpg');
+    coverReply.complete(http.Response('', 404));
+  });
+
   test('the cover is kept next to the song and played with it', () async {
     final source = File(p.join(directory.path, 'work', 'audio.flac'));
     await source.create(recursive: true);
@@ -142,18 +177,23 @@ void main() {
     final larger = image.encodeJpg(image.Image(width: 640, height: 640));
     final requests = <String>[];
     final cache = DiscoveryPlaybackCache(
-      http: DiscoveryHttp(MockClient((request) async {
-        requests.add(request.url.toString());
-        return http.Response.bytes(
-          request.url.toString().contains('w1200-h1200') ? tiny : larger,
-          200,
-        );
-      })),
+      http: DiscoveryHttp(
+        MockClient((request) async {
+          requests.add(request.url.toString());
+          return http.Response.bytes(
+            request.url.toString().contains('w1200-h1200') ? tiny : larger,
+            200,
+          );
+        }),
+      ),
       directory: () async => cacheDir,
-      probe: (_) async => const AudioProbeFormat(sampleRate: 44100, channels: 2),
+      probe: (_) async =>
+          const AudioProbeFormat(sampleRate: 44100, channels: 2),
     );
     final song = await cache.adopt(
-      fixtureTrack.withArtwork('https://lh3.googleusercontent.com/album=w120-h120'),
+      fixtureTrack.withArtwork(
+        'https://lh3.googleusercontent.com/album=w120-h120',
+      ),
       source,
     );
     expect(requests.length, 2);
@@ -167,13 +207,18 @@ void main() {
     final source = File(p.join(directory.path, 'invalid-audio.flac'))
       ..writeAsBytesSync(flacHeader);
     final cache = DiscoveryPlaybackCache(
-      http: DiscoveryHttp(MockClient((_) async =>
-          http.Response.bytes([0xff, 0xd8, 0xff, 0x00], 200))),
+      http: DiscoveryHttp(
+        MockClient(
+          (_) async => http.Response.bytes([0xff, 0xd8, 0xff, 0x00], 200),
+        ),
+      ),
       directory: () async => Directory(p.join(directory.path, 'cache')),
-      probe: (_) async => const AudioProbeFormat(sampleRate: 44100, channels: 2),
+      probe: (_) async =>
+          const AudioProbeFormat(sampleRate: 44100, channels: 2),
     );
     final song = await cache.adopt(
-      fixtureTrack.withArtwork('https://img.example/invalid.jpg'), source,
+      fixtureTrack.withArtwork('https://img.example/invalid.jpg'),
+      source,
     );
     expect(song.albumArt, isNull);
   });
@@ -332,35 +377,44 @@ void main() {
     expect(cache.downloadTimeout, const Duration(minutes: 6));
   });
 
-  test('a declared 200 MiB recording passes the old 128 MiB preflight', () async {
-    final client = MockClient.streaming((_, _) async => http.StreamedResponse(
-      Stream.value(flacHeader),
-      200,
-      contentLength: 200 * 1024 * 1024,
-    ));
-    addTearDown(client.close);
-    final cache = DiscoveryPlaybackCache(
-      http: DiscoveryHttp(client),
-      directory: () async => directory,
-      probe: (_) async => fail('Incomplete audio must never be probed'),
-    );
-    await expectLater(
-      cache.prepare(fixtureTrack, fixtureAudio),
-      throwsA(isA<DiscoveryException>().having(
-        (e) => e.message,
-        'must reject incomplete transfer, not the old size cap',
-        contains('incomplete'),
-      )),
-    );
-    expect(await directory.list().toList(), isEmpty);
-  });
+  test(
+    'a declared 200 MiB recording passes the old 128 MiB preflight',
+    () async {
+      final client = MockClient.streaming(
+        (_, _) async => http.StreamedResponse(
+          Stream.value(flacHeader),
+          200,
+          contentLength: 200 * 1024 * 1024,
+        ),
+      );
+      addTearDown(client.close);
+      final cache = DiscoveryPlaybackCache(
+        http: DiscoveryHttp(client),
+        directory: () async => directory,
+        probe: (_) async => fail('Incomplete audio must never be probed'),
+      );
+      await expectLater(
+        cache.prepare(fixtureTrack, fixtureAudio),
+        throwsA(
+          isA<DiscoveryException>().having(
+            (e) => e.message,
+            'must reject incomplete transfer, not the old size cap',
+            contains('incomplete'),
+          ),
+        ),
+      );
+      expect(await directory.list().toList(), isEmpty);
+    },
+  );
 
   test('a declared file above the new cap stays rejected', () async {
-    final client = MockClient.streaming((_, _) async => http.StreamedResponse(
-      const Stream<List<int>>.empty(),
-      200,
-      contentLength: 513 * 1024 * 1024,
-    ));
+    final client = MockClient.streaming(
+      (_, _) async => http.StreamedResponse(
+        const Stream<List<int>>.empty(),
+        200,
+        contentLength: 513 * 1024 * 1024,
+      ),
+    );
     addTearDown(client.close);
     final cache = DiscoveryPlaybackCache(
       http: DiscoveryHttp(client),
@@ -369,29 +423,35 @@ void main() {
     );
     await expectLater(
       cache.prepare(fixtureTrack, fixtureAudio),
-      throwsA(isA<DiscoveryException>().having(
-        (e) => e.message,
-        'bounded audio file',
-        contains('audio response exceeds'),
-      )),
+      throwsA(
+        isA<DiscoveryException>().having(
+          (e) => e.message,
+          'bounded audio file',
+          contains('audio response exceeds'),
+        ),
+      ),
     );
     expect(await directory.list().toList(), isEmpty);
   });
 
   test('oversized add-on JSON has a distinct metadata error', () async {
-    final client = MockClient.streaming((_, _) async => http.StreamedResponse(
-      const Stream<List<int>>.empty(),
-      200,
-      contentLength: DiscoveryHttp.jsonLimit + 1,
-    ));
+    final client = MockClient.streaming(
+      (_, _) async => http.StreamedResponse(
+        const Stream<List<int>>.empty(),
+        200,
+        contentLength: DiscoveryHttp.jsonLimit + 1,
+      ),
+    );
     addTearDown(client.close);
     await expectLater(
       DiscoveryHttp(client).json(Uri.parse('https://addon.example/stream/id')),
-      throwsA(isA<DiscoveryException>().having(
-        (e) => e.message,
-        'metadata rather than audio',
-        contains('JSON metadata'),
-      )),
+      throwsA(
+        isA<DiscoveryException>().having(
+          (e) => e.message,
+          'metadata rather than audio',
+          contains('JSON metadata'),
+        ),
+      ),
     );
   });
 
@@ -497,32 +557,40 @@ void main() {
     },
   );
 
-  test('small stream fits despite protected queue near the cache cap', () async {
-    // Before the fix, every song reserved maxFileBytes (100) although the
-    // streamed fixture occupies only 52 bytes: 120 + 100 exceeded 200.
-    final queued = File(p.join(directory.path, 'queued.flac'));
-    await queued.writeAsBytes(List.filled(120, 0));
-    final client = MockClient((_) async => http.Response.bytes(flacHeader, 200));
-    addTearDown(client.close);
-    final cache = DiscoveryPlaybackCache(
-      http: DiscoveryHttp(client),
-      directory: () async => directory,
-      maxFileBytes: 100,
-      maxCacheBytes: 200,
-      protectedPaths: () => {queued.path},
-      probe: (_) async =>
-          const AudioProbeFormat(sampleRate: 44100, channels: 2),
-    );
-    final song = await cache.prepare(fixtureTrack, fixtureAudio);
-    expect(await queued.exists(), isTrue);
-    expect(await File(song.filePath!).length(), flacHeader.length);
-    final files = await directory.list().where((entry) => entry is File).toList();
-    var total = 0;
-    for (final file in files) {
-      total += await (file as File).length();
-    }
-    expect(total, lessThanOrEqualTo(200));
-  });
+  test(
+    'small stream fits despite protected queue near the cache cap',
+    () async {
+      // Before the fix, every song reserved maxFileBytes (100) although the
+      // streamed fixture occupies only 52 bytes: 120 + 100 exceeded 200.
+      final queued = File(p.join(directory.path, 'queued.flac'));
+      await queued.writeAsBytes(List.filled(120, 0));
+      final client = MockClient(
+        (_) async => http.Response.bytes(flacHeader, 200),
+      );
+      addTearDown(client.close);
+      final cache = DiscoveryPlaybackCache(
+        http: DiscoveryHttp(client),
+        directory: () async => directory,
+        maxFileBytes: 100,
+        maxCacheBytes: 200,
+        protectedPaths: () => {queued.path},
+        probe: (_) async =>
+            const AudioProbeFormat(sampleRate: 44100, channels: 2),
+      );
+      final song = await cache.prepare(fixtureTrack, fixtureAudio);
+      expect(await queued.exists(), isTrue);
+      expect(await File(song.filePath!).length(), flacHeader.length);
+      final files = await directory
+          .list()
+          .where((entry) => entry is File)
+          .toList();
+      var total = 0;
+      for (final file in files) {
+        total += await (file as File).length();
+      }
+      expect(total, lessThanOrEqualTo(200));
+    },
+  );
 
   test('full protected cache fails before media request', () async {
     final protected = File(p.join(directory.path, 'queued.flac'));
@@ -553,7 +621,11 @@ void main() {
       final range = request.headers['range'];
       expect(range, isNotNull);
       requested.add(range!);
-      final parts = range.replaceFirst('bytes=', '').split('-').map(int.parse).toList();
+      final parts = range
+          .replaceFirst('bytes=', '')
+          .split('-')
+          .map(int.parse)
+          .toList();
       return http.Response.bytes(
         bytes.sublist(parts[0], parts[1] + 1),
         206,
@@ -568,17 +640,22 @@ void main() {
       http: DiscoveryHttp(client),
       directory: () async => directory,
       rangeBytes: 20,
-      probe: (_) async => const AudioProbeFormat(sampleRate: 44100, channels: 2),
+      probe: (_) async =>
+          const AudioProbeFormat(sampleRate: 44100, channels: 2),
     );
     final stream = ResolvedDiscoveryAudio(
-      Uri.parse('https://rr1---sn-abc.googlevideo.com/videoplayback?clen=${bytes.length}'),
+      Uri.parse(
+        'https://rr1---sn-abc.googlevideo.com/videoplayback?clen=${bytes.length}',
+      ),
       length: bytes.length,
       headers: const {'User-Agent': 'YouTube client'},
     );
     final song = await cache.prepare(fixtureTrack, stream);
-    expect(requested, ['bytes=0-19', 'bytes=20-39', 'bytes=40-${bytes.length - 1}']);
+    expect(requested, [
+      'bytes=0-19',
+      'bytes=20-39',
+      'bytes=40-${bytes.length - 1}',
+    ]);
     expect(song.fileType, 'ONLINE');
   });
-
-
 }

@@ -11,12 +11,14 @@ class IosTransferImportLease {
   const IosTransferImportLease._({
     required this.job,
     required this.leaseId,
+    required this.clientId,
     required this.reconcileOnly,
     required this.target,
     this.sourcePath,
   });
   final IosTransferJob job;
   final String leaseId;
+  final String clientId;
   final bool reconcileOnly;
   final IosTransferLibraryTarget target;
   final String? sourcePath;
@@ -27,12 +29,14 @@ class IosTransferImportLease {
           (key) => !{
             'job',
             'leaseID',
+            'clientID',
             'reconcileOnly',
             'targetRelativePath',
             'sourcePath',
           }.contains(key),
         ) ||
         value['leaseID'] is! String ||
+        value['clientID'] is! String ||
         value['reconcileOnly'] is! bool ||
         value['targetRelativePath'] is! String ||
         (value['sourcePath'] != null && value['sourcePath'] is! String)) {
@@ -40,6 +44,7 @@ class IosTransferImportLease {
     }
     final job = IosTransferJob.fromJson(value['job']);
     final leaseId = value['leaseID'] as String;
+    final clientId = value['clientID'] as String;
     final reconcileOnly = value['reconcileOnly'] as bool;
     final source = value['sourcePath'] as String?;
     final target = IosTransferLibraryTarget(
@@ -48,6 +53,9 @@ class IosTransferImportLease {
     if (!RegExp(
           r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
         ).hasMatch(leaseId) ||
+        !RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        ).hasMatch(clientId) ||
         job.direction != 'download' ||
         !{
           IosTransferPhase.validating,
@@ -67,6 +75,7 @@ class IosTransferImportLease {
     return IosTransferImportLease._(
       job: job,
       leaseId: leaseId,
+      clientId: clientId,
       reconcileOnly: reconcileOnly,
       target: target,
       sourcePath: source,
@@ -77,6 +86,7 @@ class IosTransferImportLease {
     'id': job.id,
     'revision': job.revision,
     'leaseID': leaseId,
+    'clientID': clientId,
   };
 }
 

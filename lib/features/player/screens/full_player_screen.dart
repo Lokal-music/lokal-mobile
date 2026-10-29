@@ -1436,6 +1436,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                     currentSong: song,
                     nextSong: _player.peekNext,
                     prevSong: _player.peekPrevious,
+                    buttonDissolve: true,
+                    maskOutgoingOnDissolve: true,
+                    animateButtonDissolve:
+                        ref.watch(appPreferencesProvider).animationsEnabled &&
+                        !LokalPerformanceScope.of(context),
                     enabled: progress == 0 && !_showLyrics && !_queue.isOpen && !_immersiveLyrics && !_usesEmbeddedVideo,
                     onDragStateChanged: (value) {
                       _carouselDragging = value;
@@ -1623,6 +1628,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   currentSong: song,
                   nextSong: _player.peekNext,
                   prevSong: _player.peekPrevious,
+                  buttonDissolve: true,
+                  animateButtonDissolve:
+                      ref.watch(appPreferencesProvider).animationsEnabled &&
+                      !LokalPerformanceScope.of(context),
                   enabled: atRest,
                   onDragStateChanged: (v) => _carouselDragging = v,
                   onNext: _player.next,

@@ -699,7 +699,7 @@ class LibraryScannerService {
     }
 
     if (idsToDelete.isNotEmpty) {
-      await _songRepository.deleteSongsByIds(idsToDelete);
+      await _songRepository.deleteScannedSongsByIds(idsToDelete);
     }
     deletedSongs += idsToDelete.length;
 
@@ -815,13 +815,13 @@ class LibraryScannerService {
     _logScanTiming(displayName, 'diff/build entities', diffStopwatch.elapsed);
 
     if (idsToDeleteInline.isNotEmpty) {
-      await _songRepository.deleteSongsByIds(idsToDeleteInline);
+      await _songRepository.deleteScannedSongsByIds(idsToDeleteInline);
     }
     deletedSongs += idsToDeleteInline.length;
 
     if (batch.isNotEmpty) {
       final stopwatch = Stopwatch()..start();
-      await _songRepository.upsertSongs(batch);
+      await _songRepository.upsertScannedSongs(batch);
       _logScanTiming(
         displayName,
         'upsert ${batch.length} songs',
@@ -840,7 +840,7 @@ class LibraryScannerService {
           .map((s) => s.id)
           .toList();
       if (supersededIds.isNotEmpty) {
-        await _songRepository.deleteSongsByIds(supersededIds);
+        await _songRepository.deleteScannedSongsByIds(supersededIds);
         deletedSongs += supersededIds.length;
       }
     }
@@ -1012,7 +1012,7 @@ class LibraryScannerService {
       }
 
       if (updateBatch.isNotEmpty) {
-        await _songRepository.upsertSongs(updateBatch);
+        await _songRepository.upsertScannedSongs(updateBatch);
       }
     }
   }
@@ -1097,7 +1097,7 @@ class LibraryScannerService {
         )
         .toList();
     if (orphanedCuePaths.isNotEmpty) {
-      await _songRepository.deleteCueTracksByPath(orphanedCuePaths);
+      await _songRepository.deleteScannedCueTracksByPath(orphanedCuePaths);
     }
 
     final idsToDelete = <int>[];
@@ -1156,10 +1156,10 @@ class LibraryScannerService {
     }
 
     if (idsToDelete.isNotEmpty) {
-      await _songRepository.deleteSongsByIds(idsToDelete);
+      await _songRepository.deleteScannedSongsByIds(idsToDelete);
     }
     if (entitiesToUpsert.isNotEmpty) {
-      await _songRepository.upsertSongs(entitiesToUpsert);
+      await _songRepository.upsertScannedSongs(entitiesToUpsert);
     }
 
     final finalCount = await _songRepository.countSongsInFolder(folderUri);
@@ -1219,7 +1219,7 @@ class LibraryScannerService {
     }
 
     if (newBatch.isNotEmpty) {
-      await _songRepository.upsertSongs(newBatch);
+      await _songRepository.upsertScannedSongs(newBatch);
     }
 
     const scanEngine = 'SAF (instant)';
@@ -1364,10 +1364,10 @@ class LibraryScannerService {
       }
 
       if (idsToDelete.isNotEmpty) {
-        await _songRepository.deleteSongsByIds(idsToDelete);
+        await _songRepository.deleteScannedSongsByIds(idsToDelete);
       }
       if (updateBatch.isNotEmpty) {
-        await _songRepository.upsertSongs(updateBatch);
+        await _songRepository.upsertScannedSongs(updateBatch);
       }
     }
 
@@ -1489,7 +1489,7 @@ class LibraryScannerService {
         .map((s) => s.id)
         .toList();
     if (supersededRawIds.isNotEmpty) {
-      await _songRepository.deleteSongsByIds(supersededRawIds);
+      await _songRepository.deleteScannedSongsByIds(supersededRawIds);
     }
     deletedSongs += supersededRawIds.length;
 
@@ -1499,9 +1499,9 @@ class LibraryScannerService {
           .whereType<int>()
           .toList();
       if (idsToDelete.isNotEmpty) {
-        await _songRepository.deleteSongsByIds(idsToDelete);
+        await _songRepository.deleteScannedSongsByIds(idsToDelete);
       } else {
-        await _songRepository.deleteSongsByPath(urisToDelete);
+        await _songRepository.deleteScannedSongsByPath(urisToDelete);
       }
       deletedSongs += urisToDelete.length;
     }
@@ -1516,7 +1516,7 @@ class LibraryScannerService {
         .where((p) => scannedUris.contains(p) && !audioFilesWithCue.contains(p))
         .toList();
     if (orphanedCuePaths.isNotEmpty) {
-      await _songRepository.deleteCueTracksByPath(orphanedCuePaths);
+      await _songRepository.deleteScannedCueTracksByPath(orphanedCuePaths);
     }
 
     // Updates: New files or Modified files
@@ -1768,12 +1768,12 @@ class LibraryScannerService {
       }
 
       if (idsToDelete.isNotEmpty) {
-        await _songRepository.deleteSongsByIds(idsToDelete);
+        await _songRepository.deleteScannedSongsByIds(idsToDelete);
       }
       deletedSongs += idsToDelete.length;
 
       if (batch.isNotEmpty) {
-        await _songRepository.upsertSongs(batch);
+        await _songRepository.upsertScannedSongs(batch);
       }
 
       processed += chunkUris.length;
@@ -2051,13 +2051,13 @@ class LibraryScannerService {
         }
 
         if (idsToDelete.isNotEmpty) {
-          await _songRepository.deleteSongsByIds(idsToDelete);
+          await _songRepository.deleteScannedSongsByIds(idsToDelete);
         }
         deletedSongs += idsToDelete.length;
 
         if (batch.isNotEmpty) {
-          await _songRepository.upsertSongs(batch);
-          preloadCandidates.addAll(batch);
+          await _songRepository.upsertScannedSongs(batch);
+          preloadCandidates.addAll(batch.where((song) => song.id > 0));
         }
         processed += batch.length;
         lastProcessed = batch.isNotEmpty ? batch.last : null;
@@ -2090,9 +2090,9 @@ class LibraryScannerService {
           .whereType<int>()
           .toList();
       if (idsToDelete.isNotEmpty) {
-        await _songRepository.deleteSongsByIds(idsToDelete);
+        await _songRepository.deleteScannedSongsByIds(idsToDelete);
       } else {
-        await _songRepository.deleteSongsByPath(deletedPaths);
+        await _songRepository.deleteScannedSongsByPath(deletedPaths);
       }
     }
 
@@ -2112,7 +2112,7 @@ class LibraryScannerService {
           .map((s) => s.id)
           .toList();
       if (supersededIds.isNotEmpty) {
-        await _songRepository.deleteSongsByIds(supersededIds);
+        await _songRepository.deleteScannedSongsByIds(supersededIds);
         deletedSongs += supersededIds.length;
       }
     }
@@ -2181,7 +2181,7 @@ class LibraryScannerService {
                 .where((p) => !cueMap.containsKey(p))
                 .toList();
             if (orphanedCuePaths.isNotEmpty) {
-              await _songRepository.deleteCueTracksByPath(orphanedCuePaths);
+              await _songRepository.deleteScannedCueTracksByPath(orphanedCuePaths);
             }
 
             // Process CUE files
@@ -2252,7 +2252,7 @@ class LibraryScannerService {
 
               // Delete raw entity if present
               if (rawEntity != null) {
-                await _songRepository.deleteSongsByIds([rawEntity.id]);
+                await _songRepository.deleteScannedSongsByIds([rawEntity.id]);
               }
 
               final ripLog = logMap[audioPath];
@@ -2275,7 +2275,7 @@ class LibraryScannerService {
               );
 
               if (entities.isNotEmpty) {
-                await _songRepository.upsertSongs(entities);
+                await _songRepository.upsertScannedSongs(entities);
               }
             }
 
@@ -2304,7 +2304,7 @@ class LibraryScannerService {
               existing.ripper = entry.value.ripper;
               existing.readMode = entry.value.readMode;
               existing.accurateRip = entry.value.accurateRipEnabled;
-              await _songRepository.upsertSong(existing);
+              await _songRepository.upsertScannedSong(existing);
             }
           }
         }
@@ -2589,9 +2589,9 @@ class LibraryScannerService {
           .toList();
 
       if (idsToDelete.isNotEmpty) {
-        await _songRepository.deleteSongsByIds(idsToDelete);
+        await _songRepository.deleteScannedSongsByIds(idsToDelete);
       } else {
-        await _songRepository.deleteSongsByPath(deletedPaths);
+        await _songRepository.deleteScannedSongsByPath(deletedPaths);
       }
 
       devLog('Deleted ${deletedPaths.length} missing songs from $displayName');
@@ -3014,7 +3014,7 @@ class LibraryScannerService {
 
     final ids = filtered.map((song) => song.id).toList();
     if (ids.isNotEmpty) {
-      await _songRepository.deleteSongsByIds(ids);
+      await _songRepository.deleteScannedSongsByIds(ids);
     }
 
     return filtered;

@@ -141,10 +141,10 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('Online-only search hides library-status headings and switching back restores context', (tester) async {
+  testWidgets('Search scopes retain online results without redundant library headings', (tester) async {
     await _pump(tester, sources: [_source('yt', 'YouTube Music', ['Online song'])]);
     final container = ProviderScope.containerOf(tester.element(find.byType(OnlineSearchSection)));
-    expect(find.text('Not in your library'), findsOneWidget);
+    expect(find.text('Not in your library'), findsNothing);
     container.read(searchScopeProvider.notifier).select(SearchScope.online);
     await tester.pumpAndSettle();
     expect(find.text('Not in your library'), findsNothing);
@@ -152,7 +152,8 @@ void main() {
     expect(find.text('Online song'), findsOneWidget);
     container.read(searchScopeProvider.notifier).select(SearchScope.library);
     await tester.pumpAndSettle();
-    expect(find.text('Not in your library'), findsOneWidget);
+    expect(find.text('Not in your library'), findsNothing);
+    expect(find.text('Online song'), findsOneWidget);
   });
 
   setUp(OnlineSearchSection.resetSourceSelection);
@@ -314,7 +315,7 @@ void main() {
     await tester.tap(find.text('Tidal'));
     await tester.pumpAndSettle();
     expect(find.text('From Tidal'), findsOneWidget);
-    expect(find.text('From an add-on you installed'), findsOneWidget);
+    expect(find.text('From an add-on you installed'), findsNothing);
 
     await tester.tap(find.text('From Tidal'));
     await tester.pumpAndSettle();

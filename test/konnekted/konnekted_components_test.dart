@@ -282,6 +282,116 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Home mode selector has balanced lanes and rounded selection', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(393, 852)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var selected = KonnektedHomeTab.local;
+    await tester.pumpWidget(
+      _app(
+        StatefulBuilder(
+          builder: (context, update) => KonnektedHomeTopBar(
+            onSettings: () {},
+            onAppearance: () {},
+            selectedTab: selected,
+            onTabChanged: (tab) => update(() => selected = tab),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Finder indicator(KonnektedHomeTab tab) =>
+        find.byKey(ValueKey('home-mode-indicator-${tab.name}'));
+
+    final local = tester.getRect(indicator(KonnektedHomeTab.local));
+    final discovery = tester.getRect(indicator(KonnektedHomeTab.discovery));
+    final flow = tester.getRect(indicator(KonnektedHomeTab.flow));
+    // The longest label gets the most space; the selected background never
+    // runs into the neighboring label or background.
+    expect(discovery.width, greaterThan(local.width + 12));
+    expect(discovery.width, greaterThan(flow.width + 12));
+    // Widget bounds include the inner pill margins; the visible lenses have
+    // an additional inset on both sides of these 4dp lane gaps.
+    expect(discovery.left - local.right, greaterThanOrEqualTo(3.5));
+    expect(flow.left - discovery.right, greaterThanOrEqualTo(3.5));
+    for (final tab in KonnektedHomeTab.values) {
+      expect(
+        tester.getSize(find.bySemanticsLabel(tab.label)).height,
+        greaterThanOrEqualTo(44),
+      );
+      expect(
+        tester.getRect(indicator(tab)).center.dy,
+        closeTo(local.center.dy, .1),
+      );
+    }
+
+    Future<void> checkSelection(KonnektedHomeTab tab) async {
+      final chip = tester.widget<AnimatedContainer>(indicator(tab));
+      final decoration = chip.decoration! as BoxDecoration;
+      expect(decoration.borderRadius, BorderRadius.circular(999));
+      expect(decoration.color!.a, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    }
+
+    await checkSelection(KonnektedHomeTab.local);
+    await tester.tap(find.bySemanticsLabel('Discovery'));
+    await tester.pumpAndSettle();
+    expect(selected, KonnektedHomeTab.discovery);
+    await checkSelection(KonnektedHomeTab.discovery);
+    await tester.tap(find.bySemanticsLabel('Flow'));
+    await tester.pumpAndSettle();
+    expect(selected, KonnektedHomeTab.flow);
+    await checkSelection(KonnektedHomeTab.flow);
+  });
+
+  testWidgets(
+    'Very narrow header scrolls to the selected mode without moving actions',
+    (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 568)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _app(
+          KonnektedHomeTopBar(
+            onSettings: () {},
+            onAppearance: () {},
+            selectedTab: KonnektedHomeTab.flow,
+          ),
+          scale: 2,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final selectorScroll = find.descendant(
+        of: find.byType(KonnektedHomeTopBar),
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(selectorScroll, findsOneWidget);
+      final viewport = tester.getRect(selectorScroll);
+      final selectedIndicator = tester.getRect(
+        find.byKey(const ValueKey('home-mode-indicator-flow')),
+      );
+      expect(selectedIndicator.left, greaterThanOrEqualTo(viewport.left));
+      expect(selectedIndicator.right, lessThanOrEqualTo(viewport.right));
+      expect(
+        tester.getSize(find.bySemanticsLabel('Flow')).height,
+        greaterThanOrEqualTo(44),
+      );
+      expect(
+        viewport.right,
+        lessThanOrEqualTo(
+          tester.getRect(find.bySemanticsLabel('Discord')).left,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Your Mixes play with their own queues', (tester) async {
     final mixes = [
       for (final name in ['Daily Mix', 'New Arrivals', 'Most Played'])
@@ -446,6 +556,52 @@ void main() {
     },
   );
 
+  testWidgets('Home keeps repeat and liked shelves without extra end space', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          konnektedLibraryProvider.overrideWithValue(const AsyncData([])),
+          konnektedFavoritesProvider.overrideWithValue(const AsyncData([])),
+          konnektedRecentSongsProvider.overrideWith((ref) => Stream.value([])),
+          konnektedGreetingProvider.overrideWith(
+            (ref) => Stream.value(
+              const LokalHomeMessages('A quiet day', 'Your music'),
+            ),
+          ),
+        ],
+        child: _app(KonnektedHome(onNavigate: (_) {}, onPlay: (_, _) {})),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('On repeat, lately'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('On repeat, lately'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Close to your heart'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Close to your heart'), findsOneWidget);
+
+    final clearance = find.byKey(const Key('home-bottom-clearance'));
+    await tester.scrollUntilVisible(
+      clearance,
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final bottomInsets = MediaQuery.paddingOf(tester.element(clearance)).bottom;
+    expect(tester.widget<SizedBox>(clearance).height, 12 + bottomInsets);
+    expect(find.text('Fresh in your library'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('no mixes, no sections', (tester) async {
     await tester.pumpWidget(
       _app(
@@ -595,8 +751,11 @@ void main() {
     expect(find.text('Linked playlists'), findsOneWidget);
     await tester.tap(find.text('Songs'));
     await tester.tap(find.text('Downloads'));
-    expect(opened, [KonnektedDestination.settings,
-      KonnektedDestination.songs, KonnektedDestination.downloads]);
+    expect(opened, [
+      KonnektedDestination.settings,
+      KonnektedDestination.songs,
+      KonnektedDestination.downloads,
+    ]);
   });
 
   testWidgets('shelf reports errors and retry without pretending to be empty', (

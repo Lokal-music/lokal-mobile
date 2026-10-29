@@ -1,3 +1,6 @@
+import 'package:flick/core/utils/app_log.dart';
+import 'package:flick/core/utils/online_source_log_label.dart';
+
 import 'dart:convert';
 
 import 'package:flick/features/discovery/discovery_models.dart';
@@ -38,7 +41,7 @@ DiscoveryTrack _track({String label = 'HTTP source'}) => DiscoveryTrack(
 );
 
 MockClient _client(List<String> requests) => MockClient((request) async {
-  requests.add(request.method + ' ' + request.url.path);
+  requests.add('${request.method} ${request.url.path}');
   expect(
     request.url.host,
     'addon.example',
@@ -125,6 +128,7 @@ void main() {
   test(
     'automatic Discovery searches HTTP when it is the only enabled source',
     () async {
+      final logStart = AppLog.instance.entries.length;
       final requests = <String>[];
       final client = _client(requests);
       addTearDown(client.close);
@@ -133,6 +137,21 @@ void main() {
         client: client,
         store: _MemorySettings(),
       );
+      final acquisitionLogs = AppLog.instance.entries
+          .skip(logStart)
+          .where(
+            (entry) =>
+                entry.message.startsWith('[OnlineSource] discovery acquired '),
+          )
+          .map((entry) => entry.message)
+          .toList();
+      expect(acquisitionLogs, hasLength(1));
+      expect(
+        acquisitionLogs.single,
+        contains('source=${onlineSourceLogLabel('w-${_only.id}')}'),
+      );
+      expect(acquisitionLogs.single, isNot(contains(_only.id)));
+      expect(acquisitionLogs.single, isNot(contains('sig=secret')));
       expect(played, isNotNull);
       expect(played!.sourcePackage, 'konnekted.progressive');
       expect(played.sourceDisplayName, 'HTTP source');

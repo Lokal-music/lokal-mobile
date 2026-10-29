@@ -27,13 +27,15 @@ List<ManualSection> manualSections({required bool forIos}) => !forIos
     ? kManualSections
     : [
         for (final section in kManualSections)
+          if (section.id != 'home_widget')
           ManualSection(
             id: section.id,
             title: section.title,
             icon: section.icon,
             entries: [
               for (final entry in section.entries)
-                if (entry.title != 'Bit-perfect capsule')
+                if (entry.title != 'Bit-perfect capsule' &&
+                    !(section.id == 'settings' && entry.title == 'Widgets'))
                   if (section.id == 'settings' && entry.title == 'Audio')
                     const ManualEntry(
                       title: 'Audio',

@@ -24,11 +24,13 @@ enum LokalTransferProtocol {
     let id: String
     let revision: Int
     let reconcileOnly: Bool
+    let clientID: String
   }
   struct ImportLease: Decodable, Sendable {
     let id: String
     let revision: Int
     let leaseID: String
+    let clientID: String
   }
 
   private static func object<T: Decodable>(_ type: T.Type, _ data: Data,
@@ -55,17 +57,19 @@ enum LokalTransferProtocol {
   }
 
   static func importClaim(_ data: Data) throws -> ImportClaim {
-    let value = try object(ImportClaim.self, data, keys: ["id", "revision", "reconcileOnly"])
-    guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil else {
+    let value = try object(ImportClaim.self, data, keys: ["id", "revision", "reconcileOnly", "clientID"])
+    guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
       throw LokalTransferError.invalidRecord
     }
     return value
   }
 
   static func importLease(_ data: Data) throws -> ImportLease {
-    let value = try object(ImportLease.self, data, keys: ["id", "revision", "leaseID"])
+    let value = try object(ImportLease.self, data, keys: ["id", "revision", "leaseID", "clientID"])
     guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil,
-          UUID(uuidString: value.leaseID)?.uuidString.lowercased() == value.leaseID else {
+          UUID(uuidString: value.leaseID)?.uuidString.lowercased() == value.leaseID,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
       throw LokalTransferError.invalidRecord
     }
     return value

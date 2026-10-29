@@ -100,6 +100,7 @@ def main() -> None:
                         str(ROOT / 'ios/Transfers/Tests/NetworkContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/LibraryContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/ImportOwnershipContracts.swift'),
+                        str(ROOT / 'ios/Transfers/Tests/ImportCustodyContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/main.swift'),
                         '-o', str(binary)], check=True, timeout=180)
         for round_index in range(args.repeat_native):

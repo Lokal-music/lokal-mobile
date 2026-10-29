@@ -8,6 +8,12 @@ import 'package:flutter/foundation.dart';
 
 import 'morneye_host.dart';
 
+/// Only Qobuz downloads are eligible for verified growing-file playback.
+/// Other providers wait for the completed audio produced by the same downloader.
+bool morneyeCanPlayWhileDownloading(String providerName) =>
+    providerName.trim().toLowerCase().replaceFirst(RegExp(r'-web$'), '') ==
+    'qobuz';
+
 /// Read a genuine, still-growing FLAC file through just_audio's ranged local
 /// audio proxy. Never expose a guest URL, credentials, or its staging path as
 /// a persisted Song. This mirrors desktop's Morneye liveResponse() path.
@@ -41,15 +47,21 @@ class MorneyeLiveSession {
   int? _sampleRate, _bitDepth;
   String? _mediaType;
   String? get mediaType => _mediaType;
-  String? get fileType => _mediaType == 'audio/flac' ? 'FLAC' :
-      _mediaType == 'audio/mp4' ? 'ONLINE' : null;
+  String? get fileType => _mediaType == 'audio/flac'
+      ? 'FLAC'
+      : _mediaType == 'audio/mp4'
+      ? 'ONLINE'
+      : null;
   int? get sampleRate => _sampleRate;
   int? get bitDepth => _bitDepth;
 
   @visibleForTesting
   static ({int bitDepth, int sampleRate})? readFlacStreamInfo(List<int> bytes) {
-    if (bytes.length < 22 || bytes[0] != 0x66 || bytes[1] != 0x4c ||
-        bytes[2] != 0x61 || bytes[3] != 0x43 ||
+    if (bytes.length < 22 ||
+        bytes[0] != 0x66 ||
+        bytes[1] != 0x4c ||
+        bytes[2] != 0x61 ||
+        bytes[3] != 0x43 ||
         (bytes[4] & 0x7f) != 0 ||
         ((bytes[5] << 16) | (bytes[6] << 8) | bytes[7]) != 34) {
       return null;
@@ -74,8 +86,10 @@ class MorneyeLiveSession {
     // Decode complete ISO-BMFF box boundaries instead of searching arbitrary
     // text for "mp4a": a codec string inside metadata is not a playable track.
     int word(List<int> data, int offset) =>
-        (data[offset] << 24) | (data[offset + 1] << 16) |
-        (data[offset + 2] << 8) | data[offset + 3];
+        (data[offset] << 24) |
+        (data[offset + 1] << 16) |
+        (data[offset + 2] << 8) |
+        data[offset + 3];
     String tag(List<int> data, int offset) =>
         String.fromCharCodes(data.sublist(offset, offset + 4));
     List<int>? child(List<int> data, String name) {
@@ -109,8 +123,8 @@ class MorneyeLiveSession {
     final mdia = child(trak, 'mdia');
     if (mdia == null) return null;
     final handler = child(mdia, 'hdlr');
-    if (handler == null || handler.length < 12 ||
-        tag(handler, 8) != 'soun') return null;
+    if (handler == null || handler.length < 12 || tag(handler, 8) != 'soun')
+      return null;
     final minf = child(mdia, 'minf');
     final stbl = minf == null ? null : child(minf, 'stbl');
     final stsd = stbl == null ? null : child(stbl, 'stsd');
@@ -123,7 +137,8 @@ class MorneyeLiveSession {
     const drmMarkers = ['sinf', 'schm', 'enca', 'encv', 'pssh', 'drms'];
     for (final marker in drmMarkers) {
       if (moov.length >= marker.length &&
-          String.fromCharCodes(moov).contains(marker)) return null;
+          String.fromCharCodes(moov).contains(marker))
+        return null;
     }
     return 'audio/mp4';
   }
@@ -134,14 +149,15 @@ class MorneyeLiveSession {
     if (info.total <= 0 ||
         info.total > 4 * 1024 * 1024 * 1024 ||
         !(info.file.toLowerCase().endsWith('.flac') ||
-          info.file.toLowerCase().endsWith('.m4a') ||
-          info.file.toLowerCase().endsWith('.mp4')) ||
+            info.file.toLowerCase().endsWith('.m4a') ||
+            info.file.toLowerCase().endsWith('.mp4')) ||
         info.written < 0 ||
         info.written > info.total) {
       return;
     }
     if (_part != null &&
-        (_part != info.part || _downloaded != info.file ||
+        (_part != info.part ||
+            _downloaded != info.file ||
             (info.written < _written && !info.done))) {
       // A retry replaced the bytes backing a live decoder. Never splice
       // recordings or resume the old byte stream from a different file.
@@ -246,13 +262,13 @@ class MorneyeLiveSession {
         if (_error != null) throw StateError('Morneye stream failed');
         // A stable on-disk descriptor is held across the .part -> .flac
         // rename. Seeking beyond downloaded bytes waits for the host writer.
-        final available = (_cached != null || _transferred)
-            ? _total
-            : _written;
+        final available = (_cached != null || _transferred) ? _total : _written;
         if (offset < available) {
           await handle.setPosition(offset);
           final count = await handle.readInto(
-            buffer, 0, min(buffer.length, min(end, available) - offset),
+            buffer,
+            0,
+            min(buffer.length, min(end, available) - offset),
           );
           if (count > 0) {
             offset += count;
@@ -287,8 +303,10 @@ class MorneyeLiveRegistry {
 
   String register(MorneyeLiveSession stream) {
     prune();
-    final token = List.generate(16,
-        (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    final token = List.generate(
+      16,
+      (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
     final handle = 'lokal-morneye-live://audio/$token';
     _streams[handle] = (session: stream, created: DateTime.now());
     return handle;
@@ -308,8 +326,7 @@ class MorneyeLiveRegistry {
 
   void prune() {
     final now = DateTime.now();
-    _streams.removeWhere((_, entry) =>
-        now.difference(entry.created) > _ttl);
+    _streams.removeWhere((_, entry) => now.difference(entry.created) > _ttl);
   }
 
   void clear() => _streams.clear();
