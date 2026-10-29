@@ -11,6 +11,7 @@ import 'package:flick/features/settings/screens/casting_settings_screen.dart';
 import 'package:flick/features/settings/screens/equalizer_screen.dart';
 import 'package:flick/features/settings/screens/uac2_settings_screen.dart';
 import 'package:flick/providers/app_preferences_provider.dart';
+import 'package:flick/providers/uac2_provider.dart';
 import 'package:flick/providers/player_provider.dart';
 import 'package:flick/services/replaygain_service.dart';
 import 'package:flick/services/uac2_preferences_service.dart';
@@ -287,7 +288,35 @@ List<LokalSettingsSection> outputSettings(BuildContext context, WidgetRef ref) {
   final notifier = ref.read(appPreferencesProvider.notifier);
   final player = ref.watch(playerServiceProvider);
   final locked = player.bitPerfectProcessingLockedNotifier.value;
+  final precision = ref.watch(outputPrecisionProvider).asData?.value ??
+      OutputPrecisionPreference.auto;
+  final engine = ref.watch(audioEnginePreferenceProvider).asData?.value;
   return [
+    LokalSettingsSection(
+      title: lokalText('Output precision'),
+      children: [
+        LokalSettingChoice<OutputPrecisionPreference>(
+          label: lokalText('Output precision'),
+          description: lokalText(
+            engine == AudioEnginePreference.rustOboe
+                ? 'PCM format used by Rust/Oboe. Auto follows device negotiation. '
+                  'Changes apply on the next track. Bit-perfect/DSD paths keep their native format.'
+                : 'Sets the PCM format when Rust/Oboe is selected. '
+                  'Android system playback, direct USB, DSD and Atmos use separate output negotiation.',
+          ),
+          options: [
+            LokalSegment(OutputPrecisionPreference.auto, lokalText('Auto')),
+            LokalSegment(OutputPrecisionPreference.pcm16, lokalText('16-bit PCM')),
+            LokalSegment(OutputPrecisionPreference.float32, lokalText('32-bit float')),
+          ],
+          value: precision,
+          onChanged: (value) async {
+            await ref.read(uac2PreferencesServiceProvider).setOutputPrecision(value);
+            ref.invalidate(outputPrecisionProvider);
+          },
+        ),
+      ],
+    ),
     LokalSettingsSection(
       title: lokalText('USB DAC'),
       children: [
