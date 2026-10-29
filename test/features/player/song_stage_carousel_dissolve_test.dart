@@ -14,22 +14,38 @@ const tracks = [
 ];
 
 void main() {
-  test('cloud reveal geometry is seeded, bounded, and completes seamlessly', () {
+  test('cloud mask mirrors desktop stagger and soft radial alpha gradients', () {
     final a = createCloudCoverBlobs(42);
     final b = createCloudCoverBlobs(42);
     expect(a, hasLength(14));
     expect(a.map((v) => v.x), b.map((v) => v.x));
-    final bounds = const Size(360, 720);
-    expect(CloudCoverClipper(0, a).revealPath(bounds)
-        .contains(const Offset(180, 360)), isFalse);
-    expect(CloudCoverClipper(.5, a).revealPath(bounds).getBounds().isEmpty,
-        isFalse);
-    final nearEnd = CloudCoverClipper(.995, a).revealPath(bounds);
-    expect(nearEnd.contains(const Offset(1, 1)), isTrue);
-    expect(nearEnd.contains(const Offset(359, 719)), isTrue);
-    final end = CloudCoverClipper(1, a).revealPath(bounds);
-    expect(end.contains(const Offset(359, 719)), isTrue);
-    expect(end.getBounds(), Offset.zero & bounds);
+    expect(a.map((v) => v.delay), b.map((v) => v.delay));
+    expect(a.every((v) => v.size >= .30 && v.size <= .64), isTrue);
+    expect(cloudCoverBlur(0), closeTo(16, .001));
+    expect(cloudCoverBlur(.88), closeTo(0, .001));
+
+    final one = [const CloudCoverBlob(.5, .5, 0, .4)];
+    // The first appearance is transparent. The blob core is fully opaque,
+    // with a gradual, non-binary falloff at its edge.
+    expect(cloudCoverAlphaAt(one, 0, .5, .5), 0);
+    expect(cloudCoverAlphaAt(one, .5, .5, .5), 1);
+    final p = .5;
+    final radius = .4 * (
+      .65 * (1 - (1 - p) * (1 - p) * (1 - p)) +
+      .35 * (4 * p * p * p)
+    );
+    expect(cloudCoverAlphaAt(one, p, .5 + radius * .575, .5),
+        closeTo(.8, .001)); // Between desktop 45% and 70% stops
+    expect(cloudCoverAlphaAt(one, p, .5 + radius * .85, .5),
+        closeTo(.3, .001)); // Feathered outer 30% (not a clipped oval)
+    expect(cloudCoverAlphaAt(one, p, 0, 0), 0);
+
+    // The last 18% uses uniform translucency over *every pixel*, not a
+    // rapidly expanding central ellipse that leaves cut-off corners.
+    expect(cloudCoverAlphaAt(one, .82, 0, 0), 0);
+    expect(cloudCoverAlphaAt(one, .91, 0, 0), closeTo(.5, .001));
+    expect(cloudCoverAlphaAt(one, 1, 0, 0), 1);
+    expect(cloudCoverAlphaAt(a, 1, 1, 1), 1);
   });
 
   Future<GlobalKey<SongStageCarouselState>> mount(
