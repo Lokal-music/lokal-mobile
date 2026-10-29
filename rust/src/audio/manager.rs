@@ -309,8 +309,9 @@ impl EngineManager {
                 // the engine is alive. Recreate the Oboe stream on the next
                 // track even when the sample-rate signature is unchanged.
                 #[cfg(target_os = "android")]
-                let precision_matches = handle.output_precision_pref()
-                    == crate::audio::device::output_precision_preference();
+                let precision_matches = handle.output_runtime().direct_usb_active
+                    || handle.output_precision_pref()
+                        == crate::audio::device::output_precision_preference();
                 #[cfg(not(target_os = "android"))]
                 let precision_matches = true;
                 if handle.output_signature() == desired_signature && precision_matches {
