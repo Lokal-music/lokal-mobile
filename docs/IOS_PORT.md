@@ -18,6 +18,31 @@ catalogues and 0.01× speed controls are included in the latest continuation.
 [The source audit](IOS_POST172_REVIEW.md) records the exact merged commits
 and platform adaptations.
 
+Build84 now packages that through-#332 source in an unsigned iPhone IPA. Its
+34 iOS arm64 binaries, 26 matching native dSYM bundles, Dart AOT symbols,
+notices and all 2,340 exported source files have been independently checked
+against tree `33f5d1beb5105863c49d5da80a49f381ab595a6f`. Native run9 passes
+20 complete Apple rounds, both actual iOS16 SDK/Flutter bridge checks and the
+actual Isar contracts. Build84's complete installed simulator acceptance is
+still pending; build82 remains the earlier fully qualified runtime checkpoint.
+The build84 IPA SHA-256 is
+`14300a4c5fb2ad6dc88f83b6d9d738c678daf4b909a504c59b557a8856914679`.
+It needs local signing before sideloading from Windows.
+
+Later source implements tracked native publication: private incomplete parts,
+durable native directory/file provenance before the exclusive Music link, and
+current writer ownership through the native runtime and typed Flutter channel.
+It passes three portable native rounds and 18 focused Dart channel contracts.
+It is not in build84 and has no Apple SDK/app qualification yet. Product native
+import/upload stays disabled. Later media-reader source passes actual host
+PCM24/FLAC24/AAC/MP3 and multi-track FFprobe contracts; its bundled-iOS probe
+has not run yet. The next release work is bundled-media acceptance, the root
+Isar coordinator, coordinated cleanup/deletion/CUE behavior, uploads
+and persisted progress, followed by OS suspension/relaunch acceptance. See
+[the publication sequence](IOS_TRANSFERS.md#tracked-publication-foundation)
+for the implemented boundary and remaining gates. Home Screen widgets remain
+excluded.
+
 **This source is not a finalized release.** Build 82 is the current independently
 verified engineering package through #311, including native private import
 ownership and metadata-cache acceptance. Both complete iOS 18.6 and 26 suites

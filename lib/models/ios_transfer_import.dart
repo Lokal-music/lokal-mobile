@@ -90,6 +90,49 @@ class IosTransferImportLease {
   };
 }
 
+/// A verified physical copy at the native importing boundary. This document is
+/// not acknowledgement that a Song or a completed Isar receipt exists.
+class IosTransferPublishedImport {
+  const IosTransferPublishedImport._(this.job, this.songId, this.receipt);
+  final IosTransferJob job;
+  final int songId;
+  final IosTransferLibraryReceipt receipt;
+
+  factory IosTransferPublishedImport.fromJson(Object? value) {
+    if (value is! Map ||
+        value.keys.any((key) => !{'job', 'songID', 'receipt'}.contains(key)) ||
+        value['songID'] is! int ||
+        (value['songID'] as int) < 1) {
+      _invalidImport();
+    }
+    final job = IosTransferJob.fromJson(value['job']);
+    final songId = value['songID'] as int;
+    final receipt = IosTransferLibraryReceipt.fromJson(value['receipt']);
+    if (job.direction != 'download' ||
+        job.phase != IosTransferPhase.importing ||
+        (job.intent.identity.localSongId != null &&
+            job.intent.identity.localSongId != songId.toString())) {
+      _invalidImport();
+    }
+    receipt.validateFor(job);
+    return IosTransferPublishedImport._(job, songId, receipt);
+  }
+
+  void validateFor(IosTransferImportLease lease, {required int songId}) {
+    if (lease.reconcileOnly ||
+        this.songId != songId ||
+        job.id != lease.job.id ||
+        job.revision != lease.job.revision ||
+        job.receivedBytes != lease.job.receivedBytes ||
+        job.receivedSha256 != lease.job.receivedSha256 ||
+        receipt.relativePath != lease.target.relativePath ||
+        jsonEncode(job.intent.toJson()) !=
+            jsonEncode(lease.job.intent.toJson())) {
+      _invalidImport();
+    }
+  }
+}
+
 /// A native-derived target is relative to the current app's Music directory.
 /// Preparing this target does not claim that a file has been published.
 class IosTransferLibraryTarget {

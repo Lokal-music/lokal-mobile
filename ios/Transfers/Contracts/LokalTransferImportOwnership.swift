@@ -165,6 +165,18 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     }
   }
 
+  /// Capture the existing writer's cancellation token without opening storage
+  /// or entering the file queue. Returning it cannot upgrade a read-only lease.
+  func writerCancellation(_ owner: Owner, jobID: String, revision: Int,
+                          leaseID: String) throws -> LokalTransferCopyCancellation {
+    try locked {
+      let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
+      guard lease.permission == .write else { throw LokalTransferError.invalidTransition }
+      try lease.cancellation.check()
+      return lease.cancellation
+    }
+  }
+
   /// Runtime must drain owned file work before acknowledging cleanup/releasing
   /// a database reservation. A stale client cannot release a replacement lease.
   func release(_ owner: Owner, jobID: String, revision: Int, leaseID: String) throws {

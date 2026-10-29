@@ -7,6 +7,7 @@ import 'ios_discovery_cache_probe.dart';
 import 'ios_cloud_cover_probe.dart';
 import 'ios_import_schema_probe.dart';
 import 'ios_import_scan_probe.dart';
+import 'ios_import_media_probe.dart';
 
 import 'package:flick/app/app.dart';
 import 'package:flick/features/konnekted/konnekted_shell.dart';
@@ -361,6 +362,8 @@ void main() {
     await probeIosCloudCoverPixels(tester, binding);
     binding.reportData!['native_import_private_schema'] = await probeIosImportSchema();
     binding.reportData!['native_import_scanner_writer'] = await probeIosImportScanGuard();
+    binding.reportData!['native_import_media_reader'] =
+        await probeIosImportMedia(audio);
 
     final player = PlayerService();
     // Exercise the complete recovery path before enabling production

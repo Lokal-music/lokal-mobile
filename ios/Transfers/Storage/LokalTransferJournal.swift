@@ -9,10 +9,13 @@ import Glibc
 /// Immutable work identity retained independently from a cancellable job's
 /// current revision. This is not proof that a file or library row exists.
 struct LokalTransferImportCustody: Codable, Equatable, Sendable {
-  static let maximumJSONBytes = LokalTransferJob.maximumJSONBytes + 512
+  static let maximumJSONBytes = LokalTransferJob.maximumJSONBytes + 2048
   let schemaVersion: Int
   let job: LokalTransferJob
   let songID: Int64
+  var location: LokalTransferLibraryLocation?
+  var copyNonce: String?
+  var publication: LokalTransferLibraryPublication?
 
   init(job: LokalTransferJob, songID: Int64) throws {
     schemaVersion = 1; self.job = job; self.songID = songID
@@ -26,6 +29,17 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
           job.receivedBytes != nil, job.receivedSHA256 != nil else {
       throw LokalTransferError.invalidRecord
     }
+    guard (location == nil) == (copyNonce == nil), publication == nil || location != nil else {
+      throw LokalTransferError.invalidRecord
+    }
+    try location?.validate()
+    if let copyNonce {
+      guard UUID(uuidString: copyNonce)?.uuidString.lowercased() == copyNonce else { throw LokalTransferError.invalidRecord }
+    }
+    if let publication {
+      try publication.validate()
+      guard publication.nonce == copyNonce else { throw LokalTransferError.invalidRecord }
+    }
     if let requested = job.identity.localSongID {
       guard requested == String(songID) else { throw LokalTransferError.invalidRecord }
     }
@@ -34,8 +48,17 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
   static func decode(_ data: Data) throws -> Self {
     guard !data.isEmpty, data.count <= maximumJSONBytes,
           let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-          Set(row.keys) == ["schemaVersion", "job", "songID"],
+          Set(row.keys).isSubset(of: ["schemaVersion", "job", "songID", "location", "copyNonce", "publication"]),
+          Set(["schemaVersion", "job", "songID"]).isSubset(of: Set(row.keys)),
           let job = row["job"] as? [String: Any] else { throw LokalTransferError.invalidRecord }
+    for (key, allowed) in [("location", LokalTransferLibraryLocation.keys),
+                           ("publication", LokalTransferLibraryPublication.keys)] {
+      if let nested = row[key], !(nested is NSNull) {
+        guard let fields = nested as? [String: Any], Set(fields.keys).isSubset(of: allowed) else {
+          throw LokalTransferError.invalidRecord
+        }
+      }
+    }
     _ = try LokalTransferJob.decodeDocument(JSONSerialization.data(withJSONObject: job))
     let value = try JSONDecoder().decode(Self.self, from: data)
     try value.validate()
@@ -495,6 +518,59 @@ final class LokalTransferJournal: @unchecked Sendable {
       try bind(data, at: 3, to: insert)
       guard sqlite3_step(insert) == SQLITE_DONE else { throw LokalTransferError.database(sqlite3_errcode(database)) }
       return value
+    }
+  }
+
+  /// Caller holds the library writer lock and has validated native write
+  /// authority. Neither these methods nor the proof document accept Dart paths.
+  func bindImportLocation(_ expected: LokalTransferImportCustody,
+                          location: LokalTransferLibraryLocation) throws -> LokalTransferImportCustody {
+    try mutateImportCustody(expected) { value in
+      if let previous = value.location {
+        guard previous == location else { throw LokalTransferError.unsafeFile }
+      } else {
+        value.location = location
+        value.copyNonce = UUID().uuidString.lowercased()
+      }
+    }
+  }
+
+  func recordImportPublication(_ expected: LokalTransferImportCustody,
+                               proof: LokalTransferLibraryPublication) throws -> LokalTransferImportCustody {
+    try mutateImportCustody(expected) { value in
+      guard value.location != nil, proof.nonce == value.copyNonce else { throw LokalTransferError.invalidRecord }
+      value.publication = proof
+    }
+  }
+
+  private func mutateImportCustody(_ expected: LokalTransferImportCustody,
+                                  _ operation: (inout LokalTransferImportCustody) throws -> Void) throws -> LokalTransferImportCustody {
+    try expected.validate()
+    return try transaction { current in
+      guard let (previous, oldSize) = try selectCustody(id: expected.job.id, revision: expected.job.revision),
+            previous == expected else { throw LokalTransferError.staleRevision }
+      let query = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
+      defer { sqlite3_finalize(query) }
+      try bind(expected.job.id, at: 1, to: query)
+      guard sqlite3_step(query) == SQLITE_ROW else { throw LokalTransferError.missingJob }
+      let (job, _) = try decoded(query)
+      guard previous.matches(job), job.phase == .validating else { throw LokalTransferError.staleRevision }
+      var next = previous
+      try operation(&next)
+      try next.validate()
+      let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+      let data = try encoder.encode(next)
+      guard data.count <= LokalTransferImportCustody.maximumJSONBytes else { throw LokalTransferError.limitExceeded }
+      let change = try statement("UPDATE import_custody SET document=? WHERE id=? AND revision=?")
+      defer { sqlite3_finalize(change) }
+      try bind(data, at: 1, to: change)
+      try bind(expected.job.id, at: 2, to: change)
+      try check(sqlite3_bind_int64(change, 3, Int64(expected.job.revision)))
+      guard sqlite3_step(change) == SQLITE_DONE, sqlite3_changes(database) == 1 else {
+        throw LokalTransferError.database(sqlite3_errcode(database))
+      }
+      current.custodyBytes += Int64(data.count - oldSize)
+      return next
     }
   }
 

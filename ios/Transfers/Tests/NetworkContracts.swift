@@ -118,6 +118,7 @@ private func runHostContracts() throws {
 func runNetworkContracts(origin: String, length: Int64, checksum: String) throws {
   try runHostContracts()
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
+  try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
   let manager = FileManager.default
   let root = manager.temporaryDirectory.resolvingSymlinksInPath()
     .appendingPathComponent("lokal-native-network-" + UUID().uuidString)
@@ -396,4 +397,158 @@ private func runRuntimeImportContracts(origin: String, length: Int64, checksum: 
   }
   try rejects("cancelled durable jobs cannot be reclaimed using their old revision") { _ = try claim(write, replacement) }
   print("Native runtime import contracts passed: real HTTP staging, durable validation phase, coalesced claims, independent guard during blocked native I/O, drained release, engine replacement, pairing refusal, read-only recovery and durable cancellation. Product Isar import remains disabled.")
+}
+
+private final class PublicationGate: @unchecked Sendable {
+  private let lock = NSLock()
+  private var boundary: String?
+  let entered = DispatchSemaphore(value: 0)
+  let resume = DispatchSemaphore(value: 0)
+  init(_ boundary: String?) { self.boundary = boundary }
+  func visit(_ value: String) {
+    lock.lock()
+    let block = boundary == value
+    if block { boundary = nil }
+    lock.unlock()
+    if block {
+      entered.signal()
+      // A failing contract must release/terminate rather than hang the suite.
+      _ = resume.wait(timeout: .now() + 10)
+    }
+  }
+}
+
+/// The actual native runtime, HTTP-retained WAV, ownership registry, serial file
+/// worker and journal. This still does not acknowledge media or an Isar Song.
+private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  for boundary in ["none", "trackedCopyCheckpoint", "afterTrackedPublication"] {
+    let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+      .appendingPathComponent("lokal-tracked-runtime-" + UUID().uuidString)
+    let music = root.appendingPathComponent("Music")
+    try manager.createDirectory(at: music, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: root) }
+    let gate = PublicationGate(boundary == "none" ? nil : boundary)
+    defer { gate.resume.signal() }
+    let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+      token: "transfer-fixture-token")
+    let credentials = ImportAuthorizationFixture(authorization)
+    let ownership = LokalTransferImportOwnership()
+    let runtime = try LokalTransferRuntime(container: root, importOwnership: ownership,
+      library: { try LokalTransferLibrary(root: music, testingBoundary: { gate.visit($0) }) },
+      credentials: { try credentials.read() })
+    defer {
+      gate.resume.signal()
+      let done = DispatchSemaphore(value: 0)
+      runtime.shutdown { done.signal() }
+      _ = done.wait(timeout: .now() + 10)
+    }
+    let job = try LokalTransferJob(direction: .download,
+      identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: "import-fixture",
+        localSongID: nil, origin: origin),
+      metadata: LokalTransferMetadata(title: "Tracked import", artist: "Native fixture", album: nil,
+        fileExtension: "wav"), nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+    let _: LokalTransferSummary = try native { runtime.recover($0) }
+    let _: LokalTransferSummary = try native { runtime.enqueue([job], reply: $0) }
+    _ = try awaitJob(runtime, id: job.id, phase: [.downloaded])
+    let _: LokalTransferJob = try native { runtime.verify(id: job.id, revision: 1, reply: $0) }
+    let engine = ownership.attachEngine()
+    var owner = try ownership.attachClient(engineID: engine, clientID: UUID().uuidString.lowercased())
+    func claim(_ owner: LokalTransferImportOwnership.Owner, readOnly: Bool = false) throws -> LokalTransferImportClaim {
+      let request = LokalTransferProtocol.ImportClaim(id: job.id, revision: 1,
+        reconcileOnly: readOnly, clientID: owner.clientID)
+      let ticket = try ownership.capture(owner)
+      return try native { runtime.claimImport(request, ticket: ticket, reply: $0) }
+    }
+    func publication(_ lease: LokalTransferImportClaim, songID: Int64 = 42,
+                     clientID: String? = nil) -> LokalTransferProtocol.ImportPublication {
+      LokalTransferProtocol.ImportPublication(id: job.id, revision: 1, leaseID: lease.leaseID,
+        clientID: clientID ?? lease.clientID, songID: songID)
+    }
+    var lease = try claim(owner)
+    try rejects("foreign client cannot borrow a known publication lease") {
+      let _: LokalTransferPublishedImport = try native {
+        runtime.publishImport(publication(lease, clientID: UUID().uuidString.lowercased()), owner: owner, reply: $0)
+      }
+    }
+    credentials.set(nil)
+    try rejects("publication rechecks current pairing before touching the library") {
+      let _: LokalTransferPublishedImport = try native { runtime.publishImport(publication(lease), owner: owner, reply: $0) }
+    }
+    try require(!manager.fileExists(atPath: music.appendingPathComponent(LokalTransferLibrary.directoryName).path),
+      "unauthorized publication does not initialize Music custody")
+    credentials.set(authorization)
+    let result = NativeResult<LokalTransferPublishedImport>(), completed = DispatchSemaphore(value: 0)
+    runtime.publishImport(publication(lease), owner: owner) { result.set($0); completed.signal() }
+    let target = music.appendingPathComponent(lease.targetRelativePath)
+    if boundary != "none" {
+      try require(gate.entered.wait(timeout: .now() + 5) == .success,
+        "actual runtime file worker reaches the requested publication boundary")
+      // A direct writer check remains independent of a blocked copy worker.
+      try ownership.validate(owner, jobID: job.id, revision: 1, leaseID: lease.leaseID, requiresWrite: true)
+      if boundary == "trackedCopyCheckpoint" {
+        let release = NativeResult<Bool>(), released = DispatchSemaphore(value: 0)
+        let control = LokalTransferProtocol.ImportLease(id: job.id, revision: 1,
+          leaseID: lease.leaseID, clientID: owner.clientID)
+        runtime.releaseImport(control, owner: owner) { release.set($0); released.signal() }
+        try rejects("release revokes a real blocked copy immediately") {
+          try ownership.validate(owner, jobID: job.id, revision: 1, leaseID: lease.leaseID, requiresWrite: true)
+        }
+        try require(released.wait(timeout: .now()) == .timedOut,
+          "release cannot acknowledge before the real file worker drains")
+        gate.resume.signal()
+        try require(released.wait(timeout: .now() + 5) == .success && release.get(),
+          "release acknowledges after the actual cancelled copy drains")
+        try require(!manager.fileExists(atPath: target.path), "cancelled copying never publishes")
+      } else {
+        try require(manager.fileExists(atPath: target.path), "engine handoff occurs after an actual public link")
+        let nextEngine = ownership.attachEngine()
+        owner = try ownership.attachClient(engineID: nextEngine, clientID: UUID().uuidString.lowercased())
+        // Claiming a replacement does not wait behind the blocked file queue.
+        lease = try claim(owner)
+        gate.resume.signal()
+      }
+      try require(completed.wait(timeout: .now() + 5) == .success, "retired publication settles")
+      try rejects("revoked publication cannot return an importing acknowledgement") { _ = try result.get() }
+      if boundary == "trackedCopyCheckpoint" { lease = try claim(owner) }
+    } else {
+      try require(completed.wait(timeout: .now() + 5) == .success, "real tracked publication completes")
+      let published = try result.get()
+      try require(published.job.phase == .importing && published.songID == 42 &&
+        published.receipt.bytes == length && published.receipt.sha256 == checksum,
+        "native publication persists importing with actual byte proof, without declaring completion")
+    }
+    let completedCopy: LokalTransferPublishedImport = try native {
+      runtime.publishImport(publication(lease), owner: owner, reply: $0)
+    }
+    let inode = try manager.attributesOfItem(atPath: target.path)[.systemFileNumber] as! NSNumber
+    let files = try LokalTransferFiles(container: root)
+    try files.discard(completedCopy.job)
+    let repeated: LokalTransferPublishedImport = try native {
+      runtime.publishImport(publication(lease), owner: owner, reply: $0)
+    }
+    try require(repeated.receipt == completedCopy.receipt &&
+      (manager.attributesOfItem(atPath: target.path)[.systemFileNumber] as! NSNumber) == inode,
+      "lost publication acknowledgement needs no staging and keeps the same actual inode")
+    let journal = try LokalTransferJournal(container: root)
+    let snapshot = try journal.snapshot()
+    try require(snapshot.custodies.count == 1 && snapshot.custodies.first?.publication != nil &&
+      snapshot.jobs.first?.phase == .importing, "one actual frozen publication remains, never native complete")
+    try rejects("publication cannot change its prepared Song identity") {
+      let _: LokalTransferPublishedImport = try native {
+        runtime.publishImport(publication(lease, songID: 43), owner: owner, reply: $0)
+      }
+    }
+    let control = LokalTransferProtocol.ImportLease(id: job.id, revision: 1,
+      leaseID: lease.leaseID, clientID: owner.clientID)
+    let _: Bool = try native { runtime.releaseImport(control, owner: owner, reply: $0) }
+    let readOnly = try claim(owner, readOnly: true)
+    try rejects("receipt-only authority cannot publish even an already tracked file") {
+      let _: LokalTransferPublishedImport = try native {
+        runtime.publishImport(publication(readOnly), owner: owner, reply: $0)
+      }
+    }
+    try require(manager.fileExists(atPath: target.path), "release and receipt-only refusal preserve the actual copy")
+  }
+  print("Tracked runtime contracts passed: real HTTP WAV publication, importing persistence, lost staging/acknowledgement, exact Song binding, foreign/read-only/pairing refusal, blocked-copy cancellation/drainage and engine handoff after link. Product media/Isar completion remains disabled.")
 }

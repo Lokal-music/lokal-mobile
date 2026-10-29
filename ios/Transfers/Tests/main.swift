@@ -77,6 +77,20 @@ func rawDocument(_ url: URL, id: String, replacement: Data? = nil) throws -> Dat
 
 var contractStage = "startup"
 do {
+  if CommandLine.arguments.count == 6 && CommandLine.arguments[1] == "--tracked-copy" {
+    let container = URL(fileURLWithPath: CommandLine.arguments[2])
+    let store = try LokalTransferJournal(container: container)
+    guard let job = try store.snapshot().jobs.first(where: { $0.id == CommandLine.arguments[4] }) else {
+      throw LokalTransferError.missingJob
+    }
+    let boundary = CommandLine.arguments[5]
+    let library = try LokalTransferLibrary(root: URL(fileURLWithPath: CommandLine.arguments[3]),
+      testingBoundary: { if $0 == boundary { exit(98) } })
+    _ = try library.installTracked(job, songID: 42, journal: store,
+      files: LokalTransferFiles(container: container), cancellation: LokalTransferCopyCancellation(),
+      validateOwnership: {})
+    exit(0)
+  }
   if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--migration-open" {
     _ = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2])).snapshot()
     exit(0)
@@ -232,6 +246,16 @@ do {
     "bounded typed native import claim accepted")
   try require(LokalTransferProtocol.importLease(JSONSerialization.data(withJSONObject: leaseDocument)).revision == 1,
     "bounded typed native lease guard accepted")
+  var publicationDocument = leaseDocument
+  publicationDocument["songID"] = 42
+  try require(LokalTransferProtocol.importPublication(JSONSerialization.data(withJSONObject: publicationDocument)).songID == 42,
+    "publication accepts only the current lease and positive prepared Song identity")
+  for invalid: Any in [false, 0, -1, 1.5, "42", NSNull()] {
+    var row = publicationDocument; row["songID"] = invalid
+    try rejects("publication requires a real positive integer Song identity") {
+      _ = try LokalTransferProtocol.importPublication(JSONSerialization.data(withJSONObject: row))
+    }
+  }
   for (key, value) in [("sourcePath", "/tmp/caller.wav"), ("targetRelativePath", "caller.wav"),
       ("owner", "caller"), ("headers", "caller")] {
     var injectedClaim = claimDocument, injectedLease = leaseDocument
@@ -241,6 +265,10 @@ do {
     }
     try rejects("caller cannot inject path/owner/headers into the direct lease guard") {
       _ = try LokalTransferProtocol.importLease(JSONSerialization.data(withJSONObject: injectedLease))
+    }
+    var injectedPublication = publicationDocument; injectedPublication[key] = value
+    try rejects("publication destination and provenance are never supplied by a caller") {
+      _ = try LokalTransferProtocol.importPublication(JSONSerialization.data(withJSONObject: injectedPublication))
     }
   }
   for invalid: Any in [1, "false", NSNull()] {
@@ -464,6 +492,8 @@ do {
   try runImportOwnershipContracts(job: transfer)
   contractStage = "deterministic library file promotion"
   try runLibraryContracts(container: root, job: transfer, files: files)
+  contractStage = "tracked private-part library publication"
+  try runTrackedLibraryContracts(container: root, template: transfer)
   try store.update(id: binaryJob.id, revision: 1) { try $0.cancel(nowMs: 1060) }
   try files.discard(transfer)
   try require(files.retainedSize(transfer) == nil, "cancel cleanup uses the retired file revision")

@@ -211,6 +211,24 @@ class IosTransferTransport {
     return lease;
   }
 
+  /// Private publication only; the root coordinator must still prove media and
+  /// atomically commit its prepared Song plus Isar receipt before completion.
+  Future<IosTransferPublishedImport> publishImport(
+    IosTransferImportLease lease, {
+    required int songId,
+  }) async {
+    if (lease.reconcileOnly || songId < 1) {
+      throw StateError(
+        'Publication requires a writer and prepared Song identity.',
+      );
+    }
+    final result = IosTransferPublishedImport.fromJson(
+      await _importCall('publishImport', {...lease.control, 'songID': songId}),
+    );
+    result.validateFor(lease, songId: songId);
+    return result;
+  }
+
   Future<void> validateImport(
     IosTransferImportLease lease, {
     bool requiresWrite = true,

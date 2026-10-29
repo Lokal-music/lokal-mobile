@@ -33,6 +33,12 @@ struct LokalTransferImportClaim: Encodable, Sendable {
   let clientID: String
 }
 
+struct LokalTransferPublishedImport: Encodable, Sendable {
+  let job: LokalTransferJob
+  let songID: Int64
+  let receipt: LokalTransferLibraryReceipt
+}
+
 /// One serial native owner survives Flutter lifecycle changes. Networking can
 /// finish before Flutter starts; native events are committed before the system
 /// background completion is acknowledged. Import remains an application task.
@@ -55,6 +61,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private let journal: LokalTransferJournal
   private let files: LokalTransferFiles
   private let importOwnership: LokalTransferImportOwnership
+  private let library: @Sendable () throws -> LokalTransferLibrary
   private let credentials: @Sendable () throws -> LokalTransferAuthorization?
   private var session: URLSession!
   private var jobs: [String: LokalTransferJob]
@@ -88,11 +95,13 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
 
   init(container: URL, configuration supplied: URLSessionConfiguration? = nil,
        importOwnership: LokalTransferImportOwnership = LokalTransferImportOwnership(),
+       library: @escaping @Sendable () throws -> LokalTransferLibrary = { try applicationMusicLibrary() },
        credentials: @escaping @Sendable () throws -> LokalTransferAuthorization?) throws {
     journal = try LokalTransferJournal(container: container)
     files = try LokalTransferFiles(container: container)
     self.credentials = credentials
     self.importOwnership = importOwnership
+    self.library = library
     let initial = try journal.snapshot()
     jobs = Dictionary(uniqueKeysWithValues: initial.jobs.map { ($0.id, $0) })
     order = initial.jobs.map(\.id)
@@ -137,6 +146,21 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
 
   private static func now() -> Int64 {
     Int64(min(4_102_444_800_000, max(0, Date().timeIntervalSince1970 * 1000)))
+  }
+
+  /// Only native code selects the existing application's Documents/Music root.
+  /// Do not follow a replaced Music symlink or accept a Flutter destination.
+  private static func applicationMusicLibrary() throws -> LokalTransferLibrary {
+    let documents = try FileManager.default.url(for: .documentDirectory,
+      in: .userDomainMask, appropriateFor: nil, create: true)
+    let parent = open(documents.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    guard parent >= 0 else { throw LokalTransferError.posix("open_music_parent", errno) }
+    defer { close(parent) }
+    if mkdirat(parent, "Music", 0o700) != 0 && errno != EEXIST {
+      throw LokalTransferError.posix("create_music_root", errno)
+    }
+    guard fsync(parent) == 0 else { throw LokalTransferError.posix("sync_music_parent", errno) }
+    return try LokalTransferLibrary(root: documents.appendingPathComponent("Music", isDirectory: true))
   }
 
   private func scope(_ job: LokalTransferJob) -> LokalTransferScope {
@@ -606,6 +630,57 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           try? self.importOwnership.release(ticket.owner, jobID: job.id,
             revision: job.revision, leaseID: lease.id)
           throw error
+        }
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// Private publication foundation, still disabled as a product capability.
+  /// The caller first prepares its Isar reservation. No media/Isar completion
+  /// is inferred here: importing is the explicit uncertain-commit boundary.
+  func publishImport(_ request: LokalTransferProtocol.ImportPublication,
+                     owner: LokalTransferImportOwnership.Owner,
+                     reply: @escaping LokalTransferCompletion<LokalTransferPublishedImport>) {
+    let cancellation: LokalTransferCopyCancellation
+    do {
+      guard request.clientID == owner.clientID, request.songID > 0 else {
+        throw LokalTransferError.staleRevision
+      }
+      cancellation = try importOwnership.writerCancellation(owner, jobID: request.id,
+        revision: request.revision, leaseID: request.leaseID)
+    } catch { reply(.failure(error)); return }
+    queue.async {
+      do {
+        guard self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+              let job = self.jobs[request.id], job.revision == request.revision,
+              [.validating, .importing].contains(job.phase) else { throw LokalTransferError.staleRevision }
+        guard let authorization = try self.credentials() else { throw LokalTransferError.invalidTransition }
+        _ = try authorization.downloadRequest(for: job)
+        try cancellation.check()
+        self.fileQueue.async {
+          let published = Result {
+            try self.library().installTracked(job, songID: request.songID, journal: self.journal,
+              files: self.files, cancellation: cancellation, validateOwnership: {
+                try self.importOwnership.validate(owner, jobID: request.id,
+                  revision: request.revision, leaseID: request.leaseID, requiresWrite: true)
+              })
+          }
+          self.queue.async {
+            do {
+              let receipt = try published.get()
+              try self.importOwnership.validate(owner, jobID: request.id,
+                revision: request.revision, leaseID: request.leaseID, requiresWrite: true)
+              guard !self.shuttingDown, !self.persistenceFailed,
+                    let current = self.jobs[request.id], current.revision == request.revision,
+                    [.validating, .importing].contains(current.phase) else { throw LokalTransferError.staleRevision }
+              let importing = current.phase == .importing ? current : try self.update(current) {
+                try $0.transition(to: .importing, nowMs: Self.now())
+              }
+              try self.importOwnership.validate(owner, jobID: request.id,
+                revision: request.revision, leaseID: request.leaseID, requiresWrite: true)
+              reply(.success(LokalTransferPublishedImport(job: importing, songID: request.songID, receipt: receipt)))
+            } catch { reply(.failure(error)) }
+          }
         }
       } catch { reply(.failure(error)) }
     }
