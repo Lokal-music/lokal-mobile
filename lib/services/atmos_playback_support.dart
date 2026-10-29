@@ -38,6 +38,39 @@ class AtmosPlaybackSupport {
     }
   }
 
+  /// AC-4 and E-AC-3 JOC require different system decoders.
+  static Future<bool> availableFor(String codec) async {
+    if (codec != 'ac4') return available;
+    try {
+      final caps = await _channel.invokeMapMethod<String, dynamic>('capabilities');
+      final supported = caps?['ac4Decoder'] == true || caps?['ac4Passthrough'] == true;
+      AtmosDiagnostics.record('capability', {
+        'codec': 'ac4', 'available': supported,
+        'reason': supported ? 'native_route_available' : 'native_route_unavailable',
+      });
+      return supported;
+    } catch (_) {
+      AtmosDiagnostics.record('capability_error', {'codec': 'ac4', 'reason': 'native_probe_failed'});
+      return false;
+    }
+  }
+
+  /// Inspect actual encoded audio, rather than trusting the requested tier.
+  /// AC-4 encoding alone does not prove that the presentation is Atmos.
+  static Future<bool> isAc4File(String path, {
+    Future<List<Map<String, dynamic>>> Function(String path)? probeStreams,
+  }) async {
+    try {
+      if (await _channel.invokeMethod<bool>('inspectAc4', {'path': path}) == true) return true;
+    } catch (_) { /* FFprobe still may recognize audio/ac4 */ }
+    try {
+      final streams = await (probeStreams ?? _probeStreams)(path);
+      return streams.any((stream) =>
+        '${stream['codec_name'] ?? stream['codec'] ?? ''}'.toLowerCase() == 'ac4' &&
+        '${stream['codec_type'] ?? 'audio'}'.toLowerCase() == 'audio');
+    } catch (_) { return false; }
+  }
+
   /// Only an E-AC-3 stream with an explicit JOC/Dolby Atmos profile counts.
   /// Plain E-AC-3, AAC, FLAC, marketing metadata and file extensions do not.
   static bool isJocProfile(Map<dynamic, dynamic> stream) {

@@ -1573,7 +1573,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen>
                   const SizedBox(width: 8),
                   InkWell(
                     onTap: () => SongMetadataSheet.show(context, song),
-                    child: const LokalAtmosStreamPill(),
+                    child: LokalAtmosStreamPill(codec: song.fileType),
                   ),
                 ],
                 if (LokalQualityTier.of(song) case final tier?

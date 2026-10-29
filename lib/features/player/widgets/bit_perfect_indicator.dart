@@ -47,7 +47,7 @@ class BitPerfectIndicator extends ConsumerWidget {
       return GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: const LokalAtmosStreamPill(),
+        child: LokalAtmosStreamPill(codec: song.fileType),
       );
     }
 

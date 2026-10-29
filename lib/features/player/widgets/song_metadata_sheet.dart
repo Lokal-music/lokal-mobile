@@ -117,7 +117,7 @@ class SongMetadataSheet extends StatelessWidget {
           ),
           if (song.atmosEncoded)
             _buildMetadataRow(
-              context, 'Spatial audio source', 'Dolby Atmos (verified E-AC-3 JOC)',
+              context, 'Spatial audio source', 'Dolby encoded source (${song.fileType}); output unverified',
             ),
           if (song.resolution != null && !song.isDsd)
             _buildMetadataRow(context, l10n.resolution, song.resolution!),

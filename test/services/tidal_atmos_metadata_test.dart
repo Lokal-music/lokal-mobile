@@ -26,6 +26,12 @@ void main() {
 
   });
 
+  test('Amazon comma-separated audio modes remain explicit, not inferred from codec', () {
+    expect(tidalAtmosAvailable({'audio_modes': 'STEREO,DOLBY_ATMOS'}), isTrue);
+    expect(tidalAtmosAvailable({'audio_modes': 'STEREO; ATMOS'}), isTrue);
+    expect(tidalAtmosAvailable({'audio_modes': 'STEREO', 'audio_codec': 'ac4'}), isFalse);
+  });
+
   test('lossless, hi-res and multichannel alone do not prove Atmos', () {
     expect(tidalAtmosAvailable({
       'audioQuality': 'HI_RES_LOSSLESS', 'audioModes': ['STEREO'],

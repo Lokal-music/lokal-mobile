@@ -563,7 +563,9 @@ class SongRepository {
     // container extension; mobile-downloaded Atmos files keep a filename
     // suffix so ExoPlayer still receives the original JOC stream.
     final path = entity.filePath.toLowerCase();
-    final atmos = entity.fileType?.toUpperCase() == 'E-AC-3 JOC' ||
+    final ac4 = entity.fileType?.toUpperCase() == 'AC-4' ||
+        path.endsWith('.ac4.atmos.mp4');
+    final atmos = ac4 || entity.fileType?.toUpperCase() == 'E-AC-3 JOC' ||
         path.endsWith('.atmos.m4a') ||
         path.endsWith('.atmos.mp4') ||
         path.endsWith('.atmos.ec3') ||
@@ -574,8 +576,8 @@ class SongRepository {
       artist: entity.artist,
       albumArt: entity.albumArtPath,
       duration: Duration(milliseconds: entity.durationMs ?? 0),
-      fileType: atmos ? 'E-AC-3 JOC' : entity.fileType ?? 'unknown',
-      atmosAvailable: atmos,
+      fileType: ac4 ? 'AC-4' : (atmos ? 'E-AC-3 JOC' : entity.fileType ?? 'unknown'),
+      atmosAvailable: atmos && !ac4,
       atmosEncoded: atmos,
       resolution: _buildResolutionString(entity),
       sampleRate: entity.sampleRate,

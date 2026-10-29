@@ -39,6 +39,25 @@ void main() {
       probeStreams: (_) async => [{'codec_name': 'flac'}]), isFalse);
   });
 
+  test('Amazon AC-4 uses independent decoder capability and verifies the downloaded codec', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'capabilities') return {
+        'available': false, 'jocDecoder': false, 'passthrough': false,
+        'ac4Decoder': true, 'ac4Passthrough': false,
+      };
+      if (call.method == 'inspectAc4') return false;
+      return false;
+    });
+    expect(await AtmosPlaybackSupport.available, isFalse);
+    expect(await AtmosPlaybackSupport.availableFor('ac4'), isTrue);
+    expect(await AtmosPlaybackSupport.isAc4File('/tmp/amazon.mp4', probeStreams: (_) async => [
+      {'codec_type': 'audio', 'codec_name': 'ac4'}
+    ]), isTrue);
+    expect(await AtmosPlaybackSupport.isAc4File('/tmp/stereo.mp4', probeStreams: (_) async => [
+      {'codec_type': 'audio', 'codec_name': 'aac'}
+    ]), isFalse);
+  });
+
   test('missing plugin safely falls back to stereo', () async {
     expect(await AtmosPlaybackSupport.available, isFalse);
     expect(await AtmosPlaybackSupport.isJocFile('/tmp/file.m4a',

@@ -234,13 +234,13 @@ class LokalQualityPill extends ConsumerWidget {
 }
 
 
-/// Dolby Atmos is a Tidal catalogue mode, NOT a PCM quality tier.
+/// Dolby Atmos is a catalogue mode, NOT a PCM quality tier.
 /// In particular, this never asserts that the current output is Atmos.
 class LokalAtmosPill extends StatelessWidget {
   const LokalAtmosPill({super.key});
 
   static const String description =
-      "Tidal offers an Atmos version. Lokal requests the original E-AC-3 JOC stream when Android's native decoder or passthrough route supports it.";
+      "An original Dolby encoded source may be available. Tidal uses E-AC-3 JOC; Amazon offers AC-4. Availability and spatial output depend on the source and native decoder.";
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -271,13 +271,16 @@ class LokalAtmosPill extends StatelessWidget {
 /// Shown only when Android MediaExtractor verified the downloaded source as
 /// E-AC-3 JOC and it was routed to the native Android audio engine.
 class LokalAtmosStreamPill extends StatelessWidget {
-  const LokalAtmosStreamPill({super.key});
+  const LokalAtmosStreamPill({super.key, this.codec = 'E-AC-3 JOC'});
+  final String codec;
 
   @override
   Widget build(BuildContext context) => Tooltip(
-    message: 'E-AC-3 JOC Dolby Atmos stream. Final spatial rendering depends on the connected device.',
+    message: codec == 'AC-4'
+        ? 'Original AC-4 encoded audio. The immersive presentation and spatial output have not been verified.'
+        : 'E-AC-3 JOC Dolby Atmos stream. Final spatial rendering depends on the connected device.',
     child: Semantics(
-      label: 'Dolby Atmos E-AC-3 JOC encoded stream',
+      label: '$codec encoded audio source; spatial output unverified',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
@@ -285,7 +288,7 @@ class LokalAtmosStreamPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
-          'DOLBY ATMOS',
+          codec == 'AC-4' ? 'AC-4' : 'DOLBY ATMOS',
           style: LokalTheme.label(context.lokal,
             size: 10, color: const Color(0xFFC4B4FF)),
         ),

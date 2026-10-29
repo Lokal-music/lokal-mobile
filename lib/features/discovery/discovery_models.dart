@@ -17,6 +17,7 @@ class DiscoveryTrack {
     this.inlineStream,
     this.artwork,
     this.atmosAvailable = false,
+    this.atmosRequestable = false,
     this.atmosRequested = false,
     this.atmosDownload = false,
     this.catalogueQuality,
@@ -47,6 +48,9 @@ class DiscoveryTrack {
 
   /// Catalogue flag only. The decoded output might be stereo.
   final bool atmosAvailable;
+  /// The installed addon has an AC-4 tier; per-track availability is unproven.
+  /// Exposes an explicit trial action without inventing a catalogue badge.
+  final bool atmosRequestable;
 
   /// Explicit mobile 'Play Atmos' request; never inferred from a catalogue flag.
   final bool atmosRequested;
@@ -67,7 +71,8 @@ class DiscoveryTrack {
     id: id, title: title, artist: artist, source: source,
     duration: duration, album: album, sourceUrl: sourceUrl, addonBase: addonBase,
     addonId: addonId, sourceName: sourceName, inlineStream: inlineStream,
-    artwork: artwork, atmosAvailable: atmosAvailable, atmosRequested: true,
+    artwork: artwork, atmosAvailable: atmosAvailable,
+    atmosRequestable: atmosRequestable, atmosRequested: true,
     atmosDownload: downloadOnly,
     catalogueQuality: catalogueQuality, requestedQuality: requestedQuality,
     catalogueCodec: catalogueCodec,
@@ -93,6 +98,7 @@ class DiscoveryTrack {
           inlineStream: inlineStream,
           artwork: cover,
           atmosAvailable: atmosAvailable,
+          atmosRequestable: atmosRequestable,
           atmosRequested: atmosRequested,
           atmosDownload: atmosDownload,
           catalogueQuality: catalogueQuality,

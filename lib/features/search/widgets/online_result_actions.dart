@@ -144,10 +144,10 @@ class _OnlineResultSheet extends StatelessWidget {
                     label: 'Play',
                     onTap: () => pick(OnlineResultAction.play),
                   ),
-                  if (track.atmosAvailable)
+                  if (track.atmosAvailable || track.atmosRequestable)
                     _ActionRow(
                       icon: Icons.surround_sound_rounded,
-                      label: 'Play Dolby Atmos',
+                      label: track.atmosRequestable && !track.atmosAvailable ? 'Try Amazon AC-4' : 'Play Dolby Atmos',
                       onTap: () => pick(OnlineResultAction.playAtmos),
                     ),
                   _ActionRow(
@@ -166,12 +166,12 @@ class _OnlineResultSheet extends StatelessWidget {
                     onTap: saving
                         ? null
                         : () => pick(OnlineResultAction.download),
-                    last: !track.atmosAvailable,
+                    last: !(track.atmosAvailable || track.atmosRequestable),
                   ),
-                  if (track.atmosAvailable)
+                  if (track.atmosAvailable || track.atmosRequestable)
                     _ActionRow(
                       icon: Icons.surround_sound_rounded,
-                      label: saving ? 'Downloading…' : 'Download Dolby Atmos',
+                      label: saving ? 'Downloading…' : (track.atmosRequestable && !track.atmosAvailable ? 'Download Amazon AC-4' : 'Download Dolby Atmos'),
                       onTap: saving
                           ? null
                           : () => pick(OnlineResultAction.downloadAtmos),
