@@ -147,7 +147,7 @@ class _OnlineResultSheet extends StatelessWidget {
                   if (track.atmosAvailable || track.atmosRequestable)
                     _ActionRow(
                       icon: Icons.surround_sound_rounded,
-                      label: track.atmosRequestable && !track.atmosAvailable ? 'Try Amazon AC-4' : 'Play Dolby Atmos',
+                      label: track.atmosRequestable && !track.atmosAvailable ? 'Try AC-4 (availability unverified)' : 'Play Dolby Atmos',
                       onTap: () => pick(OnlineResultAction.playAtmos),
                     ),
                   _ActionRow(
