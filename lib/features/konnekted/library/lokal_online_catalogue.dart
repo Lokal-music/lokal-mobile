@@ -183,55 +183,99 @@ class LokalOnlineCatalogue {
   }) => _load('artist:${recommendationKey(name)}', refresh, () async {
     AppleMusicArtistData? data;
     List<AppleMusicAlbumMatch> releases = const [];
-    // Independent metadata sections can still be shown when one endpoint fails.
+    List<AppleMusicAlbumMatch> artistReleases = const [];
+    // A free-text search returns only the first 100 relevance-ranked albums,
+    // often omitting singles, EPs and older releases. Supplement it with the
+    // artist-ID discography (including other storefronts). Keep failures
+    // independent so a temporarily unavailable endpoint cannot blank the page.
     await Future.wait([
-      _apple
-          .getArtistData(name, topSongLimit: 25, refresh: refresh)
-          .then((value) {
-            data = value;
-          })
-          .catchError((Object _) {}),
-      _apple
-          .searchAlbums(name, limit: 100, refresh: refresh)
-          .then((value) {
-            releases = value;
-          })
-          .catchError((Object _) {}),
+      () async {
+        try {
+          data = await _apple.getArtistData(
+            name, topSongLimit: 25, refresh: refresh,
+          );
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          releases = await _apple.searchAlbums(
+            name, limit: 100, refresh: refresh,
+          );
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          artistReleases = await _apple.getArtistReleases(
+            name, refresh: refresh,
+          );
+        } catch (_) {}
+      }(),
     ]);
     if (data != null &&
-        recommendationKey(data!.artist.name) != recommendationKey(name))
+        recommendationKey(data!.artist.name) != recommendationKey(name)) {
       data = null;
+    }
     final creditedAlbums = {
       for (final song in data?.topSongs ?? <AppleMusicTopSong>[])
         if (catalogueArtistCredit(song.artistName, name) &&
-            song.collectionName != null)
+            song.collectionName?.trim().isNotEmpty == true)
           recommendationKey(song.collectionName),
     };
-    final albums =
-        releases
-            .where(
-              (album) =>
-                  recommendationKey(album.artistName) ==
-                      recommendationKey(name) ||
-                  catalogueArtistCredit(album.artistName, name) ||
-                  creditedAlbums.contains(recommendationKey(album.name)),
-            )
-            .map(
-              (match) => LokalCatalogueAlbum(
-                id: match.collectionId,
-                title: match.name,
-                artist: match.artistName,
-                artwork: match.artworkUrl ?? '',
-                date: match.releaseDate,
-                trackCount: match.trackCount,
-                url: match.url,
-                releaseKind: !cataloguePrimaryArtist(match.artistName, name)
-                    ? LokalReleaseKind.feature
-                    : null,
-              ),
-            )
-            .toList()
-          ..sort((a, b) => (b.date ?? '').compareTo(a.date ?? ''));
+    final albums = <LokalCatalogueAlbum>[];
+    final knownIds = <String>{};
+    final knownReleases = <String>{};
+    void addAlbum(AppleMusicAlbumMatch match) {
+      if (match.name.trim().isEmpty) return;
+      // Across storefronts an identical release can carry a different ID.
+      // Preserve genuinely distinct editions with different titles/dates.
+      final identity = '${recommendationKey(match.name)}|'
+          '${recommendationKey(match.artistName)}|'
+          '${match.releaseDate ?? ''}';
+      if ((match.collectionId.isNotEmpty &&
+              !knownIds.add(match.collectionId)) ||
+          !knownReleases.add(identity)) return;
+      albums.add(LokalCatalogueAlbum(
+        id: match.collectionId,
+        title: match.name,
+        artist: match.artistName,
+        artwork: match.artworkUrl ?? '',
+        date: match.releaseDate,
+        trackCount: match.trackCount,
+        url: match.url,
+        releaseKind: !cataloguePrimaryArtist(match.artistName, name)
+            ? LokalReleaseKind.feature
+            : null,
+      ));
+    }
+
+    // An artist-ID lookup establishes attribution even if Apple lists a
+    // collaboration under its joint credit rather than the exact artist name.
+    for (final album in artistReleases) {
+      addAlbum(album);
+    }
+    for (final album in releases) {
+      if (catalogueArtistCredit(album.artistName, name) ||
+          creditedAlbums.contains(recommendationKey(album.name))) {
+        addAlbum(album);
+      }
+    }
+    // The popular-song list independently proves additional named releases.
+    // A metadata-only release remains navigable even without an iTunes ID.
+    final knownTitles = albums.map((a) => recommendationKey(a.title)).toSet();
+    for (final song in data?.topSongs ?? <AppleMusicTopSong>[]) {
+      final title = song.collectionName?.trim() ?? '';
+      if (title.isEmpty ||
+          !catalogueArtistCredit(song.artistName, name) ||
+          !knownTitles.add(recommendationKey(title))) continue;
+      albums.add(LokalCatalogueAlbum(
+        title: title,
+        artist: song.artistName,
+        releaseKind: !cataloguePrimaryArtist(song.artistName, name)
+            ? LokalReleaseKind.feature
+            : null,
+      ));
+    }
+    albums.sort((a, b) => (b.date ?? '').compareTo(a.date ?? ''));
     var tracks = [
       for (final song in data?.topSongs ?? <AppleMusicTopSong>[])
         LokalCatalogueTrack(
