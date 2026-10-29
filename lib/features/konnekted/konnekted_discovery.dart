@@ -863,6 +863,11 @@ Future<List<_PlaybackSource>> _morneyeSources(
               sourceName: addon.displayName,
               artwork: song.thumbnail,
               atmosAvailable: song.atmosAvailable,
+              // Amazon exposes AC-4 as a download tier even if its search
+              // metadata does not declare an Atmos presentation. Offer an
+              // explicit attempt, without inventing an Atmos catalogue badge.
+              atmosRequestable: addon.name.toLowerCase().startsWith('amazon') &&
+                  addon.qualityOptions.any((q) => q is Map && q['id'] == 'ac4'),
               // Tidal's search metadata describes catalogue availability,
               // while requestedQuality describes the user's download option.
               // Both must survive to the badge formatter so it can distinguish
@@ -899,12 +904,13 @@ Future<List<_PlaybackSource>> _morneyeSources(
               'mode': found.atmosRequested ? 'atmos' : 'normal',
             });
           }
-          if (found.atmosRequested && !found.atmosAvailable) {
+          if (found.atmosRequested && !found.atmosAvailable && !found.atmosRequestable) {
             AtmosDiagnostics.record('request_rejected', {'reason': 'catalogue_not_atmos'});
             throw const DiscoveryException('This track has no advertised Atmos version.');
           }
           final tryAtmos = found.atmosRequested;
-          final explicitTier = explicitMorneyePlaybackTier(atmosRequested: tryAtmos);
+          final explicitTier = explicitMorneyePlaybackTier(
+              atmosRequested: tryAtmos, provider: addon.name);
           final requestedTier = explicitTier ?? '';
           final cacheKey = morneyePlaybackCacheKey(
             addonKey: addon.key,
@@ -936,10 +942,11 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   morneyeCanPlayWhileDownloading(addon.name)
               ? MorneyeLiveSession()
               : null;
-          if (tryAtmos && !found.atmosDownload && !await AtmosPlaybackSupport.available) {
+          if (tryAtmos && !found.atmosDownload &&
+              !await AtmosPlaybackSupport.availableFor(explicitTier == 'ac4' ? 'ac4' : 'eac3-joc')) {
             AtmosDiagnostics.record('request_rejected', {'reason': 'decoder_unavailable'});
             throw const DiscoveryException(
-              'This Android device does not report an E-AC-3 JOC decoder or direct Atmos output. No stereo track was substituted.',
+              'This Android device does not support the requested native spatial-audio codec or direct output. No stereo track was substituted.',
             );
           }
           try {
@@ -1133,9 +1140,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
               download = await transfer;
               if (tryAtmos) {
                 AtmosDiagnostics.record('download_complete', {
-                  'quality': 'DOLBY_ATMOS',
+                  'quality': explicitTier,
                   'encoded': download.atmosEncoded,
-                  'outcome': download.atmosEncoded ? 'joc_confirmed' : 'not_joc',
+                  'outcome': download.atmosEncoded ? 'encoded_source_confirmed' : 'not_verified',
                 });
               }
               if (tryAtmos && !download.atmosEncoded) {
@@ -1143,7 +1150,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
                 // staged copy before rejecting the explicitly requested tier.
                 await download.cleanup();
                 throw const DiscoveryException(
-                  'Lokal could not verify the downloaded source as E-AC-3 JOC Dolby Atmos. No stereo track was substituted. Check Atmos diagnostics.',
+                  'Lokal could not verify the requested spatial audio codec in the downloaded source. No stereo track was substituted. Check Atmos diagnostics.',
                 );
               }
             } catch (error) {
@@ -1171,7 +1178,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
                     error.message.startsWith('The requested Atmos source');
                 throw DiscoveryException(
                   rejectedProbe
-                      ? 'The requested Dolby Atmos stream was not verified as E-AC-3 JOC. Check Atmos diagnostics for the actual codec and probe result. No stereo track was substituted.'
+                      ? 'The requested spatial stream was not verified. Check Atmos diagnostics. No stereo track was substituted.'
                       : tidalAtmosTierUnavailable(reason)
                           ? 'This source has no downloadable Atmos stream for this track. No stereo track was substituted.'
                           : 'Atmos download failed. No stereo track was substituted.',
