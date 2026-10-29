@@ -1,17 +1,15 @@
 # iPhone transfer architecture
 
-Status: native transport, app owner and typed Flutter bridge accepted through build
-82; product library adapter pending, 29 October 2026. Both real iOS 16 SDK checks
-and both complete iOS 18.6/26 app suites pass, including native channel ownership
-and Keychain migration. Build 82's iOS 26 first attempt failed before app
-installation during simulator boot; one fresh-host retry passed the full suite
-using the same compiled integration app. Standalone native host contracts pass
-20 rounds in native run 7. Build84 now contains explicit caller-client binding,
-the private product schema and through-#332 UI source. Its unsigned IPA is
-independently verified; its complete installed iOS18.6 suite passes, and the
-separate iOS26 suite is running against the same compiled integration app.
-Native run9 passes 20 Apple rounds, both actual iOS16 SDK/Flutter bridge checks
-and actual Isar contracts. Build82 remains the earlier complete app checkpoint.
+Status: native transport, app owner and typed Flutter bridge accepted through
+build84; product library adapter pending, 29 October 2026. Both real iOS16 SDK
+checks, 20 complete Apple native rounds in run9, actual Isar process contracts,
+1,130 Flutter regression checks and both complete installed iOS18.6/26 app
+suites pass. Build84 includes through-#332 UI, explicit caller-client binding,
+the private product schema and scanner writer guards. Both runtime jobs pass
+on their first attempts using the same compiled integration app. The unsigned
+IPA, 34 native binaries, 26 matching dSYM bundles and all 2,340 exported source
+files are independently verified. Later tracked publication, bounded media
+reader and completion acknowledgement source has no Apple acceptance yet.
 This qualifies the integrated protocol, not OS suspension/daemon delivery.
 Deterministic file promotion and private Isar receipts are later isolated
 foundations; their product adapter, uploads and persisted progress are unfinished. Product capability keeps
@@ -622,8 +620,9 @@ contracts, and refusal of symlink, unrelated hard-link, FIFO, directory and
 replaced-inode lock nodes. Native run9 subsequently passes all 20 Apple rounds,
 both actual iOS16 SDK/Flutter bridge checks and actual Isar contracts. Build84
 also passes native preflight and the full inherited Flutter selection, and has
-produced its independently verified unsigned IPA; installed simulator tests
-remain pending. The previous failure's exact errno remains unknown.
+produced its independently verified unsigned IPA. Both complete installed
+iOS18.6/26 suites subsequently pass on their first attempts using the same
+compiled integration app. The previous failure's exact errno remains unknown.
 
 ### Tracked publication foundation
 

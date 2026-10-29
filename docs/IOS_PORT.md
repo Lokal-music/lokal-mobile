@@ -24,9 +24,12 @@ notices and all 2,340 exported source files have been independently checked
 against tree `33f5d1beb5105863c49d5da80a49f381ab595a6f`. Native run9 passes
 20 complete Apple rounds, both actual iOS16 SDK/Flutter bridge checks and the
 actual Isar contracts. Build84 passes all 1,130 inherited Flutter regression
-checks and its complete installed iOS18.6 suite. Its separate iOS26 suite is
-running on the same compiled integration app; build82 remains the earlier
-fully qualified two-runtime checkpoint until that result finishes.
+checks and both complete installed iOS18.6/26 suites using the same compiled
+integration app. Both jobs pass on their first attempts. The new runtime reports
+independently confirm private schema/scan guards, caller-client retirement,
+seven real codec playback fixtures, fractional speeds and actual shader pixel
+complements. Build84 is now the latest qualified engineering checkpoint through
+#332; later native publication/media/completion source has separate gates.
 The build84 IPA SHA-256 is
 `14300a4c5fb2ad6dc88f83b6d9d738c678daf4b909a504c59b557a8856914679`.
 It needs local signing before sideloading from Windows.
