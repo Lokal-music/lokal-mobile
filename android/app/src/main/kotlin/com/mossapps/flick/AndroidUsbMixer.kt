@@ -10,6 +10,7 @@ import android.media.AudioTrack
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import java.nio.ByteBuffer
 import androidx.annotation.RequiresApi
 
 /**
@@ -54,7 +55,7 @@ object AndroidUsbMixer {
                 track.channelCount == 2 &&
                 track.audioFormat == attributes.format.encoding
 
-        fun write(data: ByteArray): Int {
+        fun write(data: ByteBuffer): Int {
             val now = SystemClock.elapsedRealtime()
             if (now >= nextCheck) {
                 if (!valid()) {
@@ -63,7 +64,7 @@ object AndroidUsbMixer {
                 }
                 nextCheck = now + 250
             }
-            return track.write(data, 0, data.size, AudioTrack.WRITE_NON_BLOCKING)
+            return track.write(data, data.remaining(), AudioTrack.WRITE_NON_BLOCKING)
         }
 
         fun release() {
@@ -170,7 +171,7 @@ object AndroidUsbMixer {
     fun bits(id: Long): Int = sessions[id]?.bits ?: 0
 
     @JvmStatic
-    fun write(id: Long, data: ByteArray): Int {
+    fun write(id: Long, data: ByteBuffer): Int {
         val session = synchronized(this) { sessions[id] } ?: return -1
         return try { session.write(data) } catch (e: Exception) {
             Log.w(TAG, "USB bit-perfect mixer write failed: ${e.message}")
