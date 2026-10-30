@@ -225,13 +225,21 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     );
   }
 
-  Future<void> forgetConfiguration() async {
+  Future<void> forgetConfiguration({
+    required LokalRemoteCredentials? expected,
+  }) async {
     final revision = ++_configurationRevision;
     await _ensureRestored();
+    if (_disposed || revision != _configurationRevision) {
+      throw StateError('Desktop pairing changed. Refresh and retry.');
+    }
+    // Read/compare/clear is serialized with writes by the same credential
+    // store. A stale confirmation cannot erase a newly-paired desktop.
+    await ref
+        .read(lokalRemoteCredentialsStoreProvider)
+        .clearIfMatching(expected);
     if (_disposed || revision != _configurationRevision) return;
     disconnect();
-    await ref.read(lokalRemoteCredentialsStoreProvider).clear();
-    if (_disposed || revision != _configurationRevision) return;
     _generation++;
     _shouldPoll = false;
     _pollTimer?.cancel();
