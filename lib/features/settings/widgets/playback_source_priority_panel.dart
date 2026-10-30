@@ -127,7 +127,7 @@ class _PlaybackSourcePriorityPanelState
               animation: animation,
               builder: (context, child) => Material(
                 color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                elevation: 6 * Curves.easeOut.transform(animation.value),
+                elevation: 6.0 * Curves.easeOut.transform(animation.value),
                 borderRadius: BorderRadius.circular(12),
                 clipBehavior: Clip.antiAlias,
                 child: child,
