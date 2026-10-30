@@ -212,8 +212,8 @@ void main() {
     },
   );
 
-  for (final configured in ['ac4', 'eac3']) {
-    test('ordinary playback excludes configured Amazon $configured', () async {
+  for (final configured in ['ac4', 'eac3', 'best']) {
+    test('normal playback requests configured Amazon $configured', () async {
       final addon = await install();
       packages.setSettings(addon.key, {'downloadQuality': configured});
       final result = await packages.download(
@@ -221,9 +221,10 @@ void main() {
         'track',
         forPlayback: true,
       );
-      expect(requested, ['best']);
-      expect(probes, isEmpty);
-      expect(result.atmosEncoded, isFalse);
+      expect(requested, [configured],
+          reason: 'Saved add-on quality must be passed to download()');
+      expect(probes, configured == 'ac4' ? ['inspectAc4'] : isEmpty);
+      expect(result.atmosEncoded, configured == 'ac4');
       await result.cleanup();
     });
   }
