@@ -98,8 +98,7 @@ void main() {
     for (final spatial in ['ac4', 'eac3']) {
       expect(amazonRequestedPlaybackQualityLabel(
         configured: spatial, options: amazonOptions,
-      ), 'FLAC best (requested)',
-          reason: 'A spatial download preference must not change normal playback');
+      ), isNull, reason: 'A selected spatial tier is not a verified search badge');
     }
     expect(amazonRequestedPlaybackQualityLabel(
       configured: null, options: const [],
