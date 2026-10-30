@@ -1924,18 +1924,32 @@ class MorneyePackages {
         options: addon.qualityOptions,
         provider: provider,
       );
-      if (forPlayback &&
-          quality != 'DOLBY_ATMOS' &&
-          isMorneyeAtmosQuality(chosen)) {
+      // The configured tier is authoritative for Play and Save. Do not
+      // silently replace AC-4/JOC with FLAC just because the recording's
+      // catalogue metadata is sparse.
+      final selectedAc4 =
+          chosen.trim().toLowerCase().replaceAll('-', '') == 'ac4';
+      final selectedJoc =
+          (isMorneyeAtmosQuality(chosen) && !selectedAc4) ||
+          (provider.toLowerCase().startsWith('amazon') &&
+              chosen.trim().toLowerCase() == 'eac3');
+      final explicitSpatial = selectedAc4 || selectedJoc;
+      // iPhone direct AC-4 playback is not implemented. Ordinary system JOC
+      // playback also requires a confirmed native route. A download remains
+      // possible; no invented codec presentation or stereo substitute.
+      if (forPlayback && explicitSpatial &&
+          (selectedAc4 || !await AtmosPlaybackSupport.available)) {
         throw const MorneyePackageError(
-          'Normal playback unexpectedly selected a Dolby Atmos download tier.',
+          'This iPhone cannot play the selected encoded spatial format. '
+          'Choose a supported addon quality or save the original file.',
         );
       }
-      if (quality == 'DOLBY_ATMOS')
+      if (explicitSpatial) {
         AtmosDiagnostics.record('addon_download_start', {
           'source': provider == 'tidal' ? 'tidal' : 'other',
-          'quality': 'DOLBY_ATMOS',
+          'quality': chosen,
         });
+      }
       phase('preparing_media');
       monitoringTransfer = true;
       recordActivity();
@@ -1960,7 +1974,7 @@ class MorneyePackages {
       }
       phase('download_complete');
       if (result is! Map || result['success'] != true) {
-        if (quality == 'DOLBY_ATMOS')
+        if (explicitSpatial)
           AtmosDiagnostics.record('addon_download_failed', {
             'reason': 'addon_returned_failure',
           });
@@ -1973,7 +1987,7 @@ class MorneyePackages {
       var file = host.file(
         '${result['file_path'] ?? result['filePath'] ?? result['path']}',
       );
-      if (quality == 'DOLBY_ATMOS') {
+      if (explicitSpatial) {
         // Diagnose provider tier negotiation without logging track IDs,
         // filesystem paths, signed URLs, manifest credentials or raw results.
         final claimed =
@@ -1983,7 +1997,7 @@ class MorneyePackages {
                 .replaceAll(RegExp(r'[ -]'), '_');
         final extension = p.extension(file).toLowerCase();
         AtmosDiagnostics.record('addon_response', {
-          'quality': 'DOLBY_ATMOS',
+          'quality': chosen,
           'reason': claimed == 'DOLBY_ATMOS'
               ? 'provider_claimed_atmos'
               : claimed == 'HI_RES_LOSSLESS' ||
@@ -1998,7 +2012,7 @@ class MorneyePackages {
         });
       }
       if (!File(file).existsSync() || File(file).lengthSync() == 0) {
-        if (quality == 'DOLBY_ATMOS')
+        if (explicitSpatial)
           AtmosDiagnostics.record('addon_download_failed', {
             'reason': 'empty_file',
           });
@@ -2011,7 +2025,7 @@ class MorneyePackages {
               ? {'strategy': 'ffmpeg.mov_key', 'key': result['decryption_key']}
               : null);
       if (decryption != null) {
-        if (quality == 'DOLBY_ATMOS')
+        if (explicitSpatial)
           AtmosDiagnostics.record('postprocess_start', {'stage': 'decrypt'});
         if (decryption is! Map ||
             decryption['strategy'] != 'ffmpeg.mov_key' ||
@@ -2054,37 +2068,37 @@ class MorneyePackages {
         }
         file = target;
       }
-      // Mornye can fetch the original E-AC-3 JOC container. Inspect it
-      // before the FLAC conversion/probe (both would discard Atmos objects).
-      // If Tidal fell back to stereo, this returns false and normal handling
-      // remains unchanged.
-      final verifiedAtmos =
-          quality == 'DOLBY_ATMOS' &&
-          await AtmosPlaybackSupport.isJocFile(file);
-      if (quality == 'DOLBY_ATMOS')
-        AtmosDiagnostics.record('joc_validation', {
-          'encoded': verifiedAtmos,
-          'outcome': verifiedAtmos ? 'confirmed' : 'rejected',
+      // Inspect the delivered original before conversion. AC-4 codec
+      // identity is not itself proof of Dolby Atmos presentation.
+      final verifiedEncoded = !explicitSpatial
+          ? false
+          : selectedAc4
+              ? await AtmosPlaybackSupport.isAc4File(file)
+              : await AtmosPlaybackSupport.isJocFile(file);
+      if (explicitSpatial) {
+        AtmosDiagnostics.record('source_validation', {
+          'encoded': verifiedEncoded,
+          'codec': selectedAc4 ? 'ac4' : 'eac3_joc',
+          'outcome': verifiedEncoded ? 'confirmed' : 'rejected',
         });
-      if (quality == 'DOLBY_ATMOS' && !verifiedAtmos) {
-        // Refuse the unverified source *before* ordinary postprocessors or
-        // transcoding can rewrite its container and obscure the failure.
-        // A rejected source never silently substitutes a stereo recording.
-        throw const MorneyePackageError(
-          'The requested Atmos source could not be verified as E-AC-3 JOC. '
-          'The provider may have returned stereo or the probe could not read '
-          'the container. Check the Atmos diagnostic log.',
+      }
+      if (explicitSpatial && !verifiedEncoded) {
+        throw MorneyePackageError(
+          'The requested ${selectedAc4 ? 'AC-4' : 'E-AC-3 JOC'} source '
+          'could not be verified from the downloaded file. No stereo track '
+          'was substituted.',
         );
       }
-      if (verifiedAtmos) {
-        // Media3/ExoPlayer handles JOC using the licensed Android stack.
-        // Never feed JOC through Symphonia/Rust or a PCM transcoder.
+      if (verifiedEncoded) {
         return MorneyeDownload(
           File(file),
           {...track.cast<String, Object?>(), ...result.cast<String, Object?>()},
-          const {'codec': 'eac3-joc', 'format': 'isomp4'},
+          selectedAc4
+              ? const {'codec': 'ac4'}
+              : const {'codec': 'eac3-joc', 'format': 'isomp4'},
           staged,
-          atmosEncoded: true,
+          // A verified AC-4 codec does not certify spatial presentation.
+          atmosEncoded: !selectedAc4,
         );
       }
 
