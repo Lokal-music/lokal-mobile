@@ -248,17 +248,47 @@ class WebdavService implements NetworkSourceService {
     String url, {
     int depth = 1,
   }) async {
-    await NetworkLocalAccess.ensure(Uri.parse(url));
-    await _loadCertificateTrust(Uri.parse(url));
-    final request = http.Request('PROPFIND', Uri.parse(url))
-      ..headers['Depth'] = '$depth'
-      ..headers['Content-Type'] = 'application/xml; charset=utf-8'
-      ..headers['Authorization'] = _basicAuth(server)
-      ..body = _propfindBody;
-    final streamed = await _client.send(request).timeout(
-          const Duration(seconds: 30),
+    var uri = Uri.parse(url);
+    await NetworkLocalAccess.ensure(uri);
+    await _loadCertificateTrust(uri);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final request = http.Request('PROPFIND', uri)
+        ..followRedirects = false
+        ..headers['Depth'] = '$depth'
+        ..headers['Content-Type'] = 'application/xml; charset=utf-8'
+        ..headers['Authorization'] = _basicAuth(server)
+        ..body = _propfindBody;
+      final streamed = await _client.send(request).timeout(
+        const Duration(seconds: 30),
+      );
+      final response = await http.Response.fromStream(streamed);
+      final redirect = response.headers['location'];
+      if (attempt == 0 &&
+          (response.statusCode == 301 ||
+              response.statusCode == 302 ||
+              response.statusCode == 307 ||
+              response.statusCode == 308) &&
+          redirect != null) {
+        final target = uri.resolve(redirect);
+        // NASes frequently add a trailing slash to WebDAV collections.
+        // Only repeat that exact canonicalization; never forward HTTP Basic
+        // credentials to a different host, scheme, port or arbitrary path.
+        if (target.origin == uri.origin &&
+            target.path == '${uri.path}/' &&
+            target.query == uri.query &&
+            !target.hasFragment &&
+            target.userInfo.isEmpty) {
+          uri = target;
+          continue;
+        }
+        return http.Response(
+          'WebDAV redirected outside the requested collection.',
+          400,
         );
-    return http.Response.fromStream(streamed);
+      }
+      return response;
+    }
+    throw StateError('WebDAV redirect limit exceeded');
   }
 
   List<_DavEntry> _parseMultistatus(String body, String requestedHref) {
