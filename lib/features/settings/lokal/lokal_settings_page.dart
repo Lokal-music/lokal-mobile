@@ -172,7 +172,6 @@ class _LokalSettingsPageState extends ConsumerState<LokalSettingsPage> {
   Widget build(BuildContext context) {
     final t = context.lokal;
     final searching = _query.trim().isNotEmpty;
-    final results = searching ? _results(context) : const <Widget>[];
     return Scaffold(
       backgroundColor: t.bg,
       body: SafeArea(
@@ -182,7 +181,11 @@ class _LokalSettingsPageState extends ConsumerState<LokalSettingsPage> {
           listenable: searching && widget.sectionsBuilder == null
               ? lokalSettingsListenable(ref)
               : const _Never(),
-          builder: (context, _) => ListView(
+          builder: (context, _) {
+            // Recompute searchable rows whenever the player changes. Computing
+            // this before ListenableBuilder captures stale On/Off values.
+            final results = searching ? _results(context) : const <Widget>[];
+            return ListView(
             key: const PageStorageKey('lokal-settings'),
             padding: EdgeInsets.only(
               bottom: 32 + MediaQuery.paddingOf(context).bottom,
@@ -217,7 +220,8 @@ class _LokalSettingsPageState extends ConsumerState<LokalSettingsPage> {
               else
                 ...results,
             ],
-          ),
+            );
+          },
         ),
       ),
     );
