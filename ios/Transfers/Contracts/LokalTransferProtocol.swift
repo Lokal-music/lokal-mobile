@@ -20,6 +20,10 @@ enum LokalTransferProtocol {
   struct Client: Decodable, Sendable {
     let clientID: String
   }
+  struct ScopeRetirement: Decodable, Sendable {
+    let scope: LokalTransferScope
+    let clientID: String
+  }
   struct ImportWorkPage: Decodable, Sendable {
     let after: String?
     let limit: Int
@@ -167,6 +171,15 @@ enum LokalTransferProtocol {
 
   static func client(_ data: Data) throws -> Client {
     let value = try object(Client.self, data, keys: ["clientID"])
+    guard UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
+      throw LokalTransferError.invalidRecord
+    }
+    return value
+  }
+
+  static func scopeRetirement(_ data: Data) throws -> ScopeRetirement {
+    let value = try object(ScopeRetirement.self, data, keys: ["scope", "clientID"])
+    try value.scope.validate()
     guard UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
       throw LokalTransferError.invalidRecord
     }
