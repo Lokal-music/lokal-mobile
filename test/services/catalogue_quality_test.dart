@@ -319,8 +319,8 @@ void main() {
         'HiRes FLAC (requested)',
         reason: 'The first advertised tier is the download fallback');
     expect(tidalRequestedQualityLabel(configured: 'DOLBY_ATMOS', options: tiers),
-        'HiRes FLAC (requested)',
-        reason: 'Normal playback never silently requests an Atmos-only download');
+        'Dolby Atmos (requested)',
+        reason: 'A selected tier is a request, not proof of a catalogue edition or decoder');
     expect(tidalRequestedQualityLabel(configured: 'LOW', options: []), isNull);
     const requested = DiscoveryTrack(
       id: 'tidal-7', title: 'Track', artist: 'Artist',

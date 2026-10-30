@@ -841,6 +841,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
           final configured = settings['downloadQuality'] as String?;
           final tidal = addon.name.toLowerCase().contains('tidal') ||
               addon.key.toLowerCase().contains('tidal');
+          final amazon = addon.name.toLowerCase().startsWith('amazon');
           final requestedQuality = tidal
               ? tidalRequestedQualityLabel(
                   configured: configured, options: addon.qualityOptions)
@@ -890,6 +891,12 @@ Future<List<_PlaybackSource>> _morneyeSources(
               sourceName: addon.displayName,
               artwork: song.thumbnail,
               atmosAvailable: song.atmosAvailable,
+              atmosCodec: song.atmosCodec,
+              // Manifest AC-4 is merely requestable, never a catalogue tag.
+              atmosRequestable: amazon &&
+                  addon.qualityOptions.any((option) =>
+                      option is Map &&
+                      option['id']?.toString().toLowerCase() == 'ac4'),
               // Tidal's search metadata describes catalogue availability,
               // while requestedQuality describes the user's download option.
               // Both must survive to the badge formatter so it can distinguish
@@ -897,7 +904,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
               catalogueQuality: verified != null
                   ? verified.resolution
                   : morneyeAdvertisedQuality(song.quality),
-              requestedQuality: verified == null ? requestedQuality : null,
+              requestedQuality: verified == null && !amazon ? requestedQuality : null,
               catalogueCodec: details.codec,
               catalogueBitDepth: details.bitDepth,
               catalogueSampleRate: details.sampleRate,
@@ -915,23 +922,44 @@ Future<List<_PlaybackSource>> _morneyeSources(
           var segmentedProgress = false;
           var finished = false;
           MorneyeDownload download;
-          // Normal Play stays on the provider's configured stereo/lossless
-          // tier. Only an explicit user request opts in to E-AC-3 JOC.
-          if (found.atmosAvailable || found.atmosRequested) {
+          // Play and Save follow the saved add-on tier. A catalogue badge
+          // never follows from that preference; only delivered bytes can
+          // establish the codec and the iPhone must support its output.
+          final settings = packages.settings(addon);
+          final configured = settings['downloadQuality']?.toString();
+          final provider = addon.name.replaceFirst(RegExp(r'-web$'), '');
+          final configuredAmazonJoc =
+              (provider == 'amazon' || provider == 'amazon-new') &&
+              configured?.trim().toLowerCase() == 'eac3';
+          final configuredAtmos = configured != null &&
+              (isMorneyeAtmosQuality(configured) || configuredAmazonJoc) &&
+              addon.qualityOptions.any((option) =>
+                  option is Map && option['id'] == configured);
+          if (found.atmosAvailable || found.atmosRequested || configuredAtmos) {
             AtmosDiagnostics.record('request', {
               'source': 'morneye',
               'requested': found.atmosRequested,
               'downloadOnly': found.atmosDownload,
               'available': found.atmosAvailable,
-              'mode': found.atmosRequested ? 'atmos' : 'normal',
+              'mode': found.atmosRequested ? 'atmos' : 'configured',
             });
           }
-          if (found.atmosRequested && !found.atmosAvailable) {
-            AtmosDiagnostics.record('request_rejected', {'reason': 'catalogue_not_atmos'});
-            throw const DiscoveryException('This track has no advertised Atmos version.');
+          if (found.atmosRequested && !found.atmosAvailable &&
+              !found.atmosRequestable) {
+            AtmosDiagnostics.record('request_rejected', {
+              'reason': 'catalogue_not_atmos',
+            });
+            throw const DiscoveryException(
+              'This track has no advertised Atmos version.',
+            );
           }
-          final tryAtmos = found.atmosRequested;
-          final explicitTier = explicitMorneyePlaybackTier(atmosRequested: tryAtmos);
+          final tryAtmos = found.atmosRequested || configuredAtmos;
+          final explicitTier = found.atmosRequested
+              ? explicitMorneyePlaybackTier(
+                  atmosRequested: true, provider: addon.name,
+                  atmosCodec: found.atmosCodec,
+                )
+              : configuredAtmos ? configured : null;
           final requestedTier = explicitTier ?? '';
           final cacheKey = morneyePlaybackCacheKey(
             addonKey: addon.key,
@@ -963,10 +991,15 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   morneyeCanPlayWhileDownloading(addon.name)
               ? MorneyeLiveSession()
               : null;
-          if (tryAtmos && !found.atmosDownload && !await AtmosPlaybackSupport.available) {
+          if (morneyeNeedsSpatialPlaybackOutput(
+                spatialRequested: tryAtmos,
+                forDownload: forDownload,
+                atmosDownload: found.atmosDownload,
+              ) &&
+              !await AtmosPlaybackSupport.available) {
             AtmosDiagnostics.record('request_rejected', {'reason': 'decoder_unavailable'});
             throw const DiscoveryException(
-              'This Android device does not report an E-AC-3 JOC decoder or direct Atmos output. No stereo track was substituted.',
+              'This iPhone does not report native support for the selected encoded spatial-audio output. No stereo track was substituted; change the addon quality or download the original file.',
             );
           }
           try {

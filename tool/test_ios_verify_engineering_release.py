@@ -116,6 +116,44 @@ class ReleasePackageTests(unittest.TestCase):
         report = verify(parent, self.repo, min_sources=2)
         self.assertEqual(report["binaries"], 2)
 
+    def test_accepts_canonical_git_archive_crlf_export(self) -> None:
+        # The vendored Opus tree uses eol=crlf for Windows project files.
+        # Git archive exports CRLF even when the committed blob is LF.
+        (self.repo / ".gitattributes").write_text("example.dart eol=crlf\\n".replace("\\n", "\n"))
+        subprocess.run(["git", "-C", str(self.repo), "add", ".gitattributes"],
+                       check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm",
+                        "mark Windows project files CRLF"], check=True)
+        self.commit = subprocess.check_output(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True
+        ).strip()
+        self.tree = subprocess.check_output(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD^{tree}"], text=True
+        ).strip()
+        with self.source.open("wb") as output:
+            subprocess.run(
+                ["git", "-C", str(self.repo), "archive", "--format=tar.gz", "HEAD"],
+                stdout=output, check=True,
+            )
+        self.metadata["source_commit"] = self.commit
+        self.metadata["source_tree"] = self.tree
+        self._write_manifest()
+        with tarfile.open(self.source, "r:gz") as archive:
+            exported = archive.extractfile("example.dart")
+            self.assertIsNotNone(exported)
+            self.assertEqual(exported.read(), b"void main() {}\r\n")
+        report = verify(self.artifact, self.repo, min_sources=3)
+        self.assertEqual(report["source_files_checked"], 3)
+
+    def test_rejects_missing_exported_member(self) -> None:
+        with tarfile.open(self.source, "w:gz") as archive:
+            content = (self.repo / "README.md").read_bytes()
+            entry = tarfile.TarInfo("README.md")
+            entry.size = len(content)
+            archive.addfile(entry, BytesIO(content))
+        with self.assertRaisesRegex(ReleaseAuditError, "member count|path differs"):
+            verify(self.artifact, self.repo, min_sources=1)
+
     def test_rejects_changed_ipa_bytes(self) -> None:
         with self.ipa.open("ab") as handle:
             handle.write(b"tamper")
