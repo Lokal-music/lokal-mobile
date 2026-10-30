@@ -438,6 +438,8 @@ class AndroidAudioEngine implements AudioEngine {
   Future<bool> enterOnDemandQueueMode({
     just_audio.ConcatenatingAudioSource? concatenated,
   }) async {
+    ++_onDemandGaplessEpoch;
+    _onDemandGaplessSlots = null;
     final restoring = _sequenceRestoreCompletion;
     if (restoring != null) await restoring.future;
     final player = _player;
@@ -447,6 +449,7 @@ class AndroidAudioEngine implements AudioEngine {
     if (player.sequence.length == 1) {
       _loadedSingleTrackOnly = true;
       _playlistSignature = const <String>[];
+      _startOnDemandGaplessWindow(active, _selectedPlaylistIndexProvider?.call() ?? -1);
       return true;
     }
 
@@ -478,6 +481,7 @@ class AndroidAudioEngine implements AudioEngine {
       _playlistSignature = const <String>[];
       devLog('[Playback] Collapsed native playlist to active track for '
           'on-demand queue');
+      _startOnDemandGaplessWindow(active, _selectedPlaylistIndexProvider?.call() ?? -1);
       return true;
     } catch (error) {
       // A partially trimmed Media3 sequence must not be reused against a
@@ -496,6 +500,7 @@ class AndroidAudioEngine implements AudioEngine {
         }
         _loadedSingleTrackOnly = true;
         _playlistSignature = const <String>[];
+        _startOnDemandGaplessWindow(active, _selectedPlaylistIndexProvider?.call() ?? -1);
         return true;
       } catch (fallbackError) {
         _sourceFailed = true;
@@ -868,6 +873,16 @@ class AndroidAudioEngine implements AudioEngine {
         _rejectTruncatedActiveHttpTrack(
           player, nextTrack, player.sequence[index].duration,
         )) return;
+    // In a rolling gapless window native slot 0 is not logical slot 0.
+    // Map each native entry to its exact occurrence before notifying Queue.
+    final window = _onDemandGaplessSlots;
+    final slot = window != null && index != null &&
+            index >= 0 && index < window.length
+        ? window[index]
+        : null;
+    if (slot != null && nextTrack != null) {
+      _onNativePlaylistIndex?.call(slot.playlistIndex);
+    }
     // Report the native slot even if adjacent songs have identical IDs or
     // metadata. A single-source fast start has native index 0 regardless of
     // its absolute logical position, so never report that as a queue index.
@@ -891,6 +906,7 @@ class AndroidAudioEngine implements AudioEngine {
         duration: nextTrack?.duration ?? Duration.zero,
       ),
     );
+    if (slot != null) _prepareOnDemandGaplessNext();
   }
 
   void _syncPlaylistStateFromPlayer() {
@@ -898,7 +914,7 @@ class AndroidAudioEngine implements AudioEngine {
     final player = _player;
     if (player == null) return;
 
-    if (shouldExitSingleTrackMode(
+    if (_onDemandGaplessSlots == null && shouldExitSingleTrackMode(
       loadedSingleTrackOnly: _loadedSingleTrackOnly,
       playerSequenceLength: player.sequence.length,
     )) {
@@ -912,6 +928,9 @@ class AndroidAudioEngine implements AudioEngine {
   }
 
   Song? _resolveTrack(int? index) {
+    final slots = _onDemandGaplessSlots;
+    if (slots != null && index != null &&
+        index >= 0 && index < slots.length) return slots[index].song;
     if (_loadedSingleTrackOnly) {
       return _loadedTrack;
     }
@@ -951,6 +970,8 @@ class AndroidAudioEngine implements AudioEngine {
     _invalidatePlayerCache?.call(player);
     _playlistSignature = const <String>[];
     _loadedSingleTrackOnly = false;
+    ++_onDemandGaplessEpoch;
+    _onDemandGaplessSlots = null;
     _sourceFailed = true;
     final orphanedFadePlayer =
         survivor != null && !identical(survivor, _providerPlayer)
@@ -1050,6 +1071,8 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> load(Song track) async {
+    ++_onDemandGaplessEpoch;
+    _onDemandGaplessSlots = null;
     await _cancelCrossfade();
     final player = await _ensurePlayer();
     final playlist = _playlistProvider();
@@ -1213,6 +1236,9 @@ class AndroidAudioEngine implements AudioEngine {
         duration: player.duration ?? track.duration,
       ),
     );
+    if (shouldFastStartCurrentTrackOnly) {
+      _startOnDemandGaplessWindow(track, index);
+    }
   }
 
   @override
