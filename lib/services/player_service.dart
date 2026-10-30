@@ -3449,6 +3449,8 @@ class PlayerService {
         ? AudioPathManagement.androidManagedShared
         : directUsbActive
         ? AudioPathManagement.directUsbExperimental
+        : outputSignature?.startsWith('android-mixer-bit-perfect:') == true
+        ? AudioPathManagement.androidMixerBitPerfect
         : outputSignature?.startsWith('android-alsa:') == true
         ? AudioPathManagement.alsaDirectDap
         : outputSignature?.startsWith('android-direct:') == true
@@ -3457,6 +3459,7 @@ class PlayerService {
 
     final isMixerManaged =
         pathManagement != AudioPathManagement.directUsbExperimental &&
+        pathManagement != AudioPathManagement.androidMixerBitPerfect &&
         pathManagement != AudioPathManagement.alsaDirectDap &&
         pathManagement != AudioPathManagement.managedDirectExclusive;
     final requestedOutputSampleRate =
