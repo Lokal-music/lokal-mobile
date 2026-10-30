@@ -1,6 +1,7 @@
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/core/utils/online_source_log_label.dart';
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flick/features/discovery/discovery_models.dart';
@@ -9,6 +10,7 @@ import 'package:flick/features/discovery/discovery_progressive_streams.dart';
 import 'package:flick/features/discovery/discovery_settings.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/services/playback_source_priority.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -168,24 +170,118 @@ void main() {
     },
   );
 
-  test(
-    'old label-based queued source IDs still resolve after a rename',
-    () async {
+  test('manifest failure does not start progressive playback', () async {
+    final config = DiscoveryAddonConfig(
+      id: _only.id, label: _only.label, endpoint: _only.endpoint,
+      enabled: true, settings: const {'quality': 'CUSTOM'},
+    );
+    final requests = <String>[];
+    final client = MockClient((request) async {
+      requests.add(request.url.path);
+      if (request.url.path.endsWith('/manifest.json')) {
+        return http.Response('unavailable', 503);
+      }
+      return http.Response('{"url":"https://cdn.example/audio.flac"}', 200);
+    });
+    addTearDown(client.close);
+    await expectLater(
+      playOnlineTrack('w-only-http', _track(), client: client,
+          store: _MemorySettings(DiscoverySettings(addons: [config]))),
+      throwsA(isA<DiscoveryException>()),
+    );
+    expect(requests, ['/library/stream/song-1', '/library/manifest.json']);
+  });
+
+  test('playback cancellation reaches the spatial manifest lookup', () async {
+    final config = DiscoveryAddonConfig(
+      id: _only.id, label: _only.label, endpoint: _only.endpoint,
+      enabled: true, settings: const {'quality': 'CUSTOM'},
+    );
+    final started = Completer<void>();
+    final response = Completer<http.Response>();
+    final cancelled = Completer<void>();
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/manifest.json')) {
+        started.complete();
+        return response.future;
+      }
+      return http.Response('{"url":"https://cdn.example/audio.flac"}', 200);
+    });
+    addTearDown(client.close);
+    final result = playOnlineTrack('w-only-http', _track(), client: client,
+        cancel: cancelled.future,
+        store: _MemorySettings(DiscoverySettings(addons: [config])));
+    await started.future;
+    cancelled.complete();
+    await expectLater(result, throwsA(isA<DiscoveryException>().having(
+        (error) => error.message, 'message', 'Request cancelled.')));
+    response.complete(http.Response('{}', 200));
+  });
+
+  for (final spatial in [true, false]) {
+    test(spatial
+        ? 'explicit spatial preparation failure does not try another source'
+        : 'ordinary stream failure still tries another source', () async {
+      SharedPreferences.setMockInitialValues({
+        PlaybackSourcePriority.key: ['w-first', 'w-second'],
+      });
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = MethodChannel('lokal/atmos');
+      messenger.setMockMethodCallHandler(channel, (_) async => {'available': false});
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final settings = DiscoverySettings(youtubeEnabled: false, addons: [
+        DiscoveryAddonConfig(id: 'first', label: 'First',
+          endpoint: 'https://first.example', enabled: true,
+          settings: spatial ? const {'quality': 'ATMOS'} : const {}),
+        const DiscoveryAddonConfig(id: 'second', label: 'Second',
+          endpoint: 'https://second.example', enabled: true),
+      ]);
       final requests = <String>[];
-      final client = _client(requests);
+      final client = MockClient((request) async {
+        requests.add('${request.url.host}${request.url.path}');
+        if (request.url.path == '/search') {
+          return http.Response(jsonEncode({'tracks': [{
+            'id': 'song', 'title': 'Night Drive', 'artist': 'Test Artist',
+          }]}), 200);
+        }
+        if (request.url.host == 'first.example' && !spatial) {
+          return http.Response('unavailable', 503);
+        }
+        return http.Response('{"url":"https://cdn.example/audio.flac"}', 200);
+      });
       addTearDown(client.close);
-      final track = _track(label: 'Former name');
-      final played = await playOnlineTrack(
-        'w-Former name',
-        track,
-        store: _MemorySettings(),
-        client: client,
+      final result = findDiscoverySong(
+        const LokalDiscoveryTrack(title: 'Night Drive', artist: 'Test Artist'),
+        client: client, store: _MemorySettings(settings),
       );
-      expect(played.sourceDisplayName, 'HTTP source');
-      expect(played.sourcePackage, 'konnekted.progressive');
-      expect(requests, ['GET /library/stream/song-1']);
-    },
-  );
+      if (spatial) {
+        await expectLater(result, throwsA(isA<DiscoveryException>().having(
+          (error) => error.message, 'message', contains('cannot decode'),
+        )));
+        expect(requests.where((request) => request.startsWith('second.example')),
+            isEmpty);
+      } else {
+        final song = await result;
+        expect(song?.sourceDisplayName, 'Second');
+        expect(requests, contains('second.example/stream/song'));
+      }
+    });
+  }
+
+  test('old label-based queued source IDs still resolve after a rename', () async {
+    final requests = <String>[];
+    final client = _client(requests);
+    addTearDown(client.close);
+    final track = _track(label: 'Former name');
+    final played = await playOnlineTrack(
+      'w-Former name', track,
+      store: _MemorySettings(),
+      client: client,
+    );
+    expect(played.sourceDisplayName, 'HTTP source');
+    expect(played.sourcePackage, 'konnekted.progressive');
+    expect(requests, ['GET /library/stream/song-1']);
+  });
 
   test('mismatched HTTP source selection never plays another add-on', () async {
     final requests = <String>[];

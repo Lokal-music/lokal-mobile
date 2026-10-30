@@ -18,6 +18,7 @@ class _MemorySettings extends DiscoverySettingsStore {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
     'Monochrome is opt-in and remains a native source when enabled',
