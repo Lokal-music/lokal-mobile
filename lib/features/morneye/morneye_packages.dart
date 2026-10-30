@@ -1907,23 +1907,17 @@ class MorneyePackages {
       final explicitAmazonJoc = amazonProvider &&
           quality?.trim().toLowerCase() == 'eac3' &&
           chosen.trim().toLowerCase() == 'eac3';
-      if (forPlayback && !isMorneyeAtmosQuality(quality) &&
-          !explicitAmazonJoc &&
-          (morneyeSpatialOption({'id': chosen}, provider: provider) ||
-              addon.qualityOptions.any((o) => o is Map && o['id'] == chosen &&
-                  morneyeSpatialOption(o, provider: provider)))) {
-        throw const MorneyePackageError(
-          'Normal playback unexpectedly selected a Dolby Atmos download tier.',
-        );
-      }
-      // Saves retain the user's Amazon AC-4 setting even without an explicit
-      // per-track tier. Playback's resolved tier has already excluded it.
+      // Play and Save must send the exact configured quality to the addon.
+      // A native encoded rendition is verified below; never silently
+      // substitute FLAC when Atmos was requested.
+      // AC-4 is a codec preference and must be validated from the delivered
+      // file; it never creates a catalogue Atmos badge.
       final amazonAc4 = amazonProvider &&
           chosen.trim().toLowerCase() == 'ac4';
       // An explicit E-AC-3 selection is Atmos only when initiated by a
       // confirmed JOC action. The decoded file must then pass the JOC probe.
-      final explicitAtmos = isMorneyeAtmosQuality(quality) ||
-          explicitAmazonJoc || (!forPlayback && amazonAc4);
+      final explicitAtmos = isMorneyeAtmosQuality(chosen) ||
+          explicitAmazonJoc;
       if (explicitAtmos) AtmosDiagnostics.record('addon_download_start', {
         'source': provider == 'tidal' ? 'tidal' : 'other',
         'quality': chosen,
