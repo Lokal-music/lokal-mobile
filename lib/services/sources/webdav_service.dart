@@ -496,6 +496,16 @@ class WebdavService implements NetworkSourceService {
 
   // --- Library walk -------------------------------------------------------
 
+  bool _isMultistatusDocument(String body) {
+    try {
+      return XmlDocument.parse(body)
+          .findAllElements('multistatus', namespace: '*')
+          .isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Stream<ScanProgress> syncLibrary(NetworkServerEntity server) async* {
     final syncedRemoteIds = <String>{};
@@ -517,12 +527,19 @@ class WebdavService implements NetworkSourceService {
     allDirs.add(rootPath);
 
     var filesProcessed = 0;
+    var scanIncomplete = false;
     while (queue.isNotEmpty) {
       final dir = queue.removeAt(0);
       List<_DavEntry> entries;
       try {
         final response = await _propfind(server, dir.url);
-        if (response.statusCode != 207 && response.statusCode != 200) {
+        if ((response.statusCode != 207 && response.statusCode != 200) ||
+            !_isMultistatusDocument(response.body)) {
+          scanIncomplete = true;
+          AppLog.instance.add(
+            'WebDAV directory scan failed at "${dir.path}" on '
+            '${server.label}: HTTP ${response.statusCode} or invalid multistatus',
+          );
           filesProcessed++;
           yield _progress(server, songsFound, allDirs.length, filesProcessed,
               dir.path);
@@ -530,6 +547,7 @@ class WebdavService implements NetworkSourceService {
         }
         entries = _parseMultistatus(response.body, dir.path);
       } catch (e) {
+        scanIncomplete = true;
         AppLog.instance
             .add('WebDAV sync skipped "${dir.path}" on ${server.label}: $e');
         filesProcessed++;
@@ -576,6 +594,15 @@ class WebdavService implements NetworkSourceService {
           server, songsFound, allDirs.length, filesProcessed, dir.path);
     }
 
+    // A single failed folder can hide hundreds of previously indexed
+    // tracks. Never interpret missing responses as deleted files or advance
+    // lastSyncedAt following an incomplete walk.
+    if (scanIncomplete) {
+      throw WebdavNetworkException(
+        'Library scan incomplete; previously indexed songs were preserved. '
+        'Check server permissions or connectivity and retry.',
+      );
+    }
     await purgeAndStampNetworkSync(
       server,
       syncedRemoteIds,
