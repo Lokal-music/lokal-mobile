@@ -70,7 +70,8 @@ def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
     _require("Engineering" in metadata.get("release_status", ""),
              "Unexpected public release claim")
 
-    sha = hashlib.file_digest(ipa.open("rb"), "sha256").hexdigest()
+    with ipa.open("rb") as handle:
+        sha = hashlib.file_digest(handle, "sha256").hexdigest()
     _require(re.fullmatch(r"[0-9a-f]{64}", sha) is not None, "Bad IPA digest")
     _require(sha == metadata.get("sha256"), "IPA differs from metadata SHA-256")
     _require(
@@ -104,7 +105,9 @@ def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
             _require(isinstance(uuids, list) and bool(uuids),
                      f"Missing binary UUID: {relative}")
         for relative in metadata.get("cast_resources_verified", []):
-            _require(f"Payload/Runner.app/{relative}" in names,
+            package_path = f"Payload/Runner.app/{relative}".rstrip("/")
+            _require(package_path in names or
+                     any(name.startswith(package_path + "/") for name in names),
                      f"Missing Cast resource: {relative}")
         _require(not any(".appex/" in name for name in names),
                  "Unqualified iOS app extension is embedded")
