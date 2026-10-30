@@ -59,6 +59,37 @@ void main() {
       expect(service.untrustedCertificateFingerprint, isNull);
     });
 
+    test('follows only same-origin trailing slash WebDAV redirects', () async {
+      final visited = <Uri>[];
+      final client = MockClient((request) async {
+        visited.add(request.url);
+        expect(request.followRedirects, isFalse);
+        if (visited.length == 1) {
+          return http.Response('', 301, headers: {
+            'location': '/music/',
+          });
+        }
+        return http.Response(_multistatus, 207);
+      });
+      final service = WebdavService.create(client: client);
+      expect(await service.ping(_server()), isTrue);
+      expect(visited.map((uri) => uri.path), ['/music', '/music/']);
+    });
+
+    test('never sends authentication on a cross-origin PROPFIND redirect', () async {
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        return http.Response('', 302, headers: {
+          'location': 'https://attacker.example/steal',
+        });
+      });
+      final service = WebdavService.create(client: client);
+      expect(await service.ping(_server()), isFalse);
+      expect(service.lastPingError, contains('redirected outside'));
+      expect(requests, 1);
+    });
+
     test('ordinary HTTP 200 does not pretend to be WebDAV', () async {
       final client = MockClient((request) async =>
           http.Response('<html>Router files</html>', 200));
