@@ -7,6 +7,9 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioMixerAttributes
 import android.media.AudioTrack
+import android.media.AudioRouting
+import android.os.Handler
+import android.os.Looper
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
@@ -47,8 +50,26 @@ object AndroidUsbMixer {
         val bits: Int,
     ) {
         private var nextCheck = 0L
+        @Volatile private var routeInvalidated = false
+        private var listenersInstalled = false
+        private val routeListener = AudioRouting.OnRoutingChangedListener {
+            if (track.routedDevice?.id != device.id) routeInvalidated = true
+        }
+        private val mixerListener = AudioManager.OnPreferredMixerAttributesChangedListener { attributes, changed, selected ->
+            if (attributes.usage == AudioAttributes.USAGE_MEDIA &&
+                changed.id == device.id && selected != this.attributes) {
+                routeInvalidated = true
+            }
+        }
+
+        fun activate() {
+            track.addOnRoutingChangedListener(routeListener, Handler(Looper.getMainLooper()))
+            manager.addOnPreferredMixerAttributesChangedListener(Runnable::run, mixerListener)
+            listenersInstalled = true
+        }
 
         fun valid(): Boolean =
+            !routeInvalidated &&
             track.routedDevice?.id == device.id &&
                 manager.getPreferredMixerAttributes(ATTRIBUTES, device) == attributes &&
                 track.sampleRate == attributes.format.sampleRate &&
@@ -56,6 +77,7 @@ object AndroidUsbMixer {
                 track.audioFormat == attributes.format.encoding
 
         fun write(data: ByteBuffer): Int {
+            if (routeInvalidated) return -1
             val now = SystemClock.elapsedRealtime()
             if (now >= nextCheck) {
                 if (!valid()) {
@@ -68,6 +90,10 @@ object AndroidUsbMixer {
         }
 
         fun release() {
+            if (listenersInstalled) {
+                runCatching { track.removeOnRoutingChangedListener(routeListener) }
+                runCatching { manager.removeOnPreferredMixerAttributesChangedListener(mixerListener) }
+            }
             runCatching { track.pause() }
             runCatching { track.flush() }
             runCatching { track.release() }
@@ -148,6 +174,7 @@ object AndroidUsbMixer {
                     }
                     val session = Session(manager, device, option, track, bits)
                     require(session.valid()) { "USB route or mixer attributes could not be verified" }
+                    session.activate()
                     val id = nextId++
                     sessions[id] = session
                     Log.i(TAG, "Verified Android bit-perfect USB mixer: ${device.productName}, ${rate}Hz, ${bits}-bit transport")
