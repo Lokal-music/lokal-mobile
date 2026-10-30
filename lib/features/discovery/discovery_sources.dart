@@ -323,6 +323,22 @@ class YoutubeMusicCatalog {
   }
 }
 
+/// An HTTP addon quality setting is only a request for a rendition, not
+/// catalogue evidence. A bare eac3/ec3 codec is not necessarily Atmos.
+/// The returned *file* must pass the existing native Atmos verification.
+String? httpAddonRequestedSpatialCodec(Map<String, String> settings) {
+  for (final entry in settings.entries) {
+    if (!RegExp(r'quality|codec|format|audio', caseSensitive: false)
+        .hasMatch(entry.key)) continue;
+    final id = entry.value.trim().toUpperCase()
+        .replaceAll(RegExp(r'[ -]'), '_');
+    if (const {'AC4_ATMOS', 'AC_4_ATMOS'}.contains(id)) return 'ac4';
+    if (const {'ATMOS', 'DOLBY_ATMOS', 'EAC3_JOC', 'E_AC_3_JOC'}
+        .contains(id)) return 'eac3-joc';
+  }
+  return null;
+}
+
 /// Supported manifest option for an HTTP add-on select setting.
 class AddonSettingOption {
   const AddonSettingOption(this.value, this.label);
@@ -738,7 +754,7 @@ class DiscoveryAddon {
     // A search result can embed a Qobuz sample URL. Discard only recognized
     // previews and request a fresh full stream from the add-on endpoint.
     // Unsafe, encrypted or DRM inline responses still fail closed.
-    if (track.inlineStream case final inline?) {
+    if (settings.isEmpty && track.inlineStream case final inline?) {
       try {
         return parseStream(inline, expectedDuration: track.duration);
       } on _PreviewOnlyAddonStream {
