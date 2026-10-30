@@ -39,7 +39,11 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     let owner: Owner
     fileprivate let barrier: UUID
   }
-  enum Permission: Equatable, Sendable { case write, reconcileOnly, cleanup }
+  struct SubmissionTicket: Sendable {
+    let owner: Owner
+    fileprivate let epoch: UUID
+  }
+  enum Permission: Equatable, Sendable { case write, reconcileOnly, cleanup, orphanCleanup }
   struct Lease: Sendable {
     let id: String
     let jobID: String
@@ -54,6 +58,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   private var engineID: String?
   private var owner: Owner?
   private var barrier = UUID()
+  private var submissionEpoch = UUID()
   private var active: Lease?
   private var cleanupPending = false
 
@@ -77,6 +82,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
 
   func attachEngine() -> String {
     locked {
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
       let id = UUID().uuidString.lowercased()
@@ -94,6 +100,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
       guard self.engineID == engineID else { throw LokalTransferError.invalidTransition }
       let next = Owner(engineID: engineID, clientID: clientID)
       if owner != next {
+        submissionEpoch = UUID()
         barrier = UUID()
         retireActive()
         owner = next
@@ -116,6 +123,30 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
       guard owner == ticket.owner, barrier == ticket.barrier else {
         throw LokalTransferError.staleRevision
       }
+    }
+  }
+
+  /// Submission consent is independent of individual import lease releases.
+  /// Capture at the bridge before dispatch, then check on the runtime queue.
+  func captureSubmission(_ owner: Owner) throws -> SubmissionTicket {
+    try locked {
+      guard self.owner == owner else { throw LokalTransferError.staleRevision }
+      return SubmissionTicket(owner: owner, epoch: submissionEpoch)
+    }
+  }
+
+  func validateSubmission(_ ticket: SubmissionTicket) throws {
+    try locked {
+      guard owner == ticket.owner, submissionEpoch == ticket.epoch else {
+        throw LokalTransferError.staleRevision
+      }
+    }
+  }
+
+  func retireSubmissions(_ owner: Owner) throws {
+    try locked {
+      guard self.owner == owner else { throw LokalTransferError.staleRevision }
+      submissionEpoch = UUID()
     }
   }
 
@@ -142,29 +173,44 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func claim(_ ticket: Ticket, job: LokalTransferJob,
              permission: Permission) throws -> Lease {
     try job.validate()
-    guard job.direction == .download,
+    guard permission != .orphanCleanup, job.direction == .download,
           [.validating, .importing].contains(job.phase) ||
             (job.phase == .complete && permission == .reconcileOnly) else {
       throw LokalTransferError.invalidTransition
     }
+    return try grant(ticket, job: job, revision: job.revision, permission: permission)
+  }
+
+  /// Bookkeeping only. Runtime proves that this older revision has no native
+  /// custody after draining file work. Never accepted by file cleanup guards.
+  func claimOrphanCleanup(_ ticket: Ticket, current: LokalTransferJob,
+                          retiringRevision: Int) throws -> Lease {
+    try current.validate()
+    guard current.direction == .download, retiringRevision > 0,
+          current.revision > retiringRevision else { throw LokalTransferError.invalidTransition }
+    return try grant(ticket, job: current, revision: retiringRevision, permission: .orphanCleanup)
+  }
+
+  private func grant(_ ticket: Ticket, job: LokalTransferJob, revision: Int,
+                     permission: Permission) throws -> Lease {
     let scope = try normalized(LokalTransferScope(desktopID: job.identity.desktopID,
       origin: job.identity.origin, pairingID: job.identity.pairingID))
     return try locked {
       guard ticket.barrier == barrier, owner == ticket.owner else {
         throw LokalTransferError.staleRevision
       }
-      guard cleanupPending == (permission == .cleanup) else {
+      guard cleanupPending == (permission == .cleanup || permission == .orphanCleanup) else {
         throw LokalTransferError.invalidTransition
       }
       if let active {
-        guard active.jobID == job.id, active.revision == job.revision,
+        guard active.jobID == job.id, active.revision == revision,
               active.owner == ticket.owner, active.scope == scope,
               active.permission == permission else { throw LokalTransferError.invalidTransition }
         try active.cancellation.check()
         return active
       }
       let lease = Lease(id: UUID().uuidString.lowercased(), jobID: job.id,
-        revision: job.revision, permission: permission,
+        revision: revision, permission: permission,
         cancellation: LokalTransferCopyCancellation(), owner: ticket.owner, scope: scope)
       active = lease
       return lease
@@ -185,7 +231,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
                 requiresWrite: Bool) throws {
     try locked {
       let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
-      guard lease.permission != .cleanup,
+      guard [.write, .reconcileOnly].contains(lease.permission),
             !requiresWrite || lease.permission == .write else {
         throw LokalTransferError.invalidTransition
       }
@@ -223,6 +269,16 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     }
   }
 
+  /// Direct Isar guard, deliberately returns no filesystem cancellation token.
+  func validateOrphanCleanup(_ owner: Owner, jobID: String, revision: Int,
+                             leaseID: String) throws {
+    try locked {
+      let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
+      guard lease.permission == .orphanCleanup else { throw LokalTransferError.invalidTransition }
+      try lease.cancellation.check()
+    }
+  }
+
   /// Runtime must drain owned file work before acknowledging cleanup/releasing
   /// a database reservation. A stale client cannot release a replacement lease.
   func release(_ owner: Owner, jobID: String, revision: Int, leaseID: String) throws {
@@ -244,6 +300,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func stopClient(_ value: Owner) {
     locked {
       guard owner == value else { return }
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
       owner = nil
@@ -253,6 +310,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func detachEngine(_ value: String) {
     locked {
       guard engineID == value else { return }
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
       owner = nil
@@ -263,6 +321,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   /// Advance the barrier even when no file operation has claimed a lease yet.
   func revokeAll() {
     locked {
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
     }
@@ -278,6 +337,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func revoke(scope: LokalTransferScope) throws {
     let scope = try normalized(scope)
     locked {
+      submissionEpoch = UUID()
       barrier = UUID()
       if active?.scope == scope { retireActive() }
     }

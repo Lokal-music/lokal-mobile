@@ -5,14 +5,17 @@ import 'dart:isolate';
 
 import 'package:flutter/services.dart';
 
+import '../data/entities/ios_transfer_receipt_entity.dart';
+
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_import.dart';
 import '../models/ios_transfer_recovery.dart';
 import '../models/ios_transfer_cleanup.dart';
+import '../models/ios_transfer_orphan.dart';
 import 'link/link_protocol.dart' show linkUuid;
 import 'ios_transfer_coordinator_port.dart';
 
-Uint8List _prepareIntents(List<IosTransferIntent> intents) {
+Uint8List _prepareIntents(List<IosTransferIntent> intents, String clientId) {
   if (intents.isEmpty ||
       intents.length > iosTransferMaximumJobs ||
       intents.map((intent) => intent.id).toSet().length != intents.length) {
@@ -25,13 +28,25 @@ Uint8List _prepareIntents(List<IosTransferIntent> intents) {
     }
   }
   final bytes = Uint8List.fromList(
-    utf8.encode(jsonEncode([for (final intent in intents) intent.toJson()])),
+    utf8.encode(
+      jsonEncode({
+        'clientID': clientId,
+        'intents': [for (final intent in intents) intent.toJson()],
+      }),
+    ),
   );
   if (bytes.length > iosTransferMaximumBytes) {
     throw const FormatException('Transfer request exceeds its byte limit.');
   }
   return bytes;
 }
+
+// Keep the isolate closure outside the transport's lexical context. A local
+// ownership-check closure can otherwise capture the transport and its Futures.
+Future<Uint8List> _encodeSubmission(
+  List<IosTransferIntent> intents,
+  String clientId,
+) => Isolate.run(() => _prepareIntents(intents, clientId));
 
 /// One application coordinator owns this transport. Native storage/networking
 /// survives Dart/engine replacement; this class owns only typed calls and the
@@ -59,6 +74,9 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   String? _subscription;
   String? _observedClient;
   Future<void>? _observationReady;
+  final _submissions = <Future<IosTransferSummary>>{};
+  int _submissionEpoch = 0;
+  bool _submissionsPaused = false;
   (BinaryMessenger, String) get _key => (channel.binaryMessenger, channel.name);
   @override
   Stream<void> get changes => _changes.stream;
@@ -133,15 +151,76 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     return List.unmodifiable(raw.map(IosTransferJob.fromJson));
   }
 
-  Future<IosTransferSummary> enqueue(List<IosTransferIntent> intents) async {
-    if (!supported || _disposed) {
+  Future<IosTransferSummary> enqueue(List<IosTransferIntent> intents) {
+    final task = _enqueue(intents, _submissionEpoch);
+    _submissions.add(task);
+    return task.whenComplete(() => _submissions.remove(task));
+  }
+
+  Future<IosTransferSummary> _enqueue(
+    List<IosTransferIntent> intents,
+    int epoch,
+  ) async {
+    if (!supported || _disposed || _submissionsPaused) {
       throw StateError('Native transfer transport unavailable.');
+    }
+    final client = _subscription, ready = _observationReady;
+    if (client == null || ready == null) {
+      throw StateError('Submission requires the active root transfer client.');
     }
     // Freeze consent before the first await; large plans are validated/encoded
     // away from the audio/UI isolate and submitted as one native transaction.
     final frozen = List<IosTransferIntent>.unmodifiable(intents);
-    final bytes = await Isolate.run(() => _prepareIntents(frozen));
-    return IosTransferSummary.fromJson(await _invoke('enqueue', bytes));
+    void check() {
+      if (_disposed ||
+          _submissionsPaused ||
+          _submissionEpoch != epoch ||
+          _subscription != client ||
+          _observedClient != client ||
+          !identical(_owners[_key], this)) {
+        throw StateError('Transfer submission was retired.');
+      }
+    }
+
+    await ready;
+    check();
+    final bytes = await _encodeSubmission(frozen, client);
+    check();
+    final result = await _invoke('enqueue', bytes);
+    check();
+    return IosTransferSummary.fromJson(result);
+  }
+
+  /// Fence app encoding synchronously, then invalidate already dispatched
+  /// native tickets and await their replies. This is not OS task cancellation
+  /// or the final storage clear barrier; the mutation owner must perform both.
+  @override
+  Future<void> pauseSubmissions() {
+    _submissionsPaused = true;
+    _submissionEpoch++;
+    final pending = _submissions.toList();
+    final fence = _subscription == null
+        ? Future<Object?>.value(true)
+        : _importCall('retireSubmissions', {});
+    return () async {
+      try {
+        if (await fence != true) {
+          throw const FormatException(
+            'Invalid native submission retirement response.',
+          );
+        }
+      } finally {
+        await Future.wait([
+          for (final task in pending)
+            task.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        ]);
+      }
+    }();
+  }
+
+  @override
+  void resumeSubmissions() {
+    if (!_disposed) _submissionsPaused = false;
   }
 
   Future<IosTransferJob> _control(String method, IosTransferJob job) async {
@@ -230,6 +309,7 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
 
   /// Private cleanup claim only; product activation and the Isar decision are
   /// separate. Native revokes publication before draining the old file worker.
+  @override
   Future<IosTransferCleanupLease> claimImportCleanup(
     IosTransferImportWork work,
   ) async {
@@ -246,15 +326,128 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     return claim;
   }
 
+  @override
   Future<void> validateImportCleanup(IosTransferCleanupLease lease) async {
     if (await _importCall('validateImportCleanup', lease.control) != true) {
       throw const FormatException('Invalid native cleanup guard response.');
     }
   }
 
+  @override
   Future<void> releaseImportCleanup(IosTransferCleanupLease lease) async {
     if (await _importCall('releaseImport', lease.control) != true) {
       throw const FormatException('Invalid native cleanup release response.');
+    }
+  }
+
+  @override
+  Future<IosTransferOrphanLease> claimOrphanCleanup(
+    IosTransferWorkCursor key, {
+    required int songId,
+  }) async {
+    if (songId < 1 || songId >= 9223372036854775807) {
+      throw const FormatException('Invalid orphan Song identity.');
+    }
+    final lease = IosTransferOrphanLease.fromJson(
+      await _importCall('claimOrphanCleanup', {
+        'id': key.jobId,
+        'revision': key.revision,
+        'songID': songId,
+      }),
+    );
+    if (lease.clientId != _subscription ||
+        lease.key.value != key.value ||
+        lease.songId != songId) {
+      throw StateError(
+        'Orphan recovery belongs to another reservation or client.',
+      );
+    }
+    return lease;
+  }
+
+  @override
+  Future<void> validateOrphanCleanup(IosTransferOrphanLease lease) async {
+    if (await _importCall('validateOrphanCleanup', lease.control) != true) {
+      throw const FormatException('Invalid orphan recovery guard response.');
+    }
+  }
+
+  @override
+  Future<void> releaseOrphanCleanup(IosTransferOrphanLease lease) async {
+    if (await _importCall('releaseImport', lease.control) != true) {
+      throw const FormatException('Invalid orphan recovery release response.');
+    }
+  }
+
+  Map<String, Object> _cleanupDecision(
+    IosTransferCleanupLease lease,
+    IosTransferReceiptEntity receipt, {
+    required bool finalized,
+  }) {
+    final job = lease.job, identity = lease.job.intent.identity;
+    final committed = receipt.state == 'committed';
+    if (receipt.id < 1 ||
+        receipt.schemaVersion != 1 ||
+        receipt.operationKey != '${job.id}:${job.revision}' ||
+        receipt.jobId != job.id ||
+        receipt.revision != job.revision ||
+        receipt.localSongId != lease.songId ||
+        receipt.serverId != identity.localServerId ||
+        receipt.desktopId != identity.scope.desktopId ||
+        receipt.desktopUserId != identity.desktopUserId ||
+        receipt.pairingId != identity.scope.pairingId ||
+        receipt.origin != identity.scope.origin ||
+        receipt.sourceId != identity.sourceId ||
+        receipt.relativePath != lease.target.relativePath ||
+        receipt.bytes != job.receivedBytes ||
+        receipt.sha256 != job.receivedSha256 ||
+        committed != (receipt.committedAt != null) ||
+        (committed && !lease.publicationRecorded) ||
+        (!committed && receipt.state != (finalized ? 'retired' : 'retiring'))) {
+      throw const FormatException(
+        'Cleanup requires the exact durable Isar decision.',
+      );
+    }
+    return {
+      ...lease.control,
+      'songID': lease.songId,
+      'mode': committed ? 'committed' : 'abandoned',
+      'isarState': receipt.state,
+    };
+  }
+
+  /// Caller has crossed the actual Isar writer barrier. Passing a prepared
+  /// receipt cannot authorize deletion, and committed history always preserves
+  /// public Music. Native retains provenance after the returned resolution.
+  @override
+  Future<IosTransferResolvedCleanup> resolveImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  }) async {
+    final payload = _cleanupDecision(lease, receipt, finalized: false);
+    final mode = payload['mode'] == 'committed'
+        ? IosTransferCleanupMode.committed
+        : IosTransferCleanupMode.abandoned;
+    final result = IosTransferResolvedCleanup.fromJson(
+      await _importCall('resolveImportCleanup', payload),
+    );
+    result.validateFor(lease, mode);
+    return result;
+  }
+
+  /// Only after Isar retirement (or durable committed history). This removes
+  /// native bookkeeping, not files or Songs, then the caller releases cleanup.
+  @override
+  Future<void> finalizeImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  }) async {
+    if (await _importCall(
+          'finalizeImportCleanup',
+          _cleanupDecision(lease, receipt, finalized: true),
+        ) !=
+        true) {
+      throw const FormatException('Invalid native cleanup finalization.');
     }
   }
 
@@ -417,6 +610,8 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   }
 
   Future<void> _stop() async {
+    _submissionEpoch++;
+    _submissionsPaused = true;
     final id = _subscription;
     _subscription = null;
     _observedClient = null;
@@ -439,6 +634,10 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     if (_disposed) return;
     _disposed = true;
     await _stop();
+    await Future.wait([
+      for (final task in _submissions.toList())
+        task.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    ]);
     await _changes.close();
   }
 }

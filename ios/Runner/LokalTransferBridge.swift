@@ -102,7 +102,9 @@ private func executeTransfer(_ operation: LokalTransferOperation, payload: Data?
       let request = try LokalTransferProtocol.page(payload!)
       runtime.page(offset: request.offset, limit: request.limit) { reply.encode($0) }
     case .enqueue:
-      runtime.enqueue(try LokalTransferProtocol.intents(payload!)) { reply.encode($0) }
+      // Submission is decoded and ticketed synchronously in handle(), before
+      // host dispatch. Never provide an unowned generic execution path.
+      reply.failure(LokalTransferError.invalidRecord)
     case .resume:
       runtime.resume(scope: try LokalTransferProtocol.scope(payload!)) { reply.encode($0) }
     case .cancel, .retry, .verify:
@@ -200,6 +202,16 @@ final class LokalTransferBridge {
   }
 
   private func handle(_ call: FlutterMethodCall, reply: LokalTransferReply) {
+    if call.method == "retireSubmissions" {
+      do {
+        guard let data = call.arguments as? FlutterStandardTypedData else { throw LokalTransferError.invalidRecord }
+        let request = try LokalTransferProtocol.client(data.data)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        try host.importOwnership.retireSubmissions(owner)
+        reply.encode(.success(true))
+      } catch { reply.failure(error) }
+      return
+    }
     if call.method == "observe" || call.method == "stopObserving" {
       do {
         guard let data = call.arguments as? FlutterStandardTypedData, data.data.count <= 8192 else {
@@ -221,7 +233,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -237,6 +249,16 @@ final class LokalTransferBridge {
     } else {
       guard call.arguments == nil else { reply.failure(LokalTransferError.invalidRecord); return }
       bytes = nil
+    }
+    if operation == .enqueue {
+      do {
+        let request = try LokalTransferProtocol.submission(bytes!)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ticket = try host.importOwnership.captureSubmission(owner)
+        host.withRuntime({ runtime in runtime.enqueue(request.jobs, submission: ticket) { reply.encode($0) } },
+                         unavailable: { reply.failure($0) })
+      } catch { reply.failure(error) }
+      return
     }
     host.withRuntime({ runtime in
       executeTransfer(operation, payload: bytes, runtime: runtime, reply: reply)
@@ -266,6 +288,14 @@ final class LokalTransferBridge {
           host.withRuntime({ runtime in runtime.importCandidatesPage(request, ticket: ticket) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
         }
+      } else if call.method == "claimOrphanCleanup" {
+        let request = try LokalTransferProtocol.importOrphanClaim(data.data)
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ownership = host.importOwnership
+        let ticket = try ownership.beginCleanup(ownership.capture(owner))
+        host.withRuntime({ runtime in runtime.claimOrphanCleanup(request, ticket: ticket) { reply.encode($0) } },
+                         unavailable: { ownership.abortCleanup(ticket); reply.failure($0) })
       } else if call.method == "claimImportCleanup" {
         let request = try LokalTransferProtocol.importCleanupClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
@@ -274,6 +304,20 @@ final class LokalTransferBridge {
         let ticket = try ownership.beginCleanup(ownership.capture(owner))
         host.withRuntime({ runtime in runtime.claimImportCleanup(request, ticket: ticket) { reply.encode($0) } },
                          unavailable: { ownership.abortCleanup(ticket); reply.failure($0) })
+      } else if call.method == "resolveImportCleanup" || call.method == "finalizeImportCleanup" {
+        let request = try LokalTransferProtocol.importCleanupDecision(data.data,
+          finalized: call.method == "finalizeImportCleanup")
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        try host.importOwnership.validateCleanup(owner, jobID: request.id,
+          revision: request.revision, leaseID: request.leaseID)
+        if call.method == "resolveImportCleanup" {
+          host.withRuntime({ runtime in runtime.resolveImportCleanup(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        } else {
+          host.withRuntime({ runtime in runtime.finalizeImportCleanup(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        }
       } else if call.method == "claimImport" {
         let request = try LokalTransferProtocol.importClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
@@ -306,6 +350,10 @@ final class LokalTransferBridge {
             revision: request.revision, leaseID: request.leaseID)
           host.withRuntime({ runtime in runtime.releaseImport(request, owner: owner) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
+        } else if call.method == "validateOrphanCleanup" {
+          try host.importOwnership.validateOrphanCleanup(owner, jobID: request.id,
+            revision: request.revision, leaseID: request.leaseID)
+          reply.encode(.success(true))
         } else if call.method == "validateImportCleanup" {
           try host.importOwnership.validateCleanup(owner, jobID: request.id,
             revision: request.revision, leaseID: request.leaseID)

@@ -37,6 +37,47 @@ class IosTransferCleanupResolution {
   }
 }
 
+class IosTransferResolvedCleanup {
+  const IosTransferResolvedCleanup._(
+    this.id,
+    this.revision,
+    this.songId,
+    this.resolution,
+  );
+  final String id;
+  final int revision, songId;
+  final IosTransferCleanupResolution resolution;
+  factory IosTransferResolvedCleanup.fromJson(Object? value) {
+    if (value is! Map ||
+        value.keys.any(
+          (key) => !{'id', 'revision', 'songID', 'resolution'}.contains(key),
+        ) ||
+        value['id'] is! String ||
+        value['revision'] is! int ||
+        value['songID'] is! int ||
+        (value['songID'] as int) < 1) {
+      _invalidCleanup();
+    }
+    final key = IosTransferWorkCursor.parse(
+      '${value['id']}:${value['revision']}',
+    );
+    return IosTransferResolvedCleanup._(
+      key.jobId,
+      key.revision,
+      value['songID'] as int,
+      IosTransferCleanupResolution.fromJson(value['resolution']),
+    );
+  }
+  void validateFor(IosTransferCleanupLease lease, IosTransferCleanupMode mode) {
+    if (id != lease.job.id ||
+        revision != lease.job.revision ||
+        songId != lease.songId ||
+        resolution.mode != mode) {
+      _invalidCleanup();
+    }
+  }
+}
+
 /// Distinct from a publication/reconciliation lease: no source path and no
 /// conversion to writer authority. Never persist this ephemeral document.
 class IosTransferCleanupLease {

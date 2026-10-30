@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../models/ios_transfer_import.dart';
+import '../models/ios_transfer_cleanup.dart';
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_recovery.dart';
+import '../models/ios_transfer_orphan.dart';
 import 'ios_transfer_coordinator_port.dart';
 import 'ios_transfer_import_store.dart';
 import 'ios_transfer_media.dart';
@@ -38,18 +40,23 @@ class IosTransferImportCoordinator {
   final _issues = <String, IosTransferCoordinatorIssue>{};
   final _frozen = <String, IosTransferImportWork>{};
   final _completed = <String>{};
-  final _pendingReservations = <String, bool>{};
+  final _pendingReservations = <String, IosTransferPendingReservation>{};
   IosTransferImportStore? _store;
   StreamSubscription<void>? _observation;
-  Future<void>? _starting, _running;
+  Future<void>? _starting, _running, _foregrounding;
+  Future<void>? _pausing;
   IosTransferImportLease? _active;
+  IosTransferCleanupLease? _activeCleanup;
+  IosTransferOrphanLease? _activeOrphan;
   Completer<void>? _activeCancellation;
   (String, Future<void>)? _lastRelease;
   bool _disposed = false, _enabled = false, _eligible = false;
   bool _dirty = false, _needsRecovery = true;
+  bool _mutationPaused = false;
   int _epoch = 0;
 
   bool get enabled => _enabled;
+  bool get eligible => _eligible;
   bool get busy => _running != null;
   Stream<void> get updates => _updates.stream;
   Map<String, IosTransferCoordinatorIssue> get issues =>
@@ -86,7 +93,8 @@ class IosTransferImportCoordinator {
     );
   }
 
-  Future<void> start() => _starting ??= _start();
+  Future<void> start() =>
+      _mutationPaused ? Future.value() : (_starting ??= _start());
   Future<void> _start() async {
     final epoch = _epoch;
     try {
@@ -106,10 +114,11 @@ class IosTransferImportCoordinator {
       await native.drainImports();
       if (_disposed || epoch != _epoch) return;
       _enabled = true;
+      native.resumeSubmissions();
       _issues.remove('root');
       await requestDrain();
     } catch (_) {
-      if (!_disposed) {
+      if (!_disposed && epoch == _epoch) {
         _enabled = false;
         _issues['root'] = IosTransferCoordinatorIssue.transport;
         _starting = null;
@@ -120,8 +129,13 @@ class IosTransferImportCoordinator {
 
   /// Lifecycle/user retry is explicit. Unrelated progress events do not retry
   /// failed media or spin on a storage/pairing conflict.
-  Future<void> foreground() async {
-    if (_disposed) return;
+  Future<void> foreground() =>
+      _foregrounding ??= _foreground().whenComplete(() {
+        _foregrounding = null;
+      });
+
+  Future<void> _foreground() async {
+    if (_disposed || _mutationPaused) return;
     if (!_eligible || _store == null) {
       await start();
       return;
@@ -140,10 +154,13 @@ class IosTransferImportCoordinator {
         _store = await _openStore();
         if (_disposed || epoch != _epoch) return;
         _enabled = true;
+        native.resumeSubmissions();
       } catch (_) {
-        _enabled = false;
-        _issues['root'] = IosTransferCoordinatorIssue.transport;
-        _notify();
+        if (!_disposed && epoch == _epoch) {
+          _enabled = false;
+          _issues['root'] = IosTransferCoordinatorIssue.transport;
+          _notify();
+        }
         return;
       }
     }
@@ -178,7 +195,7 @@ class IosTransferImportCoordinator {
             for (final job in page.entries) {
               _check(epoch);
               final key = _key(job);
-              if (_pendingReservations.remove(key) == true) {
+              if (_pendingReservations.remove(key)?.retiring == true) {
                 _issues[key] = IosTransferCoordinatorIssue.cleanupRequired;
               }
               if (!_issues.containsKey(_key(job)) &&
@@ -189,8 +206,13 @@ class IosTransferImportCoordinator {
             }
             cursor = page.nextCursor;
           } while (cursor != null);
-          for (final key in _pendingReservations.keys) {
-            _issues[key] = IosTransferCoordinatorIssue.cleanupRequired;
+          for (final pending in _pendingReservations.values.toList()) {
+            if (_frozen.containsKey(pending.operationKey)) {
+              _issues[pending.operationKey] =
+                  IosTransferCoordinatorIssue.cleanupRequired;
+            } else {
+              await _retireOrphan(pending, epoch);
+            }
           }
           _pendingReservations.clear();
         }
@@ -223,6 +245,19 @@ class IosTransferImportCoordinator {
     return released;
   }
 
+  Future<void> _releaseCleanup(IosTransferCleanupLease lease) {
+    if (_lastRelease?.$1 == lease.leaseId) return _lastRelease!.$2;
+    final released = () async {
+      try {
+        await native.releaseImportCleanup(lease);
+      } catch (_) {
+        await native.drainImports();
+      }
+    }();
+    _lastRelease = (lease.leaseId, released);
+    return released;
+  }
+
   Future<void> _recoverWork(int epoch) async {
     _frozen.clear();
     _pendingReservations.clear();
@@ -237,7 +272,7 @@ class IosTransferImportCoordinator {
         throw const FormatException('Import reservation budget exceeded.');
       }
       for (final entry in page.entries) {
-        _pendingReservations[entry.operationKey] = entry.retiring;
+        _pendingReservations[entry.operationKey] = entry;
       }
       if (page.nextId != null && page.nextId! <= (afterId ?? 0)) {
         throw const FormatException('Invalid import reservation cursor.');
@@ -261,6 +296,9 @@ class IosTransferImportCoordinator {
               IosTransferPhase.validating,
               IosTransferPhase.importing,
             }.contains(work.currentPhase)) {
+          if (_pendingReservations[_key(work.job)]?.retiring == true) {
+            await _cleanupWork(work, epoch);
+          }
           continue;
         }
         if (work.isCurrentRevision &&
@@ -268,13 +306,145 @@ class IosTransferImportCoordinator {
           await _finishHistorical(work, epoch);
           _pendingReservations.remove(_key(work.job));
         } else {
-          // Native cancellation is not proof that its older Isar/file work
-          // never committed. Public abandonment needs its separate barrier.
-          _issues[_key(work.job)] = IosTransferCoordinatorIssue.cleanupRequired;
+          await _cleanupWork(work, epoch);
         }
       }
       cursor = page.nextCursor;
     } while (cursor != null);
+  }
+
+  Future<void> _releaseOrphan(IosTransferOrphanLease lease) {
+    if (_lastRelease?.$1 == lease.leaseId) return _lastRelease!.$2;
+    final released = () async {
+      try {
+        await native.releaseOrphanCleanup(lease);
+      } catch (_) {
+        await native.drainImports();
+      }
+    }();
+    _lastRelease = (lease.leaseId, released);
+    return released;
+  }
+
+  Future<void> _retireOrphan(
+    IosTransferPendingReservation pending,
+    int epoch,
+  ) async {
+    IosTransferOrphanLease? lease;
+    try {
+      _check(epoch);
+      lease = await native.claimOrphanCleanup(
+        IosTransferWorkCursor.parse(pending.operationKey),
+        songId: pending.songId,
+      );
+      _activeOrphan = lease;
+      _check(epoch);
+      final active = lease;
+      await _store!.retireOrphanReservation(
+        pending,
+        active,
+        isCurrent: () => _current(epoch),
+        validateBookkeepingAuthority: () =>
+            native.validateOrphanCleanup(active),
+      );
+      _check(epoch);
+      _issues.remove(pending.operationKey);
+    } catch (_) {
+      if (_current(epoch)) {
+        _issues[pending.operationKey] =
+            IosTransferCoordinatorIssue.cleanupRequired;
+      }
+    } finally {
+      try {
+        if (lease != null) await _releaseOrphan(lease);
+      } finally {
+        if (identical(_activeOrphan, lease)) _activeOrphan = null;
+      }
+    }
+  }
+
+  Future<void> _cleanupWork(IosTransferImportWork work, int epoch) async {
+    final key = _key(work.job);
+    IosTransferCleanupLease? lease;
+    try {
+      lease = await native.claimImportCleanup(work);
+      _activeCleanup = lease;
+      _check(epoch);
+      lease.validateFor(work);
+      var decision = await _store!.peek(work.job, work.target);
+      _check(epoch);
+      if (decision == null || decision.receipt.localSongId != lease.songId) {
+        _issues[key] = IosTransferCoordinatorIssue.missingReservation;
+        return;
+      }
+      final active = lease;
+      Future<void> guard() => native.validateImportCleanup(active);
+      if (decision.committed && lease.currentRevision == work.job.revision) {
+        // Current importing/complete history uses the ordinary receipt-only
+        // acknowledgement. Never turn committed data into abandonment.
+        await _releaseCleanup(active);
+        _activeCleanup = null;
+        lease = null;
+        _check(epoch);
+        await _import(work.job, epoch);
+        _pendingReservations.remove(key);
+        return;
+      }
+      final mode = decision.committed
+          ? IosTransferCleanupMode.committed
+          : IosTransferCleanupMode.abandoned;
+      if (lease.resolution != null && lease.resolution!.mode != mode) {
+        _issues[key] = IosTransferCoordinatorIssue.conflict;
+        return;
+      }
+      if (!decision.committed) {
+        if (decision.receipt.state == 'retired' && lease.resolution == null) {
+          _issues[key] = IosTransferCoordinatorIssue.cleanupRequired;
+          return;
+        }
+        decision = (await _store!.beginRetirement(
+          work.job,
+          work.target,
+          isCurrent: () => _current(epoch),
+          validateCleanupAuthority: guard,
+        ))!;
+        _check(epoch);
+      }
+      if (lease.resolution == null) {
+        final handled = await native.resolveImportCleanup(
+          active,
+          receipt: decision.receipt,
+        );
+        _check(epoch);
+        handled.validateFor(active, mode);
+      }
+      if (!decision.committed && decision.receipt.state != 'retired') {
+        decision = (await _store!.retireReservation(
+          work.job,
+          work.target,
+          isCurrent: () => _current(epoch),
+          validateOwnership: guard,
+        ))!;
+        _check(epoch);
+      }
+      await native.finalizeImportCleanup(active, receipt: decision.receipt);
+      _check(epoch);
+      _pendingReservations.remove(key);
+      _frozen.remove(key);
+      _completed.add(key);
+      _issues.remove(key);
+    } catch (error) {
+      if (_current(epoch)) {
+        _issues[key] = _classify(error);
+        _needsRecovery = true;
+      }
+    } finally {
+      try {
+        if (lease != null) await _releaseCleanup(lease);
+      } finally {
+        if (identical(_activeCleanup, lease)) _activeCleanup = null;
+      }
+    }
   }
 
   Future<void> _finishHistorical(IosTransferImportWork work, int epoch) async {
@@ -454,21 +624,50 @@ class IosTransferImportCoordinator {
   }
 
   /// Revoke app writes before a caller takes the actual Isar clear/delete
-  /// writer barrier. Native OS-task cancellation and submission epochs must
-  /// also be integrated by that caller before product import is enabled.
-  Future<void> pauseForMutation() async {
+  /// writer barrier. Foreground events cannot resume a held mutation. The
+  /// caller still must cancel/drain OS tasks and complete its actual storage
+  /// mutation before explicitly calling resumeAfterMutation().
+  Future<void> pauseForMutation() {
+    if (_disposed) return Future.value();
+    _mutationPaused = true;
+    return _pausing ??= _pauseForMutation();
+  }
+
+  Future<void> _pauseForMutation() async {
+    final submissions = native.pauseSubmissions();
     _enabled = false;
     _epoch++;
     _dirty = false;
     _cancelActive();
     final active = _active;
-    if (active != null) await _release(active);
+    final cleanup = _activeCleanup;
+    final orphan = _activeOrphan;
+    await Future.wait([
+      submissions,
+      if (active != null) _release(active),
+      if (cleanup != null) _releaseCleanup(cleanup),
+      if (orphan != null) _releaseOrphan(orphan),
+    ]);
     await _running;
+    await _starting;
+    await _foregrounding;
     await native.drainImports();
+  }
+
+  Future<void> resumeAfterMutation() async {
+    final pausing = _pausing;
+    await pausing;
+    if (_disposed || !identical(_pausing, pausing)) return;
+    _mutationPaused = false;
+    _pausing = null;
+    // A startup retired before eligibility/store initialization must retry.
+    _starting = null;
+    await foreground();
   }
 
   Future<void> dispose() async {
     if (_disposed) return;
+    final submissions = native.pauseSubmissions().catchError((Object _) {});
     _disposed = true;
     _enabled = false;
     _epoch++;
@@ -479,7 +678,22 @@ class IosTransferImportCoordinator {
         await _release(active);
       } catch (_) {}
     }
+    final cleanup = _activeCleanup;
+    if (cleanup != null) {
+      try {
+        await _releaseCleanup(cleanup);
+      } catch (_) {}
+    }
+    final orphan = _activeOrphan;
+    if (orphan != null) {
+      try {
+        await _releaseOrphan(orphan);
+      } catch (_) {}
+    }
     await _running;
+    await _starting;
+    await _foregrounding;
+    await submissions;
     await _observation?.cancel();
     await _updates.close();
   }

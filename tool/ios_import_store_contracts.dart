@@ -18,6 +18,7 @@ import 'package:flick/data/entities/song_audio_cache_entity.dart';
 import 'package:flick/data/entities/song_entity.dart';
 import 'package:flick/models/ios_transfer_import.dart';
 import 'package:flick/models/ios_transfer_models.dart';
+import 'package:flick/models/ios_transfer_orphan.dart';
 import 'package:flick/services/ios_transfer_import_store.dart';
 import 'package:flick/services/ios_transfer_scan_guard.dart';
 
@@ -243,6 +244,30 @@ Future<void> main(List<String> arguments) async {
             fixture.target,
             isCurrent: () => true,
             validateCleanupAuthority: () async {},
+          );
+    } else if (options['--worker'] == 'orphan') {
+      final pending =
+          (await fixture.store().pendingReservations()).entries.single;
+      final lease = IosTransferOrphanLease.fromJson({
+        'permission': 'orphanCleanup',
+        'id': fixture.job().id,
+        'revision': 1,
+        'songID': 42,
+        'leaseID': 'a7d96b93-6526-4f1f-a1af-688ffb5c799d',
+        'clientID': 'b7d96b93-6526-4f1f-a1af-688ffb5c799d',
+        'currentJob': {
+          ...fixture.document,
+          'phase': 'cancelled',
+          'revision': 2,
+        },
+      });
+      await fixture
+          .store(boundary: boundary)
+          .retireOrphanReservation(
+            pending,
+            lease,
+            isCurrent: () => true,
+            validateBookkeepingAuthority: () async {},
           );
     } else if (options['--worker'] == 'retired') {
       await fixture
@@ -707,6 +732,85 @@ Future<void> main(List<String> arguments) async {
         'Retirement finalizes bookkeeping without removing remote Song',
       );
     });
+    await scenario('orphan-bookkeeping-barrier', (fixture) async {
+      await fixture.prepare();
+      final pending =
+          (await fixture.store().pendingReservations()).entries.single;
+      final document = {
+        'permission': 'orphanCleanup',
+        'id': fixture.job().id,
+        'revision': 1,
+        'songID': 42,
+        'leaseID': 'a7d96b93-6526-4f1f-a1af-688ffb5c799d',
+        'clientID': 'b7d96b93-6526-4f1f-a1af-688ffb5c799d',
+        'currentJob': {
+          ...fixture.document,
+          'phase': 'cancelled',
+          'revision': 2,
+        },
+      };
+      final lease = IosTransferOrphanLease.fromJson(document);
+      var checks = 0;
+      try {
+        await fixture.store().retireOrphanReservation(
+          pending,
+          lease,
+          isCurrent: () => true,
+          validateBookkeepingAuthority: () async {
+            if (++checks == 2) throw StateError('orphan authority revoked');
+          },
+        );
+        throw StateError('Expected late orphan revocation');
+      } on StateError catch (error) {
+        require(
+          error.message == 'orphan authority revoked',
+          'Late orphan guard reached',
+        );
+      }
+      require(
+        (await fixture.store().peek(
+              fixture.job(),
+              fixture.target,
+            ))!.receipt.state ==
+            'prepared',
+        'Late orphan guard rolls back the actual Isar transaction',
+      );
+      final otherIdentity = Map<String, dynamic>.from(
+        fixture.document['identity'] as Map,
+      )..['sourceID'] = 'another-recording';
+      final mismatched = IosTransferOrphanLease.fromJson({
+        ...document,
+        'currentJob': {
+          ...fixture.document,
+          'phase': 'cancelled',
+          'revision': 2,
+          'identity': otherIdentity,
+        },
+      });
+      await rejects(
+        () => fixture.store().retireOrphanReservation(
+          pending,
+          mismatched,
+          isCurrent: () => true,
+          validateBookkeepingAuthority: () async {},
+        ),
+        IosTransferImportConflict.receiptMismatch,
+      );
+      await fixture.commit();
+      await rejects(
+        () => fixture.store().retireOrphanReservation(
+          pending,
+          lease,
+          isCurrent: () => true,
+          validateBookkeepingAuthority: () async {},
+        ),
+        IosTransferImportConflict.receiptMismatch,
+      );
+      require(
+        (await fixture.store().peek(fixture.job(), fixture.target))!.committed,
+        'A stale prepared page cannot retire a subsequently committed receipt',
+      );
+    });
     await scenario('reservation-keyset-pages', (fixture) async {
       for (var index = 1; index <= 5; index++) {
         fixture.document['id'] =
@@ -1025,7 +1129,7 @@ Future<void> main(List<String> arguments) async {
         'Unsafe target cannot persist intent',
       );
     });
-    for (final operation in ['retiring', 'retired']) {
+    for (final operation in ['retiring', 'retired', 'orphan']) {
       for (final edge in ['beforeCommit', 'afterCommit']) {
         await scenario('process-$operation-$edge', (fixture) async {
           await fixture.prepare();
@@ -1049,8 +1153,8 @@ Future<void> main(List<String> arguments) async {
             fixture.target,
           ))!.receipt;
           final expected = edge == 'afterCommit'
-              ? operation
-              : (operation == 'retiring' ? 'prepared' : 'retiring');
+              ? (operation == 'orphan' ? 'retired' : operation)
+              : (operation == 'retired' ? 'retiring' : 'prepared');
           require(
             receipt.state == expected &&
                 (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal',
@@ -1127,7 +1231,7 @@ Future<void> main(List<String> arguments) async {
       );
     }, existing: false);
     stdout.writeln(
-      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, bounded reservation keyset pages, retiring/retired guards, twelve receipt/media/retirement commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
+      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, bounded reservation keyset pages, retiring/retired/orphan guards, fourteen receipt/media/retirement commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
     );
   } catch (error, stack) {
     stderr.writeln('Isar import contracts failed at $stage: $error\n$stack');

@@ -1,9 +1,26 @@
 /// Normal Morneye playback must never inherit a native Atmos-only download
 /// preference. Only an explicit Play/Download Atmos request may ask an add-on
 /// for `DOLBY_ATMOS`. Keep the other configured quality tiers unchanged.
-bool isMorneyeAtmosQuality(String? value) =>
-    RegExp(r'^(?:DOLBY[_ -]?ATMOS|ATMOS)$', caseSensitive: false)
-        .hasMatch(value?.trim() ?? '');
+bool isMorneyeAtmosQuality(String? value) => RegExp(
+  r'^(?:DOLBY[_ -]?ATMOS|ATMOS)$',
+  caseSensitive: false,
+).hasMatch(value?.trim() ?? '');
+
+/// Amazon's AC-4 and plain E-AC-3 download tiers must not leak into ordinary
+/// stereo playback. This classification does not advertise an iPhone decoder
+/// or infer Atmos from a codec. Explicit native AC-4 actions remain excluded.
+bool morneyeSpatialOption(Map option, {required String provider}) =>
+    option['kind']?.toString().toLowerCase() == 'spatial' ||
+    (provider.toLowerCase().startsWith('amazon') &&
+        {
+          'ac4',
+          'ac-4',
+          'eac3',
+        }.contains(option['id']?.toString().trim().toLowerCase())) ||
+    isMorneyeAtmosQuality(option['id']?.toString()) ||
+    isMorneyeAtmosQuality(option['kind']?.toString()) ||
+    isMorneyeAtmosQuality(option['name']?.toString()) ||
+    isMorneyeAtmosQuality(option['label']?.toString());
 
 String chooseMorneyeDownloadQuality({
   required String? requested,
@@ -12,21 +29,30 @@ String chooseMorneyeDownloadQuality({
   required String provider,
 }) {
   if (requested != null && requested.isNotEmpty) return requested;
-  if (configured != null && configured.isNotEmpty &&
-      !isMorneyeAtmosQuality(configured)) return configured;
+  final configuredSpatial =
+      morneyeSpatialOption({'id': configured}, provider: provider) ||
+      options.any(
+        (option) =>
+            option is Map &&
+            option['id']?.toString().toLowerCase() ==
+                configured?.toLowerCase() &&
+            morneyeSpatialOption(option, provider: provider),
+      );
+  if (configured != null && configured.isNotEmpty && !configuredSpatial) {
+    return configured;
+  }
 
   final candidates = <String>[];
   for (final option in options) {
     if (option is! Map) continue;
     final id = option['id']?.toString() ?? '';
-    if (id.isEmpty || isMorneyeAtmosQuality(id) ||
-        isMorneyeAtmosQuality(option['kind']?.toString()) ||
-        isMorneyeAtmosQuality(option['name']?.toString()) ||
-        isMorneyeAtmosQuality(option['label']?.toString())) continue;
+    if (id.isEmpty || morneyeSpatialOption(option, provider: provider)) {
+      continue;
+    }
     candidates.add(id);
   }
-  if (isMorneyeAtmosQuality(configured)) {
-    for (final tier in ['HI_RES_LOSSLESS', 'LOSSLESS', 'HIGH']) {
+  if (configuredSpatial) {
+    for (final tier in ['HI_RES_LOSSLESS', 'LOSSLESS', 'BEST', 'HIGH']) {
       for (final id in candidates) {
         if (id.toUpperCase() == tier) return id;
       }
@@ -39,7 +65,9 @@ String chooseMorneyeDownloadQuality({
         : 'default';
   }
   for (final option in options) {
-    if (option is! Map) continue;
+    if (option is! Map || morneyeSpatialOption(option, provider: provider)) {
+      continue;
+    }
     if (option['kind'] == 'lossless') {
       final id = option['id']?.toString() ?? '';
       if (id.isNotEmpty && !isMorneyeAtmosQuality(id)) return id;
@@ -58,13 +86,17 @@ String resolveMorneyeRequestQuality({
   required List<dynamic> options,
   required String provider,
 }) {
-  if (!forPlayback && requested == null &&
-      configured != null && configured.isNotEmpty) {
+  if (!forPlayback &&
+      requested == null &&
+      configured != null &&
+      configured.isNotEmpty) {
     return configured;
   }
   return chooseMorneyeDownloadQuality(
-    requested: requested, configured: configured,
-    options: options, provider: provider,
+    requested: requested,
+    configured: configured,
+    options: options,
+    provider: provider,
   );
 }
 
@@ -74,7 +106,6 @@ String resolveMorneyeRequestQuality({
 /// receives its configured downloadQuality.
 String? explicitMorneyePlaybackTier({required bool atmosRequested}) =>
     atmosRequested ? 'DOLBY_ATMOS' : null;
-
 
 /// The quality tier sent to a Tidal add-on for normal stereo playback.
 /// Unlike the catalogue maximum, this is a request, not proof of the bytes

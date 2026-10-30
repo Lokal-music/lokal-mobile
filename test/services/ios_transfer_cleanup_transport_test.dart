@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flick/models/ios_transfer_cleanup.dart';
+import 'package:flick/data/entities/ios_transfer_receipt_entity.dart';
 import 'package:flick/models/ios_transfer_import.dart';
 import 'package:flick/models/ios_transfer_recovery.dart';
 import 'package:flick/services/ios_transfer_transport.dart';
@@ -22,6 +23,31 @@ Map<String, Object?> cleanup({String? client}) => {
   'clientID': client ?? importLease()['clientID'],
   'leaseID': importLease()['leaseID'],
 };
+
+IosTransferReceiptEntity receiptFor(
+  IosTransferCleanupLease lease,
+  String state,
+) {
+  final identity = lease.job.intent.identity;
+  return IosTransferReceiptEntity()
+    ..id = 1
+    ..operationKey = '${lease.job.id}:${lease.job.revision}'
+    ..jobId = lease.job.id
+    ..revision = lease.job.revision
+    ..localSongId = lease.songId
+    ..serverId = identity.localServerId!
+    ..desktopId = identity.scope.desktopId
+    ..desktopUserId = identity.desktopUserId
+    ..pairingId = identity.scope.pairingId!
+    ..origin = identity.scope.origin
+    ..sourceId = identity.sourceId
+    ..relativePath = lease.target.relativePath
+    ..bytes = lease.job.receivedBytes!
+    ..sha256 = lease.job.receivedSha256!
+    ..preparedAt = DateTime.utc(2020)
+    ..state = state
+    ..committedAt = state == 'committed' ? DateTime.utc(2020) : null;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -203,4 +229,108 @@ void main() {
       messenger.setMockMethodCallHandler(channel, null);
     }
   });
+
+  test(
+    'resolution and finalization require separate exact Isar receipt states',
+    () async {
+      const channel = MethodChannel('test/ios-cleanup-finalization');
+      final ready = Completer<String>();
+      final methods = <String>[];
+      Map<String, Object?>? resolutionPatch;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'observe') {
+          ready.complete((request(call) as Map)['clientID'] as String);
+          return null;
+        }
+        if (call.method == 'stopObserving') return null;
+        final client = await ready.future;
+        if (call.method == 'claimImportCleanup') {
+          return encoded(cleanup(client: client));
+        }
+        final payload = request(call) as Map;
+        methods.add(call.method);
+        expect(payload.keys.toSet(), {
+          'id',
+          'revision',
+          'leaseID',
+          'clientID',
+          'songID',
+          'mode',
+          'isarState',
+        });
+        expect(payload['clientID'], client);
+        expect(payload['songID'], 42);
+        expect(payload['mode'], 'abandoned');
+        if (call.method == 'finalizeImportCleanup') {
+          expect(payload['isarState'], 'retired');
+          return encoded(true);
+        }
+        expect(payload['isarState'], 'retiring');
+        return encoded({
+          'id': payload['id'],
+          'revision': 1,
+          'songID': 42,
+          'resolution': {'mode': 'abandoned', 'abandonment': 'missingFile'},
+          ...?resolutionPatch,
+        });
+      });
+      final native = IosTransferTransport(channel: channel, supported: true);
+      final subscription = native.changes.listen((_) {});
+      try {
+        await ready.future;
+        final lease = await native.claimImportCleanup(
+          IosTransferImportWork.fromJson(work()),
+        );
+        await expectLater(
+          native.resolveImportCleanup(
+            lease,
+            receipt: receiptFor(lease, 'prepared'),
+          ),
+          throwsFormatException,
+        );
+        await expectLater(
+          native.finalizeImportCleanup(
+            lease,
+            receipt: receiptFor(lease, 'retiring'),
+          ),
+          throwsFormatException,
+        );
+        final wrong = receiptFor(lease, 'retiring')..localSongId = 43;
+        await expectLater(
+          native.resolveImportCleanup(lease, receipt: wrong),
+          throwsFormatException,
+        );
+        expect(methods, isEmpty);
+        final result = await native.resolveImportCleanup(
+          lease,
+          receipt: receiptFor(lease, 'retiring'),
+        );
+        expect(
+          result.resolution.abandonment,
+          IosTransferAbandonment.missingFile,
+        );
+        resolutionPatch = {'songID': 43};
+        await expectLater(
+          native.resolveImportCleanup(
+            lease,
+            receipt: receiptFor(lease, 'retiring'),
+          ),
+          throwsFormatException,
+        );
+        await native.finalizeImportCleanup(
+          lease,
+          receipt: receiptFor(lease, 'retired'),
+        );
+        expect(methods, [
+          'resolveImportCleanup',
+          'resolveImportCleanup',
+          'finalizeImportCleanup',
+        ]);
+      } finally {
+        await subscription.cancel();
+        await native.dispose();
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+  );
 }

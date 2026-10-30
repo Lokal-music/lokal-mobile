@@ -29,6 +29,7 @@ import 'package:flick/services/alac_converter_service.dart';
 import 'package:flick/services/album_art_service.dart';
 import 'package:flick/services/playback_cache_preferences_service.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
+import 'package:flick/widgets/common/ios_transfer_root.dart';
 
 /// Bumped after a cache changes, so the sizes shown measure again.
 final _cacheChanged = ValueNotifier<int>(0);
@@ -282,7 +283,10 @@ List<LokalSettingsSection> dataSettings(
             );
             if (!ok || !context.mounted) return;
             try {
-              await SongRepository().deleteAllSongs();
+              await IosTransferRoot.withMutationBarrier(
+                context,
+                () => SongRepository().deleteAllSongs(),
+              );
               if (context.mounted) _say(context, 'Library cleared.');
             } catch (error) {
               if (context.mounted) {

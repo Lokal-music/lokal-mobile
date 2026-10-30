@@ -9,6 +9,7 @@ import 'package:flick/models/lokal_remote_state.dart';
 import 'package:flick/providers/lokal_remote_provider.dart';
 import 'package:flick/services/lokal_remote_service.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
+import 'package:flick/widgets/common/ios_transfer_root.dart';
 
 /// Controls an already-running Lokal desktop over its authenticated LAN HTTP
 /// protocol. This page never feeds desktop state into the phone's player.
@@ -79,9 +80,10 @@ class _LokalRemoteSettingsScreenState
       destructive: true,
     );
     if (!confirmed || !mounted) return;
-    await ref
-        .read(lokalRemoteControllerProvider.notifier)
-        .forgetConfiguration();
+    await IosTransferRoot.withMutationBarrier(
+      context,
+      ref.read(lokalRemoteControllerProvider.notifier).forgetConfiguration,
+    );
     _origin.clear();
     _remoteToken.clear();
     _apiKey.clear();

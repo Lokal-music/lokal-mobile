@@ -1,0 +1,10 @@
+{
+  "permission": "orphanCleanup",
+  "claim": {
+    "id": "ae97c9b1-ec57-4ede-89e7-de6213202380",
+    "revision": 1,
+    "songID": 42,
+    "clientID": "b7d96b93-6526-4f1f-a1af-688ffb5c799d"
+  },
+  "replyKeys": ["permission", "id", "revision", "songID", "leaseID", "clientID", "currentJob"]
+}

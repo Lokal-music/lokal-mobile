@@ -918,11 +918,10 @@ refused without inventing provenance or leaving submission permanently blocked.
 Three complete portable native rounds pass; a final round also checks the added
 publication flag. All 27 focused Dart transport contracts pass, including four
 cleanup codec/channel checks; fatal-info analysis and workflow lint are clean.
-These native/Dart changes are later than build85 and still need Apple SDK/bridge
-execution. Claims/guards do not yet perform the full root cleanup sequence:
-runtime resolution/finalization, actual Isar cleanup integration, Isar-only
-orphan retirement and clear/unpair/UI barriers remain required. Product native
-import/upload remain false.
+These foundations were subsequently qualified in PR341/build86: both real iOS16
+SDK/bridge checks, 20 Mac Foundation coordination rounds and complete installed
+iOS18.6/26 suites. They do not include the later full root cleanup sequence.
+Product native import/upload remain false.
 
 The cleanup request now has its own strict three-field Swift decoder. A shared
 JSON fixture checks the exact Dart request shape and actual native reply keys;
@@ -932,5 +931,126 @@ pass the shared fixture. The installed-app probe additionally requires a valid
 three-field missing-custody request to reach runtime (`TRANSFER_CHANGED`), then
 checks ordinary missing-job classification. The separate actual HTTP native
 contract proves a fresh writer can be granted after cleanup abort. A malformed
-request must fail decoding instead. Installed acceptance of this new probe is
-pending the next Apple run.
+request must fail decoding instead. Build86 passes this probe on both runtimes.
+
+### Runtime/root finalization continuation (outside PR341/build86)
+
+Later source connects native resolution and app finalization as separate private
+operations. A cleanup claim alone cannot delete a file: the app supplies its
+exact durable Isar retiring/committed receipt binding. Native prepared retirement
+compares frozen custody atomically and retains that cleanup permission while
+advancing the live revision. File handling runs outside Isar/runtime queues;
+public coordination, private-part and staging drainage finish before native
+resolution is recorded. Concurrent callers coalesce. Only after actual Isar
+retirement/committed history may finalization remove native bookkeeping.
+
+The root now resumes known-custody cleanup, preserves committed history (including
+deleted Songs), and recovers native-resolution or finalization reply loss without
+repeating file handling. Current-revision committed imports use the existing
+receipt-only completion route. Missing Isar reservations and contradictory states
+remain nondestructively blocked. Isar-only orphans use the separate drained
+bookkeeping witness below; they do not authorize public cleanup.
+
+Foreground recovery is coalesced. Mutation/disposal retire the app epoch and
+active cleanup token, then await old startup/foreground/file work before a caller
+crosses its actual storage barrier. The app's clear/unpair/enqueue integration
+still needs its own hooks and submission epochs before activation.
+
+Three portable native rounds pass real HTTP/custody/staging, coalesced resolution,
+idempotent finalization and committed-file preservation. Native driver Isar states
+are explicit fixtures; Linux refuses public abandonment. Actual Isar/root checks
+pass retiring→native resolution→Isar retired→native finalization ordering, lost
+replies across reopen, edited-file preservation, deleted committed history and
+coalesced foreground/mutation retirement. Their native port/file ownership is
+explicitly a fixture. All 28 focused transport checks and fatal-info analysis
+pass. This later driver/root integration has no Apple SDK/installed acceptance
+yet. Native product import/upload remain false; owned uploads/progress,
+clear/unpair/CUE and OS lifecycle work remain release gates.
+
+### Older no-custody reservation recovery (outside build86)
+
+An Isar preparation can commit before native custody exists. After cancellation,
+the root now obtains a distinct `orphanCleanup` permission only after native
+publication is fenced, earlier file work and runtime callbacks drain, a newer
+native job revision is found, and the old revision has no custody. A missing
+native job alone is refused. Existing custody must use normal tracked recovery.
+This permission cannot pass writer, reconciliation or file-cleanup guards and
+returns no target/source path, marker or deletion authority. Shared Swift/Dart
+fixtures freeze its four-field request and reply keys.
+
+The actual Isar transaction re-reads the exact receipt ID, operation, Song ID,
+scope, source, relative suffix and declared integrity. It checks the direct
+bookkeeping guard before and after the write, then retires only prepared/retiring
+bookkeeping. A stale pending page cannot retire a committed receipt. No Song or
+public file is changed. Root mutation/disposal also drains this separate lease.
+Actual Isar tests cover late-guard rollback, mismatched source refusal, committed
+history preservation and both process-exit edges; the suite now has fourteen
+receipt/media/retirement commit-exit boundaries. The actual root harness verifies
+reopen recovery and preserves an unrelated file at the target path without
+calling file cleanup. Its native port remains an explicit fixture; portable
+native HTTP/ownership/codec checks are separate evidence, with Apple execution
+still pending for this source.
+
+### Submission consent and held mutations (outside build86)
+
+Submission now has a strict client-bound `{clientID, intents}` envelope. Dart
+freezes consent before its first await, encodes away from the UI isolate, and
+checks its local epoch/current observer before posting and after the native
+reply. The isolate closure has its own top-level context so it cannot capture
+the transport's unsendable Futures. Array-only requests, native state, paths
+and credentials are refused at the bridge. A shared Swift/Dart fixture checks
+the envelope.
+
+Native captures a separate submission ticket synchronously before host dispatch.
+Its epoch is independent of per-import lease releases. Client/engine handoff,
+scope/global revocation and direct `retireSubmissions` invalidate old tickets;
+the runtime checks before authorization, immediately before journal creation,
+and before starting network work. A request already persisted when retirement
+occurs still belongs to the subsequent native cancellation/storage barrier;
+epoch fencing is not OS-task cancellation.
+
+```mermaid
+flowchart LR
+  A[Frozen user plan] --> B[Dart epoch and current root]
+  B --> C[Isolate encoding]
+  C --> D[Recheck before channel]
+  D --> E[Native root ticket before queue]
+  E --> F[Recheck before journal]
+  F --> G[Durable idempotent job]
+  R[Mutation or root retirement] --> B
+  R --> D
+  R --> E
+  R --> F
+```
+
+Root mutation pause now fences submissions before awaiting older work, drains
+pending submission replies and import/cleanup leases, and remains held across
+foreground events. Only explicit `resumeAfterMutation` releases it after the
+caller finishes its actual storage operation. Startup retired during the pause
+is retried rather than permanently cached. Tests exercise held foreground and
+startup recovery with actual Isar, direct retirement while native authorization
+is blocked, no stale persistence, fresh HTTP submission/idempotency, stale
+success refusal and pending-reply drainage. Native Isar attestation/root RPC
+fixtures remain explicit. The UI's app-wide clear/unpair ownership, OS-task
+cancellation, journal/WAL handle retirement and installed acceptance are still
+required; these foundations do not enable product native import/upload.
+
+
+### App-level destructive UI fences (post-build-87 continuation)
+
+The iPhone app-root now exposes a serial mutation barrier. Confirmed **Clear
+library**, individual library/file deletion and desktop-pairing **Forget**
+operations enter that barrier instead of directly racing the coordinator.
+A healthy eligible coordinator must acknowledge its paused submission epoch,
+release active native leases and drain import callbacks before the mutation.
+A failed eligible-root startup refuses the mutation. Multiple UI writes
+serialize through each pause/mutate/resume cycle; exceptions after a successful
+pause still resume. The unsupported native-release adapter leaves existing
+Android and iPhone foreground copy workflows unchanged.
+
+This is an explicit, incomplete gate: native product import/upload remain
+disabled. Full safe activation still requires journal/URLSession task
+cancellation and storage barriers for *all* database and pairing mutation
+entry points, native CUE/scanner ownership, durable upload/progress and actual
+iOS suspension/relaunch plus real iPhone sideload acceptance. This source is
+newer than the independently accepted build-87 artifact.

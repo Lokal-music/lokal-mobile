@@ -250,6 +250,20 @@ do {
   try require(LokalTransferProtocol.page(Data("{\"offset\":0,\"limit\":100}".utf8)).limit == 100,
     "bounded page request accepted")
   let contractClient = "b7d96b93-6526-4f1f-a1af-688ffb5c799d"
+  let submissionFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
+    URL(fileURLWithPath: "test/fixtures/ios_transfer_submission_v1.json"))) as! [String: Any]
+  let decodedSubmission = try LokalTransferProtocol.submission(JSONSerialization.data(withJSONObject: submissionFixture))
+  try require(decodedSubmission.clientID == contractClient && decodedSubmission.jobs.count == 1,
+    "Swift decodes the shared client-bound submission envelope")
+  for field in ["headers", "sourcePath", "phase", "epoch"] {
+    var row = submissionFixture; row[field] = "caller"
+    try rejects("submission envelope never accepts native state or credentials") {
+      _ = try LokalTransferProtocol.submission(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  try rejects("array-only submission cannot bypass current root consent") {
+    _ = try LokalTransferProtocol.submission(JSONSerialization.data(withJSONObject: submissionFixture["intents"]!))
+  }
   let cleanupFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
     URL(fileURLWithPath: "test/fixtures/ios_transfer_cleanup_v1.json"))) as! [String: Any]
   let cleanupClaim = cleanupFixture["claim"] as! [String: Any]
@@ -263,6 +277,24 @@ do {
     }
   }
   let recoveryRequest: [String: Any] = ["limit": 2, "clientID": contractClient]
+  let orphanFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
+    URL(fileURLWithPath: "test/fixtures/ios_transfer_orphan_v1.json"))) as! [String: Any]
+  let orphanClaim = orphanFixture["claim"] as! [String: Any]
+  let decodedOrphan = try LokalTransferProtocol.importOrphanClaim(JSONSerialization.data(withJSONObject: orphanClaim))
+  try require(decodedOrphan.revision == 1 && decodedOrphan.songID == 42 &&
+    decodedOrphan.clientID == contractClient, "Swift decodes the shared four-field bookkeeping claim")
+  for field in ["sourcePath", "targetRelativePath", "copyNonce", "headers", "permission"] {
+    var row = orphanClaim; row[field] = "caller"
+    try rejects("orphan claim accepts no file authority") {
+      _ = try LokalTransferProtocol.importOrphanClaim(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  for value: Any in [false, 0, -1, 1.5, "42", Int64.max] {
+    var row = orphanClaim; row["songID"] = value
+    try rejects("orphan Song identity must be a bounded positive integer") {
+      _ = try LokalTransferProtocol.importOrphanClaim(JSONSerialization.data(withJSONObject: row))
+    }
+  }
   try require(LokalTransferProtocol.importWorkPage(JSONSerialization.data(withJSONObject: recoveryRequest)).limit == 2,
     "bounded client-bound recovery request accepted")
   for invalid: Any in [false, 0, 101, "2", 1.5] {
@@ -290,6 +322,25 @@ do {
     "bounded typed native lease guard accepted")
   var publicationDocument = leaseDocument
   publicationDocument["songID"] = 42
+  var decisionDocument = publicationDocument
+  decisionDocument["mode"] = "abandoned"; decisionDocument["isarState"] = "retiring"
+  try require(LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument)).mode == .abandoned,
+    "cleanup decision requires explicit app retiring attestation")
+  try rejects("retiring is not final Isar retirement") {
+    _ = try LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument), finalized: true)
+  }
+  decisionDocument["isarState"] = "retired"
+  try require(LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument), finalized: true).isarState == "retired",
+    "finalization requires the separate app retirement boundary")
+  try rejects("finalized Isar state cannot authorize a new public cleanup") {
+    _ = try LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: decisionDocument))
+  }
+  for key in ["sourcePath", "targetRelativePath", "headers", "copyNonce"] {
+    var injected = decisionDocument; injected[key] = "caller"
+    try rejects("cleanup finalization accepts no caller file authority") {
+      _ = try LokalTransferProtocol.importCleanupDecision(JSONSerialization.data(withJSONObject: injected), finalized: true)
+    }
+  }
   try require(LokalTransferProtocol.importPublication(JSONSerialization.data(withJSONObject: publicationDocument)).songID == 42,
     "publication accepts only the current lease and positive prepared Song identity")
   for invalid: Any in [false, 0, -1, 1.5, "42", NSNull()] {

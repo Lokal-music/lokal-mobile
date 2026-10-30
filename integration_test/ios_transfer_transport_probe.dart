@@ -100,6 +100,27 @@ Future<void> probeIosTransferTransport(
       );
     }
 
+    final retiredSubmissions = await const MethodChannel('lokal/transfers')
+        .invokeMethod<Object?>(
+          'retireSubmissions',
+          Uint8List.fromList(
+            utf8.encode(jsonEncode({'clientID': activeClient})),
+          ),
+        )
+        .timeout(const Duration(seconds: 10));
+    expect(jsonDecode(utf8.decode(retiredSubmissions! as Uint8List)), true);
+    await rejectedControl('retireSubmissions', {
+      'clientID': retiredClient!,
+    }, 'TRANSFER_CHANGED');
+    await rejectedControl('enqueue', {
+      'intents': [
+        {
+          'phase': 'complete',
+          'headers': {'authorization': 'synthetic-forbidden-token'},
+        },
+      ],
+    }, 'INVALID_TRANSFER_REQUEST');
+
     await rejectedControl('claimImport', {
       'id': missingJobId,
       'revision': 1,
@@ -111,11 +132,22 @@ Future<void> probeIosTransferTransport(
       'revision': 1,
       'reconcileOnly': false,
     }, 'TRANSFER_MISSING');
+    await rejectedControl('claimOrphanCleanup', {
+      'id': missingJobId,
+      'revision': 1,
+      'songID': 42,
+      'targetRelativePath': '/caller/injected.wav',
+    }, 'INVALID_TRANSFER_REQUEST');
+    await rejectedControl('claimOrphanCleanup', {
+      'id': missingJobId,
+      'revision': 1,
+      'songID': 42,
+    }, 'TRANSFER_CHANGED');
     await rejectedControl('claimImport', {
       'id': missingJobId,
       'revision': 1,
       'reconcileOnly': false,
-      'clientID': retiredClient!,
+      'clientID': retiredClient,
     }, 'TRANSFER_CHANGED');
     await rejectedControl('claimImportCleanup', {
       'id': missingJobId,
@@ -137,6 +169,7 @@ Future<void> probeIosTransferTransport(
       'validateImport',
       'validateImportReconciliation',
       'validateImportCleanup',
+      'validateOrphanCleanup',
       'releaseImport',
     ]) {
       await rejectedControl(method, {
@@ -167,6 +200,9 @@ Future<void> probeIosTransferTransport(
       'library_import_api': capability.libraryImport,
       'upload_api': capability.upload,
       'invalid_intent_rejected_without_commit': true,
+      'submission_envelope_rejects_native_state': true,
+      'current_client_retires_submissions_directly': true,
+      'retired_client_cannot_retire_replacement_submissions': true,
       'replacement_observer_survives_old_disposal': true,
       'private_import_control_rejects_injection': true,
       'unclaimed_import_guard_rejected_without_commit': true,
@@ -174,6 +210,8 @@ Future<void> probeIosTransferTransport(
       'cleanup_claim_three_field_codec_reaches_runtime': true,
       'cleanup_claim_injection_rejected': true,
       'ordinary_claim_reaches_missing_job_after_cleanup_refusal': true,
+      'orphan_claim_four_field_codec_reaches_runtime': true,
+      'orphan_claim_path_injection_rejected': true,
       'background_daemon_or_library_import_acceptance': false,
     };
   } finally {

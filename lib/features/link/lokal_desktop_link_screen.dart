@@ -13,6 +13,7 @@ import '../../providers/lokal_remote_provider.dart';
 import '../../services/link/lokal_link_service.dart';
 import '../../services/lokal_remote_service.dart';
 import '../../widgets/lokal/settings/lokal_settings_kit.dart';
+import '../../widgets/common/ios_transfer_root.dart';
 import '../settings/screens/lokal_remote_settings_screen.dart';
 
 class LokalDesktopLinkScreen extends ConsumerStatefulWidget {
@@ -441,8 +442,12 @@ class _LokalDesktopLinkScreenState
                                   confirmLabel: l10n.linkForget,
                                   destructive: true,
                                 );
-                                if (confirmed)
-                                  await controller.forgetConfiguration();
+                                if (confirmed && mounted) {
+                                  await IosTransferRoot.withMutationBarrier(
+                                    context,
+                                    controller.forgetConfiguration,
+                                  );
+                                }
                               }),
                         child: Text(l10n.linkForget),
                       ),

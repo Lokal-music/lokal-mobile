@@ -10,8 +10,10 @@ import 'package:isar_community/isar.dart';
 import 'package:flick/data/entities/ios_transfer_receipt_entity.dart';
 import 'package:flick/data/entities/song_entity.dart';
 import 'package:flick/models/ios_transfer_import.dart';
+import 'package:flick/models/ios_transfer_cleanup.dart';
 import 'package:flick/models/ios_transfer_models.dart';
 import 'package:flick/models/ios_transfer_recovery.dart';
+import 'package:flick/models/ios_transfer_orphan.dart';
 import 'package:flick/services/ios_transfer_coordinator_port.dart';
 import 'package:flick/services/ios_transfer_import_coordinator.dart';
 import 'package:flick/services/ios_transfer_media.dart';
@@ -35,9 +37,19 @@ class NativeFixture implements IosTransferCoordinatorPort {
   int? songId;
   int sequence = 0;
   IosTransferImportLease? active;
+  IosTransferCleanupLease? activeCleanup;
+  IosTransferOrphanLease? activeOrphan;
+  int orphanClaims = 0;
+  IosTransferCleanupResolution? resolution;
+  int cleanupCalls = 0, finalizations = 0;
+  int recoveries = 0;
+  int submissionPauses = 0, submissionResumes = 0;
+  Completer<void>? recoveryEntered, recoveryWait;
+  bool loseCleanupReply = false, loseFinalizationReply = false;
   final released = Completer<void>();
   static const client = 'b7d96b93-6526-4f1f-a1af-688ffb5c799d';
   IosTransferJob get job => fixture.job(phase);
+  int get currentRevision => phase == 'cancelled' ? 2 : 1;
   String get target => fixture.target.relativePath;
   void event() {
     if (!events.isClosed) events.add(null);
@@ -60,6 +72,11 @@ class NativeFixture implements IosTransferCoordinatorPort {
 
   @override
   Future<IosTransferSummary> recover() async {
+    recoveries++;
+    if (recoveryWait != null) {
+      if (!recoveryEntered!.isCompleted) recoveryEntered!.complete();
+      await recoveryWait!.future;
+    }
     active = null;
     return IosTransferSummary.fromJson({
       'generation': 1,
@@ -81,6 +98,16 @@ class NativeFixture implements IosTransferCoordinatorPort {
   }
 
   @override
+  Future<void> pauseSubmissions() async {
+    submissionPauses++;
+  }
+
+  @override
+  void resumeSubmissions() {
+    submissionResumes++;
+  }
+
+  @override
   Future<IosTransferImportWorkPage> importWorkPage({
     IosTransferWorkCursor? after,
     int limit = 100,
@@ -96,7 +123,7 @@ class NativeFixture implements IosTransferCoordinatorPort {
               'songID': songId,
               'targetRelativePath': target,
               'publicationRecorded': published,
-              'currentRevision': 1,
+              'currentRevision': currentRevision,
               'currentPhase': phase,
             },
         ],
@@ -231,6 +258,175 @@ class NativeFixture implements IosTransferCoordinatorPort {
     active = null;
     if (!released.isCompleted) released.complete();
   }
+
+  @override
+  Future<IosTransferCleanupLease> claimImportCleanup(
+    IosTransferImportWork work,
+  ) async {
+    require(
+      active == null && activeCleanup == null && songId == work.songId,
+      'Cleanup requires the actual frozen fixture reservation',
+    );
+    return activeCleanup = IosTransferCleanupLease.fromJson({
+      'permission': 'cleanup',
+      'job': {...fixture.document, 'phase': 'validating'},
+      'songID': songId,
+      'targetRelativePath': target,
+      'clientID': client,
+      'leaseID':
+          'a7d96b93-6526-4f1f-a1af-${(++sequence).toRadixString(16).padLeft(12, '0')}',
+      'currentRevision': currentRevision,
+      'currentPhase': phase,
+      'publicationRecorded': published,
+      if (resolution != null)
+        'resolution': {
+          'mode': resolution!.mode.name,
+          'abandonment': resolution!.abandonment?.name,
+        },
+    });
+  }
+
+  @override
+  Future<void> validateImportCleanup(IosTransferCleanupLease lease) async {
+    require(
+      activeCleanup?.leaseId == lease.leaseId,
+      'Current fixture cleanup authority',
+    );
+  }
+
+  @override
+  Future<IosTransferResolvedCleanup> resolveImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  }) async {
+    await validateImportCleanup(lease);
+    final actual = await fixture.db.iosTransferReceiptEntitys.getByOperationKey(
+      receipt.operationKey,
+    );
+    require(
+      actual?.state == receipt.state &&
+          actual?.localSongId == lease.songId &&
+          {'retiring', 'committed'}.contains(actual?.state),
+      'Actual Isar decision precedes native cleanup attestation',
+    );
+    if (resolution == null) {
+      cleanupCalls++;
+      if (receipt.state == 'committed') {
+        resolution = IosTransferCleanupResolution.fromJson({
+          'mode': 'committed',
+        });
+      } else {
+        phase = 'cancelled';
+        final file = File(fixture.store().absolutePath(fixture.target));
+        var outcome = 'missingFile';
+        if (await file.exists()) {
+          final digest = (await sha256.bind(file.openRead()).first).toString();
+          if (published && digest == lease.job.receivedSha256) {
+            await file.delete();
+            outcome = 'removedOwnedFile';
+          } else {
+            outcome = 'preservedUserFile';
+          }
+        }
+        resolution = IosTransferCleanupResolution.fromJson({
+          'mode': 'abandoned',
+          'abandonment': outcome,
+        });
+      }
+      staging = false;
+      event();
+    }
+    if (loseCleanupReply) {
+      loseCleanupReply = false;
+      throw StateError('Fixture lost resolved cleanup reply');
+    }
+    return IosTransferResolvedCleanup.fromJson({
+      'id': lease.job.id,
+      'revision': lease.job.revision,
+      'songID': lease.songId,
+      'resolution': {
+        'mode': resolution!.mode.name,
+        'abandonment': resolution!.abandonment?.name,
+      },
+    });
+  }
+
+  @override
+  Future<void> finalizeImportCleanup(
+    IosTransferCleanupLease lease, {
+    required IosTransferReceiptEntity receipt,
+  }) async {
+    await validateImportCleanup(lease);
+    final actual = await fixture.db.iosTransferReceiptEntitys.getByOperationKey(
+      receipt.operationKey,
+    );
+    require(
+      resolution != null &&
+          actual?.state == receipt.state &&
+          (resolution!.mode == IosTransferCleanupMode.committed
+              ? actual?.state == 'committed'
+              : actual?.state == 'retired'),
+      'Actual durable Isar finalization precedes native bookkeeping removal',
+    );
+    cleaned = true;
+    finalizations++;
+    if (loseFinalizationReply) {
+      loseFinalizationReply = false;
+      throw StateError('Fixture lost finalization reply');
+    }
+    event();
+  }
+
+  @override
+  Future<void> releaseImportCleanup(IosTransferCleanupLease lease) async {
+    await validateImportCleanup(lease);
+    activeCleanup = null;
+  }
+
+  @override
+  Future<IosTransferOrphanLease> claimOrphanCleanup(
+    IosTransferWorkCursor key, {
+    required int songId,
+  }) async {
+    if (this.songId != null ||
+        currentRevision <= key.revision ||
+        key.jobId != job.id) {
+      throw StateError('Fixture has custody or no retired revision');
+    }
+    require(
+      active == null && activeCleanup == null && activeOrphan == null,
+      'Orphan fixture crosses one owner barrier',
+    );
+    orphanClaims++;
+    return activeOrphan = IosTransferOrphanLease.fromJson({
+      'permission': 'orphanCleanup',
+      'id': key.jobId,
+      'revision': key.revision,
+      'songID': songId,
+      'clientID': client,
+      'leaseID':
+          'a7d96b93-6526-4f1f-a1af-${(++sequence).toRadixString(16).padLeft(12, '0')}',
+      'currentJob': {
+        ...fixture.document,
+        'phase': phase,
+        'revision': currentRevision,
+      },
+    });
+  }
+
+  @override
+  Future<void> validateOrphanCleanup(IosTransferOrphanLease lease) async {
+    require(
+      activeOrphan?.leaseId == lease.leaseId,
+      'Current orphan fixture guard',
+    );
+  }
+
+  @override
+  Future<void> releaseOrphanCleanup(IosTransferOrphanLease lease) async {
+    await validateOrphanCleanup(lease);
+    activeOrphan = null;
+  }
 }
 
 Future<void> main(List<String> arguments) async {
@@ -328,23 +524,199 @@ Future<void> main(List<String> arguments) async {
     readMedia: reader ?? readMedia,
   );
   try {
-    await scenario('isar-only-orphan', (fixture, native) async {
+    await scenario('coalesced-foreground-mutation', (fixture, native) async {
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        await owner.pauseForMutation();
+        native.recoveryEntered = Completer<void>();
+        native.recoveryWait = Completer<void>();
+        final before = native.recoveries;
+        final resuming = owner.resumeAfterMutation();
+        await native.recoveryEntered!.future;
+        final first = owner.foreground(), second = owner.foreground();
+        require(
+          identical(first, second),
+          'Concurrent foreground calls share one lifecycle operation',
+        );
+        var mutationFinished = false;
+        final mutation = owner.pauseForMutation().then(
+          (_) => mutationFinished = true,
+        );
+        await Future<void>.delayed(Duration.zero);
+        require(
+          !mutationFinished,
+          'Mutation waits for the actual old lifecycle recovery',
+        );
+        native.recoveryWait!.complete();
+        await Future.wait([resuming, first, second, mutation]);
+        require(
+          !owner.enabled &&
+              owner.issues.isEmpty &&
+              native.recoveries == before + 1,
+          'A stale lifecycle cannot re-enable writes or override a mutation barrier',
+        );
+        native.recoveryWait = null;
+        await owner.foreground();
+        require(
+          !owner.enabled && native.recoveries == before + 1,
+          'An unrelated foreground cannot release a held clear/unpair mutation',
+        );
+        final resumes = native.submissionResumes;
+        await owner.resumeAfterMutation();
+        require(
+          owner.enabled && native.submissionResumes == resumes + 1,
+          'Only the mutation owner explicitly resumes fresh submissions after its storage barrier',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
+    for (final mode in [
+      'owned',
+      'edited',
+      'lost-resolution',
+      'lost-finalization',
+    ]) {
+      await scenario('root-cleanup-$mode', (fixture, native) async {
+        await fixture.prepare();
+        await fixture.publishFixture();
+        native.songId = 42;
+        native.phase = 'cancelled';
+        native.published = true;
+        native.loseCleanupReply = mode == 'lost-resolution';
+        native.loseFinalizationReply = mode == 'lost-finalization';
+        final file = File(fixture.store().absolutePath(fixture.target));
+        if (mode == 'edited') await file.writeAsString('preserved user audio');
+        var owner = coordinator(fixture, native);
+        try {
+          await owner.start();
+          if (mode == 'lost-resolution') {
+            require(
+              (await fixture.store().peek(
+                        fixture.job(),
+                        fixture.target,
+                      ))!.receipt.state ==
+                      'retiring' &&
+                  native.resolution != null &&
+                  !native.cleaned,
+              'Lost native resolution retains actual Isar retiring and native provenance',
+            );
+            await owner.dispose();
+            await fixture.close();
+            await fixture.open();
+            owner = coordinator(fixture, native);
+            await owner.start();
+          } else if (mode == 'lost-finalization') {
+            require(
+              native.cleaned &&
+                  (await fixture.store().peek(
+                        fixture.job(),
+                        fixture.target,
+                      ))!.receipt.state ==
+                      'retired',
+              'Lost finalization reply leaves actual Isar retirement and native removal complete',
+            );
+            await owner.foreground();
+          }
+          require(
+            owner.enabled &&
+                owner.issues.isEmpty &&
+                native.cleanupCalls == 1 &&
+                native.finalizations == 1,
+            'Root finalizes one cleanup without repeating file handling after lost replies',
+          );
+          require(
+            (await fixture.store().peek(
+                      fixture.job(),
+                      fixture.target,
+                    ))!.receipt.state ==
+                    'retired' &&
+                (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal',
+            'Actual Isar retirement preserves the remote recording and its identity',
+          );
+          if (mode == 'edited') {
+            require(
+              await file.readAsString() == 'preserved user audio',
+              'Edited public bytes remain intact',
+            );
+          } else {
+            require(
+              !await file.exists(),
+              'Owned canceled copy is removed only by the explicit native-port fixture',
+            );
+          }
+        } finally {
+          await owner.dispose();
+        }
+      });
+    }
+    await scenario('committed-cancel-history', (fixture, native) async {
       await fixture.prepare();
+      await fixture.publishFixture();
+      await fixture.commit();
+      await fixture.db.writeTxn(() => fixture.db.songEntitys.delete(42));
+      native.songId = 42;
+      native.published = true;
       native.phase = 'cancelled';
       final owner = coordinator(fixture, native);
       try {
         await owner.start();
         require(
+          owner.issues.isEmpty &&
+              native.resolution?.mode == IosTransferCleanupMode.committed &&
+              native.cleaned,
+          'Canceled native history reconciles the actual committed Isar decision',
+        );
+        require(
+          await File(fixture.store().absolutePath(fixture.target)).exists() &&
+              await fixture.db.songEntitys.count() == 0,
+          'Committed cleanup preserves public Music and never resurrects a deleted Song',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
+    await scenario('isar-only-orphan', (fixture, native) async {
+      await fixture.prepare();
+      native.phase = 'cancelled';
+      final unrelated = File(fixture.store().absolutePath(fixture.target));
+      await unrelated.parent.create(recursive: true);
+      await unrelated.writeAsString('User-owned file without native custody');
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        require(
           owner.enabled &&
-              owner.issues['${native.job.id}:1'] ==
-                  IosTransferCoordinatorIssue.cleanupRequired,
-          'Isar-only reservation is found without native custody or ready job',
+              owner.issues.isEmpty &&
+              native.orphanClaims == 1 &&
+              (await fixture.store().pendingReservations()).entries.isEmpty,
+          'Isar-only reservation retires after a newer-revision no-custody barrier',
         );
         require(
           native.publications == 0 &&
               native.acknowledgements == 0 &&
-              (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal',
-          'Orphan detection preserves Song and never publishes or invents proof',
+              native.cleanupCalls == 0 &&
+              native.finalizations == 0 &&
+              (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal' &&
+              await unrelated.readAsString() ==
+                  'User-owned file without native custody',
+          'Orphan retirement preserves Song and public bytes without invoking file cleanup',
+        );
+        await fixture.close();
+        await fixture.open();
+        require(
+          (await fixture.store().peek(
+                fixture.job(),
+                fixture.target,
+              ))!.receipt.state ==
+              'retired',
+          'Bookkeeping retirement survives database reopen',
+        );
+        await owner.foreground();
+        require(
+          native.orphanClaims == 1,
+          'Retired orphan is absent from recovery pages',
         );
       } finally {
         await owner.dispose();
@@ -442,6 +814,37 @@ Future<void> main(List<String> arguments) async {
         if (native.startupDrain?.isCompleted == false) {
           native.startupDrain!.complete();
         }
+        await owner.dispose();
+      }
+    });
+    await scenario('mutation-during-startup', (fixture, native) async {
+      native.startupDrain = Completer<void>();
+      native.startupDrainEntered = Completer<void>();
+      final owner = coordinator(fixture, native);
+      try {
+        final starting = owner.start();
+        await native.startupDrainEntered!.future;
+        final mutation = owner.pauseForMutation();
+        await owner.foreground();
+        require(
+          !owner.enabled &&
+              native.submissionPauses == 1 &&
+              native.publications == 0,
+          'Mutation retires startup submissions before awaiting its blocked file drain',
+        );
+        native.startupDrain!.complete();
+        await Future.wait([starting, mutation]);
+        require(
+          !owner.enabled && native.publications == 0,
+          'A drained old startup cannot enable a held mutation',
+        );
+        await owner.resumeAfterMutation();
+        require(
+          owner.enabled && native.phase == 'complete' && owner.issues.isEmpty,
+          'Explicit mutation completion retries a retired startup and finishes one import',
+        );
+      } finally {
+        if (!native.startupDrain!.isCompleted) native.startupDrain!.complete();
         await owner.dispose();
       }
     });
@@ -675,7 +1078,7 @@ Future<void> main(List<String> arguments) async {
     });
     // ignore: avoid_print
     print(
-      'Actual root coordinator/Isar contracts passed: ordered completion, one identity, durable media, lost publication and staging after database reopen, deleted history, missing reservation refusal, Isar-only orphan detection and retiring refusal, blocked-reader retirement/mutation barrier, capability gating and no idle/history polling. Native RPC is a fixture; reader=${options.containsKey('--ffprobe') ? 'actual host FFprobe.' : 'generated WAV fixture.'}',
+      'Actual root coordinator/Isar contracts passed: ordered completion, one identity, durable media, lost publication/staging and cleanup replies across database reopen, retiring/native-resolution/Isar-retired/finalization ordering, edited-file preservation, deleted committed history, missing reservation refusal, bookkeeping-only orphan retirement and public-file preservation across reopen, coalesced foreground/mutation barrier, blocked-reader retirement, capability gating and no idle/history polling. Native RPC/file custody is a fixture; reader=${options.containsKey('--ffprobe') ? 'actual host FFprobe.' : 'generated WAV fixture.'}',
     );
   } finally {
     await root.delete(recursive: true);

@@ -473,11 +473,20 @@ void main() {
     () async {
       const channel = MethodChannel('test/ios-transfer-calls');
       final calls = <MethodCall>[];
+      String? client;
       messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'observe') {
+          client = (request(call) as Map)['clientID'] as String;
+          return null;
+        }
+        if (call.method == 'stopObserving') return null;
         calls.add(call);
         switch (call.method) {
           case 'enqueue':
-            expect(request(call), [intentDocument()]);
+            expect(request(call), {
+              'clientID': client,
+              'intents': [intentDocument()],
+            });
             return encoded(summary());
           case 'page':
             expect(request(call), {'offset': 0, 'limit': 100});
@@ -493,6 +502,8 @@ void main() {
         }
       });
       final transport = IosTransferTransport(channel: channel, supported: true);
+      final observation = transport.changes.listen((_) {});
+      addTearDown(observation.cancel);
       addTearDown(transport.dispose);
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       expect(
@@ -517,12 +528,23 @@ void main() {
     'submission freezes the original plan before asynchronous encoding',
     () async {
       const channel = MethodChannel('test/ios-transfer-frozen-plan');
+      String? client;
       messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'observe') {
+          client = (request(call) as Map)['clientID'] as String;
+          return null;
+        }
+        if (call.method == 'stopObserving') return null;
         expect(call.method, 'enqueue');
-        expect(request(call), [intentDocument()]);
+        expect(request(call), {
+          'clientID': client,
+          'intents': [intentDocument()],
+        });
         return encoded(summary());
       });
       final transport = IosTransferTransport(channel: channel, supported: true);
+      final observation = transport.changes.listen((_) {});
+      addTearDown(observation.cancel);
       addTearDown(transport.dispose);
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final selected = [IosTransferIntent.fromJson(intentDocument())];

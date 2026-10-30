@@ -42,6 +42,12 @@ enum LokalTransferProtocol {
     let revision: Int
     let clientID: String
   }
+  struct ImportOrphanClaim: Decodable, Sendable {
+    let id: String
+    let revision: Int
+    let songID: Int64
+    let clientID: String
+  }
   struct ImportPublication: Decodable, Sendable {
     let id: String
     let revision: Int
@@ -49,6 +55,17 @@ enum LokalTransferProtocol {
     let clientID: String
     let songID: Int64
 
+    var lease: ImportLease {
+      ImportLease(id: id, revision: revision, leaseID: leaseID, clientID: clientID)
+    }
+  }
+  struct ImportCleanupDecision: Decodable, Sendable {
+    let id: String
+    let revision: Int
+    let leaseID, clientID: String
+    let songID: Int64
+    let mode: LokalTransferImportResolution.Mode
+    let isarState: String
     var lease: ImportLease {
       ImportLease(id: id, revision: revision, leaseID: leaseID, clientID: clientID)
     }
@@ -105,6 +122,16 @@ enum LokalTransferProtocol {
     return value
   }
 
+  static func importOrphanClaim(_ data: Data) throws -> ImportOrphanClaim {
+    let value = try object(ImportOrphanClaim.self, data, keys: ["id", "revision", "songID", "clientID"])
+    guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil,
+          value.songID > 0, value.songID < Int64.max,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
+      throw LokalTransferError.invalidRecord
+    }
+    return value
+  }
+
   static func importLease(_ data: Data) throws -> ImportLease {
     let value = try object(ImportLease.self, data, keys: ["id", "revision", "leaseID", "clientID"])
     try validateImportLease(value)
@@ -124,6 +151,17 @@ enum LokalTransferProtocol {
       keys: ["id", "revision", "leaseID", "clientID", "songID"])
     try validateImportLease(value.lease)
     guard value.songID > 0 else { throw LokalTransferError.invalidRecord }
+    return value
+  }
+
+  static func importCleanupDecision(_ data: Data, finalized: Bool = false) throws -> ImportCleanupDecision {
+    let value = try object(ImportCleanupDecision.self, data,
+      keys: ["id", "revision", "leaseID", "clientID", "songID", "mode", "isarState"])
+    try validateImportLease(value.lease)
+    guard value.songID > 0,
+          value.isarState == (value.mode == .abandoned ? (finalized ? "retired" : "retiring") : "committed") else {
+      throw LokalTransferError.invalidRecord
+    }
     return value
   }
 
@@ -161,5 +199,17 @@ enum LokalTransferProtocol {
       guard ids.insert(job.id).inserted else { throw LokalTransferError.duplicateJob }
       return job
     }
+  }
+
+  /// The app submits consent under one current root client. Array-only plans
+  /// are no longer accepted at the bridge; native contracts may use intents().
+  static func submission(_ data: Data) throws -> (clientID: String, jobs: [LokalTransferJob]) {
+    guard !data.isEmpty, data.count <= maximumPayloadBytes,
+          let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          Set(row.keys) == ["clientID", "intents"],
+          let clientID = row["clientID"] as? String,
+          UUID(uuidString: clientID)?.uuidString.lowercased() == clientID,
+          let rows = row["intents"] as? [[String: Any]] else { throw LokalTransferError.invalidRecord }
+    return (clientID, try intents(JSONSerialization.data(withJSONObject: rows)))
   }
 }

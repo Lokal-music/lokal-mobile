@@ -4,13 +4,23 @@
 bool tidalAtmosAvailable(Map<dynamic, dynamic> track) {
   bool isMode(Object? value) {
     if (value is! String) return false;
-    final mode = value.trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
-    return mode == 'DOLBY_ATMOS' || mode == 'ATMOS';
+    // Catalogue modes may share one field. A codec name alone is never proof
+    // of an immersive presentation or of a supported iPhone playback route.
+    return value.split(RegExp(r'[,;|]')).any((part) {
+      final mode = part.trim().toUpperCase().replaceAll(RegExp(r'[ -]'), '_');
+      return mode == 'DOLBY_ATMOS' || mode == 'ATMOS';
+    });
   }
 
   for (final key in const [
-    'audio_mode', 'audioMode', 'audio_quality', 'audioQuality',
-    'spatial_audio', 'spatialAudio', 'audio_modes', 'audioModes',
+    'audio_mode',
+    'audioMode',
+    'audio_quality',
+    'audioQuality',
+    'spatial_audio',
+    'spatialAudio',
+    'audio_modes',
+    'audioModes',
   ]) {
     if (isMode(track[key])) return true;
   }

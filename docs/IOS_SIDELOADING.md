@@ -26,31 +26,31 @@ setup is required for the sideloaded app.
 `Lokal-unsigned.ipa.json` identifies the source commit, version/build and Apple
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
-The current independently verified engineering checkpoint is
-[build 80](https://github.com/lokal-music/lokal-mobile/actions/runs/40795645413),
-through reviewed #310 plus the embedded native transfer protocol and per-account
-Keychain preparation. Both complete iOS 18.6 and 26.0 suites pass.
-The artifact is `Lokal-iPhone-engineering-unsigned-80-attempt1`.
-Its IPA SHA-256 is
-`ec61ca758281dac569ce930cc461d352774142e918fba535fddc82122edec122`.
-All 34 arm64 iOS binaries, 26 matching native symbol bundles, Dart AOT symbols,
-notices and 2,314 exported source files are independently rechecked. Source tree:
-`8628d317596f78edf622bdfa5c37d89487840938`.
+The latest complete hosted iPhone engineering checkpoint is
+[build 87](https://github.com/lokal-music/lokal-mobile/actions/runs/40980148351)
+from [PR #345](https://github.com/lokal-music/lokal-mobile/pull/345).
+It passes both full iOS 18.6/26.0 installed simulator suites, builds the unsigned
+release/AOT IPA and passes 1,163 selected Flutter regressions. The separate
+[Apple-native run 12](https://github.com/lokal-music/lokal-mobile/actions/runs/40980148329)
+passes iOS 16 device/simulator SDK/Flutter bridge checks and 20 native rounds.
+The artifact is `Lokal-iPhone-engineering-unsigned-87-attempt1`.
+Its build-reported IPA SHA-256 is
+`56f5ef87e1cf1435c37bd24fdf3fc49a4205d048ba35729ca468c96c68c8a386`.
+The source tree is `41b64dc303351f48cc3211c39eae8aa414a07fc2`.
 
-Build 80 passes actual legacy Keychain migration and the registered native
-transfer-channel/observer replacement checks. Native library import and upload
-capability are disabled; existing product copying remains active. Later
-#311 UI and native import-ownership changes are excluded. Separate widget run 28
-failed at the English launch process; it has no complete render acceptance.
-Actual iOS 16 runtime, physical Windows signing/iPhone installation, live
-providers/receivers and OS background-transfer suspension/
-relaunch remain separate gates. This is an engineering checkpoint, not a
-qualified public release. Builds 78, 74 and 67 remain preserved older checkpoints.
+Build 87 is an **unsigned engineering checkpoint**, not a public or physically
+qualified build. It has not been independently re-inspected here. Subsequent
+source changes to the app-wide destructive mutation entry points are newer
+than build 87; use only a successful matching newer artifact to test those.
+Native product import/upload remain disabled; ordinary foreground copy flows
+remain active. Physical iPhone signing/installation and upgrades, actual iOS 16
+runtime, live online accounts/receivers, and OS background transfer
+suspension/relaunch still require real-device acceptance.
 
-Builds with a `Symbols` directory include Dart AOT symbols and matching native
-dSYMs, identified by binary UUID in the package metadata. Keep these with the
-source/build record for crash symbolication. Do not add the symbol directory to
-the IPA itself.
+Build 86 is the independently reverified prior fallback:
+[run 40951126722](https://github.com/lokal-music/lokal-mobile/actions/runs/40951126722),
+IPA SHA-256 `398d7b2f4d17de1f143bcb33c92673e379a2bcad669c9b13746b58dd94c7159e`.
+Keep its frozen source and crash symbols separate from build 87.
 
 ## Sign and install
 
