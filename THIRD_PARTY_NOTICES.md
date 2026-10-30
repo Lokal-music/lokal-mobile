@@ -71,3 +71,7 @@ artifacts; upstream source/build scripts remain available from the linked projec
 ## Mornye Discord Social SDK bridge
 
 Android native bridge adapted from [Mornye](https://github.com/mornyeapp/Mornye) (Copyright © 2026 zarzet), under the MIT License. Full license: `third_party/mornye_discord/LICENSE`. Discord SDK binaries are separately licensed; when staged, their official notices are packaged in Android assets.
+
+## Native SMB2/3 transport (dart_smb2 / libsmb2)
+
+Lokal uses `dart_smb2` version 0.1.3 (BSD-3-Clause) to communicate with SMB2/SMB3 NAS shares. Its dynamically linked `libsmb2` native binary is LGPL-2.1 licensed. The complete LGPL license appears in the installed application's **About → Licences** page and `assets/licenses/libsmb2.txt`. Corresponding LGPL library source and native build/patch scripts are available at https://github.com/sahlberg/libsmb2 and https://github.com/ales-drnz/libsmb2-scripts . This library is not part of Lokal's application source code and users retain the rights described in LGPL-2.1.

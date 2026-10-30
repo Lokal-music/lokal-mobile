@@ -112,6 +112,7 @@ class MainActivity: FlutterActivity() {
     private val CAST_EVENT_CHANNEL = "com.mossapps.flick/cast_events"
     private val DLNA_ROUTE_CHANNEL = "com.mossapps.flick/dlna_route"
     private val DIAGNOSTICS_CHANNEL = "com.mossapps.flick/diagnostics"
+    private val crashBreadcrumbs by lazy { NativeCrashBreadcrumbs(applicationContext) }
     private val SPOTIFY_AUTH_CHANNEL = "konnekted/spotify_auth"
     private val LOCKER_PACKAGE = "com.mossapps.locker"
     private val LOCKER_RETURN_URI = "locker://return?source=flick"
@@ -188,6 +189,9 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Preserve a sanitized Java exception stack even if Flutter/Dart
+        // logging stops before its periodic disk flush.
+        JavaCrashRecorder.install(applicationContext)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
@@ -1380,6 +1384,12 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DIAGNOSTICS_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getProcessExitInfo" -> result.success(getProcessExitInfo())
+                "consumeJavaCrashInfo" -> result.success(JavaCrashRecorder.consume(applicationContext))
+                "recordCrashBreadcrumb" -> {
+                    val stage = call.argument<String>("stage")
+                    result.success(stage != null &&
+                        crashBreadcrumbs.record(stage))
+                }
                 "getBuildFlavor" -> result.success(BuildConfig.FLAVOR)
                 "getPerformanceSnapshot" -> result.success(mapOf(
                     // Android's process-wide elapsed CPU time includes Flutter
@@ -4867,6 +4877,8 @@ class MainActivity: FlutterActivity() {
                     "rss" to info.rss,
                     "status" to info.status,
                     "trace" to readExitTrace(info),
+                    "processStateSummary" to info.processStateSummary
+                        ?.toString(Charsets.UTF_8)?.take(1024),
                 )
             }
         } catch (_: Exception) {
@@ -4877,12 +4889,33 @@ class MainActivity: FlutterActivity() {
     private fun readExitTrace(info: ApplicationExitInfo): String? {
         return try {
             val stream = info.traceInputStream ?: return null
-            val text = stream.bufferedReader().use { reader ->
-                val buffer = CharArray(16 * 1024)
-                val read = reader.read(buffer)
-                if (read <= 0) null else String(buffer, 0, read)
+            // Android 12+ returns a binary protobuf for native tombstones;
+            // decoding it as UTF-8 previously produced unreadable data.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                info.reason == ApplicationExitInfo.REASON_CRASH_NATIVE
+            ) {
+                val bytes = stream.use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (output.size() < 256 * 1024) {
+                        val n = input.read(buffer, 0,
+                            minOf(buffer.size, 256 * 1024 - output.size()))
+                        if (n <= 0) break
+                        output.write(buffer, 0, n)
+                    }
+                    output.toByteArray()
+                }
+                NativeTombstoneSummary.decode(bytes)
+                    ?: "Native tombstone present but stack could not be decoded"
+            } else {
+                stream.bufferedReader().use { reader ->
+                    val buffer = CharArray(16 * 1024)
+                    val length = reader.read(buffer)
+                    if (length > 0) String(buffer, 0, length).trim()
+                        .takeIf { it.isNotEmpty() }
+                    else null
+                }
             }
-            text?.trim()?.takeIf { it.isNotEmpty() }
         } catch (_: Exception) {
             null
         }

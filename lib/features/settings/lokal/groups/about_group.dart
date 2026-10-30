@@ -40,6 +40,10 @@ void openLokalLicences(BuildContext context) {
       yield LicenseEntryWithLineBreaks([
         'Noto Sans SC',
       ], await rootBundle.loadString('assets/fonts/NotoSansSC-OFL.txt'));
+      yield LicenseEntryWithLineBreaks(
+        ['libsmb2 (native SMB2/3 library)'],
+        await rootBundle.loadString('assets/licenses/libsmb2.txt'),
+      );
     });
   }
   _push(context, const LokalLicencesPage());

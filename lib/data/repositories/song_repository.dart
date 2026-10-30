@@ -42,11 +42,16 @@ class AlbumGroup {
 class SongRepository {
   final Isar _isar;
 
-  SongRepository({Isar? isar}) : _isar = isar ?? Database.instance;
+  // The optional policy lets isolated native-database tests exercise iPhone
+  // writer guards on the host. App callers use the actual platform default.
+  SongRepository({Isar? isar, bool? iosImportSafety})
+      : _isar = isar ?? Database.instance,
+        _iosImportSafety = iosImportSafety ?? Platform.isIOS;
+  final bool _iosImportSafety;
 
   Isar get isar => _isar;
 
-  late final IosTransferScanGuard? _iosScanGuard = Platform.isIOS
+  late final IosTransferScanGuard? _iosScanGuard = _iosImportSafety
       ? IosTransferScanGuard(_isar)
       : null;
 
@@ -68,6 +73,36 @@ class SongRepository {
     final entity = await _isar.songEntitys.get(key);
     if (entity == null || entity.filePath.startsWith('ghost://')) return null;
     return _entityToSong(entity);
+  }
+
+  /// Look up a single local song by path without materializing or sorting
+  /// the entire library (important for opt-in desktop download transfers).
+  Future<Song?> getSongByFilePath(String filePath) async {
+    final entity = await _isar.songEntitys
+        .where()
+        .filePathEqualToAnyStartOffsetMs(filePath)
+        .findFirst();
+    return entity == null ? null : _entityToSong(entity);
+  }
+
+  /// Bounded title lookup for incremental cross-device listening history.
+  /// Prefer the indexed exact-title match, then a capped case-insensitive
+  /// fallback. This never materializes the complete library.
+  Future<List<Song>> getHistoryMatchCandidates(String title) async {
+    if (title.trim().isEmpty) return const [];
+    var entities = await _isar.songEntitys
+        .where()
+        .titleEqualTo(title)
+        .limit(64)
+        .findAll();
+    if (entities.isEmpty) {
+      entities = await _isar.songEntitys
+          .filter()
+          .titleEqualTo(title, caseSensitive: false)
+          .limit(64)
+          .findAll();
+    }
+    return entities.map(_entityToSong).toList();
   }
 
   /// Get songs by folder URI.
@@ -160,7 +195,7 @@ class SongRepository {
     bool fromScanner = false,
   }) async {
     await _isar.writeTxn(() async {
-      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
+      if (fromScanner && _iosImportSafety) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       if (guard != null && !await guard.allowsUpsertInTransaction(entity)) {
         return;
@@ -174,7 +209,7 @@ class SongRepository {
         entity.id = existing.id;
       }
 
-      if (Platform.isIOS) {
+      if (_iosImportSafety) {
         await retainIosImportSongIdentitiesInTransaction(_isar, [entity]);
       }
       await _isar.songEntitys.put(entity);
@@ -194,7 +229,7 @@ class SongRepository {
     if (entities.isEmpty) return;
 
     await _isar.writeTxn(() async {
-      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
+      if (fromScanner && _iosImportSafety) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       final accepted = <SongEntity>[];
       for (final entity in entities) {
@@ -211,7 +246,7 @@ class SongRepository {
         }
       }
       if (accepted.isNotEmpty) {
-        if (Platform.isIOS) {
+        if (_iosImportSafety) {
           await retainIosImportSongIdentitiesInTransaction(_isar, accepted);
         }
         await _isar.songEntitys.putAll(accepted);
@@ -226,7 +261,7 @@ class SongRepository {
     List<SongEntity> tracks, {
     required List<SongEntity> expected,
   }) async {
-    if (!Platform.isIOS) return false;
+    if (!_iosImportSafety) return false;
     return _isar.writeTxn(() => IosTransferCueMapping(_isar)
         .replaceInTransaction(path, tracks, expected: expected));
   }
@@ -322,7 +357,7 @@ class SongRepository {
     if (uniquePaths.isEmpty) return;
 
     await _isar.writeTxn(() async {
-      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
+      if (fromScanner && _iosImportSafety) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       for (final path in uniquePaths) {
         if (guard == null) {
@@ -375,7 +410,7 @@ class SongRepository {
     if (uniquePaths.isEmpty) return;
 
     await _isar.writeTxn(() async {
-      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
+      if (fromScanner && _iosImportSafety) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       for (final path in uniquePaths) {
         if (guard == null) {
@@ -415,7 +450,7 @@ class SongRepository {
   }) async {
     if (ids.isEmpty) return;
     await _isar.writeTxn(() async {
-      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
+      if (fromScanner && _iosImportSafety) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       if (guard == null) {
         await _isar.songEntitys.deleteAll(ids);
@@ -592,7 +627,7 @@ class SongRepository {
   /// Delete all songs.
   Future<void> deleteAllSongs() async {
     await _isar.writeTxn(() async {
-      if (Platform.isIOS) {
+      if (_iosImportSafety) {
         await retainIosImportSongIdentitiesInTransaction(_isar, []);
       }
       await _isar.songEntitys.clear();
