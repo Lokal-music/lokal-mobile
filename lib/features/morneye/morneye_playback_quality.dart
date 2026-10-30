@@ -1,13 +1,13 @@
 /// A codec/quality identifier is not catalogue evidence of Dolby Atmos.
-/// Atmos playback requires an explicit user action; ordinary playback must
-/// always choose a stereo or lossless tier from the installed addon manifest.
+/// Selecting an encoded Atmos tier in an add-on's settings is a playback
+/// preference, not evidence that a particular song has an Atmos edition.
 bool isMorneyeAtmosQuality(String? value) => RegExp(
   r'^(?:DOLBY[_ -]?ATMOS|ATMOS|AC-?4)$',
   caseSensitive: false,
 ).hasMatch(value?.trim() ?? '');
 
 /// The Amazon extension also exposes E-AC-3 as a spatial tier, but E-AC-3
-/// alone is NOT Atmos. Never inherit either spatial option for normal play.
+/// alone is NOT Atmos. Do not invent catalogue tags from either option.
 bool morneyeSpatialOption(Map option, {String? provider}) =>
     option['kind']?.toString().toLowerCase() == 'spatial' ||
     (provider?.toLowerCase().startsWith('amazon') == true &&
@@ -46,6 +46,13 @@ String chooseMorneyeDownloadQuality({
     if (id.isNotEmpty) candidates.add(id);
   }
 
+  // Without an explicit selection, prefer the highest documented stereo
+  // quality. Never infer an Atmos capability from the add-on manifest alone.
+  for (final tier in const ['HI_RES_LOSSLESS', 'LOSSLESS']) {
+    for (final id in candidates) {
+      if (id.toUpperCase() == tier) return id;
+    }
+  }
   for (final option in options) {
     if (option is! Map || morneyeSpatialOption(option, provider: provider)) {
       continue;
@@ -77,7 +84,7 @@ String resolveMorneyeRequestQuality({
   );
 }
 
-/// Only an explicit Atmos action changes the ordinary requested quality.
+/// An explicit per-song Atmos action overrides the configured quality.
 String? explicitMorneyePlaybackTier({
   required bool atmosRequested,
   String? provider,
@@ -92,8 +99,7 @@ String? explicitMorneyePlaybackTier({
 
 /// Amazon's search rows usually omit per-track codec and available audio
 /// modes. Show the *normal playback tier we will request*, never a fabricated
-/// per-track FLAC/AC-4 guarantee. A configured spatial download tier cannot
-/// silently become the regular playback tier.
+/// per-track FLAC/AC-4 guarantee. A spatial selection is not a search tag.
 String? amazonRequestedPlaybackQualityLabel({
   required String? configured,
   required List<dynamic> options,
