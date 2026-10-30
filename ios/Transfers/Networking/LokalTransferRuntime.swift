@@ -693,12 +693,14 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   /// the app it may discard that pairing. The frozen Isar custody remains for
   /// later cleanup; an importing row refuses this operation atomically.
   func retireNetworkScope(_ scope: LokalTransferScope,
+                          ticket: LokalTransferImportOwnership.Ticket,
                           reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
     queue.async {
       do {
         guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
           throw LokalTransferError.invalidTransition
         }
+        try self.importOwnership.validateTicket(ticket)
         let changes = try self.journal.retireNetworkScope(scope, nowMs: Self.now())
         for change in changes {
           self.importOwnership.revoke(jobID: change.previous.id, revision: change.previous.revision)
