@@ -130,11 +130,15 @@ class LinkJournal {
       final entity = numericId == null
           ? null
           : await Database.instance.songEntitys.get(numericId);
+      // Normal library IDs use the Isar primary key. A missing numeric ID
+      // cannot be rescued by scanning every track during playback.
       final song = entity != null
           ? SongRepository().songFromEntity(entity)
-          : (await SongRepository().getAllSongs())
-                .where((song) => song.id == songId)
-                .firstOrNull;
+          : numericId == null
+              ? (await SongRepository().getAllSongs())
+                    .where((song) => song.id == songId)
+                    .firstOrNull
+              : null;
       if (song == null) return;
       final event = PlayEventEntity()
         ..eventId = eventId
