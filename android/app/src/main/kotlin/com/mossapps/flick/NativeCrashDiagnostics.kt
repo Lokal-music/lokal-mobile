@@ -120,7 +120,8 @@ internal object NativeTombstoneSummary {
                     val mapFields = fields(entry.data!!)
                     val id = mapFields.firstOrNull { it.id == 1 }?.value
                     val thread = mapFields.firstOrNull { it.id == 2 }?.data
-                    if (id == crashedTid && thread != null) thread else null
+                    if (crashedTid != null && id == crashedTid && thread != null)
+                        thread else null
                 }.firstOrNull()
             if (matching != null) {
                 val frames = fields(matching).filter { it.id == 4 && it.data != null }.take(12)
@@ -130,7 +131,7 @@ internal object NativeTombstoneSummary {
                         .substringAfterLast('/').take(80)
                     val function = safeSymbol(string(frame.firstOrNull { it.id == 4 }?.data))
                     val relPc = frame.firstOrNull { it.id == 1 }?.value ?: 0L
-                    out.append("\\n#$index pc=0x${relPc.toString(16)} $library $function")
+                    out.append("\n#$index pc=0x${relPc.toString(16)} $library $function")
                 }
             }
             out.toString().take(2300)
