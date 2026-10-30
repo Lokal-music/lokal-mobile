@@ -121,11 +121,25 @@ class _OnlineLyricsSearchSheetState extends State<OnlineLyricsSearchSheet> {
         _session.searched = true;
         _searching = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || generation != _generation) return;
       setState(() {
         _searching = false;
-        _error = 'Could not search lyrics. Check your connection and retry.';
+        if (error is OnlineLyricsHttpException) {
+          final retryAfter = error.retryAfter;
+          final retryHint = retryAfter != null && retryAfter.inSeconds > 0
+              ? ' Retry in ${retryAfter.inSeconds} seconds.'
+              : ' Try again shortly.';
+          _error = switch (error.statusCode) {
+            429 => 'Lyrics service rate limit reached.$retryHint',
+            503 => 'Lyrics service is temporarily busy.$retryHint',
+            _ => 'Lyrics service returned HTTP ${error.statusCode}. Please retry.',
+          };
+        } else if (error is FormatException || error is TypeError) {
+          _error = 'Lyrics service returned an invalid response. Please retry.';
+        } else {
+          _error = 'Could not reach the lyrics service. Check your connection and retry.';
+        }
       });
     }
   }
