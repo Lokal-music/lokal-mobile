@@ -1819,6 +1819,11 @@ class PlayerService {
       if (_playlist.isNotEmpty && !_usingRustBackend &&
           !requiresOnDemandAndroidSequence(_playlist)) {
         unawaited(_rebuildPlaylist());
+      } else if (!_usingRustBackend &&
+          _androidEngine?.isSingleTrackOnly == true) {
+        // Reordering/removing the next logical track invalidates the native
+        // preloaded child. Otherwise Media3 may advance to a deleted entry.
+        unawaited(_androidEngine!.invalidateOnDemandGaplessSuccessor());
       }
     });
   }
@@ -7400,6 +7405,12 @@ class PlayerService {
     // user taps Repeat All can stall the main player, particularly for HTTP
     // and on-demand sources. Keep the current stream, index and position.
     await _updateLoopMode();
+    if (!_usingRustBackend &&
+        _androidEngine?.isSingleTrackOnly == true) {
+      // Stop After Current, Repeat One and Repeat All can all change which
+      // successor is legal. Remove any child queued under the old mode.
+      await _androidEngine!.invalidateOnDemandGaplessSuccessor();
+    }
     if (mode == LoopMode.all &&
         !_usingRustBackend &&
         _playlist.length > 1 &&
