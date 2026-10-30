@@ -122,4 +122,46 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('rate limit reports the provider error instead of a connection failure',
+      (tester) async {
+    final online = _Online();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showModalBottomSheet<bool>(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => SizedBox(
+                height: 580,
+                child: OnlineLyricsSearchSheet(
+                  song: _song,
+                  lyricsService: _Lyrics(),
+                  onlineService: online,
+                  session: LyricsSearchSession(_song),
+                ),
+              ),
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Search'));
+    await tester.pump();
+    online.requests.single.completeError(
+      const OnlineLyricsHttpException(
+        429,
+        retryAfter: Duration(seconds: 45),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('rate limit'), findsOneWidget);
+    expect(find.textContaining('45 seconds'), findsOneWidget);
+    expect(find.textContaining('Check your connection'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
