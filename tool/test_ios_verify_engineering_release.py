@@ -110,6 +110,12 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertEqual(report["source_files_checked"], 2)
         self.assertEqual(report["binaries"], 2)
 
+    def test_nested_actions_artifact_layout(self) -> None:
+        parent = self.artifact.parent
+        self.artifact.rename(parent / "ipa")
+        report = verify(parent, self.repo, min_sources=2)
+        self.assertEqual(report["binaries"], 2)
+
     def test_rejects_changed_ipa_bytes(self) -> None:
         with self.ipa.open("ab") as handle:
             handle.write(b"tamper")
