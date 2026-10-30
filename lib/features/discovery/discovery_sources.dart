@@ -563,6 +563,345 @@ class DiscoveryAddon {
   final String displayName;
   final Map<String, String> settings;
 
+  /// The manifest can use provider-specific option IDs (such as MAX) with
+  /// a Dolby Atmos label. Check that label only when the saved quality value
+  /// is not one of the known spatial or standard stereo tier names.
+  Future<String?> requestedSpatialCodec() async {
+    final direct = httpAddonRequestedSpatialCodec(settings);
+    if (direct != null) return direct;
+    final chosen = settings.entries.where((entry) =>
+        RegExp(r'quality|codec|format|audio', caseSensitive: false)
+            .hasMatch(entry.key)).toList();
+    if (chosen.isEmpty || chosen.every((entry) =>
+        RegExp(r'^(?:LOSSLESS|HI_RES(?:_LOSSLESS)?|HIGH|LOW|BEST|FLAC|AAC|OPUS)(List<String> suffix, [Map<String, String>? query]) =>
+      base.replace(
+        pathSegments: [...base.pathSegments, ...suffix],
+        queryParameters: query,
+      );
+
+  Future<Map<String, dynamic>> _get(
+    List<String> suffix, {
+    Map<String, String>? query,
+    Future<void>? cancel,
+  }) => http.json(
+    _endpoint(suffix, query),
+    headers: {if (_token.isNotEmpty) 'Authorization': 'Bearer $_token'},
+    cancel: cancel,
+  );
+
+  Future<AddonHealth> health({
+    Future<void>? cancel,
+    Uri? exactManifestUrl,
+  }) async {
+    exactManifestUrl ??= this.exactManifestUrl;
+    // An installation with an explicit manifest.json URL should verify
+    // precisely that URI. The normalized base is retained for subsequent
+    // /search and /stream calls, but must not rewrite the initial probe.
+    // Never forward bearer credentials to a different origin.
+    if (exactManifestUrl != null &&
+        (exactManifestUrl.origin != base.origin ||
+            exactManifestUrl.pathSegments.lastOrNull != 'manifest.json' ||
+            exactManifestUrl.hasQuery ||
+            exactManifestUrl.hasFragment ||
+            normalizeAddonEndpoint(exactManifestUrl.toString()) != base)) {
+      throw const DiscoveryException('Invalid add-on manifest URL.');
+    }
+    final json = exactManifestUrl == null
+        ? await _get(['manifest.json'], cancel: cancel)
+        : await http.json(
+            exactManifestUrl,
+            headers: {if (_token.isNotEmpty) 'Authorization': 'Bearer $_token'},
+            cancel: cancel,
+          );
+    final id = discoveryText(json['id']);
+    final resources = json['resources'];
+    if (id == null ||
+        resources is! List ||
+        !resources.contains('search') ||
+        !resources.contains('stream')) {
+      throw const DiscoveryException(
+        'The addon must declare an id and search + stream resources.',
+      );
+    }
+    final flag = json['allowDownloads'];
+    // An add-on may prohibit saving while allowing direct streaming.
+    // Cache permission is checked only when an explicit download is requested.
+    final allowed =
+        flag == null ||
+        flag == true ||
+        flag == 1 ||
+        flag == '1' ||
+        flag == 'true';
+    return AddonHealth(
+      discoveryText(json['name']) ?? id,
+      cacheAllowed: allowed,
+      settings: AddonSetting.parse(json['settings']),
+    );
+  }
+
+  Future<List<DiscoveryTrack>> search(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    if (trimmed.length > 200) {
+      throw const DiscoveryException('Search is limited to 200 characters.');
+    }
+    final json = await _get(['search'], query: {...settings, 'q': trimmed});
+    final rows = json['tracks'];
+    if (rows is! List) {
+      throw const DiscoveryException(
+        'The addon search response must contain a tracks array.',
+      );
+    }
+    final tracks = <String, DiscoveryTrack>{};
+    for (final row in rows.take(500)) {
+      if (row is! Map<String, dynamic>) continue;
+      final id = discoveryText(row['id'], maxLength: 1024);
+      final title = discoveryText(row['title']);
+      if (id == null || title == null || id == '.' || id == '..') continue;
+      Uri? sourceUrl;
+      final source = discoveryText(row['sourceURL'], maxLength: 8192);
+      if (source != null) {
+        try {
+          sourceUrl = requireHttps(source);
+        } on DiscoveryException {
+          /* optional metadata */
+        }
+      }
+      // BitChord's wire format uses artworkURL and albumArtworkURL.
+      // Invalid/unsafe URLs must not be fetched by the player.
+      String? artwork;
+      for (final key in [
+        'artworkURL', 'albumArtworkURL', 'artworkUrl',
+        'albumArtworkUrl', 'coverUrl', 'thumbnailUrl',
+      ]) {
+        final candidate = discoveryText(row[key], maxLength: 8192);
+        if (candidate == null) continue;
+        try {
+          final imageUrl = requireHttps(candidate);
+          // The configured add-on itself may be on a private network, but an
+          // arbitrary search result must not point the image fetch at a
+          // different local/private host.
+          if (imageUrl.origin != base.origin) {
+            final host = imageUrl.host.toLowerCase();
+            if (InternetAddress.tryParse(host) != null ||
+                !host.contains('.') ||
+                host.endsWith('.') ||
+                const [
+                  '.localhost', '.local', '.internal', '.lan', '.home',
+                ].any(host.endsWith)) continue;
+          }
+          artwork = imageUrl.toString();
+          break;
+        } on DiscoveryException {
+          // Artwork is optional; an invalid URL never fails the search.
+        }
+      }
+      tracks.putIfAbsent(
+        id,
+        () => DiscoveryTrack(
+          id: id,
+          title: title,
+          artist: discoveryText(row['artist']) ?? 'Artist not supplied',
+          album: discoveryText(row['album']),
+          duration: discoveryDuration(row['duration']),
+          source: DiscoverySource.addon,
+          addonBase: base,
+          addonId: configId,
+          sourceName: displayName,
+          sourceUrl: sourceUrl,
+          artwork: artwork,
+          catalogueQuality: discoveryText(row['audioQuality'] ??
+              row['audio_quality'] ?? row['quality'], maxLength: 40),
+          catalogueCodec: providerAudioCodec(row),
+          catalogueBitDepth: providerAudioInteger(
+              row, const ['bitDepth', 'bit_depth', 'bitsPerSample', 'bits_per_sample'],
+              min: 8, max: 64),
+          catalogueSampleRate: providerAudioSampleRate(row),
+          // Retain security-relevant fields with inline URLs, not just the URL.
+          inlineStream: row['streamURL'] == null
+              ? null
+              : {...row, 'url': row['streamURL']},
+        ),
+      );
+      if (tracks.length == 50) break;
+    }
+    if (rows.isNotEmpty && tracks.isEmpty) {
+      throw const DiscoveryException(
+        'The addon returned tracks without usable ids and titles.',
+      );
+    }
+    return tracks.values.toList(growable: false);
+  }
+
+  Future<ResolvedDiscoveryAudio> resolve(
+    DiscoveryTrack track, {
+    Future<void>? cancel,
+    bool forDownload = false,
+  }) async {
+    if (track.source != DiscoverySource.addon ||
+        track.addonId != configId ||
+        track.addonBase != base ||
+        track.id.isEmpty ||
+        track.id.length > 1024 ||
+        track.id == '.' ||
+        track.id == '..') {
+      throw const DiscoveryException(
+        'This result belongs to a different source. Search again.',
+      );
+    }
+    // Search has already selected a configured, identity-checked add-on.
+    // Fetching its manifest *again* before every streaming playback adds an
+    // unrelated network round-trip to first audio (especially Qobuz HTTP).
+    // Saving still reads the current manifest to enforce allowDownloads.
+    if (forDownload) {
+      final manifest = await health(cancel: cancel);
+      if (!manifest.cacheAllowed) {
+        throw const DiscoveryException(
+          'This addon disallows saving or downloading audio.',
+        );
+      }
+    }
+    // A search result can embed a Qobuz sample URL. Discard only recognized
+    // previews and request a fresh full stream from the add-on endpoint.
+    // Unsafe, encrypted or DRM inline responses still fail closed.
+    if (settings.isEmpty && track.inlineStream != null) {
+      final inline = track.inlineStream!;
+      try {
+        return parseStream(inline, expectedDuration: track.duration);
+      } on _PreviewOnlyAddonStream {
+        // Give the full stream endpoint one opportunity to replace a preview.
+      }
+    }
+    return parseStream(
+      await _get(['stream', track.id], query: settings, cancel: cancel),
+      expectedDuration: track.duration,
+    );
+  }
+
+  ResolvedDiscoveryAudio parseStream(
+    Map<String, dynamic> json, {
+    Duration? expectedDuration,
+  }) {
+    if (json['error'] != null) {
+      throw const DiscoveryException(
+        'The addon could not resolve this recording.',
+      );
+    }
+    if (json['encrypted'] != null && json['encrypted'] != false) {
+      throw const DiscoveryException(
+        'Encrypted audio is not supported by this adapter.',
+      );
+    }
+    if (json['drm'] != null && json['drm'] != false) {
+      throw const DiscoveryException(
+        'DRM audio is not supported by this adapter.',
+      );
+    }
+    if (json['headers'] != null &&
+        !(json['headers'] is Map && (json['headers'] as Map).isEmpty)) {
+      throw const DiscoveryException(
+        'Use a signed media URL; custom media headers are not supported.',
+      );
+    }
+    final url = discoveryText(json['url'], maxLength: 8192);
+    if (url == null) {
+      throw const DiscoveryException('The addon returned no playable URL.');
+    }
+    final uri = requireHttps(url);
+    if (_isAddonPreviewStream(json, uri, expectedDuration)) {
+      throw const _PreviewOnlyAddonStream();
+    }
+    for (final key in [
+      'manifest',
+      'mediaType',
+      'format',
+      'container',
+      'containerFormat',
+      'mimeType',
+    ]) {
+      final value = json[key];
+      if (value != null && value is! String) {
+        throw const DiscoveryException(
+          'The addon returned invalid transport metadata.',
+        );
+      }
+      if (value is String &&
+          RegExp(
+            r'hls|dash|mpegurl|m3u8|mpd',
+            caseSensitive: false,
+          ).hasMatch(value)) {
+        throw const DiscoveryException(
+          'This source uses HLS/DASH. A progressive audio file is required.',
+        );
+      }
+    }
+    if (RegExp(r'\.(m3u8|mpd)$', caseSensitive: false).hasMatch(uri.path)) {
+      throw const DiscoveryException(
+        'A playlist URL cannot be played as an audio file.',
+      );
+    }
+    // An explicitly configured LAN addon may serve its own media. An addon
+    // cannot redirect the downloader to a different literal/private host.
+    if (uri.origin != base.origin) {
+      final host = uri.host.toLowerCase();
+      if (InternetAddress.tryParse(host) != null ||
+          !host.contains('.') ||
+          host.endsWith('.') ||
+          [
+            '.localhost',
+            '.local',
+            '.internal',
+            '.lan',
+            '.home',
+          ].any(host.endsWith)) {
+        throw const DiscoveryException(
+          'The addon returned a disallowed media host.',
+        );
+      }
+    }
+    return ResolvedDiscoveryAudio(
+      uri,
+      codec: providerAudioCodec(json),
+      quality: discoveryText(
+        json['audioQuality'] ?? json['audio_quality'] ?? json['quality'],
+        maxLength: 80,
+      ),
+      bitDepth: providerAudioInteger(
+        json, const ['bitDepth', 'bit_depth', 'bitsPerSample', 'bits_per_sample'],
+        min: 8, max: 64,
+      ),
+      sampleRate: providerAudioSampleRate(json),
+    );
+  }
+}
+,
+          caseSensitive: false).hasMatch(entry.value))) {
+      return null;
+    }
+    try {
+      final manifest = await health();
+      for (final setting in manifest.settings) {
+        final selected = settings[setting.key];
+        if (selected == null) continue;
+        for (final option in setting.options) {
+          if (option.value != selected) continue;
+          final label = option.label;
+          if (RegExp(r'Atmos', caseSensitive: false).hasMatch(label) &&
+              RegExp(r'AC[- ]?4', caseSensitive: false).hasMatch(label)) {
+            return 'ac4';
+          }
+          if (RegExp(r'Atmos|\\bJOC\\b', caseSensitive: false).hasMatch(label)) {
+            return 'eac3-joc';
+          }
+        }
+      }
+    } catch (_) {
+      // The setting is not proof of native audio support. When a manifest
+      // cannot be read we retain ordinary playback rather than guessing.
+    }
+    return null;
+  }
+
   Uri _endpoint(List<String> suffix, [Map<String, String>? query]) =>
       base.replace(
         pathSegments: [...base.pathSegments, ...suffix],
