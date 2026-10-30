@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../data/database.dart';
 import '../../services/ios_transfer_import_coordinator.dart';
+import '../../services/ios_transfer_mutation_barrier.dart';
 import '../../services/ios_transfer_import_store.dart';
 import '../../services/ios_transfer_media_probe.dart';
 import '../../services/ios_transfer_transport.dart';
@@ -17,6 +18,22 @@ import '../../services/ios_transfer_transport.dart';
 class IosTransferRoot extends StatefulWidget {
   const IosTransferRoot({super.key, required this.child});
   final Widget child;
+
+  /// Guard a destructive library or pairing operation at its UI entry point.
+  /// Ordinary Android operations remain unchanged. Native iOS transfers are
+  /// still release-disabled; this fence does not replace OS-task cancellation.
+  static Future<T> withMutationBarrier<T>(
+    BuildContext context,
+    Future<T> Function() mutation,
+  ) {
+    if (kIsWeb || !Platform.isIOS) return mutation();
+    final root = context.findAncestorStateOfType<_IosTransferRootState>();
+    if (root == null) {
+      throw StateError('iPhone transfer owner is unavailable.');
+    }
+    return root._withMutation(mutation);
+  }
+
   @override
   State<IosTransferRoot> createState() => _IosTransferRootState();
 }
@@ -25,6 +42,37 @@ class _IosTransferRootState extends State<IosTransferRoot>
     with WidgetsBindingObserver {
   IosTransferTransport? _native;
   IosTransferImportCoordinator? _coordinator;
+  final IosTransferMutationBarrier _mutations = IosTransferMutationBarrier();
+
+  Future<T> _withMutation<T>(Future<T> Function() mutation) {
+    final coordinator = _coordinator;
+    if (coordinator == null) {
+      throw StateError('iPhone transfer owner is unavailable.');
+    }
+    var paused = false;
+    return _mutations.run<T>(
+      pause: () async {
+        if (!mounted) throw StateError('iPhone transfer owner was disposed.');
+        await coordinator.start();
+        if (!mounted) throw StateError('iPhone transfer owner was disposed.');
+        if (!coordinator.enabled) {
+          // The disabled release adapter has never acquired a transfer lease.
+          // If an eligible adapter failed startup, refuse the mutation rather
+          // than writing across an owner whose retirement is unconfirmed.
+          if (coordinator.eligible) {
+            throw StateError('iPhone transfer recovery must succeed first.');
+          }
+          return;
+        }
+        await coordinator.pauseForMutation();
+        paused = true;
+      },
+      resume: () async {
+        if (paused) await coordinator.resumeAfterMutation();
+      },
+      mutate: mutation,
+    );
+  }
 
   @override
   void initState() {
