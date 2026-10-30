@@ -58,6 +58,22 @@ void main() {
     expect(audio.url.path, '/verified.m4a');
   });
 
+  test('HTTP quality option labels can identify a custom Atmos value', () async {
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(MockClient((request) async => http.Response(
+        '{"id":"tidal-fixture","name":"Tidal HTTP","resources":["search","stream"],'
+        '"settings":[{"key":"quality","options":['
+        '{"value":"LOSSLESS","label":"FLAC"},'
+        '{"value":"MAX","label":"Dolby Atmos (E-AC-3 JOC)"}]}]}',
+        200,
+        headers: {'content-type': 'application/json'},
+      ))),
+      endpoint: 'https://addon.example/a/opaque',
+      settings: const {'quality': 'MAX'},
+    );
+    expect(await addon.requestedSpatialCodec(), 'eac3-joc');
+  });
+
   const channel = MethodChannel('lokal/atmos');
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   late Directory directory;
