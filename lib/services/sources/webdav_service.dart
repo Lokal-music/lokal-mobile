@@ -382,12 +382,15 @@ class WebdavService implements NetworkSourceService {
         segment == '.' || segment == '..')) {
       throw const FormatException('Invalid encoded WebDAV path segment');
     }
-    final path = '/${segments.join('/')}' +
-        (resolved.path.endsWith('/') ? '/' : '');
-    final root = shareRoot.endsWith('/') && shareRoot.length > 1
+    // Uri.pathSegments already includes the trailing empty segment for
+    // collection URLs. Never append another slash.
+    final path = '/${segments.join('/')}';
+    final root = shareRoot.endsWith('/')
         ? shareRoot.substring(0, shareRoot.length - 1)
         : shareRoot;
-    if (path != root && !path.startsWith('$root/')) {
+    // The root itself permits any absolute child path. Other shares must
+    // still be contained on a whole path-segment boundary.
+    if (root.isNotEmpty && path != root && !path.startsWith('$root/')) {
       throw FormatException('WebDAV href is outside the shared folder: $path');
     }
     return path;
@@ -631,7 +634,8 @@ class WebdavService implements NetworkSourceService {
         if ((response.statusCode != 207 && response.statusCode != 200) ||
             !_isMultistatusDocument(response.body)) {
           scanIncomplete = true;
-          final detail = response.statusCode == 207
+          final detail =
+              response.statusCode == 207 || response.statusCode == 200
               ? 'invalid multistatus XML'
               : 'HTTP ${response.statusCode}';
           scanErrors.add('${dir.path}: $detail');
