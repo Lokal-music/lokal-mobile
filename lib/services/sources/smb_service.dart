@@ -116,6 +116,12 @@ class SmbService implements NetworkSourceService {
     );
   }
 
+  Future<void> _ensureLanAccess(
+    ({String host, int port, String share, String rootPath}) server,
+  ) => NetworkLocalAccess.ensure(
+    Uri(scheme: 'smb', host: server.host, port: server.port),
+  );
+
   // --- ping ---------------------------------------------------------------
 
   @override
@@ -123,7 +129,7 @@ class SmbService implements NetworkSourceService {
     _lastPingError = null;
     try {
       final s = _parseServer(server);
-      await NetworkLocalAccess.ensure(Uri.parse(server.baseUrl));
+      await _ensureLanAccess(s);
       await smbPing(
         host: s.host,
         port: s.port,
@@ -193,7 +199,7 @@ class SmbService implements NetworkSourceService {
   ) async {
     final path = utf8.decode(base64Decode(marker));
     final s = _parseServer(server);
-    await NetworkLocalAccess.ensure(Uri.parse(server.baseUrl));
+    await _ensureLanAccess(s);
     return await smbReadFile(
       host: s.host,
       port: s.port,
@@ -216,7 +222,7 @@ class SmbService implements NetworkSourceService {
     if (cached != null) return cached;
 
     final s = _parseServer(server);
-    await NetworkLocalAccess.ensure(Uri.parse(server.baseUrl));
+    await _ensureLanAccess(s);
     final destPath =
         await _cache.pathFor(server.id, remoteId, extension: extension);
     await for (final p in smbDownloadFile(
@@ -247,7 +253,7 @@ class SmbService implements NetworkSourceService {
   @override
   Stream<ScanProgress> syncLibrary(NetworkServerEntity server) async* {
     final s = _parseServer(server);
-    await NetworkLocalAccess.ensure(Uri.parse(server.baseUrl));
+    await _ensureLanAccess(s);
     final user = server.username ?? '';
     final pass = _password(server);
 
