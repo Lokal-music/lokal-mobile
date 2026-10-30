@@ -900,25 +900,34 @@ Future<List<_PlaybackSource>> _morneyeSources(
           var segmentedProgress = false;
           var finished = false;
           MorneyeDownload download;
-          // Normal Play stays on the provider's configured stereo/lossless
-          // tier. Only an explicit request opts into E-AC-3 JOC or AC-4.
+          // Playback follows this add-on's saved quality tier. When Atmos
+          // is selected in add-on settings, attempt that encoded rendition
+          // without requiring any speculative catalogue/search badge.
           if (found.atmosAvailable || found.atmosRequested) {
             AtmosDiagnostics.record('request', {
               'source': 'morneye',
               'requested': found.atmosRequested,
               'downloadOnly': found.atmosDownload,
               'available': found.atmosAvailable,
-              'mode': found.atmosRequested ? 'atmos' : 'normal',
+              'mode': found.atmosRequested ? 'atmos' : 'configured',
             });
           }
           if (found.atmosRequested && !found.atmosAvailable && !found.atmosRequestable) {
             AtmosDiagnostics.record('request_rejected', {'reason': 'catalogue_not_atmos'});
             throw const DiscoveryException('This track has no advertised Atmos version.');
           }
-          final tryAtmos = found.atmosRequested;
-          final explicitTier = explicitMorneyePlaybackTier(
-              atmosRequested: tryAtmos, provider: addon.name,
-              atmosCodec: found.atmosCodec);
+          final settings = packages.settings(addon);
+          final configured = settings['downloadQuality']?.toString();
+          final configuredAtmos = configured != null &&
+              isMorneyeAtmosQuality(configured) &&
+              addon.qualityOptions.any((option) =>
+                  option is Map && option['id'] == configured);
+          final tryAtmos = found.atmosRequested || configuredAtmos;
+          final explicitTier = found.atmosRequested
+              ? explicitMorneyePlaybackTier(
+                  atmosRequested: true, provider: addon.name,
+                  atmosCodec: found.atmosCodec)
+              : configuredAtmos ? configured : null;
           final requestedTier = explicitTier ?? '';
           final cacheKey = morneyePlaybackCacheKey(
             addonKey: addon.key,
