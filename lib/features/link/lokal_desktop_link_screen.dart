@@ -101,6 +101,15 @@ class _LokalDesktopLinkScreenState
     }
   });
 
+  Future<void> _syncNow() => _run(() async {
+    await ref.read(lokalRemoteControllerProvider.notifier).syncNow();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(lokalText('Libraries are up to date.'))),
+      );
+    }
+  });
+
   Future<void> _copyFiles() => _run(() async {
     final controller = ref.read(lokalRemoteControllerProvider.notifier);
     try {
@@ -293,7 +302,7 @@ class _LokalDesktopLinkScreenState
             const SizedBox(height: 8),
             Text(
               lokalText(
-                'Desktop songs appear in Library and stream from your PC. Audio files are copied only when you choose to download or send them.',
+                'Desktop library sync is manual. Opening Lokal, reconnecting, or changing a song will not start a library scan. Tap Sync now to update desktop songs, likes, playlists and listening history. Audio files are copied only when you explicitly choose to copy them.',
               ),
               style: TextStyle(color: t.muted),
             ),
@@ -315,7 +324,7 @@ class _LokalDesktopLinkScreenState
                       link.fileCopyProgress.busy ||
                       !link.socketConnected
                   ? null
-                  : _merge,
+                  : _syncNow,
               child: Text(l10n.syncNow),
             ),
           ],
