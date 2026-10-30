@@ -273,7 +273,8 @@ class WebdavService implements NetworkSourceService {
         // NASes frequently add a trailing slash to WebDAV collections.
         // Only repeat that exact canonicalization; never forward HTTP Basic
         // credentials to a different host, scheme, port or arbitrary path.
-        if (target.origin == uri.origin &&
+        if (target.scheme == uri.scheme &&
+            target.origin == uri.origin &&
             target.path == '${uri.path}/' &&
             target.query == uri.query &&
             !target.hasFragment &&
@@ -373,7 +374,10 @@ class WebdavService implements NetworkSourceService {
       // A plain HTML 200 response is not evidence of a WebDAV server.
       if (response.statusCode == 207 &&
           response.body.contains('multistatus')) return true;
-      _lastPingError = response.statusCode == 200
+      _lastPingError = response.statusCode == 400 &&
+              response.body.startsWith('WebDAV redirected')
+          ? response.body
+          : response.statusCode == 200
           ? 'The server answered with HTTP 200 but no WebDAV multistatus. '
               'Use the WebDAV endpoint, not an ordinary HTTP page.'
           : describeStatus(response.statusCode);
