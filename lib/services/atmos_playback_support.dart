@@ -74,6 +74,34 @@ class AtmosPlaybackSupport {
     ];
   }
 
+  /// Confirm an AC-4 *codec* from the delivered file. This is not proof of
+  /// Dolby Atmos presentation and does not establish native iPhone decoding.
+  static Future<bool> isAc4File(
+    String path, {
+    Future<List<Map<String, dynamic>>> Function(String path)? probeStreams,
+  }) async {
+    try {
+      final streams = await (probeStreams ?? _probeStreams)(path);
+      final encoded = streams.any((entry) =>
+          '${entry['codec_type'] ?? 'audio'}'.toLowerCase() == 'audio' &&
+          '${entry['codec_name'] ?? entry['codec'] ?? ''}'
+                  .trim().toLowerCase().replaceAll('-', '') == 'ac4');
+      AtmosDiagnostics.record('source_probe', {
+        'encoded': encoded,
+        'codec': encoded ? 'ac4' : 'unverified',
+        'source': 'ffprobe',
+        'outcome': encoded ? 'codec_confirmed' : 'not_confirmed',
+      });
+      return encoded;
+    } catch (error) {
+      AtmosDiagnostics.record('ffprobe_error', {
+        'errorClass': error.runtimeType.toString(),
+        'reason': 'ac4_probe_unavailable',
+      });
+      return false;
+    }
+  }
+
   /// Verify staged audio, not the catalogue. Android can expose generic
   /// audio/eac3, while FFprobe can omit the JOC extension in its profile.
   /// Read the EC3SpecificBox as a final source-level verification.
