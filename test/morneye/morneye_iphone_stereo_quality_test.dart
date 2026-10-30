@@ -69,6 +69,29 @@ void main() {
     );
   });
 
+  test('configured encoded quality requires a decoder only for playback', () {
+    for (final downloading in [true, false]) {
+      for (final downloadOnly in [true, false]) {
+        expect(
+          morneyeNeedsSpatialPlaybackOutput(
+            spatialRequested: true,
+            forDownload: downloading,
+            atmosDownload: downloadOnly,
+          ),
+          !downloading && !downloadOnly,
+        );
+      }
+    }
+    expect(
+      morneyeNeedsSpatialPlaybackOutput(
+        spatialRequested: false,
+        forDownload: false,
+        atmosDownload: false,
+      ),
+      isFalse,
+    );
+  });
+
   test('manifest preferences do not certify catalogue Atmos or iOS decoding', () {
     expect(
       isMorneyeAtmosQuality('AC-4'),
