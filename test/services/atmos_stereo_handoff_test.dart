@@ -57,11 +57,11 @@ void main() {
       {'id': 'HI_RES_LOSSLESS', 'kind': 'lossless'},
     ];
 
-    test('normal Tidal streams cannot inherit an Atmos default', () {
+    test('selected Tidal Atmos remains the requested tier', () {
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'DOLBY_ATMOS',
         options: options, provider: 'tidal',
-      ), 'HI_RES_LOSSLESS');
+      ), 'DOLBY_ATMOS');
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'ATMOS',
         options: [], provider: 'tidal-web',
@@ -91,10 +91,10 @@ void main() {
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: null,
         options: options, provider: 'tidal',
-      ), 'LOSSLESS');
+      ), 'HI_RES_LOSSLESS');
     });
 
-    test('download settings stay intact while playback excludes Atmos', () {
+    test('add-on quality settings govern playback and downloads', () {
       expect(resolveMorneyeRequestQuality(
         forPlayback: false, requested: null, configured: 'DOLBY_ATMOS',
         options: options, provider: 'tidal',
@@ -102,22 +102,22 @@ void main() {
       expect(resolveMorneyeRequestQuality(
         forPlayback: true, requested: null, configured: 'DOLBY_ATMOS',
         options: options, provider: 'tidal',
-      ), 'HI_RES_LOSSLESS');
+      ), 'DOLBY_ATMOS');
       expect(resolveMorneyeRequestQuality(
         forPlayback: true, requested: 'DOLBY_ATMOS',
         configured: 'LOSSLESS', options: options, provider: 'tidal',
       ), 'DOLBY_ATMOS');
     });
 
-    test('no implicit Atmos for providers with Atmos-only quality lists', () {
+    test('an installed Atmos-only manifest can honor the selected tier', () {
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'DOLBY_ATMOS',
         options: [{'id': 'DOLBY_ATMOS'}], provider: 'tidal',
-      ), 'HI_RES_LOSSLESS');
+      ), 'DOLBY_ATMOS');
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'DOLBY_ATMOS',
         options: [{'id': 'DOLBY_ATMOS'}], provider: 'qobuz',
-      ), 'default');
+      ), 'DOLBY_ATMOS');
     });
   });
 }
