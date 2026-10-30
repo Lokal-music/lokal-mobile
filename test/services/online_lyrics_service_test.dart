@@ -64,7 +64,7 @@ void main() {
     final client = MockClient((request) async {
       requests++;
       if (requests == 1) {
-        return http.Response('', 503, headers: {'Retry-After': '2'});
+        return http.Response('', 503, headers: {'retry-after': '2'});
       }
       return http.Response(jsonEncode([_record]), 200);
     });
@@ -84,7 +84,7 @@ void main() {
     var requests = 0;
     final client = MockClient((request) async {
       requests++;
-      return http.Response('', 429, headers: {'Retry-After': '60'});
+      return http.Response('', 429, headers: {'retry-after': '60'});
     });
     final service = OnlineLyricsService(
       client: client,
@@ -116,7 +116,7 @@ void main() {
     final client = MockClient((request) async {
       requests++;
       return requests == 1
-          ? http.Response('', 429, headers: {'Retry-After': '60'})
+          ? http.Response('', 429, headers: {'retry-after': '60'})
           : http.Response(jsonEncode(_record), 200);
     });
     final service = OnlineLyricsService(client: client);
