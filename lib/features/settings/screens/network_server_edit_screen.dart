@@ -111,6 +111,7 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
   bool _testing = false;
   bool? _testPassed;
   String? _testError;
+  String? _removeError;
 
   /// Set when Tidal sign-in can't auto-open the browser; the live banner shows
   /// it for manual copy/open while polling continues.
@@ -337,7 +338,10 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
       destructive: true,
     );
     if (!confirmed || !mounted || _saving) return;
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _removeError = null;
+    });
     try {
       // Removing a server also purges its downloaded library rows and linked
       // playlists. Stop the iPhone native import owner before any of those
@@ -359,10 +363,9 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _testPassed = false;
-        _testError =
-            'Could not remove the server. Check library transfer recovery '
-            'and try again.';
+        _removeError =
+            'Server removal could not finish. Check library transfer '
+            'recovery and try again.';
       });
     }
   }
@@ -500,6 +503,11 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
               expand: true,
               onPressed: _saving ? null : _delete,
             ),
+          ),
+        if (_removeError != null)
+          LokalSettingsBlock(
+            top: 10,
+            child: LokalSettingsNotice(warning: true, text: _removeError!),
           ),
       ],
     );
