@@ -1518,6 +1518,17 @@ Future<List<OnlineSource>> _playbackSources(
           final audio = await registry.resolve(
             found, cancel: cancel, forDownload: forDownload,
           );
+          final selectedSpatial = httpAddonRequestedSpatialCodec(addon.settings);
+          if (selectedSpatial != null) {
+            // HTTP add-ons use a separate protocol from Mornye packages.
+            // A configured Atmos tier must pass through the native verifier,
+            // not progressive PCM playback or a catalogue quality label.
+            onStatus?.call('Verifying selected spatial audio from ${addon.displayName}…');
+            return cache().prepare(
+              found, audio, cancel: cancel,
+              requestedSpatialCodec: selectedSpatial,
+            );
+          }
           if (forDownload) {
             return cache().prepare(
               found, audio, cancel: cancel,
