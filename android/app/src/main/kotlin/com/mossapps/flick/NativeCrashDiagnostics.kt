@@ -94,6 +94,7 @@ internal object NativeTombstoneSummary {
         if (bytes.isEmpty) return null
         return try {
             val top = fields(bytes)
+            if (top.isEmpty()) return null
             val crashedTid = top.firstOrNull { it.id == 6 }?.value
             val signal = top.firstOrNull { it.id == 10 }?.data?.let(::fields)
             val signalName = safeSymbol(string(signal?.firstOrNull { it.id == 2 }?.data))
