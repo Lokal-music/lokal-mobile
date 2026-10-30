@@ -3,6 +3,7 @@ import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MemorySettings extends DiscoverySettingsStore {
   _MemorySettings(this.settings);
@@ -14,6 +15,9 @@ class _MemorySettings extends DiscoverySettingsStore {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   test('new online Search includes saved HTTP add-ons', () async {
     final client = MockClient((_) async => fail('Search was not started'));
     addTearDown(client.close);

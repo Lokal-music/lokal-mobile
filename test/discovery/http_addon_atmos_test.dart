@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flick/features/discovery/discovery_http.dart';
@@ -56,6 +57,98 @@ void main() {
     expect(requests.single.path, '/private/stream/song');
     expect(requests.single.queryParameters['quality'], 'DOLBY_ATMOS');
     expect(audio.url.path, '/verified.m4a');
+  });
+
+  test('unrelated settings keep a usable inline stream', () async {
+    final client = MockClient((_) async => fail('Unexpected stream request'));
+    addTearDown(client.close);
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(client),
+      endpoint: 'https://addon.example/private',
+      configId: 'fixture',
+      settings: const {'region': 'US'},
+    );
+    final track = DiscoveryTrack(
+      id: 'song', title: 'Song', artist: 'Artist',
+      source: DiscoverySource.addon, addonId: 'fixture',
+      addonBase: addon.base,
+      inlineStream: const {'url': 'https://audio.example/full.flac'},
+    );
+    expect((await addon.resolve(track)).url.path, '/full.flac');
+  });
+
+  test('quality keys of every supported kind require a fresh stream', () async {
+    for (final key in ['quality', 'CODEC', 'format', 'audio_mode']) {
+      final requests = <Uri>[];
+      final client = MockClient((request) async {
+        requests.add(request.url);
+        return http.Response('{"url":"https://audio.example/full.flac"}', 200);
+      });
+      addTearDown(client.close);
+      final addon = DiscoveryAddon(
+        DiscoveryHttp(client), endpoint: 'https://addon.example/private',
+        configId: 'fixture', settings: {key: 'LOSSLESS'},
+      );
+      final track = DiscoveryTrack(
+        id: 'song', title: 'Song', artist: 'Artist',
+        source: DiscoverySource.addon, addonId: 'fixture', addonBase: addon.base,
+        inlineStream: const {'url': 'https://audio.example/inline.flac'},
+      );
+      expect((await addon.resolve(track)).url.path, '/full.flac');
+      expect(requests.single.queryParameters[key], 'LOSSLESS');
+    }
+  });
+
+  test('manifest failures and missing selected options do not imply stereo', () async {
+    for (final response in [
+      http.Response('unavailable', 503),
+      http.Response('{"id":"fixture","resources":["search","stream"],'
+          '"settings":[{"key":"quality","options":['
+          '{"value":"OTHER","label":"Lossless"}]}]}', 200),
+    ]) {
+      final client = MockClient((_) async => response);
+      addTearDown(client.close);
+      final addon = DiscoveryAddon(
+        DiscoveryHttp(client), endpoint: 'https://addon.example/private',
+        settings: const {'quality': 'CUSTOM'},
+      );
+      await expectLater(addon.requestedSpatialCodec(),
+          throwsA(isA<DiscoveryException>()));
+    }
+  });
+
+  test('a confirmed non-spatial manifest option returns null', () async {
+    final client = MockClient((_) async => http.Response(
+      '{"id":"fixture","resources":["search","stream"],'
+      '"settings":[{"key":"quality","options":['
+      '{"value":"CUSTOM","label":"Lossless stereo"}]}]}', 200));
+    addTearDown(client.close);
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(client), endpoint: 'https://addon.example/private',
+      settings: const {'quality': 'CUSTOM'},
+    );
+    expect(await addon.requestedSpatialCodec(), isNull);
+  });
+
+  test('cancellation interrupts an in-flight spatial manifest lookup', () async {
+    final started = Completer<void>();
+    final response = Completer<http.Response>();
+    final cancelled = Completer<void>();
+    final client = MockClient((_) {
+      started.complete();
+      return response.future;
+    });
+    addTearDown(client.close);
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(client), endpoint: 'https://addon.example/private',
+      settings: const {'quality': 'CUSTOM'},
+    );
+    final lookup = addon.requestedSpatialCodec(cancel: cancelled.future);
+    await started.future;
+    cancelled.complete();
+    await expectLater(lookup, throwsA(isA<DiscoveryException>().having(
+        (error) => error.message, 'message', 'Request cancelled.')));
+    response.complete(http.Response('{}', 200));
   });
 
   test('HTTP quality option labels can identify a custom Atmos value', () async {

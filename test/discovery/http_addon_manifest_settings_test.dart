@@ -201,9 +201,9 @@ void main() {
     expect(tracks[2].artwork, isNull);
     expect(requests[0].queryParameters, {'quality': 'HI_RES', 'q': 'song'});
     await addon.resolve(tracks[0]);
-    expect(requests[1].path, '/private/manifest.json');
-    expect(requests[2].pathSegments.last, 'track/1');
-    expect(requests[2].queryParameters['quality'], 'HI_RES');
+    expect(requests, hasLength(2));
+    expect(requests[1].pathSegments.last, 'track/1');
+    expect(requests[1].queryParameters['quality'], 'HI_RES');
   });
 
   test('secure settings survive reload and older version 2 records', () async {
