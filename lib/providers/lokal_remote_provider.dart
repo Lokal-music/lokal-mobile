@@ -705,6 +705,7 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     if (!state.syncProgress.busy &&
         !state.fileCopyProgress.busy &&
         !_downloadOutbox.busy &&
+        !PlayerService().isPlayingNotifier.value &&
         DateTime.now().difference(_lastActivity) > const Duration(minutes: 3)) {
       disconnect();
       state = state.copyWith(
