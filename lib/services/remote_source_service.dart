@@ -7,6 +7,7 @@ import '../data/database.dart';
 import '../data/repositories/song_repository.dart';
 import '../models/song.dart';
 import '../src/rust/api/audio_api.dart' as rust_audio;
+import 'album_art_service.dart';
 import 'sources/network_source_service.dart';
 
 /// Bridges playback/download for network-sourced songs.
@@ -29,6 +30,7 @@ class RemoteSourceService {
   /// Songs whose format probe failed (e.g. AAC-in-M4A Symphonia gap);
   /// skip retrying them every play.
   final Set<String> _probeFailed = {};
+  final Set<String> _artworkPending = {};
 
   Future<NetworkServerEntity> _serverFor(Song song) async {
     final serverId = song.remoteServerId;
@@ -68,9 +70,31 @@ class RemoteSourceService {
             : null,
       );
       unawaited(_backfillAudioFormat(song, path));
+      if (reportProgress) {
+        // The player initially sees a placeholder when a NAS listing did not
+        // contain cover.jpg. Once its file is available locally, trigger a
+        // single embedded-artwork lookup and notify the active player's
+        // artwork without blocking playback or fetching the FLAC again.
+        unawaited(_backfillArtwork(song));
+      }
       return path;
     } finally {
       if (reportProgress) downloadProgressNotifier.value = null;
+    }
+  }
+
+  Future<void> _backfillArtwork(Song song) async {
+    final filePath = song.filePath;
+    if (filePath == null || !_artworkPending.add(filePath)) return;
+    try {
+      await AlbumArtService.instance.resolveArtworkPath(
+        existingPath: song.albumArt,
+        audioSourcePath: filePath,
+      );
+    } catch (e) {
+      AppLog.instance.add('Network artwork backfill failed: $e');
+    } finally {
+      _artworkPending.remove(filePath);
     }
   }
 
