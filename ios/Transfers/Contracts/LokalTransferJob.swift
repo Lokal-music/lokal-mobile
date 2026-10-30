@@ -157,6 +157,16 @@ struct LokalTransferJob: Codable, Equatable, Sendable {
   private(set) var responseSHA256: String?
   private(set) var lastFailure: LokalTransferFailure?
 
+  /// Hash only immutable user intent, independent of progress/retry/completion.
+  func intentFingerprint() throws -> String {
+    let queued = try LokalTransferJob(id: id, direction: direction, identity: identity,
+      metadata: metadata, nowMs: createdMs, expectedBytes: expectedBytes,
+      expectedSHA256: expectedSHA256)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    return try LokalTransferFiles.digestIntent(encoder.encode(queued))
+  }
+
   /// Shared strict document boundary for storage and the private app protocol.
   /// Unknown credential/header/path payloads are never silently accepted.
   static func decodeDocument(_ data: Data) throws -> LokalTransferJob {

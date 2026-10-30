@@ -234,7 +234,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["cancelNetworkScopePreservingFiles", "preserveImportPublicFile", "retireNetworkScope", "drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["cancelNetworkScopePreservingFiles", "preserveImportPublicFile", "retireNetworkScope", "drainImports", "completedHistoryPage", "compactCompletedImport", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -289,12 +289,15 @@ final class LokalTransferBridge {
         host.withRuntime({ runtime in
           runtime.retireNetworkScope(request.scope, ticket: ticket, retirePairing: retirePairing) { reply.encode($0) }
         }, unavailable: { reply.failure($0) })
-      } else if call.method == "importWorkPage" || call.method == "importCandidatesPage" {
+      } else if call.method == "importWorkPage" || call.method == "importCandidatesPage" || call.method == "completedHistoryPage" {
         let request = try LokalTransferProtocol.importWorkPage(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
         guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
         let ticket = try host.importOwnership.capture(owner)
-        if call.method == "importWorkPage" {
+        if call.method == "completedHistoryPage" {
+          host.withRuntime({ runtime in runtime.completedHistoryPage(request, ticket: ticket) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        } else if call.method == "importWorkPage" {
           host.withRuntime({ runtime in runtime.importWorkPage(request, ticket: ticket) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
         } else {
@@ -347,13 +350,16 @@ final class LokalTransferBridge {
         let ticket = try host.importOwnership.capture(owner)
         host.withRuntime({ runtime in runtime.claimImport(request, ticket: ticket) { reply.encode($0) } },
                          unavailable: { reply.failure($0) })
-      } else if call.method == "publishImport" || call.method == "acknowledgeImport" {
+      } else if call.method == "publishImport" || call.method == "acknowledgeImport" || call.method == "compactCompletedImport" {
         let request = try LokalTransferProtocol.importPublication(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
         guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
         try host.importOwnership.validate(owner, jobID: request.id, revision: request.revision,
           leaseID: request.leaseID, requiresWrite: call.method == "publishImport")
-        if call.method == "publishImport" {
+        if call.method == "compactCompletedImport" {
+          host.withRuntime({ runtime in runtime.compactCompletedImport(request, owner: owner) { reply.encode($0) } },
+                           unavailable: { reply.failure($0) })
+        } else if call.method == "publishImport" {
           host.withRuntime({ runtime in runtime.publishImport(request, owner: owner) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
         } else {

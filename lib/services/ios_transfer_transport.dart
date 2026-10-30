@@ -301,6 +301,54 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   }
 
   @override
+  Future<IosTransferImportWorkPage> completedHistoryPage({
+    IosTransferWorkCursor? after,
+    int limit = 100,
+  }) async {
+    if (limit < 1 || limit > 100) {
+      throw const FormatException('Invalid completed history page size.');
+    }
+    final page = IosTransferImportWorkPage.fromJson(
+      await _importCall('completedHistoryPage', {
+        if (after != null) 'after': after.value,
+        'limit': limit,
+      }),
+      limit: limit,
+      after: after,
+    );
+    if (page.entries.any(
+      (work) =>
+          !work.isCurrentRevision ||
+          work.currentPhase != IosTransferPhase.complete ||
+          !work.publicationRecorded,
+    )) {
+      throw const FormatException('Unsettled import in completed history.');
+    }
+    return page;
+  }
+
+  @override
+  Future<void> compactCompletedImport(
+    IosTransferImportLease lease, {
+    required int songId,
+  }) async {
+    if (!lease.reconcileOnly ||
+        lease.job.phase != IosTransferPhase.complete ||
+        songId < 1) {
+      throw const FormatException(
+        'History cleanup requires a completed reconciliation lease.',
+      );
+    }
+    if (await _importCall('compactCompletedImport', {
+          ...lease.control,
+          'songID': songId,
+        }) !=
+        true) {
+      throw const FormatException('Invalid completed history acknowledgement.');
+    }
+  }
+
+  @override
   Future<void> drainImports() async {
     if (await _importCall('drainImports', {}) != true) {
       throw const FormatException('Invalid native import drainage response.');

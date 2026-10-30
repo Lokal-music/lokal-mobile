@@ -113,13 +113,17 @@ final class LokalTransferJournal: @unchecked Sendable {
     var bytes: Int64
     var custodyCount: Int64
     var custodyBytes: Int64
+    var archivedCount: Int64
   }
 
   static let directoryName = "LokalTransfers-v1"
   static let databaseName = "jobs.sqlite3"
   static let maximumBytes = 16 * 1024 * 1024
   static let maximumJobs = 10_000
-  static let schemaVersion: Int64 = 2
+  // Compact fixed-shape completion proofs are retained, never silently evicted.
+  static let maximumArchivedJobs = 1_000_000
+  static let retainedCompletedImports = 200
+  static let schemaVersion: Int64 = 3
   private static let maximumJobBytes = LokalTransferJob.maximumJSONBytes
   private let directory: Int32
   private let root: URL
@@ -204,7 +208,7 @@ final class LokalTransferJournal: @unchecked Sendable {
             try execute("PRAGMA user_version=1")
           }
           let migrating = try scalar("PRAGMA user_version")
-          guard migrating == 1 || migrating == Self.schemaVersion else {
+          guard (1...Self.schemaVersion).contains(migrating) else {
             throw LokalTransferError.unsupportedSchema
           }
           if migrating == 1 {
@@ -212,6 +216,11 @@ final class LokalTransferJournal: @unchecked Sendable {
             try execute("ALTER TABLE metadata ADD COLUMN custody_bytes INTEGER NOT NULL DEFAULT 0 CHECK(typeof(custody_bytes)='integer' AND custody_bytes>=0)")
             try execute("CREATE TABLE import_custody (id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(typeof(revision)='integer' AND revision>0), document BLOB NOT NULL CHECK(typeof(document)='blob'), PRIMARY KEY(id,revision))")
             try execute("PRAGMA user_version=2")
+          }
+          if try scalar("PRAGMA user_version") == 2 {
+            try execute("ALTER TABLE metadata ADD COLUMN archived_count INTEGER NOT NULL DEFAULT 0 CHECK(typeof(archived_count)='integer' AND archived_count>=0)")
+            try execute("CREATE TABLE completed_imports (id TEXT PRIMARY KEY NOT NULL CHECK(length(id)=36), revision INTEGER NOT NULL CHECK(typeof(revision)='integer' AND revision>0), song_id INTEGER NOT NULL CHECK(typeof(song_id)='integer' AND song_id>0), fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64))")
+            try execute("PRAGMA user_version=3")
           }
           testingCommitBoundary?("beforeMigrationCommit")
           try execute("COMMIT")
@@ -273,21 +282,22 @@ final class LokalTransferJournal: @unchecked Sendable {
 
   private func usage() throws -> Usage {
     guard try scalar("PRAGMA user_version") == Self.schemaVersion else { throw LokalTransferError.unsupportedSchema }
-    let query = try statement("SELECT generation,job_count,byte_count,custody_count,custody_bytes FROM metadata WHERE id=1")
+    let query = try statement("SELECT generation,job_count,byte_count,custody_count,custody_bytes,archived_count FROM metadata WHERE id=1")
     defer { sqlite3_finalize(query) }
     guard sqlite3_step(query) == SQLITE_ROW,
-          (0...4).allSatisfy({ sqlite3_column_type(query, Int32($0)) == SQLITE_INTEGER }) else {
+          (0...5).allSatisfy({ sqlite3_column_type(query, Int32($0)) == SQLITE_INTEGER }) else {
       throw LokalTransferError.invalidRecord
     }
     let value = Usage(generation: sqlite3_column_int64(query, 0), count: sqlite3_column_int64(query, 1),
       bytes: sqlite3_column_int64(query, 2), custodyCount: sqlite3_column_int64(query, 3),
-      custodyBytes: sqlite3_column_int64(query, 4))
+      custodyBytes: sqlite3_column_int64(query, 4), archivedCount: sqlite3_column_int64(query, 5))
     guard value.generation >= 0, value.generation < Int64.max,
           value.count >= 0, value.count <= Self.maximumJobs,
           value.bytes >= 0, value.bytes <= Self.maximumBytes,
           value.custodyCount >= 0, value.custodyCount <= Self.maximumJobs,
           value.custodyBytes >= 0, value.custodyBytes <= Self.maximumBytes,
-          value.bytes + value.custodyBytes <= Self.maximumBytes else { throw LokalTransferError.invalidRecord }
+          value.bytes + value.custodyBytes <= Self.maximumBytes,
+          (0...Int64(Self.maximumArchivedJobs)).contains(value.archivedCount) else { throw LokalTransferError.invalidRecord }
     return value
   }
 
@@ -339,16 +349,18 @@ final class LokalTransferJournal: @unchecked Sendable {
           return result
         }
         guard current.count <= Self.maximumJobs, current.custodyCount <= Self.maximumJobs,
-              current.bytes + current.custodyBytes <= Self.maximumBytes else {
+              current.bytes + current.custodyBytes <= Self.maximumBytes,
+              current.archivedCount <= Self.maximumArchivedJobs else {
           throw LokalTransferError.limitExceeded
         }
-        let query = try statement("UPDATE metadata SET generation=?,job_count=?,byte_count=?,custody_count=?,custody_bytes=? WHERE id=1")
+        let query = try statement("UPDATE metadata SET generation=?,job_count=?,byte_count=?,custody_count=?,custody_bytes=?,archived_count=? WHERE id=1")
         defer { sqlite3_finalize(query) }
         try check(sqlite3_bind_int64(query, 1, current.generation + 1))
         try check(sqlite3_bind_int64(query, 2, current.count))
         try check(sqlite3_bind_int64(query, 3, current.bytes))
         try check(sqlite3_bind_int64(query, 4, current.custodyCount))
         try check(sqlite3_bind_int64(query, 5, current.custodyBytes))
+        try check(sqlite3_bind_int64(query, 6, current.archivedCount))
         guard sqlite3_step(query) == SQLITE_DONE else { throw LokalTransferError.database(sqlite3_errcode(database)) }
         testingCommitBoundary?("beforeCommit")
         try execute("COMMIT")
@@ -427,6 +439,7 @@ final class LokalTransferJournal: @unchecked Sendable {
       let insert = try statement("INSERT INTO jobs(id,revision,document) VALUES(?,?,?)")
       defer { sqlite3_finalize(insert) }
       for (index, job) in jobs.enumerated() {
+        guard try selectArchived(job.id) == nil else { throw LokalTransferError.duplicateJob }
         try check(sqlite3_reset(insert))
         try bind(job.id, at: 1, to: insert)
         try check(sqlite3_bind_int64(insert, 2, Int64(job.revision)))
@@ -435,6 +448,86 @@ final class LokalTransferJournal: @unchecked Sendable {
         if code == SQLITE_CONSTRAINT { throw LokalTransferError.duplicateJob }
         guard code == SQLITE_DONE else { throw LokalTransferError.database(code) }
       }
+    }
+  }
+
+  private func selectArchived(_ id: String) throws -> (revision: Int, songID: Int64, fingerprint: String)? {
+    let query = try statement("SELECT revision,song_id,fingerprint FROM completed_imports WHERE id=?")
+    defer { sqlite3_finalize(query) }
+    try bind(id, at: 1, to: query)
+    let code = sqlite3_step(query)
+    if code == SQLITE_DONE { return nil }
+    guard code == SQLITE_ROW, sqlite3_column_type(query, 0) == SQLITE_INTEGER,
+          sqlite3_column_type(query, 1) == SQLITE_INTEGER else { throw LokalTransferError.invalidRecord }
+    let revision = sqlite3_column_int64(query, 0), song = sqlite3_column_int64(query, 1)
+    let fingerprint = try text(query, 2)
+    guard revision > 0, revision < Int64.max, song > 0, song < Int64.max,
+          fingerprint.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+      throw LokalTransferError.invalidRecord
+    }
+    return (Int(revision), song, fingerprint)
+  }
+
+  /// Indexed duplicate-submission proof. It grants no file or library authority.
+  func archivedSubmissionMatches(_ job: LokalTransferJob) throws -> Bool {
+    try job.validate()
+    return try locked {
+      try preflight(); _ = try usage()
+      guard let archived = try selectArchived(job.id) else { return false }
+      guard archived.fingerprint == (try job.intentFingerprint()) else { throw LokalTransferError.duplicateJob }
+      return true
+    }
+  }
+
+  func importHistoryWasCompacted(id: String, revision: Int, songID: Int64) throws -> Bool {
+    try locked {
+      try preflight(); _ = try usage()
+      guard let archived = try selectArchived(id) else { return false }
+      guard archived.revision == revision, archived.songID == songID else { throw LokalTransferError.staleRevision }
+      return true
+    }
+  }
+
+  /// Root already confirmed the actual committed Isar receipt. Remove only
+  /// acknowledged completed native bookkeeping, atomically retaining replay proof.
+  /// No public/private file is opened, hashed, removed or recreated here.
+  func compactCompletedImport(_ expected: LokalTransferJob, songID: Int64) throws {
+    let fingerprint = try expected.intentFingerprint()
+    try transaction { current in
+      let query = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
+      defer { sqlite3_finalize(query) }
+      try bind(expected.id, at: 1, to: query)
+      guard sqlite3_step(query) == SQLITE_ROW else { throw LokalTransferError.missingJob }
+      let (job, size) = try decoded(query)
+      guard job == expected, job.direction == .download, job.phase == .complete,
+            let (work, custodySize) = try selectCustody(id: job.id, revision: job.revision),
+            work.songID == songID, work.matches(job), work.stagingRetired == true,
+            work.publication != nil, work.resolution == nil,
+            try selectArchived(job.id) == nil else { throw LokalTransferError.invalidTransition }
+      let count = try statement("SELECT count(*) FROM import_custody WHERE id=?")
+      defer { sqlite3_finalize(count) }
+      try bind(job.id, at: 1, to: count)
+      guard sqlite3_step(count) == SQLITE_ROW, sqlite3_column_int64(count, 0) == 1 else {
+        throw LokalTransferError.invalidTransition
+      }
+      let insert = try statement("INSERT INTO completed_imports(id,revision,song_id,fingerprint) VALUES(?,?,?,?)")
+      defer { sqlite3_finalize(insert) }
+      try bind(job.id, at: 1, to: insert)
+      try check(sqlite3_bind_int64(insert, 2, Int64(job.revision)))
+      try check(sqlite3_bind_int64(insert, 3, songID))
+      try bind(fingerprint, at: 4, to: insert)
+      guard sqlite3_step(insert) == SQLITE_DONE else { throw LokalTransferError.database(sqlite3_errcode(database)) }
+      for table in ["import_custody", "jobs"] {
+        let remove = try statement("DELETE FROM \(table) WHERE id=?")
+        defer { sqlite3_finalize(remove) }
+        try bind(job.id, at: 1, to: remove)
+        guard sqlite3_step(remove) == SQLITE_DONE, sqlite3_changes(database) == 1 else {
+          throw LokalTransferError.invalidRecord
+        }
+      }
+      current.count -= 1; current.bytes -= Int64(size)
+      current.custodyCount -= 1; current.custodyBytes -= Int64(custodySize)
+      current.archivedCount += 1
     }
   }
 

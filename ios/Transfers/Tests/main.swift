@@ -77,6 +77,13 @@ func rawDocument(_ url: URL, id: String, replacement: Data? = nil) throws -> Dat
 
 var contractStage = "startup"
 do {
+  if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--compact-import" {
+    let store = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
+      testingCommitBoundary: { if $0 == CommandLine.arguments[3] { exit(97) } })
+    guard let job = try store.snapshot().jobs.first else { throw LokalTransferError.missingJob }
+    try store.compactCompletedImport(job, songID: 42)
+    throw TestFailure.failed("compaction crash edge not reached")
+  }
   if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--preserve-import" {
     let boundary = CommandLine.arguments[4]
     let store = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
@@ -619,10 +626,10 @@ do {
 
   contractStage = "strict SQLite records"
   let committed = try store.snapshot()
-  try rawExecute(disk, "PRAGMA user_version=3")
+  try rawExecute(disk, "PRAGMA user_version=4")
   try rejects("future database read") { _ = try store.snapshot() }
   try rejects("future database write") { try store.create([makeJob()]) }
-  try rawExecute(disk, "PRAGMA user_version=2")
+  try rawExecute(disk, "PRAGMA user_version=3")
   try require(store.snapshot().jobs == committed.jobs && store.snapshot().generation == committed.generation,
     "future schema never replaces committed records")
   let originalDocument = try rawDocument(disk, id: original.id)

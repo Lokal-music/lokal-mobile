@@ -355,6 +355,88 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     }
   }
 
+  /// Keep the newest completed imports in visible history. Older records are
+  /// eligible only after successful app acknowledgement and private staging drain.
+  func completedHistoryPage(_ request: LokalTransferProtocol.ImportWorkPage,
+                            ticket: LokalTransferImportOwnership.Ticket,
+                            reply: @escaping LokalTransferCompletion<LokalTransferImportWorkPage>) {
+    queue.async {
+      do {
+        guard request.clientID == ticket.owner.clientID, (1...100).contains(request.limit),
+              request.after == nil || LokalTransferTaskBinding(request.after!) != nil, self.reconciled,
+              !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.staleRevision }
+        try self.importOwnership.validateTicket(ticket)
+        let completed = self.jobs.values.filter { $0.direction == .download && $0.phase == .complete }
+          .sorted { $0.updatedMs == $1.updatedMs ? $0.id < $1.id : $0.updatedMs > $1.updatedMs }
+        guard completed.count > LokalTransferJournal.retainedCompletedImports else {
+          reply(.success(LokalTransferImportWorkPage(generation: self.generation, entries: [], nextCursor: nil)))
+          return
+        }
+        let retained = Set(completed.prefix(LokalTransferJournal.retainedCompletedImports).map(\.id))
+        let page = try self.journal.custodyPage(after: request.after, limit: request.limit)
+        let entries = try page.values.compactMap { work -> LokalTransferImportWork? in
+          guard !retained.contains(work.job.id), let current = self.jobs[work.job.id],
+                current.phase == .complete, work.matches(current), work.stagingRetired == true,
+                work.publication != nil, work.resolution == nil else { return nil }
+          return LokalTransferImportWork(job: work.job, songID: work.songID,
+            targetRelativePath: LokalTransferLibrary.directoryName + "/" + (try LokalTransferLibrary.fileName(work.job)),
+            publicationRecorded: true, currentRevision: current.revision, currentPhase: current.phase)
+        }
+        try self.importOwnership.validateTicket(ticket)
+        reply(.success(LokalTransferImportWorkPage(generation: page.generation,
+          entries: entries, nextCursor: page.nextCursor)))
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// Root attests its matching committed Isar receipt under a reconciliation
+  /// lease. Drain prior native file callbacks and reject any remaining OS task.
+  /// Compaction opens no public file and retains idempotent-submission proof.
+  func compactCompletedImport(_ request: LokalTransferProtocol.ImportPublication,
+                              owner: LokalTransferImportOwnership.Owner,
+                              reply: @escaping LokalTransferCompletion<Bool>) {
+    queue.async {
+      do {
+        guard request.clientID == owner.clientID else { throw LokalTransferError.staleRevision }
+        try self.importOwnership.validateHistory(owner, jobID: request.id, revision: request.revision,
+          leaseID: request.leaseID)
+        guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
+        self.fileQueue.async {
+          self.session.getAllTasks { actual in
+            self.queue.async {
+              do {
+                try self.importOwnership.validateHistory(owner, jobID: request.id, revision: request.revision,
+                  leaseID: request.leaseID)
+                guard self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+                      !actual.contains(where: { LokalTransferTaskBinding($0.taskDescription)?.id == request.id }),
+                      !self.tasks.values.contains(where: { LokalTransferTaskBinding($0.taskDescription)?.id == request.id }) else {
+                  throw LokalTransferError.invalidTransition
+                }
+                if self.jobs[request.id] == nil {
+                  guard try self.journal.importHistoryWasCompacted(id: request.id,
+                    revision: request.revision, songID: request.songID) else { throw LokalTransferError.missingJob }
+                  reply(.success(true)); return
+                }
+                guard let job = self.jobs[request.id], job.revision == request.revision,
+                      job.phase == .complete, job.direction == .download,
+                      let work = try self.journal.importCustody(id: request.id, revision: request.revision),
+                      work.songID == request.songID, work.matches(job), work.stagingRetired == true,
+                      work.publication != nil, work.resolution == nil else { throw LokalTransferError.invalidTransition }
+                do { try self.journal.compactCompletedImport(job, songID: request.songID) }
+                catch { self.persistenceFailed = true; self.notify(); throw error }
+                self.jobs.removeValue(forKey: request.id)
+                self.order.removeAll { $0 == request.id }
+                self.progress.removeValue(forKey: request.id)
+                self.generation += 1; self.notify()
+                reply(.success(true))
+              } catch { reply(.failure(error)) }
+            }
+          }
+        }
+      } catch { reply(.failure(error)) }
+    }
+  }
+
   /// Reopen committed truth after a failed acknowledgement or app reattachment.
   /// Do not accept new network work until task identities have been reconciled.
   func recover(_ reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
@@ -440,6 +522,10 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
                   existing.expectedBytes == job.expectedBytes, existing.expectedSHA256 == job.expectedSHA256 else {
               throw LokalTransferError.duplicateJob
             }
+          } else if try self.journal.archivedSubmissionMatches(job) {
+            // Completion may outlive the visible history. A lost enqueue reply
+            // must not turn a restored frozen plan into another download.
+            continue
           } else {
             // A restored Flutter plan can create a fresh intent UUID before it
             // learns about an already queued original. Never start two copies

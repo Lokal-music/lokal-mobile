@@ -1083,7 +1083,7 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
     }
     try require(retiredPage.entries.isEmpty && retiredPage.nextCursor == nil,
       "retained completed history is omitted from app recovery work")
-    let historical = try claim(owner, readOnly: true)
+    var historical = try claim(owner, readOnly: true)
     try require(historical.job.phase == .complete && historical.sourcePath == nil,
       "complete recovery is receipt-only and never exposes an old staged source")
     try rejects("a completed historical claim never becomes writer authority") {
@@ -1098,6 +1098,63 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
     let afterRepeated: LokalTransferSummary = try native { runtime.summary($0) }
     try require(beforeRepeated.generation == afterRepeated.generation,
       "duplicate completion does not generate another event-driven recovery mutation")
+    let smallHistoryTicket = try ownership.capture(owner)
+    let smallHistory: LokalTransferImportWorkPage = try native {
+      runtime.completedHistoryPage(request, ticket: smallHistoryTicket, reply: $0)
+    }
+    try require(smallHistory.entries.isEmpty && smallHistory.nextCursor == nil,
+      "recent completed history is retained without scanning custody")
+    let retainedHistory = boundary == "none" ? LokalTransferJournal.retainedCompletedImports : 0
+    if retainedHistory > 0 {
+      // Legacy terminal fixtures exercise only the recent-history policy. They
+      // are not claimed to be media imports and have no app custody to delete.
+      let recent = try (0..<retainedHistory).map { index in
+        try LokalTransferJob(direction: .download, identity: job.identity, metadata: job.metadata,
+          nowMs: 1000 + Int64(index), expectedBytes: length, expectedSHA256: checksum)
+      }
+      try journal.create(recent)
+      for (index, queued) in recent.enumerated() {
+        _ = try journal.update(id: queued.id, revision: 1) { try $0.bind(taskID: 1000 + index, nowMs: 2000) }
+        _ = try journal.update(id: queued.id, revision: 1) {
+          try $0.retainDownload(taskID: 1000 + index, bytes: length, sha256: checksum, nowMs: 2010)
+        }
+        _ = try journal.update(id: queued.id, revision: 1) { try $0.transition(to: .validating, nowMs: 2020) }
+        _ = try journal.update(id: queued.id, revision: 1) { try $0.transition(to: .importing, nowMs: 2030) }
+        _ = try journal.update(id: queued.id, revision: 1) { try $0.transition(to: .complete, nowMs: 4_000_000_000_000) }
+      }
+      let _: LokalTransferSummary = try native { runtime.recover($0) }
+      historical = try claim(owner, readOnly: true)
+      let oldHistoryTicket = try ownership.capture(owner)
+      let oldHistory: LokalTransferImportWorkPage = try native {
+        runtime.completedHistoryPage(request, ticket: oldHistoryTicket, reply: $0)
+      }
+      try require(oldHistory.entries.count == 1 && oldHistory.entries[0].job.id == job.id,
+        "only the acknowledged import older than the newest 200 is offered for compaction")
+    }
+    // Explicit app attestation is a fixture here; real Isar is tested by Core.
+    try rejects("wrong history Song identity is not a storage failure") {
+      let _: Bool = try native { runtime.compactCompletedImport(publication(historical, songID: 43), owner: owner, reply: $0) }
+    }
+    let beforeHistory: LokalTransferSummary = try native { runtime.summary($0) }
+    try require(!beforeHistory.persistenceFailed, "invalid compaction request preserves healthy native storage")
+    let compactRequest = publication(historical)
+    let _: Bool = try native { runtime.compactCompletedImport(compactRequest, owner: owner, reply: $0) }
+    let afterCompact: LokalTransferSummary = try native { runtime.summary($0) }
+    let _: Bool = try native { runtime.compactCompletedImport(compactRequest, owner: owner, reply: $0) }
+    let afterLostReply: LokalTransferSummary = try native { runtime.summary($0) }
+    try require(afterCompact.total == retainedHistory && afterCompact.generation == afterLostReply.generation &&
+      journal.importHistoryWasCompacted(id: job.id, revision: 1, songID: 42),
+      "lost compaction reply is read-only and keeps durable duplicate-submission proof")
+    credentials.set(authorization)
+    let beforeReplay = (try state(origin))["requests"] as! [String: Int]
+    let replay: LokalTransferSummary = try native { runtime.enqueue([job], reply: $0) }
+    let afterReplay = (try state(origin))["requests"] as! [String: Int]
+    try require(replay.total == retainedHistory && beforeReplay == afterReplay,
+      "replayed frozen plan performs no new HTTP work after history compaction")
+    let _: LokalTransferSummary = try native { runtime.recover($0) }
+    let replayAfterRestart: LokalTransferSummary = try native { runtime.enqueue([job], reply: $0) }
+    try require(replayAfterRestart.total == retainedHistory && journal.snapshot().custodies.isEmpty,
+      "recovery cannot resurrect compacted history or its custody")
     if boundary == "afterTrackedPublication" {
       try require(!manager.fileExists(atPath: target.path), "historical completion cannot recreate a deleted public copy")
     } else if boundary == "trackedCopyCheckpoint" {
