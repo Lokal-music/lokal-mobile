@@ -362,7 +362,8 @@ bool shouldSuppressMotionArt({
 }) {
   if (!bitPerfectEnabled || allowDuringBitPerfect) return false;
   return engine == AudioEngineType.usbDacExperimental ||
-      engine == AudioEngineType.dapInternalHighRes;
+      engine == AudioEngineType.dapInternalHighRes ||
+      engine == AudioEngineType.rustOboe;
 }
 
 /// The Rust engine and its direct backends emit these markers when the output
@@ -3092,7 +3093,9 @@ class PlayerService {
   bool get _isAnchorEligiblePath =>
       Platform.isAndroid &&
       currentEngineType.usesRustBackend &&
-      currentEngineType != AudioEngineType.dapInternalHighRes;
+      currentEngineType != AudioEngineType.dapInternalHighRes &&
+      !(Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+          _uac2Service.isBitPerfectEnabledSync);
 
   void _updatePriorityAnchor() {
     final shouldAnchor =
