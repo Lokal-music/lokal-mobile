@@ -48,6 +48,29 @@ void main() {
       expect(utf8.decode(base64Decode(token!)), 'secret');
     });
 
+    test('ordinary HTTP 200 does not pretend to be WebDAV', () async {
+      final client = MockClient((request) async =>
+          http.Response('<html>Router files</html>', 200));
+      final service = WebdavService.create(client: client);
+      expect(await service.ping(_server()), isFalse);
+      expect(service.lastPingError, contains('no WebDAV multistatus'));
+    });
+
+    test('HTTP authentication, missing folders and unsupported methods explain failures', () async {
+      for (final (code, expected) in [
+        (401, 'username or password'),
+        (403, 'cannot access'),
+        (404, 'not found'),
+        (405, 'does not offer WebDAV'),
+      ]) {
+        final service = WebdavService.create(
+          client: MockClient((_) async => http.Response('', code)),
+        );
+        expect(await service.ping(_server()), isFalse);
+        expect(service.lastPingError, contains(expected));
+      }
+    });
+
     test('ping sends HTTP Basic over PROPFIND and accepts 207', () async {
       late String capturedAuth;
       late String capturedDepth;
