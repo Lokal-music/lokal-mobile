@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml/xml.dart';
 
 import '../../core/utils/app_log.dart';
@@ -30,9 +34,16 @@ class WebdavService implements NetworkSourceService {
     http.Client? client,
     SongRepository? songRepository,
     NetworkCacheService? networkCache,
-  })  : _client = client ?? http.Client(),
-        _songRepository = songRepository,
-        _networkCache = networkCache;
+  })  : _songRepository = songRepository,
+        _networkCache = networkCache {
+    if (client != null) {
+      _client = client;
+    } else {
+      final nativeClient = HttpClient();
+      nativeClient.badCertificateCallback = _validateUntrustedCertificate;
+      _client = IOClient(nativeClient);
+    }
+  }
 
   static WebdavService instance = WebdavService._();
 
@@ -60,7 +71,65 @@ class WebdavService implements NetworkSourceService {
     'cover', 'folder', 'album', 'albumart', 'front',
   ];
 
-  final http.Client _client;
+  late final http.Client _client;
+
+  static const _certificatePrefix = 'network_webdav_certificate_sha256_';
+  final Map<String, String> _trusted = {};
+  final Map<String, String> _trial = {};
+  String? _untrustedFingerprint;
+  String? _untrustedOrigin;
+
+  String? get untrustedCertificateFingerprint => _untrustedFingerprint;
+  String? get untrustedCertificateOrigin => _untrustedOrigin;
+
+  static String _fingerprint(X509Certificate certificate) =>
+      sha256.convert(certificate.der).toString();
+
+  bool _validateUntrustedCertificate(
+      X509Certificate certificate, String host, int port) {
+    final origin = Uri(scheme: 'https', host: host, port: port).origin;
+    final fingerprint = _fingerprint(certificate);
+    _untrustedOrigin = origin;
+    _untrustedFingerprint = fingerprint;
+    return _trusted[origin] == fingerprint || _trial[origin] == fingerprint;
+  }
+
+  static String _certificateKey(String origin) =>
+      '$_certificatePrefix${Uri.encodeComponent(origin)}';
+
+  Future<void> _loadCertificateTrust(Uri uri) async {
+    if (uri.scheme != 'https') return;
+    final preferences = await SharedPreferences.getInstance();
+    final trusted = preferences.getString(_certificateKey(uri.origin));
+    if (trusted != null) _trusted[uri.origin] = trusted;
+  }
+
+  /// Only a fingerprint explicitly approved by the user is allowed, only
+  /// for that HTTPS origin. The probe must still return valid WebDAV data
+  /// before the exception is persisted.
+  Future<bool> trustPresentedCertificate(NetworkServerEntity server) async {
+    final origin = Uri.parse(server.baseUrl).origin;
+    final fingerprint = _untrustedOrigin == origin
+        ? _untrustedFingerprint
+        : null;
+    if (fingerprint == null) return false;
+    _trial[origin] = fingerprint;
+    try {
+      if (!await ping(server)) return false;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_certificateKey(origin), fingerprint);
+      _trusted[origin] = fingerprint;
+      return true;
+    } finally {
+      _trial.remove(origin);
+    }
+  }
+
+  Future<bool> hasTrustedCertificate(NetworkServerEntity server) async {
+    final uri = Uri.parse(server.baseUrl);
+    await _loadCertificateTrust(uri);
+    return _trusted.containsKey(uri.origin);
+  }
   SongRepository? _songRepository;
   NetworkCacheService? _networkCache;
 
@@ -177,6 +246,7 @@ class WebdavService implements NetworkSourceService {
     int depth = 1,
   }) async {
     await NetworkLocalAccess.ensure(Uri.parse(url));
+    await _loadCertificateTrust(Uri.parse(url));
     final request = http.Request('PROPFIND', Uri.parse(url))
       ..headers['Depth'] = '$depth'
       ..headers['Content-Type'] = 'application/xml; charset=utf-8'
@@ -262,6 +332,8 @@ class WebdavService implements NetworkSourceService {
   @override
   Future<bool> ping(NetworkServerEntity server) async {
     _lastPingError = null;
+    _untrustedFingerprint = null;
+    _untrustedOrigin = null;
     try {
       final response = await _propfind(server, server.baseUrl, depth: 0);
       // PROPFIND normally returns 207, including the target folder.
@@ -290,6 +362,7 @@ class WebdavService implements NetworkSourceService {
     final href = utf8.decode(base64Decode(marker));
     final uri = _requestUri(server, href);
     await NetworkLocalAccess.ensure(uri);
+    await _loadCertificateTrust(uri);
     final response = await _client.get(
       uri,
       headers: {'Authorization': _basicAuth(server)},
@@ -316,6 +389,7 @@ class WebdavService implements NetworkSourceService {
     final href = _tryDecode(remoteId);
     final uri = _requestUri(server, href);
     await NetworkLocalAccess.ensure(uri);
+    await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
       ..headers['Authorization'] = _basicAuth(server);
     final response =
@@ -347,6 +421,10 @@ class WebdavService implements NetworkSourceService {
     // re-encode at the request boundary.
     final href = _tryDecode(remoteId);
     final uri = _requestUri(server, href);
+    // Direct Rust/Media3 network playback does not share this client's
+    // certificate pin, so a self-signed NAS must take the verified cache
+    // path instead of failing on the second TLS handshake.
+    if (await hasTrustedCertificate(server)) return null;
     return (url: uri.toString(), headers: {'Authorization': _basicAuth(server)});
   }
 
