@@ -1340,3 +1340,35 @@ compilable selector and adapts the relevant #340 isolation behavior. Decoder,
 source-verification and UI assertions require their own supported platform
 evidence; these shared changes do not qualify an authenticated Amazon stream or
 physical spatial output.
+
+
+## Post-build-87 product parity through merged PR #348
+
+This continuation carries the shared parts of merged mobile PRs #343, #344,
+#346, #347 and #348, including #342's relevant metadata context. #346's
+Morneye Dart syntax correction is already present in the iPhone code; there
+is no Android-native build work. The bundled Amazon (New) extension and its
+injected registry are **not** part of the iPhone source.
+
+- **#343/#344:** Atmos is catalogue evidence only if explicit on the
+  individual recording. Per-track `audioQualities` and known JOC/AC-4 Atmos
+  modes are parsed without treating codec strings, a provider manifest or
+  search-wide AC-4 options as a badge. Amazon repeated ASINs retain one
+  recording and can merge *explicit* later mode evidence without mixing
+  separate ASINs. A codec is not a claim that the iPhone can decode it.
+- **#347:** Manual LRCLIB lyrics search sends an identifiable User-Agent,
+  handles short bounded retries and gives separate rate-limit, invalid
+  response and network feedback. The upstream tests accompany it.
+- **#348:** The installed plugin's quality setting controls Play and Save,
+  with an explicit per-song override and only exact manifest tiers. An AC-4
+  request is checked against delivered source bytes, not guessed from tags.
+  Unsupported encoded spatial iPhone playback is refused without silently
+  replacing it with a different stereo rendition. The original compressed
+  file can be saved when verified, without claiming an Atmos presentation
+  from AC-4 alone. The quality picker explains the playback/download
+  relationship.
+
+This is source-level parity; neither authenticated live-provider acceptance
+nor iPhone JOC/AC-4 output is claimed. The branch is stacked above #345 and
+requires its **own** iOS 16 SDK, 18.6/26 simulator, independent IPA and
+physical-device gates. Native product transfer import/upload remain off.
