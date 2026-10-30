@@ -1451,6 +1451,9 @@ class PlayerService {
     final wasEnabled = gaplessPlaybackEnabledNotifier.value;
     gaplessPlaybackEnabledNotifier.value = enabled;
     await _preferencesService.setGaplessPlaybackEnabled(enabled);
+    if (enabled && !wasEnabled && !_usingRustBackend) {
+      _androidEngine?.prepareGaplessAfterToggle();
+    }
     // A mid-song toggle must prepare the successor now, not wait for the
     // following track to start. Avoid replacing an already-prepared crossfade.
     if (enabled && !wasEnabled && !_isCrossfadeActive &&
@@ -2893,6 +2896,7 @@ class PlayerService {
       stemClipLookup: AutoMixStemClipCache.instance.read,
       stemVolumeProvider: () => _currentVolume,
       onNextSong: _resolveAndroidCrossfadeNext,
+      gaplessEnabledProvider: () => gaplessPlaybackEnabledNotifier.value,
       onTrackAdvanced: _onAndroidTrackAdvanced,
       onTrackError: _onAndroidTrackError,
     );
