@@ -70,12 +70,17 @@ class RemoteSourceService {
             ? (p) => downloadProgressNotifier.value = p
             : null,
       );
-      if (reportProgress) {
-        // Rust format probing and embedded-artwork extraction both read the
-        // downloaded file. Do them in one guarded job, only for the track
-        // actually playing, rather than launching four parallel native probes
-        // for the next prefetched tracks while the audio decoder starts.
-        unawaited(_backfillMetadata(song, path));
+      if (sourceType == 'smb' || sourceType == 'webdav') {
+        if (reportProgress) {
+          // Native artwork extraction and format probing read the same NAS
+          // cache file. Do them in one deduplicated job for the playing song,
+          // not four parallel Rust calls for prefetched songs.
+          unawaited(_backfillMetadata(song, path));
+        }
+      } else {
+        // Preserve the existing format-backfill behavior for other network
+        // protocols, which are outside this NAS-specific stability change.
+        unawaited(_backfillAudioFormat(song, path));
       }
       return path;
     } finally {
