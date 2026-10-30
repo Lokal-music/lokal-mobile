@@ -117,6 +117,9 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private var generation: Int
   private var pauses: [LokalTransferScope: LokalTransferFailure]
   private var tasks: [Int: URLSessionTask] = [:]
+  // Reconciliation also cancels stale daemon tasks whose revision is already
+  // retired. Track their callbacks until the native unlink barrier drains.
+  private var staleScopeTasks: [Int: LokalTransferScope] = [:]
   private var progress: [String: LokalTransferProgress] = [:]
   private var reconciled = false
   private var persistenceFailed = false {
@@ -130,6 +133,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private var backgroundEventsFinished = false
   private var shuttingDown = false
   private struct PendingNetworkRetirement {
+    let scope: LokalTransferScope
     var taskIDs: Set<Int>
     let reply: LokalTransferCompletion<LokalTransferSummary>
   }
@@ -496,6 +500,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       generation = durable.generation
       pauses = Dictionary(uniqueKeysWithValues: durable.pauses.map { ($0.scope, $0.reason) })
       tasks.removeAll()
+      let actualIDs = Set(actual.map(\.taskIdentifier))
+      staleScopeTasks = staleScopeTasks.filter { actualIDs.contains($0.key) }
       progress = progress.filter { id, value in
         jobs[id]?.revision == value.revision && jobs[id]?.phase == .transferring
       }
@@ -504,6 +510,10 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
               job.direction == .download,
               job.revision == binding.revision, job.taskID == task.taskIdentifier,
               [.transferring, .received].contains(job.phase), task.originalRequest?.url == (try LokalTransferRequest.downloadURL(job)) else {
+          if let binding = LokalTransferTaskBinding(task.taskDescription),
+             let job = jobs[binding.id], job.direction == .download {
+            staleScopeTasks[task.taskIdentifier] = scope(job)
+          }
           task.cancel(); continue
         }
         tasks[task.taskIdentifier] = task
@@ -520,7 +530,6 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       persistenceFailed = false
       // A second recovery can observe tasks that disappeared after cancel,
       // even if the old delegate callback was lost across an engine reset.
-      let actualIDs = Set(actual.map(\.taskIdentifier))
       for index in pendingNetworkRetirements.indices {
         pendingNetworkRetirements[index].taskIDs.formIntersection(actualIDs)
       }
@@ -593,6 +602,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       else { failed(task, reason: .network, retryable: true) }
     }
     tasks.removeValue(forKey: task.taskIdentifier)
+    staleScopeTasks.removeValue(forKey: task.taskIdentifier)
     for index in pendingNetworkRetirements.indices {
       pendingNetworkRetirements[index].taskIDs.remove(task.taskIdentifier)
     }
@@ -714,13 +724,20 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         }
         self.generation += 1
         self.pauses[scope] = .pairingChanged
-        let pending = Set(changes.compactMap { change -> Int? in
+        let activeIDs = changes.compactMap { change -> Int? in
           guard let taskID = change.previous.taskID, self.tasks[taskID] != nil else { return nil }
           return taskID
-        })
+        }
+        // A second unlink must wait for the first cancellation, even if the
+        // journal already contains only cancelled revisions. Include stale
+        // daemon tasks discovered during relaunch reconciliation as well.
+        let pending = Set(activeIDs)
+          .union(self.staleScopeTasks.compactMap { $0.value == scope ? $0.key : nil })
+          .union(self.pendingNetworkRetirements.filter { $0.scope == scope }
+            .flatMap { $0.taskIDs })
         self.pendingNetworkRetirements.append(PendingNetworkRetirement(
-          taskIDs: pending, reply: reply))
-        for id in pending { self.tasks[id]?.cancel() }
+          scope: scope, taskIDs: pending, reply: reply))
+        for id in activeIDs { self.tasks[id]?.cancel() }
         self.finishNetworkRetirements()
         self.notify()
       } catch {
