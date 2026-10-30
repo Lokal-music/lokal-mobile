@@ -20,6 +20,7 @@ import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
+import 'package:flick/widgets/common/ios_transfer_root.dart';
 
 /// Add or edit a network server. All registered protocols are selectable;
 /// each dispatches test/sync/stream through [networkSourceServiceFor].
@@ -335,19 +336,35 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
       confirmLabel: l10n.delete,
       destructive: true,
     );
-    if (!confirmed) return;
-    if (server.protocol == NetworkProtocol.jellyfin) {
-      await JellyfinService.instance.forgetPassword(server.id);
+    if (!confirmed || !mounted || _saving) return;
+    setState(() => _saving = true);
+    try {
+      // Removing a server also purges its downloaded library rows and linked
+      // playlists. Stop the iPhone native import owner before any of those
+      // mutations (including credential revocation) become visible.
+      await IosTransferRoot.withMutationBarrier(context, () async {
+        if (server.protocol == NetworkProtocol.jellyfin) {
+          await JellyfinService.instance.forgetPassword(server.id);
+        }
+        await Database.instance.writeTxn(() async {
+          await Database.networkServers.delete(server.id);
+        });
+        await SongRepository().deleteSongsForRemoteServer(server.id);
+        await PlaylistService.instance.removeNetworkPlaylistsForServer(
+          '${server.id}',
+        );
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _testPassed = false;
+        _testError =
+            'Could not remove the server. Check library transfer recovery '
+            'and try again.';
+      });
     }
-    await Database.instance.writeTxn(() async {
-      await Database.networkServers.delete(server.id);
-    });
-    await SongRepository().deleteSongsForRemoteServer(server.id);
-    await PlaylistService.instance.removeNetworkPlaylistsForServer(
-      '${server.id}',
-    );
-    if (!mounted) return;
-    Navigator.of(context).pop(true);
   }
 
   IconData get _testIcon => _testPassed == null
