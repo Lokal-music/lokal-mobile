@@ -2170,7 +2170,8 @@ pub fn create_audio_engine(
         };
         managed_prefer_exclusive = dap_bit_perfect_enabled
             && device_profile.as_ref().is_some_and(|p| p.is_dap())
-            && !will_attempt_usb;
+            && !will_attempt_usb
+            && !android_mixer_requested;
         let is_dsd_dop =
             dsd_rate.is_some() && matches!(desired_shared_strategy, OutputStrategy::DsdDoP);
         managed_use_integer = is_dsd_dop || desired_shared_strategy.is_dsd();
