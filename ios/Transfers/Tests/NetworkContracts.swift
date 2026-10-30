@@ -873,14 +873,17 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
     let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
       token: "transfer-fixture-token")
     let credentials = ImportAuthorizationFixture(authorization)
-    let ownership = LokalTransferImportOwnership()
-    let runtime = try LokalTransferRuntime(container: root, importOwnership: ownership,
+    let host = LokalTransferHost(container: { root },
       library: { try LokalTransferLibrary(root: music, testingBoundary: { gate.visit($0) }) },
       credentials: { try credentials.read() })
+    let ownership = host.importOwnership
+    let runtime: LokalTransferRuntime = try native { reply in
+      host.withRuntime({ reply(.success($0)) }, unavailable: { reply(.failure($0)) })
+    }
     defer {
       gate.resume.signal()
       let done = DispatchSemaphore(value: 0)
-      runtime.shutdown { done.signal() }
+      host.shutdown { done.signal() }
       _ = done.wait(timeout: .now() + 10)
     }
     let job = try LokalTransferJob(direction: .download,

@@ -9,13 +9,14 @@ iOS Home Screen widgets are excluded from this release. Standard lock-screen
 and Control Center playback controls remain available; no WidgetKit/App Group
 setup is required for the sideloaded app.
 
-## First-release transfer behavior
+## Current engineering-build transfer behavior
 
-The first release uses foreground desktop copying. Keep Lokal open with the iPhone
+The existing engineering build uses foreground desktop copying. Keep Lokal open with the iPhone
 unlocked and the desktop awake on Wi-Fi during a copy. After an interruption, check for
 missing files again; completed copies stay local. Background music playback and
 lock-screen controls remain available. The replacement native background-copy
-engine is deferred; see the [bounded release checklist](IOS_FIRST_RELEASE.md).
+engine remains disabled while its [completion milestones](IOS_FIRST_RELEASE.md)
+are implemented and qualified.
 
 ## Get the artifact
 

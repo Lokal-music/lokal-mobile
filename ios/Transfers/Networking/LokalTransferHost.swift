@@ -11,6 +11,7 @@ final class LokalTransferHost: @unchecked Sendable {
   private let container: @Sendable () throws -> URL
   private let credentials: @Sendable () throws -> LokalTransferAuthorization?
   private let configuration: @Sendable () -> URLSessionConfiguration?
+  private let library: @Sendable () throws -> LokalTransferLibrary
   private var runtime: LokalTransferRuntime?
   private var stopped = false
   private var pendingBackgroundReplies: [BackgroundReply] = []
@@ -44,9 +45,13 @@ final class LokalTransferHost: @unchecked Sendable {
 
   init(container: @escaping @Sendable () throws -> URL = { try applicationContainer() },
        configuration: @escaping @Sendable () -> URLSessionConfiguration? = { nil },
+       library: @escaping @Sendable () throws -> LokalTransferLibrary = {
+         try LokalTransferRuntime.applicationMusicLibrary()
+       },
        credentials: @escaping @Sendable () throws -> LokalTransferAuthorization? = { try backgroundCredentials() }) {
     self.container = container
     self.configuration = configuration
+    self.library = library
     self.credentials = credentials
   }
 
@@ -55,7 +60,7 @@ final class LokalTransferHost: @unchecked Sendable {
     guard !stopped else { throw LokalTransferError.invalidTransition }
     if let runtime { return runtime }
     let value = try LokalTransferRuntime(container: container(), configuration: configuration(),
-      importOwnership: importOwnership, credentials: credentials)
+      importOwnership: importOwnership, library: library, credentials: credentials)
     runtime = value
     let pending = pendingBackgroundReplies
     pendingBackgroundReplies.removeAll()

@@ -6,6 +6,9 @@ import UIKit
   private var lokalPlatform: LokalPlatform?
   private let transferHost = LokalTransferHost()
   private var transferBridge: LokalTransferBridge?
+  #if DEBUG
+  private var transferIntegrationHarness: LokalTransferIntegrationHarness?
+  #endif
   private var protectedDataObserver: NSObjectProtocol?
   private var pendingDocuments: [URL] = []
 
@@ -44,6 +47,10 @@ import UIKit
     lokalPlatform = LokalPlatform(messenger: engineBridge.applicationRegistrar.messenger())
     transferBridge = LokalTransferBridge(
       messenger: engineBridge.applicationRegistrar.messenger(), host: transferHost)
+    #if DEBUG
+    transferIntegrationHarness = LokalTransferIntegrationHarness(
+      messenger: engineBridge.applicationRegistrar.messenger())
+    #endif
     lokalPlatform?.openDocuments(pendingDocuments)
     pendingDocuments = []
   }

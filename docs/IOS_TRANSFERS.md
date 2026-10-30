@@ -1,12 +1,10 @@
 # iPhone transfer architecture
 
-Current release decision: [ship the established foreground-copy path](IOS_FIRST_RELEASE.md).
-The replacement native background importer/uploader remains disabled and is
-**deferred from the first release**. The activation gates recorded below apply
-before enabling that engine. They do not block an IPA using foreground copies.
-Retain existing safety checks and receipts; do not add CUE mapping, queue/pruning
-or OS recovery infrastructure merely to finish the first-release checklist.
-Background audio playback is a separate, required shipped capability.
+Current scope decision: the user restored the native background-transfer work
+on 30 October 2026. Follow the [fixed completion milestones](IOS_FIRST_RELEASE.md).
+Build120 is a separate foreground-copy checkpoint. The native replacement stays
+disabled until its integration, mapping, upload and OS recovery gates pass.
+Background audio and existing foreground copies continue independently.
 
 The following sections retain historical implementation and qualification evidence.
 
@@ -1232,3 +1230,28 @@ This does not implement CUE expansion of a still-present native import anchor.
 That needs an atomic anchor-preserving range replacement. Receipt pruning also
 needs a durable identity high-water mark before deleting the last historical
 ID evidence; do not prune those receipts as an incidental cleanup.
+
+
+### Installed complete-import probe (source; Apple execution pending)
+
+The DEBUG-only integration harness creates a separate native host/channel,
+ephemeral URLSession, Music directory and actual Isar database. It accepts only
+a localhost fixture port, chooses its own temporary paths, and uses synthetic
+authorization in memory. It never changes Keychain or the production journal.
+The production bridge and host retain their default namespace, root and session.
+Release builds contain no integration-control handler.
+
+The smoke suite submits a generated WAV through the real session/coordinator,
+typed channel and native HTTP/file/custody writer, then verifies its actual
+Isar Song/committed receipt, SHA-256 and bundled FFprobe media validation. Two
+foreground reconciliations must retain one Song/receipt and one HTTP request.
+Disposal closes the coordinator and client, closes Isar and HTTP, then drains
+the native owner before its temporary directory is removed. Public product
+background flags remain false; only the isolated coordinator explicitly opts
+into unreleased APIs.
+
+The SDK check now type-checks both DEBUG and release bridge variants for device
+and simulator. Host compilation and Dart analysis do not qualify UIKit/file
+coordination on an installed iPhone app. The installed probe must actually pass
+before closing this milestone; ephemeral networking does not prove suspended
+OS-daemon delivery, relaunch, real-desktop authorization or upload acceptance.
