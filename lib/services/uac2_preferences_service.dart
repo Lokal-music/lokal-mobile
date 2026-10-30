@@ -855,6 +855,8 @@ class Uac2PreferencesService {
       await prefs.remove(_key432HzTuningEnabled);
       await prefs.remove(_keyExclusiveDacModeEnabled);
 await prefs.remove(_keyAudioEnginePreference);
+    await prefs.remove('android_mixer_source_bits');
+    selectedAudioEngineNotifier.value = AudioEnginePreference.exoPlayer;
     await prefs.remove(_keyAndroidAudioApi);
     await prefs.remove(_keyOutputPrecision);
     await prefs.remove(_keyDeveloperModeEnabled);
