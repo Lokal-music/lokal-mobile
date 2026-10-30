@@ -5,6 +5,7 @@ import 'package:flick/features/discovery/discovery_http.dart';
 import 'package:flick/features/discovery/discovery_models.dart';
 import 'package:flick/features/discovery/discovery_settings.dart';
 import 'package:flick/features/discovery/discovery_sources.dart';
+import 'package:flick/services/playback_source_priority.dart';
 
 /// Inline HTTP catalogue setup for Settings › Online sources.
 /// A manifest is checked before the source is stored or enabled.
@@ -144,11 +145,21 @@ class _HttpAddonsSettingsPanelState extends State<HttpAddonsSettingsPanel> {
       ).validated();
       final next = _withAddons([...current.addons, addon]);
       await _store.save(next);
+      // The source is installed even if device preferences are temporarily
+      // unavailable; surface that separately instead of retrying the install.
+      var prioritySaved = true;
+      try {
+        await PlaybackSourcePriority.promoteNewAddon('w-${addon.id}');
+      } catch (_) {
+        prioritySaved = false;
+      }
       if (!mounted) return;
       _url.clear();
       setState(() {
         _settings = next;
-        _message = 'Source added and enabled.';
+        _message = prioritySaved
+            ? 'Source added and enabled at the top of playback priority.'
+            : 'Source added, but playback priority could not be saved.';
       });
     } catch (error) {
       if (mounted) {

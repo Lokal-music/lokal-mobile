@@ -2,10 +2,12 @@ import 'dart:convert';
 
 import 'package:flick/features/discovery/discovery_settings.dart';
 import 'package:flick/features/settings/widgets/http_addons_settings_panel.dart';
+import 'package:flick/services/playback_source_priority.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MemoryStore extends DiscoverySettingsStore {
   _MemoryStore(this.settings);
@@ -31,6 +33,9 @@ void main() {
   testWidgets('adds a manifest URL inline after validating the manifest', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({
+      PlaybackSourcePriority.key: ['yt', 'mono'],
+    });
     final store = _MemoryStore(const DiscoverySettings(youtubeEnabled: true));
     var requests = 0;
     final client = MockClient((request) async {
@@ -83,6 +88,12 @@ void main() {
     );
     expect(store.settings.addons.single.enabled, isTrue);
     expect(store.settings.addons.single.token, isEmpty);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(await PlaybackSourcePriority.load(), [
+      'w-${store.settings.addons.single.id}',
+      'yt',
+      'mono',
+    ]);
     expect(find.text('music.example'), findsOneWidget);
     expect(find.textContaining('private.example'), findsNothing);
     expect(find.textContaining('do-not-display-secret'), findsNothing);
