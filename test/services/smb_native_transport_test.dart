@@ -46,6 +46,30 @@ NetworkServerEntity _server() => NetworkServerEntity()
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('libsmb2 rejects a nonstandard port before any network call', () async {
+    await expectLater(
+      Libsmb2Transport.connect(
+        host: '192.168.8.1', port: 1445, share: 'disk1_part1',
+        username: 'user1', password: 'secret',
+      ),
+      throwsA(isA<UnsupportedError>().having(
+        (error) => error.message, 'message', contains('445'),
+      )),
+    );
+  });
+
+  test('libsmb2 rejects missing named-account password before native login', () async {
+    await expectLater(
+      Libsmb2Transport.connect(
+        host: '192.168.8.1', port: 445, share: 'disk1_part1',
+        username: 'user1', password: '',
+      ),
+      throwsA(isA<FormatException>().having(
+        (error) => error.message, 'message', contains('password missing'),
+      )),
+    );
+  });
+
   test('native SMB authenticates and lists the configured folder', () async {
     final session = _Session();
     final service = SmbService.create(
