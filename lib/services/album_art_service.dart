@@ -11,6 +11,7 @@ import '../data/database.dart';
 import '../data/repositories/song_repository.dart';
 import '../src/rust/api/scanner.dart' as rust_scanner;
 import 'music_folder_service.dart';
+import 'network_cache_service.dart';
 import 'player_service.dart';
 import 'sources/network_source_service.dart';
 
@@ -240,19 +241,32 @@ class AlbumArtService {
           : uri.scheme == 'lokal' && uri.pathSegments.isNotEmpty
           ? uri.pathSegments.last
           : null;
-      if (marker == null || marker.isEmpty) return null;
-
       final serverId = int.tryParse(uri.host);
       if (serverId == null) return null;
-      final server = await Database.networkServers.get(serverId);
-      if (server == null) return null;
-
-      try {
-        final bytes = await service.getCoverArt(server, marker);
-        return Uint8List.fromList(bytes);
-      } catch (e) {
-        return null;
+      if (marker != null && marker.isNotEmpty) {
+        final server = await Database.networkServers.get(serverId);
+        if (server != null) {
+          try {
+            final bytes = await service.getCoverArt(server, marker);
+            if (bytes.isNotEmpty) return Uint8List.fromList(bytes);
+          } catch (_) {
+            // A missing/unreadable cover.jpg must not suppress embedded art.
+          }
+        }
       }
+
+      // SMB and WebDAV directory listings cannot expose the APIC/FLAC
+      // PICTURE tag. Once playback has cached the original audio, recover its
+      // embedded artwork without another NAS read or full-file download.
+      // Preserve the opaque percent-encoded remoteId (critical for WebDAV).
+      if (uri.scheme == 'smb' || uri.scheme == 'webdav') {
+        final raw = audioSourcePath.substring(
+          audioSourcePath.indexOf('/', audioSourcePath.indexOf('://') + 3) + 1,
+        );
+        final local = await NetworkCacheService().getPath(serverId, raw);
+        if (local != null) return _loadEmbeddedArtworkBytes(local);
+      }
+      return null;
     }
 
     final embedded = await _loadEmbeddedArtworkBytes(audioSourcePath);
