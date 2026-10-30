@@ -9,6 +9,30 @@ lock-screen/Control Center playback controls retain their existing behavior.
 The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
+
+### Build 87 and the subsequent app-mutation continuation
+
+[Build 87](https://github.com/lokal-music/lokal-mobile/actions/runs/40980148351)
+passes its complete installed iOS 18.6 and 26.0 simulator acceptance suites
+on the same integration app, 1,163 selected Flutter checks, and an unsigned
+release/AOT IPA build. The independent Apple-native transfer-contract
+[run 12](https://github.com/lokal-music/lokal-mobile/actions/runs/40980148329)
+also passes both iOS 16 SDK/real Flutter bridge checks, 20 native rounds and
+host Isar/root contracts. Build-reported IPA SHA-256:
+`56f5ef87e1cf1435c37bd24fdf3fc49a4205d048ba35729ca468c96c68c8a386`;
+source tree `41b64dc303351f48cc3211c39eae8aa414a07fc2`.
+This is hosted engineering acceptance, not independent package reinspection,
+physical installation or a signed public release.
+
+Later source on PR345 wires serialized UI entry-point mutation fences for clear
+library, song/file removal and desktop pairing forget. A healthy eligible root
+must retire native import activity before these writes; a failed retirement
+blocks the mutation, and a successful one resumes in `finally`. Unsupported
+Android operations stay unchanged. These follow-up changes require their own
+hosted acceptance and do **not** finish OS-task cancellation, scanner/CUE
+barriers, uploads/progress, or suspension/relaunch. Product native import and
+upload capabilities remain disabled.
+
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
 app for the iOS 16+ port. The current parity source includes **123 reviewed merged
 mobile PRs after #172 through #340**. Search keyboard behavior, the single
