@@ -15,6 +15,7 @@ import '../../../services/playlist_service.dart';
 import '../../../services/sources/jellyfin_service.dart';
 import '../../../services/sources/network_source_service.dart';
 import '../../../services/sources/tidal_service.dart';
+import '../../../services/sources/webdav_service.dart';
 
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
@@ -110,6 +111,8 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
   bool _testing = false;
   bool? _testPassed;
   String? _testError;
+  String? _certificateCandidateFingerprint;
+  String? _certificateCandidateUrl;
 
   /// Set when Tidal sign-in can't auto-open the browser; the live banner shows
   /// it for manual copy/open while polling continues.
@@ -154,7 +157,22 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
     super.dispose();
   }
 
+  static String? _safeOrigin(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http') ||
+        uri.host.isEmpty) return null;
+    return uri.origin;
+  }
+
   void _updateValidity() {
+    if (_certificateCandidateUrl != null &&
+        _urlController.text.trim() != _certificateCandidateUrl) {
+      _certificateCandidateFingerprint = null;
+      _certificateCandidateUrl = null;
+      _testPassed = null;
+      _testError = null;
+      setState(() {});
+    }
     final valid =
         _labelController.text.trim().isNotEmpty &&
         (_isTidal || _urlController.text.trim().isNotEmpty);
@@ -208,6 +226,8 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
       _testPassed = null;
       _testError = null;
       _testVerificationUri = null;
+      _certificateCandidateFingerprint = null;
+      _certificateCandidateUrl = null;
     });
     AppHaptics.tap();
     String? token;
@@ -235,6 +255,13 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
         _testing = false;
         _testPassed = ok;
         if (!ok) _testError = service.lastPingError;
+        if (!ok && _selectedProtocol == NetworkProtocol.webdav) {
+          final dav = WebdavService.instance;
+          if (_safeOrigin(entity.baseUrl) == dav.untrustedCertificateOrigin) {
+            _certificateCandidateFingerprint = dav.untrustedCertificateFingerprint;
+            _certificateCandidateUrl = _urlController.text.trim();
+          }
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -276,6 +303,43 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
         _testPassed = ok;
       });
       if (ok && _resolvedToken != null) await _save(force: true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testPassed = false;
+        _testError = _humanError(e);
+      });
+    }
+  }
+
+  Future<void> _trustWebdavCertificate() async {
+    final approvedFingerprint = _certificateCandidateFingerprint;
+    if (_selectedProtocol != NetworkProtocol.webdav ||
+        approvedFingerprint == null ||
+        _certificateCandidateUrl != _urlController.text.trim()) return;
+    setState(() {
+      _testing = true;
+      _testError = null;
+    });
+    try {
+      final token = await _resolvePersistedToken();
+      final ok = await WebdavService.instance
+          .trustPresentedCertificate(
+            _draftEntity(token: token),
+            approvedFingerprint: approvedFingerprint,
+          );
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testPassed = ok;
+        if (ok) {
+          _certificateCandidateFingerprint = null;
+          _certificateCandidateUrl = null;
+        }
+        if (!ok) _testError = WebdavService.instance.lastPingError ??
+            'The certificate was not trusted because the WebDAV check failed.';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -462,6 +526,37 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
           LokalSettingsBlock(top: 10, child: _buildSignInLinkBanner(context)),
         if (_testPassed == false)
           LokalSettingsBlock(top: 10, child: _buildFailureBanner(context)),
+        if (!_testing &&
+            _testPassed == false &&
+            _selectedProtocol == NetworkProtocol.webdav &&
+            _certificateCandidateFingerprint != null &&
+            _certificateCandidateUrl == _urlController.text.trim() &&
+            WebdavService.instance.untrustedCertificateOrigin ==
+                _safeOrigin(_urlController.text.trim()))
+          LokalSettingsBlock(
+            top: 10,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LokalSettingsNotice(
+                  warning: true,
+                  text: 'Self-signed HTTPS certificate on '
+                      '${WebdavService.instance.untrustedCertificateOrigin}. '
+                      'Verify its SHA-256 fingerprint independently before '
+                      'approving it for this NAS only: '
+                      '${_certificateCandidateFingerprint}',
+                ),
+                const SizedBox(height: 10),
+                LokalSettingsActionButton(
+                  label: 'Trust this certificate and retry',
+                  icon: LucideIcons.shieldCheck,
+                  primary: false,
+                  expand: true,
+                  onPressed: _trustWebdavCertificate,
+                ),
+              ],
+            ),
+          ),
         LokalSettingsBlock(
           top: 10,
           child: LokalSettingsActionButton(

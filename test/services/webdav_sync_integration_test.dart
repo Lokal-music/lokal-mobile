@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:isar_community/isar.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _serverId = 42;
 
@@ -107,6 +108,7 @@ void main() async {
   }
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     if (corePath == null) return;
     await isar.writeTxn(() => isar.clear());
   });
@@ -161,6 +163,85 @@ void main() async {
         songRepository: SongRepository(isar: isar),
         networkCache: NetworkCacheService(rootDirectory: cacheDir),
       );
+
+  test(
+    'failed or malformed folder scans never delete existing indexed songs',
+    () async {
+      final connected = server();
+      await isar.writeTxn(() => isar.networkServerEntitys.put(connected));
+      final successful = service(
+        fixtureClient(
+          rootEntries: [_albumSelf, _japanese],
+          coverBytes: [1],
+        ),
+        Directory(p.join(tempDir.path, 'initial-cache')),
+      );
+      expect((await successful.syncLibrary(connected).toList()).last.isComplete,
+          isTrue);
+      final repository = SongRepository(isar: isar);
+      final initial = await repository.getSongsByRemoteServer(_serverId);
+      expect(initial.map((song) => song.title), containsAll([
+        '照井順政 - Delirious',
+        'What?',
+      ]));
+      final stampedAt = (await isar.networkServerEntitys.get(_serverId))?.lastSyncedAt;
+      expect(stampedAt, isNotNull);
+
+      for (final failure in [
+        'forbidden child', 'invalid 207 body', 'network exception',
+        'nested HTML multistatus', 'wrong namespace',
+      ]) {
+        final client = MockClient((request) async {
+          if (failure == 'invalid 207 body') {
+            return http.Response('<html>Not a WebDAV collection</html>', 207);
+          }
+          if (failure == 'nested HTML multistatus') {
+            return http.Response(
+              '<html><multistatus><response><href>/music/</href></response></multistatus></html>',
+              207,
+            );
+          }
+          if (failure == 'wrong namespace') {
+            return http.Response(
+              '<multistatus><response><href>/music/</href></response></multistatus>',
+              207,
+            );
+          }
+          if (request.url.path == '/music') {
+            return http.Response(
+              _multistatus([_rootSelf, _albumSelf, _japanese]), 207,
+            );
+          }
+          if (failure == 'network exception') {
+            throw const SocketException('NAS disconnected');
+          }
+          return http.Response('Access denied', 403);
+        });
+        final dav = service(
+          client,
+          Directory(p.join(tempDir.path, 'failure-cache')),
+        );
+
+        await expectLater(
+          dav.syncLibrary(connected).toList(),
+          throwsA(isA<WebdavNetworkException>()),
+          reason: failure,
+        );
+        final retained = await repository.getSongsByRemoteServer(_serverId);
+        expect(
+          retained.map((song) => song.remoteId).toSet(),
+          initial.map((song) => song.remoteId).toSet(),
+          reason: failure,
+        );
+        expect(
+          (await isar.networkServerEntitys.get(_serverId))?.lastSyncedAt,
+          stampedAt,
+          reason: failure,
+        );
+      }
+    },
+    skip: corePath == null ? 'Isar core library not found' : false,
+  );
 
   test(
     'syncLibrary imports non-ASCII and special-char names (regression #255)',

@@ -77,6 +77,21 @@ void main() {
       );
     });
 
+    test('distinguishes denied share from denied directory listing', () {
+      expect(
+        SmbService.describePingError(
+          Exception('SMB share access failed: STATUS_ACCESS_DENIED'),
+        ),
+        contains('cannot connect to the named share'),
+      );
+      expect(
+        SmbService.describePingError(
+          Exception('SMB directory listing failed: STATUS_ACCESS_DENIED'),
+        ),
+        contains('login succeeded'),
+      );
+    });
+
     test('keeps an unrecognized error as-is', () {
       expect(
         SmbService.describePingError(Exception('weird transport failure')),

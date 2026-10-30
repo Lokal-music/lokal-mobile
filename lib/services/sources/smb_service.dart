@@ -9,6 +9,7 @@ import '../library_scanner_service.dart' show ScanProgress;
 import '../network_cache_service.dart';
 import '../../src/rust/api/smb_api.dart';
 import 'network_source_service.dart';
+import 'local_network_access.dart';
 
 /// SMB2/3 client backed by the pure-Rust `smb2` crate (via flutter_rust_bridge).
 ///
@@ -88,6 +89,12 @@ class SmbService implements NetworkSourceService {
       source = 'smb://${source.substring(2).replaceAll(r'\', '/')}';
     }
     final uri = Uri.parse(source);
+    if (uri.scheme.toLowerCase() != 'smb' || uri.userInfo.isNotEmpty ||
+        uri.hasQuery || uri.hasFragment) {
+      throw const FormatException(
+        'Use an SMB share URL like smb://nas/Music — not an HTTP address.',
+      );
+    }
     if (uri.host.isEmpty) {
       throw const FormatException(
         'Missing server address — use smb://host/share (e.g. smb://nas/music).',
@@ -102,12 +109,18 @@ class SmbService implements NetworkSourceService {
     return (
       host: uri.host,
       port: uri.port == 0 ? 445 : uri.port,
-      share: Uri.decodeComponent(segments.first),
+      share: segments.first,
       rootPath: segments.length > 1
-          ? segments.skip(1).map(Uri.decodeComponent).join('/')
+          ? segments.skip(1).join('/')
           : '',
     );
   }
+
+  Future<void> _ensureLanAccess(
+    ({String host, int port, String share, String rootPath}) server,
+  ) => NetworkLocalAccess.ensure(
+    Uri(scheme: 'smb', host: server.host, port: server.port),
+  );
 
   // --- ping ---------------------------------------------------------------
 
@@ -116,6 +129,7 @@ class SmbService implements NetworkSourceService {
     _lastPingError = null;
     try {
       final s = _parseServer(server);
+      await _ensureLanAccess(s);
       await smbPing(
         host: s.host,
         port: s.port,
@@ -136,6 +150,7 @@ class SmbService implements NetworkSourceService {
   static String describePingError(Object error) {
     final raw = error.toString();
     final lower = raw.toLowerCase();
+    if (error is NetworkAccessDenied) return error.message;
     if (lower.contains('authentication failed') ||
         lower.contains('logon_failure')) {
       return 'The server rejected the username or password. Check the '
@@ -146,7 +161,16 @@ class SmbService implements NetworkSourceService {
           'share name in the URL.';
     }
     if (lower.contains('access_denied') || lower.contains('access denied')) {
-      return 'Access denied. Check that the account can read this share.';
+      if (lower.contains('directory listing')) {
+        return 'SMB login succeeded, but this account cannot list the share '
+            'folder. Check NAS folder read/list permissions.';
+      }
+      if (lower.contains('share access')) {
+        return 'SMB login succeeded, but this account cannot connect to the '
+            'named share. Check the share name and NAS share permissions.';
+      }
+      return 'SMB access denied during authentication or protocol setup. '
+          'Verify credentials, required signing and SMB2/3 compatibility.';
     }
     if (lower.contains('lookup') ||
         lower.contains('resolve') ||
@@ -184,6 +208,7 @@ class SmbService implements NetworkSourceService {
   ) async {
     final path = utf8.decode(base64Decode(marker));
     final s = _parseServer(server);
+    await _ensureLanAccess(s);
     return await smbReadFile(
       host: s.host,
       port: s.port,
@@ -206,6 +231,7 @@ class SmbService implements NetworkSourceService {
     if (cached != null) return cached;
 
     final s = _parseServer(server);
+    await _ensureLanAccess(s);
     final destPath =
         await _cache.pathFor(server.id, remoteId, extension: extension);
     await for (final p in smbDownloadFile(
@@ -236,6 +262,7 @@ class SmbService implements NetworkSourceService {
   @override
   Stream<ScanProgress> syncLibrary(NetworkServerEntity server) async* {
     final s = _parseServer(server);
+    await _ensureLanAccess(s);
     final user = server.username ?? '';
     final pass = _password(server);
 
