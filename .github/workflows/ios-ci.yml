@@ -196,7 +196,7 @@ jobs:
             build/ios/ipa/*
             build/ios/iphoneos/*.dSYM
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
       - name: Boot an iPhone simulator
         timeout-minutes: 16
         run: python3 tool/ios_simulator.py --recover-preinstall-boot
