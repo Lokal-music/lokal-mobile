@@ -105,7 +105,7 @@ class Libsmb2Transport implements NativeSmbSession {
           final chunk = await _native.synchronized(() => _pool.readFromHandle(
             handle,
             offset: offset,
-            length: (size - offset).clamp(1, 256 * 1024),
+            length: (size - offset).clamp(1, 256 * 1024).toInt(),
           ));
           if (chunk.isEmpty) {
             throw const FileSystemException('SMB download truncated');
