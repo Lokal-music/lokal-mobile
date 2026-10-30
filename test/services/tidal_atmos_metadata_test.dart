@@ -32,6 +32,16 @@ void main() {
     expect(tidalAtmosAvailable({'audio_modes': 'STEREO', 'audio_codec': 'ac4'}), isFalse);
   });
 
+  test('explicit E-AC-3 JOC and AC-4 Atmos modes share the Atmos badge', () {
+    expect(tidalAtmosAvailable({'audio_modes': 'E-AC-3 JOC'}), isTrue);
+    expect(tidalAtmosAvailable({'audio_modes': 'EAC3_JOC'}), isTrue);
+    expect(tidalAtmosAvailable({'audio_modes': 'AC-4 Atmos'}), isTrue);
+    expect(tidalAtmosAvailable({'audio_modes': 'AC4_ATMOS'}), isTrue);
+    expect(tidalAtmosAvailable({'codec': 'ac4'}), isFalse);
+    expect(tidalAtmosAvailable({'audio_modes': 'E-AC-3'}), isFalse);
+    expect(tidalAtmosAvailable({'audio_modes': 'AC-4'}), isFalse);
+  });
+
   test('lossless, hi-res and multichannel alone do not prove Atmos', () {
     expect(tidalAtmosAvailable({
       'audioQuality': 'HI_RES_LOSSLESS', 'audioModes': ['STEREO'],
