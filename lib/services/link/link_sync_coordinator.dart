@@ -252,11 +252,16 @@ class LinkSyncCoordinator {
         // The journal always retains remote-only plays. Local recent history
         // is updated only for bounded, matching phone songs.
         final rawTrack = item['track'];
-        final track = rawTrack is Map
-            ? rawTrack
-            : item['track_json'] is String
-                ? jsonDecode(item['track_json'] as String)
-                : null;
+        Object? track = rawTrack;
+        if (track is! Map && item['track_json'] is String) {
+          try {
+            track = jsonDecode(item['track_json'] as String);
+          } on FormatException {
+            // Keep the play in the stats journal even if its optional
+            // track metadata cannot be projected to local recent history.
+            continue;
+          }
+        }
         if (track is! Map) continue;
         final wire = Map<String, dynamic>.from(track);
         final title = wire['title'] as String? ?? '';
