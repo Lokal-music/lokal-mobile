@@ -13,7 +13,7 @@ class NetworkLocalAccess {
 
   @visibleForTesting
   static bool isPrivateHost(String host) {
-    final name = host.toLowerCase().replaceFirst(RegExp(r'\., '');
+    final name = host.toLowerCase().replaceFirst(RegExp(r'\.$'), '');
     if (name == 'localhost' || name.endsWith('.localhost')) return false;
     final address = InternetAddress.tryParse(name.split('%').first);
     if (address == null) {
