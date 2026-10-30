@@ -249,32 +249,40 @@ void main() {
     expect(find.text('Play Dolby Atmos'), findsOneWidget);
   });
 
-  testWidgets('Amazon AC-4 is an explicit action, not a badge on every song', (tester) async {
+  testWidgets('Amazon (New) search shows only verified Atmos, never a universal AC-4 action', (tester) async {
     final amazon = OnlineSource(
-      id: 'a-amazon', name: 'Amazon Music', addon: true,
+      id: 'a-amazon-new', name: 'Amazon (New)', addon: true,
       results: (_) async => [
         const OnlineResult(DiscoveryTrack(
           id: 'amazon-1', title: 'TEST ME', artist: 'Chanmina',
-          source: DiscoverySource.morneye, addonId: 'amazon',
+          source: DiscoverySource.morneye, addonId: 'amazon-new',
           atmosRequestable: true, atmosAvailable: false,
-          requestedQuality: 'FLAC best (requested)',
+        )),
+        const OnlineResult(DiscoveryTrack(
+          id: 'amazon-2', title: 'Confirmed Atmos', artist: 'Artist',
+          source: DiscoverySource.morneye, addonId: 'amazon-new',
+          atmosRequestable: true, atmosAvailable: true,
         )),
       ],
       play: (_) async => throw const DiscoveryException('not needed'),
     );
     await _pump(tester, sources: [amazon]);
     expect(find.text('TEST ME'), findsOneWidget);
-    expect(find.text('FLAC best (requested)'), findsOneWidget);
-    expect(find.text('AC-4?'), findsNothing);
-    expect(find.text('ATMOS'), findsNothing);
-    expect(find.text('Try AC-4').hitTestable(), findsOneWidget,
-        reason: 'The unverified codec is an explicit interactive action');
+    expect(find.text('FLAC best (requested)'), findsNothing);
+    expect(find.text('Try AC-4'), findsNothing);
+    expect(find.text('ATMOS'), findsOneWidget,
+        reason: 'Only the confirmed second track carries an Atmos badge');
     await tester.longPress(find.text('TEST ME'));
     await tester.pumpAndSettle();
-    expect(find.text('Try AC-4 (availability unverified)'), findsOneWidget);
-    expect(find.text('Download Amazon AC-4'), findsOneWidget);
-    expect(find.text('Play Dolby Atmos'), findsNothing,
-        reason: 'Do not promise a confirmed Atmos edition in Amazon search');
+    expect(find.text('Try AC-4 (availability unverified)'), findsNothing);
+    expect(find.text('Download Amazon AC-4'), findsNothing);
+    expect(find.text('Play Dolby Atmos'), findsNothing);
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Confirmed Atmos'));
+    await tester.pumpAndSettle();
+    expect(find.text('Play Dolby Atmos'), findsOneWidget);
+    expect(find.text('Download Dolby Atmos'), findsOneWidget);
   });
 
   testWidgets('Search shows measured quality without inventing badges for unspecified tracks', (tester) async {

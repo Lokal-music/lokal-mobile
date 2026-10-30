@@ -149,6 +149,55 @@ void main() {
     );
   }
 
+  test('Amazon (New) JOC-only track explicitly requests E-AC-3 and validates JOC', () async {
+    final addon = await install(provider: 'amazon-new', conversion: true);
+    final result = await packages.download(
+      addon.key, 'track', quality: 'eac3', forPlayback: true,
+    );
+    expect(requested, ['eac3']);
+    expect(probes, ['inspect'],
+        reason: 'JOC must be verified, not treated as generic E-AC-3 or AC-4');
+    expect(result.atmosEncoded, isTrue);
+    expect(result.atmosCodec, 'eac3-joc');
+    expect(result.info['codec'], 'eac3-joc');
+    expect(result.file.readAsBytesSync(), decryptedBytes);
+    await result.cleanup();
+  });
+
+  test('Amazon (New) E-AC-3 without verified JOC is rejected', () async {
+    final addon = await install(provider: 'amazon-new', conversion: true);
+    rejectCodecProbe();
+    await expectLater(
+      packages.download(
+        addon.key, 'track', quality: 'eac3', forPlayback: true,
+      ),
+      throwsA(isA<MorneyeSourceVerificationError>()),
+    );
+    expect(requested, ['eac3']);
+    expect(probes, contains('inspect'));
+    expect(probes, isNot(contains('inspectAc4')));
+  });
+
+  test('Amazon duplicate search retains first artist while upgrading exact-track Atmos', () async {
+    final addon = await install(provider: 'amazon-new');
+    engine.scripts['spatial']!['searchTracks'] = (_, _) async => [
+      {'id': 'B000000001', 'name': 'Song', 'artists': 'Valid Artist',
+        'album_name': 'Good Album', 'audio_modes': ''},
+      {'id': 'B000000001', 'name': 'Song', 'artists': '',
+        'album_name': '', 'audio_modes': 'EAC3_JOC'},
+      {'id': 'B000000002', 'name': 'Song', 'artists': 'Other Release',
+        'audio_modes': ''},
+    ];
+    final tracks = await packages.search(addon.key, 'Song');
+    expect(tracks, hasLength(2));
+    expect(tracks.first.artist, 'Valid Artist');
+    expect(tracks.first.album, 'Good Album');
+    expect(tracks.first.atmosAvailable, isTrue);
+    expect(tracks.first.atmosCodec, 'eac3-joc');
+    expect(tracks.last.atmosAvailable, isFalse);
+    expect(tracks.last.artist, 'Other Release');
+  });
+
   test(
     'configured Amazon AC-4 save verifies bytes and bypasses conversion',
     () async {

@@ -20,6 +20,15 @@ void main() {
     expect(explicitMorneyePlaybackTier(atmosRequested: true), 'DOLBY_ATMOS');
     expect(explicitMorneyePlaybackTier(atmosRequested: true, provider: 'amazon'), 'ac4');
     expect(explicitMorneyePlaybackTier(atmosRequested: false, provider: 'amazon'), isNull);
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: true, provider: 'amazon-new', atmosCodec: 'eac3-joc',
+    ), 'eac3', reason: 'JOC-only Amazon results must not request AC-4');
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: true, provider: 'amazon-new', atmosCodec: 'ac4',
+    ), 'ac4');
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: true, provider: 'tidal-web', atmosCodec: 'eac3-joc',
+    ), 'DOLBY_ATMOS');
     for (final quality in ['HIGH', 'LOW', 'LOSSLESS']) {
       expect(resolveMorneyeRequestQuality(
         forPlayback: true,
@@ -111,6 +120,23 @@ void main() {
     expect(badge.label, 'FLAC best (requested)');
     expect(badge.tooltip, contains('requested'));
     expect(badge.label, isNot(contains('AC-4')));
+  });
+
+  test('confirmed Amazon JOC codec survives selection, artwork and Atmos request', () {
+    const track = DiscoveryTrack(
+      id: 'joc', title: 'Song', artist: 'Artist',
+      source: DiscoverySource.morneye, addonId: 'amazon-new',
+      atmosAvailable: true, atmosRequestable: true,
+      atmosCodec: 'eac3-joc',
+    );
+    expect(track.requestAtmos().atmosCodec, 'eac3-joc');
+    expect(track.withArtwork('https://example.com/cover.jpg').atmosCodec,
+        'eac3-joc');
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: track.requestAtmos().atmosRequested,
+      provider: 'amazon-new',
+      atmosCodec: track.requestAtmos().atmosCodec,
+    ), 'eac3');
   });
 
   test('WEBM/M4A containers are never treated as playback quality codecs', () {

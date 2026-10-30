@@ -815,13 +815,12 @@ Future<List<_PlaybackSource>> _morneyeSources(
           final tidal = addon.name.toLowerCase().contains('tidal') ||
               addon.key.toLowerCase().contains('tidal');
           final amazon = addon.name.toLowerCase().startsWith('amazon');
+          // Search should show actual per-track formats, not the addon's
+          // preferred FLAC request. The latter belongs in playback settings.
           final requestedQuality = tidal
               ? tidalRequestedQualityLabel(
                   configured: configured, options: addon.qualityOptions)
-              : amazon
-                  ? amazonRequestedPlaybackQualityLabel(
-                      configured: configured, options: addon.qualityOptions)
-                  : null;
+              : null;
           // A configured tier is not proof of the rendered stream's quality.
           // Retain Tidal's *per-track catalogue availability* regardless of
           // the selected quality; Search labels it as catalogue data, not
@@ -867,6 +866,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
               sourceName: addon.displayName,
               artwork: song.thumbnail,
               atmosAvailable: song.atmosAvailable,
+              atmosCodec: song.atmosCodec,
               // This flag denotes only that the installed *Amazon addon*
               // offers an optional AC-4 request. It does NOT certify that
               // this specific search result has an AC-4 or Atmos edition.
@@ -882,7 +882,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
               catalogueQuality: verified != null
                   ? verified.resolution
                   : morneyeAdvertisedQuality(song.quality),
-              requestedQuality: verified == null ? requestedQuality : null,
+              requestedQuality: verified == null && !amazon ? requestedQuality : null,
               catalogueCodec: details.codec,
               catalogueBitDepth: details.bitDepth,
               catalogueSampleRate: details.sampleRate,
@@ -917,7 +917,8 @@ Future<List<_PlaybackSource>> _morneyeSources(
           }
           final tryAtmos = found.atmosRequested;
           final explicitTier = explicitMorneyePlaybackTier(
-              atmosRequested: tryAtmos, provider: addon.name);
+              atmosRequested: tryAtmos, provider: addon.name,
+              atmosCodec: found.atmosCodec);
           final requestedTier = explicitTier ?? '';
           final cacheKey = morneyePlaybackCacheKey(
             addonKey: addon.key,
