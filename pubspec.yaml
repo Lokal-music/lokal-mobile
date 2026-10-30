@@ -75,6 +75,7 @@ dependencies:
   rust_lib_flick_player:
     path: rust_builder
   shared_preferences: ^2.2.2
+  synchronized: ^3.4.0
   in_app_update: ^5.0.0
   share_plus: ^13.3.1
   skeletonizer: ^3.0.0
