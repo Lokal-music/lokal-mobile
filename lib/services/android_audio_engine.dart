@@ -427,6 +427,18 @@ class AndroidAudioEngine implements AudioEngine {
     _prepareOnDemandGaplessNext();
   }
 
+  /// A setting toggled mid-song can start preparing the next source without
+  /// interrupting the currently audible decoder.
+  void prepareGaplessAfterToggle() {
+    final current = _loadedTrack;
+    final player = _player;
+    if (current == null || player == null || !_loadedSingleTrackOnly ||
+        _onDemandGaplessSlots != null || player.sequence.length != 1) return;
+    _startOnDemandGaplessWindow(
+      current, _selectedPlaylistIndexProvider?.call() ?? -1,
+    );
+  }
+
   /// Collapse a previously restored/full native playlist when a network,
   /// pending or 65th entry makes the logical queue on-demand. Retain the
   /// decoder, current source and position: the native sequence must not carry
