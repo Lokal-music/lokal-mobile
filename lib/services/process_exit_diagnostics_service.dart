@@ -9,9 +9,40 @@ class ProcessExitDiagnosticsService {
   static const _channel = MethodChannel('com.mossapps.flick/diagnostics');
   static const _lastSeenKey = 'diagnostics.last_process_exit_timestamp';
 
+  /// Coarse lifecycle events only: never include filenames, titles, URLs,
+  /// server IDs, user names or tokens. Android stores the last 12 events in
+  /// ApplicationExitInfo so they survive SIGSEGV/abort without Dart flushing.
+  static Future<void> recordBreadcrumb(String stage) async {
+    if (!Platform.isAndroid) return;
+    if (!RegExp(r'^[a-z0-9:_-]{1,64}$').hasMatch(stage)) return;
+    try {
+      await _channel.invokeMethod<bool>(
+        'recordCrashBreadcrumb', <String, String>{'stage': stage},
+      );
+    } on MissingPluginException {
+      // Older/native-unavailable builds have no crash breadcrumb service.
+    } on PlatformException {
+      // Telemetry must never interfere with playback.
+    }
+  }
+
   Future<void> reportPreviousExits() async {
     if (!Platform.isAndroid) return;
+    // Start a new per-process breadcrumb ring after a native restart. This
+    // call does not overwrite the preceding process's ApplicationExitInfo.
+    await recordBreadcrumb('app:startup');
     try {
+      // Java/Kotlin exceptions usually have REASON_CRASH rather than
+      // REASON_CRASH_NATIVE; Android's tombstone API does not retain their
+      // Java stack. Our crash handler persisted a privacy-safe call stack.
+      final javaCrash = await _channel.invokeMethod<String>(
+        'consumeJavaCrashInfo',
+      );
+      if (javaCrash != null && javaCrash.isNotEmpty) {
+        AppLog.instance.add('[java-crash-recovered] $javaCrash',
+            source: LogSource.crash);
+        await AppLog.instance.flushToDisk();
+      }
       final exits = await _channel.invokeListMethod<Object?>(
         'getProcessExitInfo',
       );
@@ -35,6 +66,19 @@ class ProcessExitDiagnosticsService {
         final trace = info['trace'];
         if (trace is String && trace.isNotEmpty) {
           AppLog.instance.add('[native-exit-trace] $trace', source: source);
+        } else if (isLikelyCrash(reason: reason, status: status)) {
+          AppLog.instance.add(
+            '[native-exit-trace] No Android tombstone available for this exit '
+            '(OS may not retain it).', source: source,
+          );
+        }
+        final checkpoints = info['processStateSummary'];
+        if (checkpoints is String && checkpoints.isNotEmpty &&
+            isLikelyCrash(reason: reason, status: status)) {
+          AppLog.instance.add(
+            '[native-exit-breadcrumbs] ${checkpoints.length > 1024 ? checkpoints.substring(0, 1024) : checkpoints}',
+            source: source,
+          );
         }
         if (timestamp > newest) newest = timestamp;
       }

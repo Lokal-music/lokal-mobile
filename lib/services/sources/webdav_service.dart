@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -42,6 +43,8 @@ class WebdavService implements NetworkSourceService {
     } else {
       final nativeClient = HttpClient();
       nativeClient.badCertificateCallback = _validateUntrustedCertificate;
+      nativeClient.connectionTimeout = const Duration(seconds: 15);
+      nativeClient.maxConnectionsPerHost = 2;
       _client = IOClient(nativeClient);
     }
   }
@@ -269,6 +272,10 @@ class WebdavService implements NetworkSourceService {
     for (var attempt = 0; attempt < 2; attempt++) {
       final request = http.Request('PROPFIND', uri)
         ..followRedirects = false
+        // Several Android builds report uncaught _HttpClient._returnConnection
+        // errors after failed NAS requests. Do not return these connections
+        // to Dart's keep-alive pool while certificate trust is changing.
+        ..headers['Connection'] = 'close'
         ..headers['Depth'] = '$depth'
         ..headers['Content-Type'] = 'application/xml; charset=utf-8'
         ..headers['Authorization'] = _basicAuth(server)
@@ -472,13 +479,32 @@ class WebdavService implements NetworkSourceService {
     await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
       ..followRedirects = false
+      ..headers['Connection'] = 'close'
       ..headers['Authorization'] = _basicAuth(server);
     final streamed = await _client.send(request).timeout(const Duration(seconds: 30));
-    final response = await http.Response.fromStream(streamed);
-    if (response.statusCode != 200) {
-      throw WebdavNetworkException('HTTP ${response.statusCode} for cover');
+    if (streamed.statusCode != 200) {
+      await streamed.stream.listen(null).cancel();
+      throw WebdavNetworkException('HTTP ${streamed.statusCode} for cover');
     }
-    return response.bodyBytes;
+    // Cover requests are untrusted NAS input. Avoid Response.fromStream,
+    // which buffers arbitrarily large images into memory ahead of decoding.
+    const limit = 12 * 1024 * 1024;
+    if ((streamed.contentLength ?? 0) > limit) {
+      await streamed.stream.listen(null).cancel();
+      throw WebdavNetworkException('NAS cover exceeds 12 MiB');
+    }
+    final bytes = BytesBuilder(copy: false);
+    var size = 0;
+    await for (final chunk in streamed.stream.timeout(
+      const Duration(seconds: 30),
+    )) {
+      size += chunk.length;
+      if (size > limit) {
+        throw WebdavNetworkException('NAS cover exceeds 12 MiB');
+      }
+      bytes.add(chunk);
+    }
+    return bytes.takeBytes();
   }
 
   @override
@@ -500,10 +526,12 @@ class WebdavService implements NetworkSourceService {
     await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
       ..followRedirects = false
+      ..headers['Connection'] = 'close'
       ..headers['Authorization'] = _basicAuth(server);
     final response =
         await _client.send(request).timeout(const Duration(minutes: 5));
     if (response.statusCode != 200) {
+      await response.stream.listen(null).cancel();
       throw WebdavNetworkException('HTTP ${response.statusCode} for stream');
     }
     // Stream directly to a temporary cache file. Keeping an entire FLAC in a

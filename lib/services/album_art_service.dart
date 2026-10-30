@@ -11,6 +11,7 @@ import '../data/database.dart';
 import '../data/repositories/song_repository.dart';
 import '../src/rust/api/scanner.dart' as rust_scanner;
 import 'music_folder_service.dart';
+import 'network_cache_service.dart';
 import 'player_service.dart';
 import 'sources/network_source_service.dart';
 
@@ -227,6 +228,17 @@ class AlbumArtService {
   /// service's cover endpoint using the `<proto>-cover://<marker>` stored in
   /// the entity's albumArtPath. Local songs try embedded art first, then fall
   /// back to a nearby folder cover (`cover.jpg`, `folder.png`, …).
+  /// The cache key contains the original opaque remoteId, not Uri.path:
+  /// Uri decoding would change WebDAV '%2F' to '/' and miss the FLAC cache.
+  @visibleForTesting
+  static String? networkRemoteIdFromAudioPath(String audioPath) {
+    final scheme = audioPath.indexOf('://');
+    if (scheme < 0) return null;
+    final slash = audioPath.indexOf('/', scheme + 3);
+    if (slash < 0 || slash == audioPath.length - 1) return null;
+    return audioPath.substring(slash + 1);
+  }
+
   Future<Uint8List?> _loadArtworkBytes(
     String audioSourcePath, {
     String? existingPath,
@@ -240,19 +252,31 @@ class AlbumArtService {
           : uri.scheme == 'lokal' && uri.pathSegments.isNotEmpty
           ? uri.pathSegments.last
           : null;
-      if (marker == null || marker.isEmpty) return null;
-
       final serverId = int.tryParse(uri.host);
       if (serverId == null) return null;
-      final server = await Database.networkServers.get(serverId);
-      if (server == null) return null;
-
-      try {
-        final bytes = await service.getCoverArt(server, marker);
-        return Uint8List.fromList(bytes);
-      } catch (e) {
-        return null;
+      if (marker != null && marker.isNotEmpty) {
+        final server = await Database.networkServers.get(serverId);
+        if (server != null) {
+          try {
+            final bytes = await service.getCoverArt(server, marker);
+            if (bytes.isNotEmpty) return Uint8List.fromList(bytes);
+          } catch (_) {
+            // A missing/unreadable cover.jpg must not suppress embedded art.
+          }
+        }
       }
+
+      // SMB and WebDAV directory listings cannot expose the APIC/FLAC
+      // PICTURE tag. Once playback has cached the original audio, recover its
+      // embedded artwork without another NAS read or full-file download.
+      // Preserve the opaque percent-encoded remoteId (critical for WebDAV).
+      if (uri.scheme == 'smb' || uri.scheme == 'webdav') {
+        final raw = networkRemoteIdFromAudioPath(audioSourcePath);
+        if (raw == null) return null;
+        final local = await NetworkCacheService().getPath(serverId, raw);
+        if (local != null) return _loadEmbeddedArtworkBytes(local);
+      }
+      return null;
     }
 
     final embedded = await _loadEmbeddedArtworkBytes(audioSourcePath);

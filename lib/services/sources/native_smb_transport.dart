@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dart_smb2/dart_smb2.dart';
 import 'package:synchronized/synchronized.dart';
@@ -95,9 +96,35 @@ class Libsmb2Transport implements NativeSmbSession {
     ];
   }
 
+  /// Artwork must never be loaded as an unbounded native allocation.
+  /// Some NASes expose unexpectedly large scans as cover.jpg.
+  static const int maxArtworkBytes = 12 * 1024 * 1024;
+
   @override
-  Future<List<int>> read(String path) async =>
-      _native.synchronized(() => _pool.readFile(path));
+  Future<List<int>> read(String path) async {
+    final (handle, size) =
+        await _native.synchronized(() => _pool.openFileWithSize(path));
+    try {
+      if (size < 0 || size > maxArtworkBytes) {
+        throw const FileSystemException('NAS cover exceeds 12 MiB');
+      }
+      final result = BytesBuilder(copy: false);
+      var offset = 0;
+      while (offset < size) {
+        final chunk = await _native.synchronized(() => _pool.readFromHandle(
+          handle,
+          offset: offset,
+          length: (size - offset).clamp(1, 256 * 1024).toInt(),
+        ));
+        if (chunk.isEmpty) throw const FileSystemException('NAS cover truncated');
+        result.add(chunk);
+        offset += chunk.length;
+      }
+      return result.takeBytes();
+    } finally {
+      await _native.synchronized(() => _pool.closeHandle(handle));
+    }
+  }
 
   @override
   Future<void> download(

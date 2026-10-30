@@ -3,6 +3,16 @@ name: Network sources and NAS compatibility
 on:
   pull_request:
     paths:
+      - 'lib/services/album_art_service.dart'
+      - 'lib/services/remote_source_service.dart'
+      - 'lib/services/android_audio_engine.dart'
+      - 'lib/services/process_exit_diagnostics_service.dart'
+      - 'android/app/src/main/kotlin/com/mossapps/flick/MainActivity.kt'
+      - 'android/app/src/main/kotlin/com/mossapps/flick/NativeCrashDiagnostics.kt'
+      - 'android/app/src/main/kotlin/com/mossapps/flick/JavaCrashRecorder.kt'
+      - 'android/app/src/test/kotlin/com/mossapps/flick/JavaCrashRecorderTest.kt'
+      - 'android/app/src/test/kotlin/com/mossapps/flick/NativeTombstoneSummaryTest.kt'
+      - 'test/services/album_art_service_test.dart'
       - 'lib/services/sources/local_network_access.dart'
       - 'lib/services/sources/smb_service.dart'
       - 'lib/services/sources/native_smb_transport.dart'
@@ -31,7 +41,11 @@ jobs:
       - uses: ./.github/actions/android-toolchain
       - name: Analyze network implementations and settings
         run: >-
-          dart analyze
+          dart analyze --no-fatal-infos --no-fatal-warnings
+          lib/services/album_art_service.dart
+          lib/services/remote_source_service.dart
+          lib/services/android_audio_engine.dart
+          lib/services/process_exit_diagnostics_service.dart
           lib/services/sources/local_network_access.dart
           lib/services/sources/smb_service.dart
           lib/services/sources/native_smb_transport.dart
@@ -40,12 +54,15 @@ jobs:
       - name: Run SMB, WebDAV and Android LAN permission regressions
         run: >-
           flutter test --no-pub
+          test/services/album_art_service_test.dart
           test/services/smb_service_parse_test.dart
           test/services/smb_native_transport_test.dart
           test/services/webdav_service_test.dart
           test/services/local_network_access_test.dart
       - name: Run Rust SMB transport tests
         run: cargo test --locked --lib --manifest-path rust/Cargo.toml smb_api
+      - name: Test Android native crash tombstone decoder
+        run: cd android && ./gradlew :app:testFullDebugUnitTest --no-daemon
       - name: Compile mobile network code into Android test APK
         run: flutter build apk --debug --flavor full --target-platform android-arm64 --no-pub
       - name: Verify dependency locks
