@@ -35,6 +35,10 @@ class _FakePlayer extends Fake implements PlayerService {
   @override
   Future<void> setAutoplayOnQueueEnd(bool value) async =>
       autoplayOnQueueEndNotifier.value = value;
+
+  @override
+  Future<void> setGaplessPlaybackEnabled(bool value) async =>
+      gaplessPlaybackEnabledNotifier.value = value;
 }
 
 Widget _app(Widget home, {PlayerService? player}) => ProviderScope(
@@ -169,6 +173,45 @@ void main() {
     expect(find.text('Licences'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final (query, label, initial) in [
+    ('autoplay', 'Autoplay', false),
+    ('gapless', 'Gapless playback', true),
+  ]) {
+    testWidgets('settings search updates $label ON/OFF state immediately',
+        (tester) async {
+      tester.view
+        ..physicalSize = const Size(412, 915)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final player = _FakePlayer();
+      await tester.pumpWidget(_app(const LokalSettingsPage(), player: player));
+      await tester.enterText(find.byType(TextField), query);
+      await tester.pumpAndSettle();
+
+      LokalSettingRow row() => tester.widgetList<LokalSettingRow>(
+        find.byType(LokalSettingRow),
+      ).singleWhere((candidate) => candidate.label == label);
+      expect(row().toggled, initial);
+
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+      expect(row().toggled, !initial);
+      expect(
+        label == 'Autoplay'
+            ? player.autoplayOnQueueEndNotifier.value
+            : player.gaplessPlaybackEnabledNotifier.value,
+        !initial,
+      );
+
+      // Toggling the result a second time must use its new value, not the
+      // stale closure captured on the initial search render.
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+      expect(row().toggled, initial);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('canonical Online sources exposes HTTP add-ons', (tester) async {
     await tester.pumpWidget(
