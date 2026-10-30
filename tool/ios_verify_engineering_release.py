@@ -53,7 +53,12 @@ def _blob_hash(data: bytes) -> str:
 
 def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
     artifact = artifact.resolve(strict=True)
-    ipa = artifact / "Lokal-unsigned.ipa"
+    # upload-artifact may retain the common 'ipa/' directory when it also
+    # uploads matching Xcode dSYMs from the sibling iphoneos directory.
+    packages = list(artifact.rglob("Lokal-unsigned.ipa"))
+    _require(len(packages) == 1, "Expected exactly one unsigned IPA in artifact")
+    artifact = packages[0].parent
+    ipa = packages[0]
     sha_file = artifact / "Lokal-unsigned.ipa.sha256"
     manifest_file = artifact / "Lokal-unsigned.ipa.json"
     source = artifact / "Lokal-source.tar.gz"
