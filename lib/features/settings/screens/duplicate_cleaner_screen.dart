@@ -11,6 +11,7 @@ import 'package:flick/core/utils/audio_metadata_utils.dart';
 import 'package:flick/core/utils/responsive.dart';
 import 'package:flick/providers/providers.dart';
 import 'package:flick/services/duplicate_cleaner_service.dart';
+import 'package:flick/widgets/common/ios_transfer_root.dart';
 import 'package:flick/l10n/l10n.dart';
 
 // ---------------------------------------------------------------------------
@@ -871,10 +872,19 @@ class _BottomActionBar extends ConsumerWidget {
       confirmLabel: l10n.remove,
       destructive: true,
     );
-    if (!confirmed) return;
-    final result = await ref
-        .read(duplicateScanProvider.notifier)
-        .removeSelected();
+    if (!confirmed || !context.mounted) return;
+    DuplicateRemovalResult? result;
+    try {
+      result = await IosTransferRoot.withMutationBarrier(
+        context,
+        () => ref.read(duplicateScanProvider.notifier).removeSelected(),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        LokalToast.show(context, 'Could not remove duplicates. Check transfer recovery and retry.');
+      }
+      return;
+    }
     if (!context.mounted) return;
     if (result != null) {
       LokalToast.fromSnackBar(context, 
@@ -921,9 +931,21 @@ class _BottomActionBar extends ConsumerWidget {
       confirmLabel: l10n.removeAll,
       destructive: true,
     );
-    if (!confirmed) return;
-    await ref.read(duplicateScanProvider.notifier).removeAllDuplicates();
-    if (!context.mounted) return;
+    if (!confirmed || !context.mounted) return;
+    try {
+      await IosTransferRoot.withMutationBarrier(
+        context,
+        () => ref.read(duplicateScanProvider.notifier).removeAllDuplicates(),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        LokalToast.show(context, 'Could not remove duplicates. Check transfer recovery and retry.');
+      }
+      return;
+    }
+    if (!context.mounted || ref.read(duplicateScanProvider).error != null) {
+      return;
+    }
     LokalToast.fromSnackBar(context, 
       SnackBar(
         backgroundColor: context.lokal.surface2,

@@ -36,6 +36,40 @@ void main() {
     ]);
   });
 
+  test('waits for native drain before the first destructive side effect', () async {
+    final gate = IosTransferMutationBarrier();
+    final nativeDrain = Completer<void>();
+    final events = <String>[];
+    final removing = gate.run<void>(
+      pause: () async {
+        events.add('pause requested');
+        await nativeDrain.future;
+        events.add('native drained');
+      },
+      mutate: () async {
+        events.add('revoke credentials');
+        events.add('delete server');
+        events.add('delete songs');
+        events.add('delete playlists');
+      },
+      resume: () async => events.add('resume'),
+    );
+
+    await Future<void>.delayed(Duration.zero);
+    expect(events, ['pause requested']);
+    nativeDrain.complete();
+    await removing;
+    expect(events, [
+      'pause requested',
+      'native drained',
+      'revoke credentials',
+      'delete server',
+      'delete songs',
+      'delete playlists',
+      'resume',
+    ]);
+  });
+
   test('failed retirement refuses mutation and does not resume', () async {
     final gate = IosTransferMutationBarrier();
     var mutated = false, resumed = false;
