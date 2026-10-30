@@ -400,10 +400,11 @@ class WebdavService implements NetworkSourceService {
     final uri = _requestUri(server, href);
     await NetworkLocalAccess.ensure(uri);
     await _loadCertificateTrust(uri);
-    final response = await _client.get(
-      uri,
-      headers: {'Authorization': _basicAuth(server)},
-    ).timeout(const Duration(seconds: 30));
+    final request = http.Request('GET', uri)
+      ..followRedirects = false
+      ..headers['Authorization'] = _basicAuth(server);
+    final streamed = await _client.send(request).timeout(const Duration(seconds: 30));
+    final response = await http.Response.fromStream(streamed);
     if (response.statusCode != 200) {
       throw WebdavNetworkException('HTTP ${response.statusCode} for cover');
     }
@@ -428,24 +429,42 @@ class WebdavService implements NetworkSourceService {
     await NetworkLocalAccess.ensure(uri);
     await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
+      ..followRedirects = false
       ..headers['Authorization'] = _basicAuth(server);
     final response =
         await _client.send(request).timeout(const Duration(minutes: 5));
     if (response.statusCode != 200) {
       throw WebdavNetworkException('HTTP ${response.statusCode} for stream');
     }
+    // Stream directly to a temporary cache file. Keeping an entire FLAC in a
+    // BytesBuilder doubles peak RAM and can kill the app on large albums.
+    // Publish atomically: partial transfers must never be returned as hits.
+    final destination = await _cache.pathFor(server.id, remoteId, extension: extension);
+    final partial = File('$destination.part.$pid.${DateTime.now().microsecondsSinceEpoch}');
+    final output = partial.openWrite();
     final total = response.contentLength;
-    final builder = BytesBuilder();
     var received = 0;
-    await for (final chunk in response.stream) {
-      builder.add(chunk);
-      received += chunk.length;
-      if (onProgress != null && total != null && total > 0) {
-        onProgress(received / total);
+    try {
+      await for (final chunk in response.stream) {
+        output.add(chunk);
+        received += chunk.length;
+        if (onProgress != null && total != null && total > 0) {
+          onProgress(received / total);
+        }
       }
+      await output.flush();
+      await output.close();
+      if (total != null && received != total) {
+        throw WebdavNetworkException('Incomplete WebDAV download: $received of $total bytes');
+      }
+      await partial.rename(destination);
+      await _cache.commitDownload(destination);
+      return destination;
+    } catch (_) {
+      try { await output.close(); } catch (_) {}
+      try { if (await partial.exists()) await partial.delete(); } catch (_) {}
+      rethrow;
     }
-    return _cache.stash(server.id, remoteId, builder.takeBytes(),
-        extension: extension);
   }
 
   @override
