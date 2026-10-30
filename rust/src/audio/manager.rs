@@ -305,6 +305,33 @@ impl EngineManager {
                     return false;
                 }
 
+                // The framework USB mixer is negotiated per track. In
+                // particular, switching from an exact 16/24-bit track to a
+                // true 32-bit (or unknown-precision) source must close the
+                // old mixer rather than reuse an apparently matching rate.
+                // Likewise, retry an eligible mixer after a prior managed
+                // fallback: that fallback has the same requested rate but
+                // is not a bit-perfect route.
+                #[cfg(target_os = "android")]
+                {
+                    let wants_mixer = crate::audio::android_mixer::requested();
+                    let has_mixer = handle.output_signature()
+                        .starts_with("android-mixer-bit-perfect:");
+                    if wants_mixer != has_mixer {
+                        crate::dev_eprintln!(
+                            "[USB-MIXER] requested={} active={}; recreating output",
+                            wants_mixer, has_mixer
+                        );
+                        return false;
+                    }
+                    // The Android USB mixer depends on the track's PCM
+                    // precision, not merely the rate. Never carry a live
+                    // framework mixer over a track boundary unchecked.
+                    if has_mixer {
+                        return false;
+                    }
+                }
+
                 // Precision is persistent Android state and may change while
                 // the engine is alive. Recreate the Oboe stream on the next
                 // track even when the sample-rate signature is unchanged.
