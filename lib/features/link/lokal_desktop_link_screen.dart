@@ -302,7 +302,7 @@ class _LokalDesktopLinkScreenState
             const SizedBox(height: 8),
             Text(
               lokalText(
-                'Desktop library sync is manual. Opening Lokal, reconnecting, or changing a song will not start a library scan. Tap Sync now to update desktop songs, likes, playlists and listening history. Audio files are copied only when you explicitly choose to copy them.',
+                'Desktop library sync is manual. Opening Lokal, reconnecting, or changing a song will not start a library scan. Tap Sync now to update desktop songs, likes, playlists and listening history. Optional phone-download transfers are queued until Sync now; other audio files copy only when requested.',
               ),
               style: TextStyle(color: t.muted),
             ),
