@@ -460,7 +460,12 @@ class WebdavService implements NetworkSourceService {
     final total = response.contentLength;
     var received = 0;
     try {
-      await for (final chunk in response.stream) {
+      // Sending response headers is not proof that the NAS continues sending
+      // the body. Time out stalled chunks and let the catch block remove the
+      // partial cache file instead of leaving playback pending indefinitely.
+      await for (final chunk in response.stream.timeout(
+        const Duration(seconds: 30),
+      )) {
         output.add(chunk);
         received += chunk.length;
         if (onProgress != null && total != null && total > 0) {
@@ -506,9 +511,24 @@ class WebdavService implements NetworkSourceService {
 
   bool _isMultistatusDocument(String body) {
     try {
-      return XmlDocument.parse(body)
-          .findAllElements('multistatus', namespace: '*')
-          .isNotEmpty;
+      final root = XmlDocument.parse(body).rootElement;
+      // A nested <multistatus> inside HTML (or a non-DAV namespace) is NOT
+      // a WebDAV collection listing. Accepting it as an empty collection
+      // could purge every indexed song for the requested directory.
+      if (root.name.local != 'multistatus' || root.namespaceUri != 'DAV:') {
+        return false;
+      }
+      final responses = root.childElements.toList();
+      if (responses.isEmpty) return false;
+      for (final response in responses) {
+        if (response.name.local != 'response' ||
+            response.namespaceUri != 'DAV:') return false;
+        final hrefs = response.findElements('href', namespaceUri: 'DAV:').toList();
+        if (hrefs.length != 1 || hrefs.single.innerText.trim().isEmpty) {
+          return false;
+        }
+      }
+      return true;
     } catch (_) {
       return false;
     }
