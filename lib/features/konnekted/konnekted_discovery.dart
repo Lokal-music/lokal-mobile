@@ -991,7 +991,8 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   morneyeCanPlayWhileDownloading(addon.name)
               ? MorneyeLiveSession()
               : null;
-          if (tryAtmos && !found.atmosDownload && !await AtmosPlaybackSupport.available) {
+          if (tryAtmos && !forDownload && !found.atmosDownload &&
+              !await AtmosPlaybackSupport.available) {
             AtmosDiagnostics.record('request_rejected', {'reason': 'decoder_unavailable'});
             throw const DiscoveryException(
               'This iPhone does not report native support for the selected encoded spatial-audio output. No stereo track was substituted; change the addon quality or download the original file.',
