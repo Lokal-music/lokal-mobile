@@ -841,6 +841,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
           final configured = settings['downloadQuality'] as String?;
           final tidal = addon.name.toLowerCase().contains('tidal') ||
               addon.key.toLowerCase().contains('tidal');
+          final amazon = addon.name.toLowerCase().startsWith('amazon');
           final requestedQuality = tidal
               ? tidalRequestedQualityLabel(
                   configured: configured, options: addon.qualityOptions)
@@ -890,6 +891,12 @@ Future<List<_PlaybackSource>> _morneyeSources(
               sourceName: addon.displayName,
               artwork: song.thumbnail,
               atmosAvailable: song.atmosAvailable,
+              atmosCodec: song.atmosCodec,
+              // Manifest AC-4 is merely requestable, never a catalogue tag.
+              atmosRequestable: amazon &&
+                  addon.qualityOptions.any((option) =>
+                      option is Map &&
+                      option['id']?.toString().toLowerCase() == 'ac4'),
               // Tidal's search metadata describes catalogue availability,
               // while requestedQuality describes the user's download option.
               // Both must survive to the badge formatter so it can distinguish
@@ -897,7 +904,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
               catalogueQuality: verified != null
                   ? verified.resolution
                   : morneyeAdvertisedQuality(song.quality),
-              requestedQuality: verified == null ? requestedQuality : null,
+              requestedQuality: verified == null && !amazon ? requestedQuality : null,
               catalogueCodec: details.codec,
               catalogueBitDepth: details.bitDepth,
               catalogueSampleRate: details.sampleRate,
@@ -950,6 +957,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
           final explicitTier = found.atmosRequested
               ? explicitMorneyePlaybackTier(
                   atmosRequested: true, provider: addon.name,
+                  atmosCodec: found.atmosCodec,
                 )
               : configuredAtmos ? configured : null;
           final requestedTier = explicitTier ?? '';
