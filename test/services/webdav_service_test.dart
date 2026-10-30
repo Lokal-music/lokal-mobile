@@ -59,6 +59,79 @@ void main() {
       expect(service.untrustedCertificateFingerprint, isNull);
     });
 
+    test('certificate approval persists only after successful PROPFIND', () async {
+      final server = _server(token: base64Encode(utf8.encode('secret')));
+      final origin = Uri.parse(server.baseUrl).origin;
+      const fingerprint = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      var requests = 0;
+      final service = WebdavService.create(
+        client: MockClient((request) async {
+          requests++;
+          expect(request.method, 'PROPFIND');
+          return http.Response(_multistatus, 207);
+        }),
+      );
+      service.recordRejectedCertificateForTest(origin, fingerprint);
+      expect(
+        await service.trustPresentedCertificate(
+          server, approvedFingerprint: fingerprint,
+        ),
+        isTrue,
+      );
+      expect(requests, 1);
+      final independentlyLoaded = WebdavService.create(
+        client: MockClient((_) async => http.Response('', 500)),
+      );
+      expect(await independentlyLoaded.hasTrustedCertificate(server), isTrue);
+    });
+
+    test('certificate approval is not persisted on failed PROPFIND', () async {
+      final server = _server();
+      const fingerprint = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+      var requests = 0;
+      final service = WebdavService.create(
+        client: MockClient((_) async {
+          requests++;
+          return http.Response('Forbidden', 403);
+        }),
+      );
+      service.recordRejectedCertificateForTest(
+        Uri.parse(server.baseUrl).origin, fingerprint,
+      );
+      expect(
+        await service.trustPresentedCertificate(
+          server, approvedFingerprint: fingerprint,
+        ),
+        isFalse,
+      );
+      expect(requests, 1);
+      final other = WebdavService.create(
+        client: MockClient((_) async => http.Response('', 500)),
+      );
+      expect(await other.hasTrustedCertificate(server), isFalse);
+    });
+
+    test('certificate approval rejects a swapped fingerprint before credentials',
+        () async {
+      final server = _server();
+      const seen = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
+      const swapped = 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd';
+      final service = WebdavService.create(
+        client: MockClient((_) async {
+          fail('No authorization request is allowed for a swapped certificate');
+        }),
+      );
+      service.recordRejectedCertificateForTest(
+        Uri.parse(server.baseUrl).origin, swapped,
+      );
+      expect(
+        await service.trustPresentedCertificate(
+          server, approvedFingerprint: seen,
+        ),
+        isFalse,
+      );
+    });
+
     test('follows only same-origin trailing slash WebDAV redirects', () async {
       final visited = <Uri>[];
       final client = MockClient((request) async {
