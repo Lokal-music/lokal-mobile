@@ -53,6 +53,7 @@ internal object NativeTombstoneSummary {
             throw IllegalArgumentException("Bad tombstone varint")
         }
         while (p < bytes.size && result.size < 4096) {
+            try {
             val key = variable()
             val id = (key ushr 3).toInt()
             if (id == 0) throw IllegalArgumentException("Invalid tombstone field")
@@ -74,6 +75,11 @@ internal object NativeTombstoneSummary {
                 }
                 else -> throw IllegalArgumentException("Unknown tombstone wire type")
             }
+            } catch (_: IllegalArgumentException) {
+                // A bounded 256-KiB capture can end partway through a large
+                // memory map. Earlier signal/crashed-thread fields are useful.
+                break
+            }
         }
         return result
     }
@@ -94,7 +100,7 @@ internal object NativeTombstoneSummary {
             val signalCode = safeSymbol(string(signal?.firstOrNull { it.id == 4 }?.data))
             val number = signal?.firstOrNull { it.id == 1 }?.value
             val abortMessage = top.firstOrNull { it.id == 14 }?.data
-            val out = StringBuilder("tombstone signal=${signalName.ifEmpty { number ?: "unknown" }}")
+            val out = StringBuilder("tombstone signal=${signalName.ifEmpty { number?.toString() ?: "unknown" }}")
             if (signalCode.isNotEmpty()) out.append(" code=$signalCode")
             if (crashedTid != null) out.append(" tid=$crashedTid")
             // Avoid printing raw abort_message, as it may include user paths.
