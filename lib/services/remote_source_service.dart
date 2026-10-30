@@ -31,6 +31,7 @@ class RemoteSourceService {
   /// skip retrying them every play.
   final Set<String> _probeFailed = {};
   final Set<String> _artworkPending = {};
+  final Set<String> _metadataPending = {};
 
   Future<NetworkServerEntity> _serverFor(Song song) async {
     final serverId = song.remoteServerId;
@@ -69,17 +70,27 @@ class RemoteSourceService {
             ? (p) => downloadProgressNotifier.value = p
             : null,
       );
-      unawaited(_backfillAudioFormat(song, path));
       if (reportProgress) {
-        // The player initially sees a placeholder when a NAS listing did not
-        // contain cover.jpg. Once its file is available locally, trigger a
-        // single embedded-artwork lookup and notify the active player's
-        // artwork without blocking playback or fetching the FLAC again.
-        unawaited(_backfillArtwork(song));
+        // Rust format probing and embedded-artwork extraction both read the
+        // downloaded file. Do them in one guarded job, only for the track
+        // actually playing, rather than launching four parallel native probes
+        // for the next prefetched tracks while the audio decoder starts.
+        unawaited(_backfillMetadata(song, path));
       }
       return path;
     } finally {
       if (reportProgress) downloadProgressNotifier.value = null;
+    }
+  }
+
+  Future<void> _backfillMetadata(Song song, String localPath) async {
+    final key = song.filePath ?? song.id;
+    if (!_metadataPending.add(key)) return;
+    try {
+      await _backfillArtwork(song);
+      await _backfillAudioFormat(song, localPath);
+    } finally {
+      _metadataPending.remove(key);
     }
   }
 
