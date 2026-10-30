@@ -1,6 +1,7 @@
 """Synthetic host-side HTTP service for actual native transfer contracts."""
 
 import contextlib
+import base64
 import hashlib
 import http.server
 import io
@@ -29,7 +30,9 @@ def serve_fixture():
     payload = audio_bytes()
     digest = hashlib.sha256(payload).hexdigest()
     lock = threading.Lock()
-    state = {'requests': {}, 'redirectHits': 0, 'cookiesSeen': False}
+    slow_upload_reply = threading.Event()
+    state = {'requests': {}, 'redirectHits': 0, 'cookiesSeen': False,
+             'uploadRequests': {}, 'uploadHashes': {}, 'uploadMetadataValid': True, 'uploadLeakHits': 0}
 
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
@@ -47,6 +50,13 @@ def serve_fixture():
                 self.wfile.write(body)
 
         def do_GET(self):
+            if self.path == '/__release_upload':
+                slow_upload_reply.set()
+                self.respond(200)
+                return
+            if self.path == '/__upload_payload':
+                self.respond(200, payload)
+                return
             if self.path == '/__state':
                 with lock:
                     body = json.dumps(state).encode()
@@ -93,12 +103,82 @@ def serve_fixture():
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
+        def do_POST(self):
+            size = int(self.headers.get('Content-Length', '0'))
+            if not 0 < size <= 1024 * 1024:
+                self.close_connection = True
+                self.respond(413)
+                return
+            body = self.rfile.read(size)
+            if self.path == '/upload-leak':
+                with lock:
+                    state['uploadLeakHits'] += 1
+                self.respond(200)
+                return
+            if self.path != '/api/remote/files':
+                self.respond(404)
+                return
+            try:
+                header = self.headers.get('x-link-metadata', '')
+                metadata = json.loads(base64.urlsafe_b64decode(header + '=' * (-len(header) % 4)))
+                mode = metadata['title']
+            except (ValueError, KeyError):
+                self.respond(400)
+                return
+            actual = hashlib.sha256(body).hexdigest()
+            with lock:
+                state['uploadRequests'][mode] = state['uploadRequests'].get(mode, 0) + 1
+                state['uploadHashes'][mode] = actual
+                state['cookiesSeen'] |= self.headers.get('Cookie') is not None
+                state['uploadMetadataValid'] &= (
+                    metadata.get('sha256') == digest and actual == digest and body == payload
+                    and metadata.get('extension') == 'wav'
+                    and metadata.get('artist') == 'Native fixture — Café'
+                    and self.headers.get('Content-Type') == 'application/octet-stream')
+            try:
+                if self.headers.get('x-remote-token') != 'transfer-fixture-token' or mode == 'upload-unauthorized':
+                    self.respond(401, b'{}', Content_Type='application/json')
+                elif mode == 'upload-lost':
+                    # The peer committed the body; only its response is lost.
+                    self.close_connection = True
+                elif mode == 'upload-redirect':
+                    self.respond(307, b'{}', Location='/upload-leak', Content_Type='application/json')
+                elif mode == 'upload-large':
+                    self.respond(200, b'x' * (20 * 1024), Content_Type='application/json')
+                elif mode == 'upload-large-chunked':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Transfer-Encoding', 'chunked')
+                    self.end_headers()
+                    for _ in range(3):
+                        chunk = b'x' * 8192
+                        self.wfile.write(f'{len(chunk):x}\r\n'.encode() + chunk + b'\r\n')
+                        self.wfile.flush()
+                    self.wfile.write(b'0\r\n\r\n')
+                elif mode == 'upload-malformed':
+                    self.respond(200, b'{"ok":true}', Content_Type='application/json')
+                elif mode == 'upload-html':
+                    self.respond(200, b'<html>not a receipt</html>', Content_Type='text/html')
+                else:
+                    if mode == 'upload-slow':
+                        slow_upload_reply.wait(timeout=10)
+                    receipt = {'ok': True, 'trackId': 'desktop-' + mode}
+                    if mode == 'upload-present':
+                        receipt['alreadyPresent'] = True
+                    else:
+                        receipt['file_hash'] = '0' * 64 if mode == 'upload-bad-hash' else actual
+                    self.respond(200, json.dumps(receipt).encode(), Content_Type='application/json',
+                                 Set_Cookie='upload_fixture_cookie=unexpected; Path=/')
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
         yield f'http://127.0.0.1:{server.server_port}', len(payload), digest
     finally:
+        slow_upload_reply.set()
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)

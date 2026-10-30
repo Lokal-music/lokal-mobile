@@ -623,8 +623,7 @@ final class LokalTransferJournal: @unchecked Sendable {
           if code == SQLITE_DONE { break }
           guard code == SQLITE_ROW else { throw LokalTransferError.database(code) }
           let (job, oldBytes) = try decoded(query)
-          guard job.direction == .download,
-                job.identity.desktopID == scope.desktopID,
+          guard job.identity.desktopID == scope.desktopID,
                 job.identity.origin == scope.origin,
                 job.identity.pairingID == scope.pairingID else { continue }
           if job.phase == .importing {

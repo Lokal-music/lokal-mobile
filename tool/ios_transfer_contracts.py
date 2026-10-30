@@ -36,6 +36,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--swiftc', default=shutil.which('swiftc'))
     parser.add_argument('--check-ios-sdks', action='store_true')
+    parser.add_argument('--preserve-binary', type=pathlib.Path,
+                        help='Copy the compiled host contract executable for failure diagnosis.')
     parser.add_argument('--check-flutter-bridge', action='store_true',
                         help='Also type-check the real Flutter/UIKit bridge in both iOS SDKs.')
     parser.add_argument('--sqlite-include', type=pathlib.Path)
@@ -106,6 +108,10 @@ def main() -> None:
                         str(ROOT / 'ios/Transfers/Tests/TrackedLibraryContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/main.swift'),
                         '-o', str(binary)], check=True, timeout=180)
+        if args.preserve_binary:
+            args.preserve_binary.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(binary, args.preserve_binary)
+            print(f'Preserved host contract binary: {args.preserve_binary}', flush=True)
         for round_index in range(args.repeat_native):
             with serve_fixture() as (origin, length, checksum):
                 subprocess.run([str(binary), '--network-fixture', origin, str(length), checksum],

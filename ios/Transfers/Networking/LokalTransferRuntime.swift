@@ -90,8 +90,10 @@ struct LokalTransferImportCandidatePage: Encodable, Sendable {
 /// One serial native owner survives Flutter lifecycle changes. Networking can
 /// finish before Flutter starts; native events are committed before the system
 /// background completion is acknowledged. Import remains an application task.
-final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
   private struct Original: Hashable {
+    let direction: String
+    let desktopUserID: String?
     let desktopID: String
     let origin: String
     let pairingID: String?
@@ -99,9 +101,17 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   }
 
   private func original(_ job: LokalTransferJob) throws -> Original {
-    Original(desktopID: job.identity.desktopID,
+    let recording: String
+    if job.direction == .upload {
+      guard let song = job.identity.localSongID, let hash = job.expectedSHA256, let bytes = job.expectedBytes else {
+        throw LokalTransferError.invalidRecord
+      }
+      recording = "song:" + song + ":" + hash + ":" + String(bytes)
+    } else { recording = job.identity.sourceID }
+    return Original(direction: job.direction.rawValue, desktopUserID: job.identity.desktopUserID,
+      desktopID: job.identity.desktopID,
       origin: try LokalTransferRequest.originKey(job.identity.origin),
-      pairingID: job.identity.pairingID, sourceID: job.identity.sourceID)
+      pairingID: job.identity.pairingID, sourceID: recording)
   }
 
   private let queue = DispatchQueue(label: "app.lokal.mobile.transfers", qos: .utility)
@@ -121,6 +131,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   // retired. Track their callbacks until the native unlink barrier drains.
   private var staleScopeTasks: [Int: LokalTransferScope] = [:]
   private var progress: [String: LokalTransferProgress] = [:]
+  private var uploadResponses: [Int: Data] = [:]
+  private var preparingUploads: [String: LokalTransferJob] = [:]
   private var reconciled = false
   private var persistenceFailed = false {
     didSet { if persistenceFailed { importOwnership.revokeAll() } }
@@ -548,14 +560,106 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     }
   }
 
+  /// Native-only admission: caller supplies already-authorized source access
+  /// and consent captured before dispatch. A nil source recovers an existing
+  /// verified private snapshot; it can never manufacture bytes or consent.
+  /// Only queued never-started intent can resume. Ambiguous POSTs cannot enter
+  /// this path under a new revision or a fresh UUID for the same recording.
+  func enqueueUpload(_ requested: LokalTransferJob, source: Int32? = nil,
+                     submission: LokalTransferImportOwnership.SubmissionTicket,
+                     reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
+    let owned = source.map { fcntl($0, F_DUPFD_CLOEXEC, 0) } ?? -1
+    if source != nil && owned < 0 {
+      reply(.failure(LokalTransferError.unsafeFile)); return
+    }
+    queue.async {
+      do {
+        try self.validateUploadAdmission(requested, submission: submission)
+        if let existing = self.jobs[requested.id], [.transferring, .complete].contains(existing.phase) {
+          if owned >= 0 { close(owned) }
+          reply(.success(self.summaryValue())); return
+        }
+        guard self.tasks.count + self.preparingUploads.count < 2,
+              self.preparingUploads[requested.id] == nil else { throw LokalTransferError.limitExceeded }
+        self.preparingUploads[requested.id] = requested
+        self.fileQueue.async {
+          let prepared: Result<URL, Error> = Result {
+            defer { if owned >= 0 { close(owned) } }
+            _ = try self.files.stageUpload(from: owned, for: requested) {
+              try self.importOwnership.validateSubmission(submission)
+            }
+            return try self.files.uploadURL(requested) {
+              try self.importOwnership.validateSubmission(submission)
+            }
+          }
+          self.queue.async {
+            defer { self.preparingUploads.removeValue(forKey: requested.id); self.pump() }
+            do {
+              let body = try prepared.get()
+              try self.validateUploadAdmission(requested, submission: submission)
+              guard self.tasks.count < 2, let authorization = try self.credentials() else {
+                throw LokalTransferError.invalidTransition
+              }
+              let request = try authorization.uploadRequest(for: requested)
+              try self.importOwnership.validateSubmission(submission)
+              if self.jobs[requested.id] == nil {
+                do { try self.journal.create([requested]) }
+                catch { self.persistenceFailed = true; self.notify(); throw error }
+                self.jobs[requested.id] = requested; self.order.append(requested.id); self.generation += 1
+              }
+              guard let current = self.jobs[requested.id], current.phase == .queued else {
+                throw LokalTransferError.invalidTransition
+              }
+              let task = self.session.uploadTask(with: request, fromFile: body)
+              task.taskDescription = current.taskBinding
+              do {
+                try self.importOwnership.validateSubmission(submission)
+                _ = try self.update(current) { try $0.bind(taskID: task.taskIdentifier, nowMs: Self.now()) }
+                self.tasks[task.taskIdentifier] = task
+                try self.importOwnership.validateSubmission(submission)
+                task.resume()
+              } catch {
+                self.tasks[task.taskIdentifier] = task
+                self.staleScopeTasks[task.taskIdentifier] = self.scope(current)
+                task.cancel(); throw error
+              }
+              self.notify()
+              reply(.success(self.summaryValue()))
+            } catch { reply(.failure(error)) }
+          }
+        }
+      } catch {
+        if owned >= 0 { close(owned) }
+        reply(.failure(error))
+      }
+    }
+  }
+
+  private func validateUploadAdmission(_ job: LokalTransferJob,
+                    submission: LokalTransferImportOwnership.SubmissionTicket) throws {
+    guard reconciled, !shuttingDown, !persistenceFailed,
+          job.phase == .queued, job.revision == 1, pauses[scope(job)] == nil,
+          let authorization = try credentials() else { throw LokalTransferError.invalidTransition }
+    try importOwnership.validateSubmission(submission)
+    _ = try authorization.uploadRequest(for: job)
+    if let existing = jobs[job.id] {
+      guard try existing.intentFingerprint() == job.intentFingerprint() else { throw LokalTransferError.duplicateJob }
+      guard [.queued, .transferring, .complete].contains(existing.phase) else { throw LokalTransferError.invalidTransition }
+    }
+    let key = try original(job)
+    for other in Array(jobs.values) + Array(preparingUploads.values) where other.id != job.id {
+      guard try original(other) != key else { throw LokalTransferError.duplicateJob }
+    }
+  }
+
   private func pump() {
-    guard reconciled, !shuttingDown, !persistenceFailed, tasks.count < 2 else { return }
+    guard reconciled, !shuttingDown, !persistenceFailed, tasks.count + preparingUploads.count < 2 else { return }
     let authorization: LokalTransferAuthorization?
     do { authorization = try credentials() }
     catch { return }
     guard let authorization else { return }
     for id in order {
-      guard tasks.count < 2 else { return }
+      guard tasks.count + preparingUploads.count < 2 else { return }
       guard let job = jobs[id], job.direction == .download,
             job.phase == .queued || job.phase == .waiting, pauses[scope(job)] == nil else { continue }
       let request: URLRequest
@@ -588,17 +692,17 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       pauses = Dictionary(uniqueKeysWithValues: durable.pauses.map { ($0.scope, $0.reason) })
       tasks.removeAll()
       let actualIDs = Set(actual.map(\.taskIdentifier))
+      uploadResponses = uploadResponses.filter { actualIDs.contains($0.key) }
       staleScopeTasks = staleScopeTasks.filter { actualIDs.contains($0.key) }
       progress = progress.filter { id, value in
         jobs[id]?.revision == value.revision && jobs[id]?.phase == .transferring
       }
       for task in actual {
         guard let binding = LokalTransferTaskBinding(task.taskDescription), let job = jobs[binding.id],
-              job.direction == .download,
               job.revision == binding.revision, job.taskID == task.taskIdentifier,
-              [.transferring, .received].contains(job.phase), task.originalRequest?.url == (try LokalTransferRequest.downloadURL(job)) else {
+              [.transferring, .received].contains(job.phase), try taskMatches(job, task: task) else {
           if let binding = LokalTransferTaskBinding(task.taskDescription),
-             let job = jobs[binding.id], job.direction == .download {
+             let job = jobs[binding.id] {
             staleScopeTasks[task.taskIdentifier] = scope(job)
           }
           task.cancel(); continue
@@ -606,7 +710,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         tasks[task.taskIdentifier] = task
       }
       for id in order {
-        guard let job = jobs[id], job.direction == .download,
+        guard let job = jobs[id],
               [.transferring, .received].contains(job.phase), let taskID = job.taskID,
               tasks[taskID] == nil else { continue }
         // Without a live task/final acknowledgement, retain the owned bytes
@@ -629,6 +733,54 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       failNetworkRetirements(error)
       notify()
     }
+  }
+
+  private func taskMatches(_ job: LokalTransferJob, task: URLSessionTask) throws -> Bool {
+    if job.direction == .download {
+      let expected = try LokalTransferRequest.downloadURL(job)
+      return task is URLSessionDownloadTask && task.originalRequest?.url == expected
+    }
+    guard task is URLSessionUploadTask, let authorization = try? credentials(),
+          let expected = try? authorization.uploadRequest(for: job) else { return false }
+    return task.originalRequest?.url == expected.url && task.originalRequest?.httpMethod == "POST"
+      && task.originalRequest?.value(forHTTPHeaderField: "x-remote-token") == expected.value(forHTTPHeaderField: "x-remote-token")
+      && task.originalRequest?.value(forHTTPHeaderField: "x-api-key") == expected.value(forHTTPHeaderField: "x-api-key")
+      && task.originalRequest?.value(forHTTPHeaderField: "x-link-metadata") == expected.value(forHTTPHeaderField: "x-link-metadata")
+  }
+
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
+                  didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+    guard let job = current(dataTask), job.direction == .upload,
+          let response = response as? HTTPURLResponse else { completionHandler(.cancel); return }
+    do {
+      try LokalTransferRequest.checkUploadResponse(response, job: job)
+      uploadResponses[dataTask.taskIdentifier] = Data()
+      completionHandler(.allow)
+    } catch {
+      failed(dataTask, reason: [401, 403].contains(response.statusCode) ? .unauthorized : .invalidResponse, retryable: false)
+      completionHandler(.cancel)
+    }
+  }
+
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    guard let job = current(dataTask), job.direction == .upload else { return }
+    guard var body = uploadResponses[dataTask.taskIdentifier],
+          data.count <= LokalTransferRequest.maximumUploadResponseBytes - body.count else {
+      failed(dataTask, reason: .invalidResponse, retryable: false); dataTask.cancel(); return
+    }
+    body.append(data)
+    uploadResponses[dataTask.taskIdentifier] = body
+  }
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+                  totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+    guard let job = current(task), job.direction == .upload, let expected = job.expectedBytes else { return }
+    guard totalBytesSent >= 0, totalBytesSent <= expected else {
+      failed(task, reason: .checksum, retryable: false); task.cancel(); return
+    }
+    progress[job.id] = LokalTransferProgress(id: job.id, revision: job.revision, bytes: totalBytesSent,
+      expectedBytes: expected, waitingForConnectivity: false)
+    notify()
   }
 
   private func current(_ task: URLSessionTask) -> LokalTransferJob? {
@@ -674,7 +826,20 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   }
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-    if let binding = LokalTransferTaskBinding(task.taskDescription), let job = jobs[binding.id],
+    if let job = current(task), job.direction == .upload {
+      do {
+        if let error { throw error }
+        guard try taskMatches(job, task: task),
+              let response = task.response as? HTTPURLResponse,
+              let body = uploadResponses[task.taskIdentifier] else { throw LokalTransferError.invalidRecord }
+        let originalID = try LokalTransferRequest.uploadOriginalID(body, response: response, job: job)
+        _ = try update(job) { try $0.acknowledgeUpload(taskID: task.taskIdentifier, originalID: originalID, nowMs: Self.now()) }
+      } catch {
+        // The peer may have committed before a response was lost. Retain the
+        // snapshot and pause. Neither retry() nor pump() may POST it again.
+        failed(task, reason: error is URLError ? .network : .invalidResponse, retryable: true)
+      }
+    } else if let binding = LokalTransferTaskBinding(task.taskDescription), let job = jobs[binding.id],
        job.revision == binding.revision, job.taskID == task.taskIdentifier, job.phase == .received {
       do {
         _ = try update(job) {
@@ -688,6 +853,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       else if error == nil { failed(task, reason: .invalidResponse, retryable: false) }
       else { failed(task, reason: .network, retryable: true) }
     }
+    uploadResponses.removeValue(forKey: task.taskIdentifier)
     tasks.removeValue(forKey: task.taskIdentifier)
     staleScopeTasks.removeValue(forKey: task.taskIdentifier)
     for index in pendingNetworkRetirements.indices {
@@ -716,9 +882,11 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
 
   func urlSession(_ session: URLSession, taskIsWaitingForConnectivity task: URLSessionTask) {
     guard let job = current(task) else { return }
-    progress[job.id] = LokalTransferProgress(id: job.id, revision: job.revision, bytes: max(0, task.countOfBytesReceived),
-      expectedBytes: task.countOfBytesExpectedToReceive > 0 ? task.countOfBytesExpectedToReceive : nil,
-      waitingForConnectivity: true)
+    let bytes = job.direction == .upload ? task.countOfBytesSent : task.countOfBytesReceived
+    let expected = job.direction == .upload ? job.expectedBytes
+      : (task.countOfBytesExpectedToReceive > 0 ? task.countOfBytesExpectedToReceive : nil)
+    progress[job.id] = LokalTransferProgress(id: job.id, revision: job.revision, bytes: max(0, bytes),
+      expectedBytes: expected, waitingForConnectivity: true)
     notify()
   }
 
@@ -776,12 +944,15 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     queue.async {
       do {
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
-        guard let job = self.jobs[id], job.direction == .download else { throw LokalTransferError.missingJob }
+        guard let job = self.jobs[id] else { throw LokalTransferError.missingJob }
         guard job.revision == revision else { throw LokalTransferError.staleRevision }
         let cancelled = try self.update(job) { try $0.cancel(nowMs: Self.now()) }
-        if let taskID = job.taskID { self.tasks[taskID]?.cancel() }
+        if let taskID = job.taskID, let task = self.tasks[taskID] {
+          self.staleScopeTasks[taskID] = self.scope(job)
+          task.cancel()
+        }
         if self.progress[id]?.revision == revision { self.progress.removeValue(forKey: id) }
-        self.fileQueue.async { try? self.files.discard(job) }
+        if job.direction == .download { self.fileQueue.async { try? self.files.discard(job) } }
         reply(.success(cancelled))
       } catch { reply(.failure(error)) }
     }
@@ -1387,3 +1558,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     }
   }
 }
+
+
+#if !os(Linux)
+extension LokalTransferRuntime: URLSessionDataDelegate {}
+#endif
