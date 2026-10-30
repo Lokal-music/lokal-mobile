@@ -188,6 +188,8 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   let reopenedBatch = try LokalTransferJournal(container: batchRoot).snapshot()
   try require(reopenedBatch.jobs == batchAfter.jobs && reopenedBatch.pauses == batchAfter.pauses,
     "reopen retains cancelled identities and pause after process replacement")
+  try require(try batch.retireNetworkScope(scope, nowMs: 2001).isEmpty,
+    "repeated scoped retirement cannot increment an already cancelled job revision")
 
   // Exercise the real ephemeral URLSession delegate, not a fake task list.
   let liveRoot = root.appendingPathComponent("live")
@@ -229,6 +231,9 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   try require(recovered.pauses == retired.pauses &&
       (try awaitJob(runtime, id: slow.id, phase: [.cancelled])).revision == 2,
     "runtime recovery never resurrects cancelled network work")
+  try rejects("the same pairing cannot clear its retirement tombstone by reconnecting") {
+    let _: LokalTransferSummary = try native { runtime.resume(scope: scope, reply: $0) }
+  }
   print("Native scope retirement contracts passed: importing rollback, exact scope, durable journal, real URLSession callback drainage and recovery. Physical iOS suspension/Isar cleanup remain unqualified.")
 }
 
