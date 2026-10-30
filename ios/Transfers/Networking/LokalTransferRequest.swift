@@ -43,6 +43,43 @@ struct LokalTransferAuthorization: Sendable, CustomStringConvertible, CustomDebu
     if !apiKey.isEmpty { request.setValue(apiKey, forHTTPHeaderField: "x-api-key") }
     return request
   }
+  /// Pairing/account checks precede construction of any authenticated upload.
+  /// No caller path, bearer value or signed URL enters the durable job.
+  func uploadRequest(for job: LokalTransferJob) throws -> URLRequest {
+    try job.validate()
+    guard job.direction == .upload, pairingID != nil, job.identity.pairingID == pairingID,
+          job.identity.localSongID != nil, job.identity.desktopID == desktopID,
+          job.identity.desktopUserID == desktopUserID,
+          // Retain the atomic credential record's exact scope spelling so a
+          // semantically equivalent URL cannot escape its retirement tombstone.
+          job.identity.origin == origin,
+          let bytes = job.expectedBytes, bytes <= LokalTransferFiles.maximumUploadBytes,
+          let hash = job.expectedSHA256,
+          ["flac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "aiff", "aif", "alac", "ape", "wv",
+            "dsf", "dff", "webm"].contains(job.metadata.fileExtension) else { throw LokalTransferError.invalidRecord }
+    var metadata = ["title": job.metadata.title, "artist": job.metadata.artist,
+      "extension": job.metadata.fileExtension, "sha256": hash]
+    if let album = job.metadata.album { metadata["album"] = album }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let header = try encoder.encode(metadata).base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
+    guard header.utf8.count <= 8192,
+          header.utf8.count + token.utf8.count + apiKey.utf8.count <= 12 * 1024 else {
+      throw LokalTransferError.limitExceeded
+    }
+    var request = URLRequest(url: try LokalTransferRequest.uploadURL(job),
+      cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+    request.httpMethod = "POST"
+    request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+    request.setValue(String(bytes), forHTTPHeaderField: "Content-Length")
+    request.setValue(header, forHTTPHeaderField: "x-link-metadata")
+    request.setValue(token, forHTTPHeaderField: "x-remote-token")
+    if !apiKey.isEmpty { request.setValue(apiKey, forHTTPHeaderField: "x-api-key") }
+    return request
+  }
+
 }
 
 struct LokalTransferTaskBinding: Equatable, Sendable {
@@ -83,6 +120,47 @@ enum LokalTransferRequest {
     parts.percentEncodedPath = "/api/remote/files/" + source
     guard let url = parts.url else { throw LokalTransferError.invalidRecord }
     return url
+  }
+
+  static let maximumUploadResponseBytes = 16 * 1024
+
+  static func uploadURL(_ job: LokalTransferJob) throws -> URL {
+    try job.validate()
+    guard job.direction == .upload, var parts = URLComponents(string: job.identity.origin) else {
+      throw LokalTransferError.invalidRecord
+    }
+    parts.percentEncodedPath = "/api/remote/files"
+    guard let url = parts.url else { throw LokalTransferError.invalidRecord }
+    return url
+  }
+
+  static func checkUploadResponse(_ response: HTTPURLResponse, job: LokalTransferJob) throws {
+    guard response.url == (try uploadURL(job)), [200, 201].contains(response.statusCode),
+          response.value(forHTTPHeaderField: "Content-Type")?.split(separator: ";").first?
+            .trimmingCharacters(in: .whitespaces).lowercased() == "application/json",
+          response.expectedContentLength < 0 || response.expectedContentLength <= Int64(maximumUploadResponseBytes) else {
+      throw LokalTransferError.invalidRecord
+    }
+  }
+
+  static func uploadOriginalID(_ body: Data, response: HTTPURLResponse, job: LokalTransferJob) throws -> String {
+    try checkUploadResponse(response, job: job)
+    struct Receipt: Decodable {
+      let ok: Bool
+      let trackId: String
+      let file_hash: String?
+      let alreadyPresent: Bool?
+    }
+    guard !body.isEmpty, body.count <= maximumUploadResponseBytes else { throw LokalTransferError.limitExceeded }
+    let receipt = try JSONDecoder().decode(Receipt.self, from: body)
+    guard receipt.ok, !receipt.trackId.isEmpty, receipt.trackId.utf8.count <= 512,
+          !receipt.trackId.contains("://"), !receipt.trackId.contains("?"), !receipt.trackId.contains("#"),
+          !receipt.trackId.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+          receipt.file_hash != nil || receipt.alreadyPresent == true else { throw LokalTransferError.invalidRecord }
+    if let hash = receipt.file_hash {
+      guard hash == job.expectedSHA256 else { throw LokalTransferError.checksumMismatch }
+    }
+    return receipt.trackId
   }
 
   /// Actual retained length is recorded even for a chunked response. Encoded

@@ -39,12 +39,16 @@ private func state(_ origin: String) throws -> [String: Any] {
 private func awaitJob(_ runtime: LokalTransferRuntime, id: String,
                       phase: Set<LokalTransferPhase>) throws -> LokalTransferJob {
   let deadline = Date().addingTimeInterval(10)
+  var lastState = "missing"
   while Date() < deadline {
     let jobs: [LokalTransferJob] = try native { runtime.page(offset: 0, limit: 100, reply: $0) }
-    if let job = jobs.first(where: { $0.id == id }), phase.contains(job.phase) { return job }
+    if let job = jobs.first(where: { $0.id == id }) {
+      lastState = job.direction.rawValue + ":" + job.phase.rawValue + ":" + (job.lastFailure?.rawValue ?? "none")
+      if phase.contains(job.phase) { return job }
+    }
     Thread.sleep(forTimeInterval: 0.02)
   }
-  throw TestFailure.failed("Native request did not reach expected phase")
+  throw TestFailure.failed("Native request did not reach expected phase; last state " + lastState)
 }
 
 private final class HostFixture: @unchecked Sendable {
@@ -133,8 +137,8 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   try rejects("retirement rejects unknown nested credential fields") {
     _ = try LokalTransferProtocol.scopeRetirement(JSONSerialization.data(withJSONObject: envelope))
   }
-  func request(_ source: String, desktop: String = "fixture-pc") throws -> LokalTransferJob {
-    try LokalTransferJob(direction: .download,
+  func request(_ source: String, desktop: String = "fixture-pc", direction: LokalTransferDirection = .download) throws -> LokalTransferJob {
+    try LokalTransferJob(direction: direction,
       identity: LokalTransferIdentity(desktopID: desktop, sourceID: source,
         localSongID: nil, origin: origin),
       metadata: LokalTransferMetadata(title: source, artist: "Retirement fixture",
@@ -148,7 +152,8 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   try manager.createDirectory(at: rollbackRoot, withIntermediateDirectories: false)
   let rollback = try LokalTransferJournal(container: rollbackRoot)
   let importing = try request("importing"), queued = try request("queued")
-  try rollback.create([importing, queued])
+  let uploading = try request("uploading", direction: .upload)
+  try rollback.create([uploading, importing, queued])
   _ = try rollback.update(id: importing.id, revision: 1) {
     try $0.bind(taskID: 61, nowMs: 1010)
   }
@@ -181,7 +186,7 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   let batchRoot = root.appendingPathComponent("batch")
   try manager.createDirectory(at: batchRoot, withIntermediateDirectories: false)
   let batch = try LokalTransferJournal(container: batchRoot)
-  let a = try request("a"), b = try request("b"), foreign = try request("foreign", desktop: "other-pc")
+  let a = try request("a"), b = try request("b", direction: .upload), foreign = try request("foreign", desktop: "other-pc")
   try batch.create([a, b, foreign])
   let batchBefore = try batch.snapshot()
   let changes = try batch.retireNetworkScope(scope, nowMs: 2000)
@@ -314,6 +319,7 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
 
 func runNetworkContracts(origin: String, length: Int64, checksum: String) throws {
   try runHostContracts()
+  try runUploadRuntimeContracts(origin: origin, length: length, checksum: checksum)
   try runNetworkRetirementContracts(origin: origin, length: length, checksum: checksum)
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
@@ -1166,4 +1172,241 @@ private func runTrackedRuntimeContracts(origin: String, length: Int64, checksum:
     }
   }
   print("Tracked runtime contracts passed: real HTTP WAV publication, importing persistence, exact Song binding, ownership/pairing refusal, blocked-copy cancellation/drainage, engine handoff, app-attested completion, actual private staging drainage, read-only complete recovery and preservation of deleted/edited public copies. Actual Isar completion/product adapter remains disabled.")
+}
+
+
+#if os(Linux)
+/// Corelibs 6.0.3 _ProtocolClient.didLoad force-unwraps a data-task cast even
+/// for downloads if the session delegate conforms to DataDelegate. Keep the
+/// host's upload-only fixture separate. This changes only conformance, never
+/// runtime methods/storage/network behavior. Apple uses the combined owner.
+private final class PortableNativeUploadRuntime: LokalTransferRuntime, URLSessionDataDelegate, @unchecked Sendable {}
+#else
+private typealias PortableNativeUploadRuntime = LokalTransferRuntime
+#endif
+
+/// Actual HTTP upload tasks use the real owned-file/journal/delegate path.
+/// The synthetic peer models the desktop wire shape, not its durability or
+/// idempotency. Apple daemon/task replay remains separately unqualified.
+private func runUploadRuntimeContracts(origin: String, length: Int64, checksum: String) throws {
+  func trace(_ stage: String) {
+    FileHandle.standardError.write(Data(("Native upload stage: " + stage + "\n").utf8))
+  }
+  trace("startup")
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-native-upload-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: false)
+  defer { try? manager.removeItem(at: root) }
+  let pairing = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token", pairingID: pairing, desktopUserID: "fixture-account")
+  let credentials = ImportAuthorizationFixture(authorization)
+  let ownership = LokalTransferImportOwnership()
+  let runtime = try PortableNativeUploadRuntime(container: root, importOwnership: ownership,
+    credentials: { try credentials.read() })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+  }
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+  var ticket = try ownership.captureSubmission(owner)
+  let bytes: Data = try native { reply in
+    URLSession.shared.dataTask(with: URL(string: origin + "/__upload_payload")!) { data, _, error in
+      if let error { reply(.failure(error)) }
+      else if let data { reply(.success(data)) }
+      else { reply(.failure(TestFailure.failed("No upload fixture bytes"))) }
+    }.resume()
+  }
+  try require(bytes.count == length, "actual upload fixture length")
+  let sourcePath = root.appendingPathComponent("authorized-source.wav")
+  try bytes.write(to: sourcePath)
+  let source = open(sourcePath.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+  guard source >= 0 else { throw TestFailure.failed("open authorized upload fixture") }
+  defer { close(source) }
+  let journal = try LokalTransferJournal(container: root)
+  let files = try LokalTransferFiles(container: root)
+  func job(_ mode: String, id: String = UUID().uuidString.lowercased(), sourceID: String? = nil,
+           user: String = "fixture-account", pairingID: String? = nil, localID: String? = nil) throws -> LokalTransferJob {
+    try LokalTransferJob(id: id, direction: .upload,
+      identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: sourceID ?? mode, localSongID: localID ?? sourceID ?? mode,
+        origin: origin, pairingID: pairingID ?? pairing, desktopUserID: user),
+      metadata: LokalTransferMetadata(title: mode, artist: "Native fixture — Café", album: "Album", fileExtension: "wav"),
+      nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  }
+  func counts() throws -> [String: Int] { (try state(origin))["uploadRequests"] as! [String: Int] }
+  trace("admission refusal")
+  let beforeRefusal = try counts()
+  for refused in [try job("upload-wrong-account", user: "different-account"),
+                  try job("upload-wrong-pairing", pairingID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")] {
+    try rejects("upload admission checks exact account and pairing before staging") {
+      let _: LokalTransferSummary = try native { runtime.enqueueUpload(refused, source: source, submission: ticket, reply: $0) }
+    }
+  }
+  let missing = try job("upload-no-source")
+  try rejects("missing source and owned body cannot persist runnable upload") {
+    let _: LokalTransferSummary = try native { runtime.enqueueUpload(missing, submission: ticket, reply: $0) }
+  }
+  try require(journal.snapshot().jobs.isEmpty && counts() == beforeRefusal, "refused uploads perform no HTTP or journal admission")
+
+  trace("receipt codec")
+  let blocked = try job("upload-blocked-consent")
+  let entered = DispatchSemaphore(value: 0), released = DispatchSemaphore(value: 0)
+  credentials.blockNextRead(entered: entered, resume: released)
+  let refused = NativeResult<LokalTransferSummary>(), refusalDone = DispatchSemaphore(value: 0)
+  runtime.enqueueUpload(blocked, source: source, submission: ticket) { refused.set($0); refusalDone.signal() }
+  try require(entered.wait(timeout: .now() + 10) == .success, "upload admission reaches actual queued credential read")
+  try ownership.retireSubmissions(owner)
+  released.signal()
+  try require(refusalDone.wait(timeout: .now() + 10) == .success, "retired blocked upload admission returns")
+  try rejects("consent retirement wins while the runtime authorization queue is blocked") { _ = try refused.get() }
+  ticket = try ownership.captureSubmission(owner)
+  try require(journal.snapshot().jobs.isEmpty && counts() == beforeRefusal,
+    "blocked stale admission stages no runnable intent or HTTP")
+
+  let codec = try job("upload-codec")
+  let variant = try LokalTransferJob(direction: .upload,
+    identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: "origin-variant", localSongID: "42",
+      origin: origin + "/", pairingID: pairing, desktopUserID: "fixture-account"),
+    metadata: codec.metadata, nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  try rejects("upload cannot escape exact retirement scope using an equivalent origin spelling") {
+    _ = try authorization.uploadRequest(for: variant)
+  }
+  let firstHeader = try authorization.uploadRequest(for: codec).value(forHTTPHeaderField: "x-link-metadata")
+  let secondHeader = try authorization.uploadRequest(for: codec).value(forHTTPHeaderField: "x-link-metadata")
+  try require(firstHeader == secondHeader && firstHeader != nil,
+    "upload authorization reconstructs deterministic metadata across callbacks/relaunch")
+  let response = HTTPURLResponse(url: try LokalTransferRequest.uploadURL(codec), statusCode: 200,
+    httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+  for receipt in ["{\"ok\":1,\"trackId\":\"id\",\"alreadyPresent\":true}",
+                  "{\"ok\":true,\"trackId\":\"https://untrusted/?token=x\",\"alreadyPresent\":true}",
+                  "{\"ok\":true,\"trackId\":\"id\"}", "{\"ok\":false,\"trackId\":\"id\",\"alreadyPresent\":true}"] {
+    try rejects("malformed or insufficient peer receipt cannot persist an original ID") {
+      _ = try LokalTransferRequest.uploadOriginalID(Data(receipt.utf8), response: response, job: codec)
+    }
+  }
+
+  trace("positive HTTP")
+  let successful = try job("upload-ok")
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(successful, source: source, submission: ticket, reply: $0) }
+  let complete = try awaitJob(runtime, id: successful.id, phase: [.complete])
+  try require(complete.resultOriginalID == "desktop-upload-ok", "actual peer original ID is durable")
+  trace("positive receipt persisted")
+  let beforeReplay = try counts()
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(successful, submission: ticket, reply: $0) }
+  try require(try counts() == beforeReplay, "lost admission reply never sends a second upload")
+  try rejects("fresh UUID cannot bypass a stored original upload") {
+    let duplicate = try job("upload-new-uuid", sourceID: "another-caller-source", localID: successful.identity.localSongID)
+    let _: LokalTransferSummary = try native { runtime.enqueueUpload(duplicate, source: source, submission: ticket, reply: $0) }
+  }
+  try require(try Data(contentsOf: sourcePath) == bytes && Data(contentsOf: files.uploadURL(successful)) == bytes,
+    "successful network upload preserves both original and private snapshot")
+
+  trace("queued recovery")
+  let queued = try job("upload-queued")
+  _ = try files.stageUpload(from: source, for: queued)
+  try journal.create([queued]) // Process stopped after durable intent, before task creation.
+  let beforeRecovery = try counts()
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  ticket = try ownership.captureSubmission(owner)
+  try require(try counts() == beforeRecovery, "recovered queued upload requires explicit current submission consent")
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(queued, submission: ticket, reply: $0) }
+  _ = try awaitJob(runtime, id: queued.id, phase: [.complete])
+
+  let noCallback = try job("upload-missing-callback")
+  _ = try files.stageUpload(from: source, for: noCallback)
+  try journal.create([noCallback])
+  _ = try journal.update(id: noCallback.id, revision: 1) { try $0.bind(taskID: 999999, nowMs: 1010) }
+  let beforeMissingTask = try counts()
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  ticket = try ownership.captureSubmission(owner)
+  let uncertain = try journal.snapshot().jobs.first { $0.id == noCallback.id }
+  try require(uncertain?.phase == .interrupted && uncertain?.resultOriginalID == nil,
+    "missing upload task/receipt becomes uncertain, never complete")
+  try rejects("missing callback cannot silently restart a persisted POST") {
+    let _: LokalTransferSummary = try native { runtime.enqueueUpload(noCallback, submission: ticket, reply: $0) }
+  }
+  try require(try counts() == beforeMissingTask && Data(contentsOf: files.uploadURL(noCallback)) == bytes,
+    "missing-task recovery retains frozen body and sends no POST")
+
+  for mode in ["upload-present", "upload-lost", "upload-bad-hash", "upload-malformed",
+               "upload-large", "upload-large-chunked", "upload-html", "upload-redirect"] {
+    trace("case " + mode)
+    let request = try job(mode)
+    let _: LokalTransferSummary = try native { runtime.enqueueUpload(request, source: source, submission: ticket, reply: $0) }
+    let result = try awaitJob(runtime, id: request.id, phase: [.complete, .failed, .interrupted])
+    if mode == "upload-present" {
+      try require(result.phase == .complete && result.resultOriginalID == "desktop-upload-present",
+        "existing-original receipt accepted without inventing a hash")
+    } else {
+      try require(result.phase != .complete && result.resultOriginalID == nil,
+        "uncertain or invalid upload response cannot acknowledge completion")
+      let observed = try counts()
+      try rejects("failed/ambiguous upload cannot replay through admission") {
+        let _: LokalTransferSummary = try native { runtime.enqueueUpload(request, submission: ticket, reply: $0) }
+      }
+      try rejects("ordinary Retry cannot blindly POST an ambiguous upload") {
+        let _: LokalTransferJob = try native { runtime.retry(id: request.id, revision: 1, reply: $0) }
+      }
+      let _: LokalTransferSummary = try native { runtime.recover($0) }
+      ticket = try ownership.captureSubmission(owner)
+      try require(try counts() == observed, "recovery and refused retries perform no further POST")
+      try require(try Data(contentsOf: files.uploadURL(request)) == bytes, "ambiguous receipt retains exact body for reconciliation")
+    }
+  }
+  let observed = try state(origin)
+  try require(observed["uploadMetadataValid"] as? Bool == true && observed["cookiesSeen"] as? Bool == false,
+    "actual raw POST metadata, Unicode, content type, hash and every byte match; no cookie propagation")
+  try require(observed["uploadLeakHits"] as? Int == 0, "307 does not redirect upload data or bearer")
+
+  let unauthorized = try job("upload-unauthorized")
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(unauthorized, source: source, submission: ticket, reply: $0) }
+  _ = try awaitJob(runtime, id: unauthorized.id, phase: [.failed])
+  let unauthorizedSummary: LokalTransferSummary = try native { runtime.summary($0) }
+  try require(unauthorizedSummary.pauses.contains { $0.reason == .unauthorized },
+    "401 upload persists a pairing pause")
+  let scope = LokalTransferScope(desktopID: "fixture-pc", origin: origin, pairingID: pairing)
+  let pausedCounts = try counts()
+  let paused = try job("upload-paused")
+  try rejects("pairing pause blocks subsequent upload admission") {
+    let _: LokalTransferSummary = try native { runtime.enqueueUpload(paused, source: source, submission: ticket, reply: $0) }
+  }
+  let _: LokalTransferSummary = try native { runtime.resume(scope: scope, reply: $0) }
+  try require(try counts() == pausedCounts, "explicit reconnect never replays the failed upload")
+
+  trace("retired consent")
+  let stale = try job("upload-stale-consent")
+  try ownership.retireSubmissions(owner)
+  try rejects("retired submission cannot snapshot or queue a new upload") {
+    let _: LokalTransferSummary = try native { runtime.enqueueUpload(stale, source: source, submission: ticket, reply: $0) }
+  }
+  ticket = try ownership.captureSubmission(owner)
+  trace("cancel while peer response held")
+  let slow = try job("upload-slow")
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(slow, source: source, submission: ticket, reply: $0) }
+  let deadline = Date().addingTimeInterval(10)
+  while try counts()["upload-slow"] == nil {
+    guard Date() < deadline else { throw TestFailure.failed("peer did not receive slow upload") }
+    Thread.sleep(forTimeInterval: 0.01)
+  }
+  let _: LokalTransferJob = try native { runtime.cancel(id: slow.id, revision: 1, reply: $0) }
+  trace("retire scope")
+  let retirement = try ownership.beginScopeRetirement(owner, scope: scope)
+  let _: LokalTransferSummary = try native { runtime.retireNetworkScope(scope, ticket: retirement, reply: $0) }
+  let retired = try journal.snapshot().jobs.first { $0.id == slow.id }
+  try require(retired?.phase == .cancelled && retired?.resultOriginalID == nil,
+    "cancelled/retired upload cannot accept the late peer receipt")
+  let _: Data = try native { reply in
+    URLSession.shared.dataTask(with: URL(string: origin + "/__release_upload")!) { data, _, error in
+      if let error { reply(.failure(error)) } else { reply(.success(data ?? Data())) }
+    }.resume()
+  }
+  let afterRetirement = try counts()
+  try rejects("ordinary reconnect cannot revive retired upload intent") {
+    let _: LokalTransferSummary = try native { runtime.resume(scope: scope, reply: $0) }
+  }
+  try require(try counts() == afterRetirement && Data(contentsOf: sourcePath) == bytes,
+    "retirement preserves original and never issues another POST")
+  print("Native upload runtime contracts passed: actual file POST/Unicode/hash, durable original ID, lost-reply idempotence, explicit queued recovery, exact pairing/account/consent refusal, bounded/invalid/redirect/lost responses, no app retry after ambiguity, private body preservation and cancellation/retirement drainage. Not desktop idempotency or Apple daemon qualification.")
 }

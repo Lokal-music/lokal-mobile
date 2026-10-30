@@ -1393,9 +1393,9 @@ leave a partial snapshot and prove it cannot be acknowledged or silently sent
 on reopening. Recovery/retirement of these unaccepted parts still needs queue
 integration; they are not treated as completed uploads.
 
-This is the file boundary, not a native upload feature. Runtime enqueue/pump,
-URLSession task/response reconciliation, exact pairing authorization, ambiguous
-POST recovery, terminal cleanup and user queue controls remain to be connected.
+This is the file boundary, not a native upload feature. The native-only admission/task/receipt path is implemented in the continuation
+below. App source authorization, ambiguous POST matching, terminal cleanup and
+user queue controls remain to be connected.
 The desktop `server/linkUpload.js` last changed at
 `0bb366877c119c76bfa3be5c5b06d8c4b0728cd5`; its hash lookup alone is not proof
 of a durable, concurrency-safe idempotency contract. Do not blindly retry a POST
@@ -1413,5 +1413,58 @@ flowchart LR
   F --> H[Drain tasks, then retire private body]
 ```
 
-The snapshot box has native host coverage. The surrounding upload admission,
-network, receipt and retirement path remains an integration requirement.
+Snapshot, native admission and network/receipt boxes have portable host coverage.
+App authorization/queue wiring, content matching, private-body retirement and
+Apple background delivery remain integration/qualification requirements.
+
+## Native upload runtime continuation
+
+The native-only `enqueueUpload` API now duplicates a caller's already-authorized
+source descriptor and requires a current submission ticket. It stages and hashes
+the private snapshot on the file worker, rechecks the exact desktop, account,
+pairing and atomic credential record's origin spelling, then persists both intent
+and task binding before resuming a file-backed URLSession POST. At most two tasks
+or preparations share the session capacity. No absolute caller path enters the
+journal or request. The app source-selection/Isar adapter is still required;
+this API is not exposed by the Flutter bridge and does not enable product uploads.
+
+The request uses the desktop originals endpoint's raw octet-stream and base64url
+metadata contract. Metadata headers are deterministic and bounded. Upload replies
+are retained up to16KiB, with strict JSON boolean/ID/integrity checks and exact
+endpoint/task/revision authorization. The current peer's verified `file_hash` or
+an explicit `alreadyPresent` receipt is required before storing the original ID.
+Redirects never forward the body or credentials. Cookies and credential caches
+remain disabled. Upload progress reports sent bytes and the frozen body size.
+
+A replay of the same live/completed frozen intent is read-only. A new UUID cannot
+bypass existing history for the same local recording, bytes, account and pairing.
+If a task or response disappears, the job becomes interrupted and retains its
+verified snapshot. Recovery, ordinary Retry and Reconnect issue no further audio
+POST for it. A never-started queued job requires a fresh submission ticket and
+its existing verified body before starting. Positive content matching and safe
+retry after an ambiguous POST remain work to finish; absence from a query alone
+must not be treated as permission to resend.
+
+The journal's atomic pairing-retirement transaction now includes uploads and
+downloads. A blocked importing download rolls back the entire mixed batch.
+Individual cancellation also records its still-draining task's scope, allowing
+subsequent Forget/Clear to wait for that callback. Cancellation prevents a late
+receipt from completing the retired revision; it cannot undo a remote commit.
+Private upload bodies remain retained until terminal/orphan cleanup is connected.
+
+Portable tests use real HTTP, files, the native journal and actual delegate
+callbacks. They cover successful/existing receipts, byte/hash/Unicode metadata,
+lost replies, queued and missing-task recovery, consent retirement while the
+credential queue is blocked, wrong account/pairing/origin, malformed or oversized
+fixed/chunked replies, wrong hashes, redirects, authentication pause and scoped
+cancellation/drainage. The synthetic endpoint models the wire contract, not the
+desktop database's concurrency, fsync or exactly-once semantics.
+
+Swift Corelibs Foundation6.0.3 has a host defect: `_ProtocolClient.didLoad` force
+unwraps a data-task cast for a download when the session delegate also conforms
+to DataDelegate. Linux contracts therefore use an upload-only runtime subclass
+that adds only protocol conformance and overrides no runtime methods. Download
+contracts use the base owner. Apple Foundation uses the combined session owner;
+its SDK checks, mixed-direction execution and actual background lifecycle remain
+pending. The test tool can preserve its executable with `--preserve-binary` for
+failure diagnosis. Native `upload` and `libraryImport` remain false.
