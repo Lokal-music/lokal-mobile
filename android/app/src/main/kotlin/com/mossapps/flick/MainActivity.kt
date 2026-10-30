@@ -190,6 +190,9 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Preserve a sanitized Java exception stack even if Flutter/Dart
+        // logging stops before its periodic disk flush.
+        JavaCrashRecorder.install(applicationContext)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
@@ -1382,6 +1385,7 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DIAGNOSTICS_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getProcessExitInfo" -> result.success(getProcessExitInfo())
+                "consumeJavaCrashInfo" -> result.success(JavaCrashRecorder.consume(applicationContext))
                 "recordCrashBreadcrumb" -> {
                     val stage = call.argument<String>("stage")
                     result.success(stage != null &&
