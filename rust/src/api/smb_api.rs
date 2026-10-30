@@ -37,12 +37,17 @@ pub async fn smb_ping(
     user: String,
     pass: String,
 ) -> anyhow::Result<()> {
-    let mut client = smb2::connect(&addr(&host, port), &user, &pass).await?;
-    let mut tree = client.connect_share(&share).await?;
-    // TREE_CONNECT alone is insufficient: the server can allow the session
-    // yet deny listing. Test the first folder access that a library sync
-    // needs, without recursively crawling the share during connection test.
-    let _entries = client.list_directory(&mut tree, "").await?;
+    let mut client = smb2::connect(&addr(&host, port), &user, &pass)
+        .await
+        .map_err(|error| anyhow::anyhow!("SMB authentication/negotiation failed: {error}"))?;
+    let mut tree = client.connect_share(&share)
+        .await
+        .map_err(|error| anyhow::anyhow!("SMB share access failed: {error}"))?;
+    // A successful SMB session and TREE_CONNECT do not prove that listing
+    // the music directory is allowed. Distinguish share ACL from login.
+    let _entries = client.list_directory(&mut tree, "")
+        .await
+        .map_err(|error| anyhow::anyhow!("SMB directory listing failed: {error}"))?;
     Ok(())
 }
 
