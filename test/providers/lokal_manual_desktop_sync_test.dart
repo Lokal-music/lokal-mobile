@@ -95,7 +95,9 @@ void main() {
     expect(recaps, contains('displayedEventIds.contains(event.eventId)'));
     expect(recaps, contains('.playEventEntitys'));
     expect(recaps, contains('listenedMs: event.msPlayed'));
-    expect(recaps, contains("id: 'history:${event.trackKey}'"));
+    expect(recaps, contains('recordLinkPlays('));
+    expect(recaps, contains('displayedEventIds.add(entry.eventId!)'));
+    expect(recaps, contains(r"id: 'history:${event.trackKey}'"));
   });
 
 }
