@@ -1475,3 +1475,15 @@ accounting, capped candidate lookup, manual-sync wiring, NAS byte limits,
 provider/pairing/drain and shared playback regressions. The real native SMB2
 fixture also rejects an oversized cover before allocation. These passes do not
 establish Apple package/lifecycle acceptance or physical Android behavior.
+
+## Review: open Android PR371 USB mixer output
+
+Reviewed head `536b3320f477fff0259ce7f68d4a2102e2696db0`, which was open
+at review time. This adds Android14+ AudioTrack/USB mixer negotiation and its
+settings, format gates and motion-art suppression. The shared Dart changes are
+specific to that opt-in Android hardware route; they add no ordinary iPhone
+feature. This falls within the user's explicit exclusion of complex direct
+and bit-perfect audio paths, so it is not ported or advertised in the iPhone UI.
+The iPhone system-player adapter and existing supported output routes remain the
+port's playback path. A future integration of the Android parent must retain
+those platform guards and filter unsupported engine choices on iPhone.
