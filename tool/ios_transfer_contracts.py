@@ -99,6 +99,7 @@ def main() -> None:
                         print(f'Transfer Flutter bridge SDK check {status}: {target} ({mode})', flush=True)
         subprocess.run([*command, *map(str, SOURCES),
                         str(ROOT / 'ios/Transfers/Tests/NetworkContracts.swift'),
+                        str(ROOT / 'ios/Transfers/Tests/UploadFileContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/LibraryContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/ImportOwnershipContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/ImportCustodyContracts.swift'),
