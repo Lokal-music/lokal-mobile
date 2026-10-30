@@ -135,7 +135,8 @@ class OnlineLyricsService {
     try {
       final remaining = HttpDate.parse(header).difference(DateTime.now().toUtc());
       return remaining.isNegative ? Duration.zero : remaining;
-    } on FormatException {
+    } catch (_) {
+      // An invalid Retry-After header must not become a parsing failure.
       return null;
     }
   }
@@ -291,7 +292,7 @@ class OnlineLyricsService {
         return result;
       }
       // Definitive miss (e.g. 404) — cache it. 5xx is transient, skip caching.
-      if (response.statusCode < 500) {
+      if (response.statusCode == 404) {
         _put(_exactCache, cacheKey, null);
       }
     } catch (_) {
