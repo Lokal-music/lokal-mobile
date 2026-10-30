@@ -18,6 +18,9 @@ class ProcessExitDiagnosticsService {
 
   Future<void> reportPreviousExits() async {
     if (!Platform.isAndroid) return;
+    // Start a new per-process breadcrumb ring after a native restart. This
+    // call does not overwrite the preceding process's ApplicationExitInfo.
+    await recordBreadcrumb('app:startup');
     try {
       final exits = await _channel.invokeListMethod<Object?>(
         'getProcessExitInfo',
