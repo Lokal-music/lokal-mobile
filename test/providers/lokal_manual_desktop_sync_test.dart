@@ -19,7 +19,7 @@ void main() {
     return controller.substring(begin, finish);
   }
 
-  test('startup, reconnect, refresh and timer must never start a sync', () {
+  test('startup, reconnect, refresh and timer never start full sync', () {
     final startup = section(
       'LokalRemoteControllerState build()', 'Future<void> _ensureRestored()',
     );
@@ -48,6 +48,54 @@ void main() {
     expect(RegExp(r'\.synchronize\(').allMatches(controller).length, 1);
     expect(screen, contains('Future<void> _syncNow()'));
     expect(screen, contains(': _syncNow,'));
-    expect(screen, contains('Desktop library sync is manual.'));
+    expect(screen, contains('Full desktop-library, metadata, likes and playlist sync is manual'));
   });
+  test('automatic stats path is bounded and excludes catalog operations', () {
+    final coordinator = File('lib/services/link/link_sync_coordinator.dart')
+        .readAsStringSync();
+    final journal = File('lib/services/link/link_journal.dart')
+        .readAsStringSync();
+    final statsStart = coordinator.indexOf('Future<void> _syncStatsBatch()');
+    final statsEnd = coordinator.indexOf('Future<void> _synchronize(');
+    expect(statsStart, greaterThanOrEqualTo(0));
+    expect(statsEnd, greaterThan(statsStart));
+    final stats = coordinator.substring(statsStart, statsEnd);
+
+    expect(stats, contains('const pageSize = 50;'));
+    expect(stats, contains("socket.request('history.push'"));
+    expect(stats, contains("socket.request('history.pull'"));
+    expect(stats, contains('getHistoryMatchCandidates'));
+    expect(stats, isNot(contains('syncLibrary(')));
+    expect(stats, isNot(contains('repairDesktopCopies(')));
+    expect(stats, isNot(contains('syncCopiedLyrics(')));
+    expect(stats, isNot(contains('_reconcileDesktopPlaylists(')));
+    expect(coordinator, contains('fullSync: false'));
+    expect(journal, contains('final historyChanges = StreamController<void>.broadcast();'));
+    expect(journal, contains('historyChanges.add(null);'));
+    expect(journal, contains('int limit = 250'));
+  });
+
+  test('stats are scheduled separately on connection, play and polling', () {
+    final socket = section(
+      'Future<void> _connectSocket()', 'void _socketConnectionChanged(',
+    );
+    final timer = section('void _tickLink()', 'Future<void> _syncLink()');
+    final manual = section('Future<void> syncNow()', 'LinkFileCopy _fileCopier()');
+    expect(socket, contains('_scheduleStatsSync(const Duration(seconds: 8))'));
+    expect(socket, contains('_lastStatsSyncAt = DateTime.now()'));
+    expect(timer, contains('unawaited(_syncStats())'));
+    expect(controller, contains('LinkJournal.instance.historyChanges.stream.listen'));
+    expect(controller, contains('await coordinator.synchronizeStats();'));
+    expect(manual, isNot(contains('synchronizeStats')));
+  });
+
+  test('unmatched remote events still count toward listening minutes', () {
+    final recaps = File('lib/data/repositories/recently_played_repository.dart')
+        .readAsStringSync();
+    expect(recaps, contains('displayedEventIds.contains(event.eventId)'));
+    expect(recaps, contains('.playEventEntitys'));
+    expect(recaps, contains('listenedMs: event.msPlayed'));
+    expect(recaps, contains("id: 'history:${event.trackKey}'"));
+  });
+
 }
