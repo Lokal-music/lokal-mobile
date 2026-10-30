@@ -15,8 +15,10 @@ import '../../services/ios_transfer_media_probe.dart';
 import '../../services/ios_transfer_transport.dart';
 
 /// App lifetime, rather than a tab/screen, owns import observation. Native
-/// libraryImport=false keeps this inert while cleanup/upload/lifecycle gates
-/// remain unfinished; Android and the existing foreground copy flows continue.
+/// libraryImport=false keeps product imports disabled while cleanup/upload
+/// gates remain unfinished. An explicit pairing mutation may temporarily
+/// attach a native owner to revoke URLSession authority before Keychain changes.
+/// Android and the existing foreground copy flows remain unchanged.
 class IosTransferRoot extends StatefulWidget {
   const IosTransferRoot({super.key, required this.child});
   final Widget child;
