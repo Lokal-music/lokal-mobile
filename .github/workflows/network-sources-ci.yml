@@ -9,6 +9,8 @@ on:
       - 'lib/services/process_exit_diagnostics_service.dart'
       - 'android/app/src/main/kotlin/com/mossapps/flick/MainActivity.kt'
       - 'android/app/src/main/kotlin/com/mossapps/flick/NativeCrashDiagnostics.kt'
+      - 'android/app/src/main/kotlin/com/mossapps/flick/JavaCrashRecorder.kt'
+      - 'android/app/src/test/kotlin/com/mossapps/flick/JavaCrashRecorderTest.kt'
       - 'android/app/src/test/kotlin/com/mossapps/flick/NativeTombstoneSummaryTest.kt'
       - 'test/services/album_art_service_test.dart'
       - 'lib/services/sources/local_network_access.dart'
