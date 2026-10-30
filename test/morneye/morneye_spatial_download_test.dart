@@ -84,6 +84,17 @@ void main() {
     await root.delete(recursive: true);
   });
 
+  void rejectCodecProbe() {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      probes.add(call.method);
+      return false;
+    });
+    messenger.setMockMethodCallHandler(ffmpeg, (_) async {
+      throw PlatformException(code: 'probe_unavailable');
+    });
+    messenger.setMockMethodCallHandler(ffmpegEvents, (_) async => null);
+  }
+
   Future<MorneyeAddon> install({
     String provider = 'amazon',
     String? error,
@@ -147,6 +158,50 @@ void main() {
         await result.cleanup();
       },
     );
+  }
+
+  test('non-Amazon AC-4 uses the AC-4 probe and codec metadata', () async {
+    final addon = await install(provider: 'example', conversion: true);
+    final result = await packages.download(
+      addon.key, 'track', quality: 'ac4', forPlayback: true,
+    );
+    expect(requested, ['ac4']);
+    expect(probes, ['inspectAc4']);
+    expect(result.atmosEncoded, isTrue);
+    expect(result.atmosCodec, 'ac4');
+    expect(result.info['codec'], 'ac4');
+    await result.cleanup();
+  });
+
+  for (final provider in ['amazon', 'amazon-new']) {
+    test('configured $provider E-AC-3 checks the JOC decoder before download', () async {
+      final addon = await install(provider: provider);
+      packages.setSettings(addon.key, {'downloadQuality': 'eac3'});
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        probes.add(call.method);
+        if (call.method == 'capabilities') {
+          return {'available': false, 'ac4Decoder': true};
+        }
+        fail('The file must not be downloaded or probed without a JOC decoder');
+      });
+      final client = MockClient((_) async => fail('No network request expected'));
+      addTearDown(client.close);
+      await expectLater(
+        playOnlineTrack(
+          'a-${addon.key}',
+          const DiscoveryTrack(
+            id: 'track', title: 'Title', artist: 'Artist',
+            source: DiscoverySource.morneye,
+          ),
+          morneye: _Service(packages), client: client,
+        ),
+        throwsA(isA<DiscoveryException>().having(
+          (error) => error.message, 'message', contains('does not support'),
+        )),
+      );
+      expect(probes, ['capabilities']);
+      expect(requested, isEmpty);
+    });
   }
 
   test('Amazon (New) JOC-only track explicitly requests E-AC-3 and validates JOC', () async {
@@ -244,17 +299,6 @@ void main() {
     expect(result.atmosCodec, 'eac3-joc');
     await result.cleanup();
   });
-
-  void rejectCodecProbe() {
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      probes.add(call.method);
-      return false;
-    });
-    messenger.setMockMethodCallHandler(ffmpeg, (_) async {
-      throw PlatformException(code: 'probe_unavailable');
-    });
-    messenger.setMockMethodCallHandler(ffmpegEvents, (_) async => null);
-  }
 
   test(
     'configured AC-4 save rejects an unverified file without conversion',

@@ -918,8 +918,12 @@ Future<List<_PlaybackSource>> _morneyeSources(
           }
           final settings = packages.settings(addon);
           final configured = settings['downloadQuality']?.toString();
+          final provider = addon.name.replaceFirst(RegExp(r'-web$'), '');
+          final configuredAmazonJoc =
+              (provider == 'amazon' || provider == 'amazon-new') &&
+              configured?.trim().toLowerCase() == 'eac3';
           final configuredAtmos = configured != null &&
-              isMorneyeAtmosQuality(configured) &&
+              (isMorneyeAtmosQuality(configured) || configuredAmazonJoc) &&
               addon.qualityOptions.any((option) =>
                   option is Map && option['id'] == configured);
           final tryAtmos = found.atmosRequested || configuredAtmos;
@@ -960,7 +964,9 @@ Future<List<_PlaybackSource>> _morneyeSources(
               ? MorneyeLiveSession()
               : null;
           if (tryAtmos && !found.atmosDownload &&
-              !await AtmosPlaybackSupport.availableFor(explicitTier == 'ac4' ? 'ac4' : 'eac3-joc')) {
+              !await AtmosPlaybackSupport.availableFor(
+                explicitTier?.trim().toLowerCase().replaceAll('-', '') == 'ac4'
+                    ? 'ac4' : 'eac3-joc')) {
             AtmosDiagnostics.record('request_rejected', {'reason': 'decoder_unavailable'});
             throw const DiscoveryException(
               'This Android device does not support the requested native spatial-audio codec or direct output. No stereo track was substituted.',

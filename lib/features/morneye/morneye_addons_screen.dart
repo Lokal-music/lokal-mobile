@@ -11,6 +11,7 @@ import 'package:flick/widgets/lokal/lokal_toast.dart';
 
 import 'morneye_auth_sheet.dart';
 import 'morneye_packages.dart';
+import 'morneye_playback_quality.dart';
 import 'morneye_service.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 
@@ -651,7 +652,12 @@ class _AddonRowState extends State<_AddonRow> {
                       {'value': q['id'], 'label': q['label'] ?? q['id']},
                   ],
                 },
-                value: _values['downloadQuality'] ?? quality.first['id'],
+                value: chooseMorneyeDownloadQuality(
+                  requested: null,
+                  configured: _values['downloadQuality']?.toString(),
+                  options: _addon.qualityOptions,
+                  provider: _addon.name.replaceFirst(RegExp(r'-web$'), ''),
+                ),
                 onChanged: (value) =>
                     setState(() => _values['downloadQuality'] = value),
               ),

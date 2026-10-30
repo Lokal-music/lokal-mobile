@@ -62,7 +62,13 @@ String chooseMorneyeDownloadQuality({
       if (id.isNotEmpty) return id;
     }
   }
-  return candidates.isNotEmpty ? candidates.first : 'default';
+  if (candidates.isNotEmpty) return candidates.first;
+  // Preserve Tidal's stereo fallback when an absent Atmos tier was saved.
+  if (isMorneyeAtmosQuality(configured) &&
+      provider.toLowerCase().startsWith('tidal')) {
+    return 'HI_RES_LOSSLESS';
+  }
+  return 'default';
 }
 
 /// Play and Save both honor the selected add-on tier. Neither a manifest

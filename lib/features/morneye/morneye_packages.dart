@@ -1924,10 +1924,8 @@ class MorneyePackages {
       // substitute FLAC when Atmos was requested.
       // AC-4 is a codec preference and must be validated from the delivered
       // file; it never creates a catalogue Atmos badge.
-      final amazonAc4 = amazonProvider &&
-          chosen.trim().toLowerCase() == 'ac4';
-      // An explicit E-AC-3 selection is Atmos only when initiated by a
-      // confirmed JOC action. The decoded file must then pass the JOC probe.
+      final selectedAc4 = chosen.trim().toLowerCase().replaceAll('-', '') == 'ac4';
+      // Amazon E-AC-3 must pass the JOC probe before it can be played.
       final explicitAtmos = isMorneyeAtmosQuality(chosen) ||
           explicitAmazonJoc;
       if (explicitAtmos) AtmosDiagnostics.record('addon_download_start', {
@@ -2049,26 +2047,26 @@ class MorneyePackages {
       // Preserve the original compressed stream, including Atmos objects.
       // Amazon exposes 'ac4'; Tidal exposes 'DOLBY_ATMOS' (E-AC-3 JOC).
       // AC-4 verifies the codec, not independently its immersive presentation.
-      final verifiedAtmos = explicitAtmos && (amazonAc4
+      final verifiedAtmos = explicitAtmos && (selectedAc4
           ? await AtmosPlaybackSupport.isAc4File(file)
           : await AtmosPlaybackSupport.isJocFile(file));
       if (explicitAtmos) AtmosDiagnostics.record('source_validation', {
-        'codec': amazonAc4 ? 'ac4' : 'eac3_joc',
+        'codec': selectedAc4 ? 'ac4' : 'eac3_joc',
         'encoded': verifiedAtmos,
         'outcome': verifiedAtmos ? 'confirmed' : 'rejected',
       });
       if (explicitAtmos && !verifiedAtmos) {
-        throw MorneyeSourceVerificationError(amazonAc4 ? 'AC-4' : 'E-AC-3 JOC');
+        throw MorneyeSourceVerificationError(selectedAc4 ? 'AC-4' : 'E-AC-3 JOC');
       }
       if (verifiedAtmos) {
         // Media3, not Rust/FFmpeg PCM, retains the original encoded data.
         return MorneyeDownload(
           File(file),
           {...track.cast<String, Object?>(), ...result.cast<String, Object?>()},
-          {'codec': amazonAc4 ? 'ac4' : 'eac3-joc', 'format': 'isomp4'},
+          {'codec': selectedAc4 ? 'ac4' : 'eac3-joc', 'format': 'isomp4'},
           staged,
           atmosEncoded: true,
-          atmosCodec: amazonAc4 ? 'ac4' : 'eac3-joc',
+          atmosCodec: selectedAc4 ? 'ac4' : 'eac3-joc',
         );
       }
 
