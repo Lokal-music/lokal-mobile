@@ -125,7 +125,6 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   defer { try? manager.removeItem(at: root) }
 
   let scope = LokalTransferScope(desktopID: "fixture-pc", origin: origin)
-  let otherScope = LokalTransferScope(desktopID: "other-pc", origin: origin)
   func request(_ source: String, desktop: String = "fixture-pc") throws -> LokalTransferJob {
     try LokalTransferJob(direction: .download,
       identity: LokalTransferIdentity(desktopID: desktop, sourceID: source,
@@ -222,14 +221,14 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   let snapshot = try LokalTransferJournal(container: liveRoot).snapshot()
   try require(snapshot.jobs.first(where: { $0.id == foreignLive.id }) == foreignLive,
     "real runtime keeps unrelated scopes untouched")
+  let forbidden = try request("after-auth")
   try rejects("retired scope rejects a new plan while old credentials still exist") {
-    let _: LokalTransferSummary = try native { runtime.enqueue([try request("after-auth")], reply: $0) }
+    let _: LokalTransferSummary = try native { runtime.enqueue([forbidden], reply: $0) }
   }
   let recovered: LokalTransferSummary = try native { runtime.recover($0) }
   try require(recovered.pauses == retired.pauses &&
       (try awaitJob(runtime, id: slow.id, phase: [.cancelled])).revision == 2,
     "runtime recovery never resurrects cancelled network work")
-  _ = otherScope
   print("Native scope retirement contracts passed: importing rollback, exact scope, durable journal, real URLSession callback drainage and recovery. Physical iOS suspension/Isar cleanup remain unqualified.")
 }
 
