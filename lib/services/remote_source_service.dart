@@ -8,6 +8,7 @@ import '../data/repositories/song_repository.dart';
 import '../models/song.dart';
 import '../src/rust/api/audio_api.dart' as rust_audio;
 import 'album_art_service.dart';
+import 'process_exit_diagnostics_service.dart';
 import 'sources/network_source_service.dart';
 
 /// Bridges playback/download for network-sourced songs.
@@ -61,6 +62,12 @@ class RemoteSourceService {
       throw StateError('Network song has no remote id');
     }
     final service = networkSourceServiceFor(sourceType);
+    final diagnosed = reportProgress && (sourceType == 'smb' || sourceType == 'webdav');
+    if (diagnosed) {
+      unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+        'nas:$sourceType:download-start',
+      ));
+    }
     try {
       final path = await service.stream(
         server,
@@ -70,6 +77,11 @@ class RemoteSourceService {
             ? (p) => downloadProgressNotifier.value = p
             : null,
       );
+      if (diagnosed) {
+        unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+          'nas:$sourceType:cache-ready',
+        ));
+      }
       if (sourceType == 'smb' || sourceType == 'webdav') {
         if (reportProgress) {
           // Native artwork extraction and format probing read the same NAS
@@ -83,6 +95,13 @@ class RemoteSourceService {
         unawaited(_backfillAudioFormat(song, path));
       }
       return path;
+    } catch (_) {
+      if (diagnosed) {
+        unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+          'nas:$sourceType:download-error',
+        ));
+      }
+      rethrow;
     } finally {
       if (reportProgress) downloadProgressNotifier.value = null;
     }
@@ -91,9 +110,18 @@ class RemoteSourceService {
   Future<void> _backfillMetadata(Song song, String localPath) async {
     final key = song.filePath ?? song.id;
     if (!_metadataPending.add(key)) return;
+    unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+      'nas:metadata-start',
+    ));
     try {
       await _backfillArtwork(song);
+      unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+        'nas:artwork-done',
+      ));
       await _backfillAudioFormat(song, localPath);
+      unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+        'nas:metadata-done',
+      ));
     } finally {
       _metadataPending.remove(key);
     }
