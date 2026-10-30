@@ -259,6 +259,16 @@ class Uac2PreferencesService {
     return getBitPerfectEnabled();
   }
 
+  // Source-precision gate: the current Rust float callback is lossless for
+  // 16/24-bit integer PCM, but cannot preserve arbitrary 32-bit samples.
+  Future<void> setAndroidMixerSourceBitDepth(int? depth) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      'android_mixer_source_bits',
+      depth != null && depth > 0 && depth <= 24 ? depth : 0,
+    );
+  }
+
   Future<void> setAudioEnginePreference(
     AudioEnginePreference preference,
   ) async {
