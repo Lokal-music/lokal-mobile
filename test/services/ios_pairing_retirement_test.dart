@@ -33,30 +33,97 @@ void main() {
     ],
     'persistenceFailed': persistenceFailed,
   });
-  final pairing = IosTransferPairing.fromJson({
-    'scope': nativeScope.toJson(),
-  });
+  final pairing = IosTransferPairing.fromJson({'scope': nativeScope.toJson()});
 
-  test('matching Keychain pairing retires before allowing credential deletion', () async {
-    final events = <String>[];
-    await IosPairingRetirement.retireBeforeForget(
-      expected: credentials,
-      recover: () async {
-        events.add('recover');
-        return summary(total: 2, phase: 'queued');
-      },
-      currentPairing: () async {
-        events.add('keychain');
-        return pairing;
-      },
-      retire: (scope) async {
-        events.add('retire');
-        expect(IosPairingRetirement.sameScope(scope, nativeScope), isTrue);
-        return summary(total: 2, phase: 'cancelled', pauseScope: scope);
-      },
-    );
-    expect(events, ['recover', 'keychain', 'retire']);
-  });
+  test(
+    'matching Keychain pairing retires before allowing credential deletion',
+    () async {
+      final events = <String>[];
+      await IosPairingRetirement.retireBeforeForget(
+        reconcileImports: (_) async {
+          events.add('isar-before');
+        },
+        reconcileReservations: (_) async {
+          events.add('isar-after');
+        },
+        expected: credentials,
+        recover: () async {
+          events.add('recover');
+          return summary(total: 2, phase: 'queued');
+        },
+        currentPairing: () async {
+          events.add('keychain');
+          return pairing;
+        },
+        retire: (scope) async {
+          events.add('retire');
+          expect(IosPairingRetirement.sameScope(scope, nativeScope), isTrue);
+          return summary(total: 2, phase: 'cancelled', pauseScope: scope);
+        },
+      );
+      expect(events, [
+        'recover',
+        'keychain',
+        'isar-before',
+        'retire',
+        'isar-after',
+      ]);
+    },
+  );
+
+  test(
+    'failed import reconciliation prevents native retirement and Forget',
+    () async {
+      final events = <String>[];
+      await expectLater(
+        IosPairingRetirement.retireBeforeForget(
+          expected: credentials,
+          recover: () async => summary(),
+          currentPairing: () async => pairing,
+          reconcileImports: (_) async {
+            events.add('before');
+            throw StateError('missing Isar proof');
+          },
+          retire: (_) async {
+            events.add('retire');
+            return summary(pauseScope: nativeScope);
+          },
+          reconcileReservations: (_) async {
+            events.add('after');
+          },
+        ),
+        throwsStateError,
+      );
+      expect(events, ['before']);
+    },
+  );
+
+  test(
+    'failed reservation reconciliation blocks Forget after durable retirement',
+    () async {
+      final events = <String>[];
+      await expectLater(
+        IosPairingRetirement.retireBeforeForget(
+          expected: credentials,
+          recover: () async => summary(),
+          currentPairing: () async => pairing,
+          reconcileImports: (_) async {
+            events.add('before');
+          },
+          retire: (_) async {
+            events.add('retire');
+            return summary(pauseScope: nativeScope);
+          },
+          reconcileReservations: (_) async {
+            events.add('after');
+            throw StateError('retiring Isar receipt');
+          },
+        ),
+        throwsStateError,
+      );
+      expect(events, ['before', 'retire', 'after']);
+    },
+  );
 
   test('mismatch never retires and blocks credential clear', () async {
     var attempted = false;
@@ -65,6 +132,8 @@ void main() {
     });
     await expectLater(
       IosPairingRetirement.retireBeforeForget(
+        reconcileImports: (_) async {},
+        reconcileReservations: (_) async {},
         expected: credentials,
         recover: () async => summary(total: 1, phase: 'queued'),
         currentPairing: () async => changed,
@@ -78,33 +147,41 @@ void main() {
     expect(attempted, isFalse);
   });
 
-  test('legacy/no Keychain pairing is safe only with empty native journal', () async {
-    final legacy = LokalRemoteCredentials(
-      origin: credentials.origin,
-      desktopId: credentials.desktopId,
-      remoteToken: credentials.remoteToken,
-    );
-    var retirementCalled = false;
-    Future<void> attempt(int total) => IosPairingRetirement.retireBeforeForget(
-      expected: legacy,
-      recover: () async => summary(
-        total: total,
-        phase: total == 0 ? null : 'transferring',
-      ),
-      currentPairing: () async => null,
-      retire: (_) async {
-        retirementCalled = true;
-        return summary();
-      },
-    );
-    await attempt(0);
-    await expectLater(attempt(1), throwsStateError);
-    expect(retirementCalled, isFalse);
-  });
+  test(
+    'legacy/no Keychain pairing is safe only with empty native journal',
+    () async {
+      final legacy = LokalRemoteCredentials(
+        origin: credentials.origin,
+        desktopId: credentials.desktopId,
+        remoteToken: credentials.remoteToken,
+      );
+      var retirementCalled = false;
+      Future<void> attempt(int total) =>
+          IosPairingRetirement.retireBeforeForget(
+            reconcileImports: (_) async {},
+            reconcileReservations: (_) async {},
+            expected: legacy,
+            recover: () async => summary(
+              total: total,
+              phase: total == 0 ? null : 'transferring',
+            ),
+            currentPairing: () async => null,
+            retire: (_) async {
+              retirementCalled = true;
+              return summary();
+            },
+          );
+      await attempt(0);
+      await expectLater(attempt(1), throwsStateError);
+      expect(retirementCalled, isFalse);
+    },
+  );
 
   test('native Keychain missing for a v2 pairing fails closed', () async {
     await expectLater(
       IosPairingRetirement.retireBeforeForget(
+        reconcileImports: (_) async {},
+        reconcileReservations: (_) async {},
         expected: credentials,
         recover: () async => summary(),
         currentPairing: () async => null,
@@ -114,24 +191,33 @@ void main() {
     );
   });
 
-  test('invalid native receipt, journal failure and transport errors block Forget', () async {
-    for (final scenario in ['failedRecovery', 'missingTombstone', 'throwingCancel']) {
-      await expectLater(
-        IosPairingRetirement.retireBeforeForget(
-          expected: credentials,
-          recover: () async => summary(
-            persistenceFailed: scenario == 'failedRecovery',
+  test(
+    'invalid native receipt, journal failure and transport errors block Forget',
+    () async {
+      for (final scenario in [
+        'failedRecovery',
+        'missingTombstone',
+        'throwingCancel',
+      ]) {
+        await expectLater(
+          IosPairingRetirement.retireBeforeForget(
+            reconcileImports: (_) async {},
+            reconcileReservations: (_) async {},
+            expected: credentials,
+            recover: () async =>
+                summary(persistenceFailed: scenario == 'failedRecovery'),
+            currentPairing: () async => pairing,
+            retire: (_) async {
+              if (scenario == 'throwingCancel')
+                throw StateError('native failed');
+              return summary(total: 1, phase: 'cancelled');
+            },
           ),
-          currentPairing: () async => pairing,
-          retire: (_) async {
-            if (scenario == 'throwingCancel') throw StateError('native failed');
-            return summary(total: 1, phase: 'cancelled');
-          },
-        ),
-        throwsStateError,
-      );
-    }
-  });
+          throwsStateError,
+        );
+      }
+    },
+  );
 
   test('origin normalization accepts only the same exact desktop endpoint', () {
     expect(

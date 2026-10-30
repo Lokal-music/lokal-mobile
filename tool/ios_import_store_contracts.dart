@@ -1,3 +1,4 @@
+import 'package:flick/services/ios_library_scan_epoch.dart';
 // Actual Isar/libmdbx contracts. The native lease callback and media description
 // are fixture boundaries; this is not installed-app/import/media acceptance.
 import 'dart:async';
@@ -551,6 +552,34 @@ Future<void> main(List<String> arguments) async {
             await fixture.db.songEntitys.count() == 0,
         'Committed deletion never resurrects its recording',
       );
+    });
+    await scenario('scanner-mutation-generation', (fixture) async {
+      final entered = Completer<void>(), release = Completer<void>();
+      final blocking = fixture.db.writeTxn(() async {
+        entered.complete();
+        await release.future;
+      });
+      await entered.future;
+      final stale = IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
+        IosLibraryScanEpoch.requireCurrent();
+        await fixture.db.songEntitys.put(SongEntity()
+          ..filePath = '/stale.wav' ..title = 'Stale scan' ..artist = 'Fixture' ..dateAdded = DateTime.utc(2026));
+      }));
+      final refused = stale.then((_) => false, onError: (_) => true);
+      final clear = IosLibraryScanEpoch.withMutation(() => fixture.db.writeTxn(
+        () => fixture.db.songEntitys.clear()));
+      release.complete();
+      await blocking;
+      await clear;
+      require(await refused && await fixture.db.songEntitys.count() == 0,
+        'Actual queued scanner writer cannot repopulate after mutation retirement');
+      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
+        IosLibraryScanEpoch.requireCurrent();
+        await fixture.db.songEntitys.put(SongEntity()
+          ..filePath = '/fresh.wav' ..title = 'Fresh scan' ..artist = 'Fixture' ..dateAdded = DateTime.utc(2026));
+      }));
+      require(await fixture.db.songEntitys.count() == 1,
+        'Fresh post-mutation scan is admitted in the actual writer');
     });
     await scenario('scanner-serialization', (fixture) async {
       final guard = IosTransferScanGuard(fixture.db);

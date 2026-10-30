@@ -319,6 +319,19 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     );
   }
 
+  /// Cancel this plan while keeping files and allowing fresh future consent.
+  /// Unlike Forget, this never removes an existing pairing tombstone.
+  Future<IosTransferSummary> cancelNetworkScopePreservingFiles(
+    IosTransferScope scope,
+  ) async {
+    scope.validate();
+    return IosTransferSummary.fromJson(
+      await _importCall('cancelNetworkScopePreservingFiles', {
+        'scope': scope.toJson(),
+      }),
+    );
+  }
+
   /// Private cleanup claim only; product activation and the Isar decision are
   /// separate. Native revokes publication before draining the old file worker.
   @override
@@ -349,6 +362,15 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   Future<void> releaseImportCleanup(IosTransferCleanupLease lease) async {
     if (await _importCall('releaseImport', lease.control) != true) {
       throw const FormatException('Invalid native cleanup release response.');
+    }
+  }
+
+  @override
+  Future<void> preserveImportPublicFile(IosTransferCleanupLease lease) async {
+    if (await _importCall('preserveImportPublicFile', lease.control) != true) {
+      throw const FormatException(
+        'Invalid native public-file preservation response.',
+      );
     }
   }
 

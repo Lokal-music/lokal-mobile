@@ -3,6 +3,7 @@ import '../local_metadata_repair.dart';
 import '../../models/song.dart';
 
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -104,7 +105,12 @@ class LinkSyncCoordinator {
   Future<void> _run(Future<void> Function() action) {
     final active = _active;
     if (active != null) return active;
-    final task = _execute(action);
+    final task = LokalDesktopSource.instance.runLibraryTransfer(() {
+      LokalDesktopSource.instance.cancelLibraryTransferOnPause(() {
+        unawaited(socket.disconnect().catchError((Object _) {}));
+      });
+      return _execute(action);
+    });
     _active = task;
     return task.whenComplete(() {
       if (identical(_active, task)) _active = null;

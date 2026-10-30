@@ -43,6 +43,11 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     let owner: Owner
     fileprivate let epoch: UUID
   }
+  struct RetirementTicket: Sendable {
+    let owner: Owner
+    fileprivate let epoch: UUID
+    fileprivate let scope: LokalTransferScope
+  }
   enum Permission: Equatable, Sendable { case write, reconcileOnly, cleanup, orphanCleanup }
   struct Lease: Sendable {
     let id: String
@@ -59,6 +64,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   private var owner: Owner?
   private var barrier = UUID()
   private var submissionEpoch = UUID()
+  private var retirementEpoch = UUID()
   private var active: Lease?
   private var cleanupPending = false
 
@@ -82,6 +88,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
 
   func attachEngine() -> String {
     locked {
+      retirementEpoch = UUID()
       submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
@@ -100,6 +107,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
       guard self.engineID == engineID else { throw LokalTransferError.invalidTransition }
       let next = Owner(engineID: engineID, clientID: clientID)
       if owner != next {
+        retirementEpoch = UUID()
         submissionEpoch = UUID()
         barrier = UUID()
         retireActive()
@@ -147,6 +155,28 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     try locked {
       guard self.owner == owner else { throw LokalTransferError.staleRevision }
       submissionEpoch = UUID()
+    }
+  }
+
+  /// Fence queued publication and active scoped writers before journal I/O.
+  /// Duplicate retirements share the current owner epoch; cancelling the first
+  /// job cannot invalidate the second request's authority to await drainage.
+  func beginScopeRetirement(_ owner: Owner, scope: LokalTransferScope) throws -> RetirementTicket {
+    let scope = try normalized(scope)
+    return try locked {
+      guard self.owner == owner else { throw LokalTransferError.staleRevision }
+      submissionEpoch = UUID(); barrier = UUID()
+      if active?.scope == scope { retireActive() }
+      return RetirementTicket(owner: owner, epoch: retirementEpoch, scope: scope)
+    }
+  }
+
+  func validateRetirement(_ ticket: RetirementTicket, scope: LokalTransferScope) throws {
+    let scope = try normalized(scope)
+    try locked {
+      guard owner == ticket.owner, retirementEpoch == ticket.epoch, ticket.scope == scope else {
+        throw LokalTransferError.staleRevision
+      }
     }
   }
 
@@ -300,6 +330,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func stopClient(_ value: Owner) {
     locked {
       guard owner == value else { return }
+      retirementEpoch = UUID()
       submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
@@ -310,6 +341,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func detachEngine(_ value: String) {
     locked {
       guard engineID == value else { return }
+      retirementEpoch = UUID()
       submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
@@ -321,6 +353,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   /// Advance the barrier even when no file operation has claimed a lease yet.
   func revokeAll() {
     locked {
+      retirementEpoch = UUID()
       submissionEpoch = UUID()
       barrier = UUID()
       retireActive()

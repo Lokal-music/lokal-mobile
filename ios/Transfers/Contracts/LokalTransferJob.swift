@@ -195,6 +195,17 @@ struct LokalTransferJob: Codable, Equatable, Sendable {
 
   var taskBinding: String { id + ":" + String(revision) }
   var stagedName: String { id + "-" + String(revision) + ".download" }
+
+  /// Cancellation advances the live revision while its private download keeps
+  /// the old binding. This derives that exact binding, never a caller path.
+  func cancelledDownloadForCleanup() throws -> Self {
+    try validate()
+    guard direction == .download, phase == .cancelled else { throw LokalTransferError.invalidTransition }
+    var previous = self
+    if previous.revision > 1 { previous.revision -= 1 }
+    try previous.validate()
+    return previous
+  }
   var uploadName: String { id + "-" + String(revision) + ".upload" }
 
   func validate() throws {

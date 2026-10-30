@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -8,6 +9,23 @@ import 'package:flick/services/link/lokal_desktop_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+class _CancellationClient extends http.BaseClient {
+  final entered = Completer<void>();
+  final response = Completer<http.StreamedResponse>();
+  bool closed = false;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    await request.finalize().drain<void>();
+    entered.complete();
+    return response.future;
+  }
+  @override
+  void close() {
+    closed = true;
+    if (!response.isCompleted) response.completeError(StateError('cancelled request'));
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +79,27 @@ void main() {
     await source.uploadToDesktop(song(), credentials);
     expect(await file.readAsBytes(), original);
   });
+  test('iPhone mutation closes the actual source client and drains upload work', () async {
+    final client = _CancellationClient();
+    final source = LokalDesktopSource(
+      iosLibraryMutations: true,
+      uploadClientFactory: () => client,
+    );
+    final upload = source.uploadToDesktop(song(), credentials);
+    final cancelled = expectLater(upload, throwsStateError);
+    await client.entered.future;
+    var mutated = false;
+    await source.withLibraryTransfersDrained(() async {
+      expect(client.closed, true);
+      await expectLater(source.uploadToDesktop(song(), credentials), throwsStateError);
+      mutated = true;
+    });
+    await cancelled;
+    expect(mutated, true);
+    expect(source.libraryTransfersPaused, false);
+    expect(source.libraryTransferEpoch, 1);
+  });
+
   test('transmits Unicode original filename without directory information', () async {
     final original = await file.readAsBytes();
     file = await file.rename('${root.path}/The Motion Epic - L’été.FLAC');

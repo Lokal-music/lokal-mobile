@@ -31,6 +31,9 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
   var publication: LokalTransferLibraryPublication?
   var stagingRetired: Bool?
   var resolution: LokalTransferImportResolution?
+  /// Monotonic user intent: metadata removal must never delete public Music.
+  /// Nil is the legacy cancellation policy; false is not a valid downgrade.
+  var preservePublicFile: Bool?
 
   init(job: LokalTransferJob, songID: Int64) throws {
     schemaVersion = 1; self.job = job; self.songID = songID
@@ -50,6 +53,11 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
     }
     try location?.validate()
     try resolution?.validate()
+    guard preservePublicFile != false,
+          resolution?.abandonment != .preservedByRequest || preservePublicFile == true,
+          preservePublicFile != true || resolution?.abandonment != .removedOwnedFile else {
+      throw LokalTransferError.invalidRecord
+    }
     if resolution?.mode == .committed, publication == nil {
       throw LokalTransferError.invalidRecord
     }
@@ -68,7 +76,7 @@ struct LokalTransferImportCustody: Codable, Equatable, Sendable {
   static func decode(_ data: Data) throws -> Self {
     guard !data.isEmpty, data.count <= maximumJSONBytes,
           let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-          Set(row.keys).isSubset(of: ["schemaVersion", "job", "songID", "location", "copyNonce", "publication", "stagingRetired", "resolution"]),
+          Set(row.keys).isSubset(of: ["schemaVersion", "job", "songID", "location", "copyNonce", "publication", "stagingRetired", "resolution", "preservePublicFile"]),
           Set(["schemaVersion", "job", "songID"]).isSubset(of: Set(row.keys)),
           let job = row["job"] as? [String: Any] else { throw LokalTransferError.invalidRecord }
     for (key, allowed) in [("location", LokalTransferLibraryLocation.keys),
@@ -508,9 +516,9 @@ final class LokalTransferJournal: @unchecked Sendable {
   /// job is an Isar/public-file ownership boundary: it must be reconciled by
   /// the app coordinator, not silently cancelled as network work.
   ///
-  /// The frozen import-custody table is deliberately unchanged. Its entries
-  /// still require the separate app-attested cleanup protocol.
-  func retireNetworkScope(_ scope: LokalTransferScope, nowMs: Int64)
+  /// Preserve matching public-file intent in the same transaction. Custody
+  /// provenance is retained for the separate app-attested cleanup protocol.
+  func retireNetworkScope(_ scope: LokalTransferScope, nowMs: Int64, retirePairing: Bool = true)
     throws -> [(previous: LokalTransferJob, retired: LokalTransferJob)] {
     try scope.validate()
     return try transaction { current in
@@ -541,6 +549,18 @@ final class LokalTransferJournal: @unchecked Sendable {
       }
       sqlite3_finalize(query)
 
+      // Forget revokes a desktop, not ownership of the user's music files.
+      // Include previously cancelled revisions whose app cleanup is pending.
+      for work in try readCustodies().values where work.resolution == nil && work.preservePublicFile != true &&
+          work.job.identity.desktopID == scope.desktopID && work.job.identity.origin == scope.origin &&
+          work.job.identity.pairingID == scope.pairingID {
+        guard let (_, oldSize) = try selectCustody(id: work.job.id, revision: work.job.revision) else {
+          throw LokalTransferError.staleRevision
+        }
+        var next = work; next.preservePublicFile = true
+        try writeCustody(next, oldSize: oldSize, usage: &current)
+      }
+
       let update = try statement("UPDATE jobs SET revision=?,document=? WHERE id=? AND revision=?")
       defer { sqlite3_finalize(update) }
       for change in changes {
@@ -555,7 +575,7 @@ final class LokalTransferJournal: @unchecked Sendable {
         guard sqlite3_changes(database) == 1 else { throw LokalTransferError.staleRevision }
         current.bytes += Int64(change.data.count - change.oldBytes)
       }
-      try writePause(LokalTransferPause(scope: scope, reason: .pairingChanged))
+      if retirePairing { try writePause(LokalTransferPause(scope: scope, reason: .pairingChanged)) }
       return changes.map { (previous: $0.previous, retired: $0.retired) }
     }
   }
@@ -693,9 +713,28 @@ final class LokalTransferJournal: @unchecked Sendable {
   func recordImportPublication(_ expected: LokalTransferImportCustody,
                                proof: LokalTransferLibraryPublication) throws -> LokalTransferImportCustody {
     try mutateImportCustody(expected) { value in
+      guard value.preservePublicFile != true else { throw LokalTransferError.invalidTransition }
       guard value.location != nil, proof.nonce == value.copyNonce else { throw LokalTransferError.invalidRecord }
       value.publication = proof
     }
+  }
+
+  /// Restrict future handling before a metadata mutation. The caller must
+  /// fence/drain writers; this operation grants no file or Isar authority.
+  /// Keep the decision in custody until actual app retirement is acknowledged.
+  func preserveImportPublicFile(_ expected: LokalTransferImportCustody) throws -> LokalTransferImportCustody {
+    try expected.validate()
+    let result: (LokalTransferImportCustody, Bool) = try transaction(advancesGeneration: { $0.1 }) { current in
+      guard let (previous, oldSize) = try selectCustody(id: expected.job.id, revision: expected.job.revision),
+            previous.resolution == nil else { throw LokalTransferError.staleRevision }
+      var original = previous; original.preservePublicFile = expected.preservePublicFile
+      guard original == expected else { throw LokalTransferError.staleRevision }
+      if previous.preservePublicFile == true { return (previous, false) }
+      var next = previous; next.preservePublicFile = true
+      try writeCustody(next, oldSize: oldSize, usage: &current)
+      return (next, true)
+    }
+    return result.0
   }
 
   /// Only after actual private file cleanup. This is separate from the earlier

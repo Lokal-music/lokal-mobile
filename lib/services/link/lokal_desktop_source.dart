@@ -1,4 +1,6 @@
 import '../lyrics_service.dart';
+import '../ios_foreground_transfer_barrier.dart';
+import '../ios_library_scan_epoch.dart';
 import 'desktop_music_storage.dart';
 import 'desktop_catalogue_import.dart';
 import 'desktop_genre_reconciliation.dart';
@@ -37,11 +39,27 @@ class LokalDesktopSource extends NetworkSourceService {
   LokalDesktopSource({
     http.Client Function()? uploadClientFactory,
     http.Client Function()? originalClientFactory,
-  }) : _uploadClientFactory = uploadClientFactory ?? GracefulHttpClient.new,
+    bool? iosLibraryMutations,
+  }) : _iosLibraryMutations = iosLibraryMutations ?? Platform.isIOS,
+       _uploadClientFactory = uploadClientFactory ?? GracefulHttpClient.new,
        _originalClientFactory = originalClientFactory ?? GracefulHttpClient.new;
+  final bool _iosLibraryMutations;
   final http.Client Function() _uploadClientFactory;
   final http.Client Function() _originalClientFactory;
   static final instance = LokalDesktopSource();
+  final _libraryTransfers = IosForegroundTransferBarrier();
+  int get libraryTransferEpoch => _libraryTransfers.epoch;
+  bool get libraryTransfersPaused => _libraryTransfers.paused;
+  Future<T> withLibraryTransfersDrained<T>(Future<T> Function() mutation) =>
+      _libraryTransfers.withMutation(mutation);
+  /// Include peer sync's final database writes in the same iPhone drain.
+  Future<T> runLibraryTransfer<T>(Future<T> Function() operation) =>
+      _trackLibraryTransfer(operation);
+  void cancelLibraryTransferOnPause(void Function() cancel) {
+    if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(cancel);
+  }
+  Future<T> _trackLibraryTransfer<T>(Future<T> Function() operation) =>
+      _iosLibraryMutations ? _libraryTransfers.run(operation) : operation();
   final _cache = NetworkCacheService();
   final _musicStorage = DesktopMusicStorage();
   Future<String>? _legacyDirectory;
@@ -141,6 +159,7 @@ class LokalDesktopSource extends NetworkSourceService {
     List<int> sizes,
   ) async {
     final client = _originalClientFactory();
+    if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(client.close);
     try {
       final response = await client
           .post(
@@ -172,6 +191,7 @@ class LokalDesktopSource extends NetworkSourceService {
     List<Map<String, dynamic>> fingerprints,
   ) async {
     final client = _originalClientFactory();
+    if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(client.close);
     try {
       final response = await client
           .post(
@@ -211,14 +231,25 @@ class LokalDesktopSource extends NetworkSourceService {
   Future<void> rememberDesktopOriginal(
     Song song,
     int serverId,
-    String remoteId,
-  ) async {
+    String remoteId, {
+    bool Function()? stillCurrent,
+  }) => _trackLibraryTransfer(
+    () => _rememberDesktopOriginal(song, serverId, remoteId, stillCurrent: stillCurrent),
+  );
+
+  Future<void> _rememberDesktopOriginal(
+    Song song,
+    int serverId,
+    String remoteId, {
+    bool Function()? stillCurrent,
+  }) async {
     if (!Database.isInitialized) return;
     final id = int.tryParse(song.id);
     if (id == null) return;
     await Database.instance.writeTxn(() async {
       final row = await Database.songs.get(id);
-      if (row == null || !isDownloadedDesktopOriginal(row)) return;
+      if (stillCurrent?.call() == false || row == null ||
+          !isDownloadedDesktopOriginal(row)) return;
       row.remoteServerId = serverId;
       row.remoteId = remoteId;
       await Database.songs.put(row);
@@ -231,6 +262,7 @@ class LokalDesktopSource extends NetworkSourceService {
     String id,
   ) async {
     final client = _originalClientFactory();
+    if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(client.close);
     try {
       final response = await client
           .head(
@@ -289,6 +321,14 @@ class LokalDesktopSource extends NetworkSourceService {
     NetworkServerEntity server,
     Map<String, dynamic> track, {
     Song? existing,
+  }) => _trackLibraryTransfer(
+    () => _copyOriginalToPhone(server, track, existing: existing),
+  );
+
+  Future<void> _copyOriginalToPhone(
+    NetworkServerEntity server,
+    Map<String, dynamic> track, {
+    Song? existing,
   }) async {
     await _musicStorage.requireFolder();
     final credentials = await _credentials(server);
@@ -307,6 +347,7 @@ class LokalDesktopSource extends NetworkSourceService {
     final file = File('${directory.path}/${linkUuid()}.$extension');
     final part = File('${file.path}.part');
     final client = GracefulHttpClient();
+    if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(client.close);
     try {
       final request =
           http.Request(
@@ -413,6 +454,7 @@ class LokalDesktopSource extends NetworkSourceService {
     void Function(int, int)? onProgress,
   }) async {
     final client = GracefulHttpClient();
+    if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(client.close);
     try {
       final rows =
           copies ??
@@ -521,6 +563,7 @@ class LokalDesktopSource extends NetworkSourceService {
   ) async {
     final credentials = await _credentials(server);
     final client = GracefulHttpClient();
+    if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(client.close);
     try {
       final request =
           http.Request(
@@ -703,6 +746,11 @@ class LokalDesktopSource extends NetworkSourceService {
   Future<Song> importTrack(
     NetworkServerEntity server,
     Map<String, dynamic> track,
+  ) => _trackLibraryTransfer(() => _importTrack(server, track));
+
+  Future<Song> _importTrack(
+    NetworkServerEntity server,
+    Map<String, dynamic> track,
   ) async {
     final remoteId = track['id']?.toString();
     if (remoteId == null || remoteId.isEmpty) {
@@ -770,7 +818,10 @@ class LokalDesktopSource extends NetworkSourceService {
     return SongRepository().songFromEntity(saved);
   }
 
-  Future<void> uploadToDesktop(
+  Future<void> uploadToDesktop(Song song, LokalRemoteCredentials credentials) =>
+      _trackLibraryTransfer(() => _uploadToDesktop(song, credentials));
+
+  Future<void> _uploadToDesktop(
     Song song,
     LokalRemoteCredentials credentials,
   ) async {
@@ -895,6 +946,7 @@ class LokalDesktopSource extends NetworkSourceService {
         );
       }
       final client = _uploadClientFactory();
+      if (_iosLibraryMutations) _libraryTransfers.cancelOnPause(client.close);
       try {
         // Bound the upload itself as well as the response: a desktop refusal
         // must not leave the streamed request waiting indefinitely for a sink.
@@ -1007,7 +1059,10 @@ class LokalDesktopSource extends NetworkSourceService {
 
   /// Recover existing app-private copies locally: no network download and the
   /// database ID stays stable so playlists, favorites and listening history do.
-  Future<void> recoverPrivateCopy(Song song) async {
+  Future<void> recoverPrivateCopy(Song song) =>
+      _trackLibraryTransfer(() => _recoverPrivateCopy(song));
+
+  Future<void> _recoverPrivateCopy(Song song) async {
     if (!await isPrivateDesktopCopy(song)) return;
     final entity = await Database.songs.get(int.parse(song.id));
     if (entity == null) {
@@ -1139,7 +1194,11 @@ class LokalDesktopSource extends NetworkSourceService {
   }
 
   @override
-  Stream<ScanProgress> syncLibrary(NetworkServerEntity server) async* {
+  Stream<ScanProgress> syncLibrary(NetworkServerEntity server) => _iosLibraryMutations
+      ? IosLibraryScanEpoch.bind(() => _syncLibrary(server))
+      : _syncLibrary(server);
+
+  Stream<ScanProgress> _syncLibrary(NetworkServerEntity server) async* {
     final credentials = await _credentials(server);
     var offset = 0, imported = 0, total = 0;
     final owned = <String>{};
@@ -1160,6 +1219,7 @@ class LokalDesktopSource extends NetworkSourceService {
           items = body['items'] as List;
       total = (body['total'] as num? ?? 0).toInt();
       for (final raw in items) {
+        if (_iosLibraryMutations) IosLibraryScanEpoch.requireCurrent();
         final track = Map<String, dynamic>.from(raw as Map);
         owned.add(track['id'].toString());
         await importTrack(server, track);
@@ -1181,6 +1241,7 @@ class LokalDesktopSource extends NetworkSourceService {
         .sourceTypeEqualTo('lokal')
         .findAll();
     await Database.instance.writeTxn(() async {
+      if (_iosLibraryMutations) IosLibraryScanEpoch.requireCurrent();
       for (final row in remoteRows) {
         if (!owned.contains(row.remoteId)) {
           row.filePath = 'ghost://desktop/${server.id}/${row.remoteId}';

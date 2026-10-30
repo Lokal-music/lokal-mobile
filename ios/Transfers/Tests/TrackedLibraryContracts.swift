@@ -64,6 +64,70 @@ func runTrackedLibraryContracts(container: URL, template: LokalTransferJob) thro
     return process
   }
 
+  for edge in ["beforeCommit", "afterCommit"] {
+    let retained = try fixture("preserve-crash-" + edge)
+    _ = try retained.install()
+    let child = Process()
+    child.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    child.arguments = ["--preserve-import", retained.root.path, retained.job.id, edge]
+    try child.run(); child.waitUntilExit()
+    try require(child.terminationStatus == 97, "preservation child exits at exact transaction edge")
+    let reopened = try LokalTransferJournal(container: retained.root)
+    try require(reopened.importCustody(id: retained.job.id, revision: 1)?.preservePublicFile ==
+      (edge == "afterCommit" ? true : nil), "preserve intent is atomic across process exit")
+    try require(Data(contentsOf: retained.target()) == payload, "policy crash never changes public bytes")
+  }
+  for mode in ["owned", "missing", "edited", "unpublished"] {
+    let retained = try fixture("preserve-" + mode)
+    if mode != "unpublished" { _ = try retained.install() }
+    else { _ = try retained.journal.reserveImport(id: retained.job.id, revision: 1, songID: 42) }
+    let original = try retained.work()
+    let kept = try retained.journal.preserveImportPublicFile(original)
+    let generation = try retained.journal.snapshot().generation
+    try require(retained.journal.preserveImportPublicFile(original) == kept &&
+      retained.journal.snapshot().generation == generation, "lost preservation reply is read-only/idempotent")
+    try rejects("retained work cannot resume publication") { _ = try retained.install() }
+    let destination = try retained.target()
+    if mode == "missing" { try manager.removeItem(at: destination) }
+    if mode == "edited" { try Data("user edit".utf8).write(to: destination) }
+    _ = try retained.journal.update(id: retained.job.id, revision: 1) { try $0.cancel(nowMs: 1060) }
+    try rejects("pre-policy custody cannot authorize later abandonment") {
+      try retained.journal.validateAbandonment(original)
+    }
+    let result = try LokalTransferLibrary(root: retained.music).abandonTracked(kept,
+      journal: retained.journal, files: retained.files, cancellation: LokalTransferCopyCancellation(),
+      validateCleanupAuthority: {})
+    try require(result == .preservedByRequest, "explicit preservation does no public file handling")
+    if mode == "owned" { try require(Data(contentsOf: destination) == payload, "owned public bytes preserved") }
+    if mode == "edited" { try require(Data(contentsOf: destination) == Data("user edit".utf8), "edited bytes preserved") }
+    if mode == "missing" || mode == "unpublished" {
+      try require(!manager.fileExists(atPath: destination.path), "preservation never recreates missing bytes")
+    }
+    let saved = try retained.journal.recordImportResolution(kept,
+      resolution: LokalTransferImportResolution(mode: .abandoned, abandonment: .preservedByRequest))
+    try require(saved.preservePublicFile == true && saved.resolution?.mode == .abandoned,
+      "preservation keeps truthful uncommitted cleanup outcome and custody")
+  }
+  print("Durable public-file preservation passed: two process-exit edges, owned/missing/edited/unpublished bytes, stale-policy refusal and no publication restart. Mutation integration remains gated.")
+
+  let forgotten = try fixture("forget-preserves-public")
+  _ = try forgotten.install()
+  let beforeForget = try forgotten.journal.snapshot()
+  let forgottenScope = LokalTransferScope(desktopID: forgotten.job.identity.desktopID,
+    origin: forgotten.job.identity.origin, pairingID: forgotten.job.identity.pairingID)
+  let changes = try forgotten.journal.retireNetworkScope(forgottenScope, nowMs: 1070)
+  let afterForget = try forgotten.journal.snapshot()
+  let retainedForget = try forgotten.work()
+  try require(changes.count == 1 && retainedForget.preservePublicFile == true &&
+    afterForget.generation == beforeForget.generation + 1 &&
+    afterForget.pauses == [LokalTransferPause(scope: forgottenScope, reason: .pairingChanged)],
+    "Forget preservation, cancellation and tombstone share one native transaction")
+  try require(LokalTransferLibrary(root: forgotten.music).abandonTracked(retainedForget,
+    journal: forgotten.journal, files: forgotten.files, cancellation: LokalTransferCopyCancellation(),
+    validateCleanupAuthority: {}) == .preservedByRequest &&
+    Data(contentsOf: forgotten.target()) == payload,
+    "actual scope retirement cannot turn later app cleanup into public deletion")
+
   let first = try fixture("identity")
   let unbound = try first.journal.reserveImport(id: first.job.id, revision: 1, songID: 42)
   let receipt = try first.install()

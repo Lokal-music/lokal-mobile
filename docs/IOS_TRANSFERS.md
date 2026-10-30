@@ -1126,3 +1126,72 @@ operations. Targeted fatal-info analysis is clean. CI waits remain skipped at
 the user's request; no Apple or physical qualification is claimed for this
 later source. Durable preserve-public custody policy and actual Isar/file
 reconciliation remain necessary before background-transfer activation.
+
+### Preserve public files while reconciling Clear and Forget (after PR355)
+
+Clear Library and Forget Desktop now run actual receipt reconciliation even
+while product native imports are disabled. The temporary mutation role can
+acknowledge completed history and retire prepared receipts; it cannot publish
+new music. It reads the real Isar store, checks the native custody/lease, and
+refuses the user-data mutation if either side is missing or inconsistent.
+Prepared receipts become `retiring`, native cleanup is durably resolved, the
+Isar receipt becomes `retired`, and native finalization follows that commit.
+A failure preserves credentials/library metadata and can be retried.
+
+Public-file preservation is a monotonic native custody policy. Its SQLite
+commit precedes abandoned-import cleanup. A preserved abandonment returns
+`preservedByRequest` without inspecting, recreating or unlinking a public
+Music file; it makes no claim that the file exists. A restart cannot resume
+publication from that custody. Scope cancellation records the same policy
+atomically with cancelled job revisions, including older unresolved custody.
+Private staging without custody is drained before cancellation is acknowledged.
+
+```mermaid
+flowchart TD
+  A[Clear or Forget] --> B[Retire scan generation and block foreground copies]
+  B --> C[Close tracked requests and drain desktop sync and handoff]
+  C --> D[Shared app mutation queue]
+  D --> E[Pause submissions and drain native import writers]
+  E --> F[Reconcile actual Isar receipts with preserve-public policy]
+  F --> G[Cancel exact native scopes and drain callbacks and private files]
+  G --> H[Retire orphan Isar reservations]
+  H --> I{User action}
+  I -->|Clear| J[Delete song metadata; keep pairing and public music]
+  I -->|Forget| K[Compare and clear captured credentials]
+  J --> L[Release mutation hold]
+  K --> L
+```
+
+Clear cancels old plans without adding a permanent pairing pause. Forget adds
+`pairingChanged`; ordinary reconnect/retry cannot remove that tombstone. A
+separate retirement ticket survives its own per-job cancellations and duplicate
+requests, but engine/client replacement invalidates it before acknowledgment.
+No caller-supplied path, bearer credential or file-deletion permission enters
+these new control messages.
+
+Existing foreground desktop copies/uploads, metadata sync and queue handoffs
+are tracked until their final database work finishes. Clear/Forget and generic
+library mutations close tracked HTTP requests and wait for that work. Old copy
+previews retain an invalidated epoch. Desktop catalogue scans and local folder
+scans capture an epoch at subscription, including detached metadata tasks;
+scanner repository writes check it inside Isar's writer. A queued stale write
+cannot repopulate a cleared library. Android paths retain their previous
+behavior.
+
+Local evidence includes three repeated portable Swift/SQLite/file/real-HTTP
+contract rounds, Flutter lifetime/pairing/foreground/scan contracts, and actual
+Isar coordinator/store checks. Native RPC and Apple public-file coordination
+remain explicit fixture/platform boundaries in host checks. The full Flutter
+integration entry point is compiled separately; that is not an iOS SDK build.
+No CI wait, signing, installed-app or physical-device acceptance is claimed
+for this continuation. Build 103 (PR345) and build 111 (PR349) remain separate,
+earlier qualified engineering sources; these changes do not update their IPA.
+
+Native product import/upload flags remain **false**. Activation still requires
+committed-anchor rescan/CUE identity mapping, bounded history retirement,
+owned/idempotent uploads, unavailable-storage OS-task cancellation, and a
+positive installed coordinator/native/Isar/media-reader integration probe plus
+actual suspension/relaunch qualification. The generation fence does not grant
+a scanner permission to replace a protected committed import anchor or change
+its historical receipt. Other network-source writers need their own verified
+mutation admission before enabling native background transfer coexistence.

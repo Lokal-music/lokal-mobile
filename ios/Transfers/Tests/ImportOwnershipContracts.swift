@@ -187,6 +187,25 @@ func runImportOwnershipContracts(job: LokalTransferJob) throws {
   try rejects("clear retires an orphan Isar guard immediately") {
     try registry.validateOrphanCleanup(third, jobID: job.id, revision: job.revision, leaseID: orphan.id)
   }
+  let retiringScope = LokalTransferScope(desktopID: job.identity.desktopID,
+    origin: job.identity.origin, pairingID: job.identity.pairingID)
+  let activeWriter = try registry.claim(registry.capture(third), job: job, permission: .write)
+  let retirement = try registry.beginScopeRetirement(third, scope: retiringScope)
+  try rejects("scoped retirement immediately stops active publication before native I/O") {
+    try activeWriter.cancellation.check()
+  }
+  let duplicateRetirement = try registry.beginScopeRetirement(third, scope: retiringScope)
+  registry.revoke(jobID: job.id, revision: job.revision)
+  try registry.validateRetirement(retirement, scope: retiringScope)
+  try registry.validateRetirement(duplicateRetirement, scope: retiringScope)
+  try rejects("retirement authority cannot be reused for another desktop") {
+    try registry.validateRetirement(retirement, scope: LokalTransferScope(desktopID: "another-desktop",
+      origin: job.identity.origin, pairingID: job.identity.pairingID))
+  }
+  registry.revokeAll()
+  try rejects("global revocation invalidates old retirement authority") {
+    try registry.validateRetirement(retirement, scope: retiringScope)
+  }
   let last = try registry.claim(registry.capture(third), job: job, permission: .write)
   try rejects("a publication writer cannot authorize abandonment") {
     try registry.validateCleanup(third, jobID: job.id, revision: job.revision, leaseID: last.id)

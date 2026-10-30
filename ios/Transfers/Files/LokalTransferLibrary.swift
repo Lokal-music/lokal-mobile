@@ -129,7 +129,7 @@ struct LokalTransferLibraryReceipt: Codable, Equatable, Sendable {
 }
 
 enum LokalTransferLibraryAbandonment: String, Codable, Sendable {
-  case removedOwnedFile, missingFile, preservedUserFile
+  case removedOwnedFile, missingFile, preservedUserFile, preservedByRequest
 }
 
 private final class LokalTransferAbandonmentResult: @unchecked Sendable {
@@ -367,6 +367,13 @@ final class LokalTransferLibrary: @unchecked Sendable {
                       validateCleanupAuthority: @escaping @Sendable () throws -> Void) throws -> LokalTransferLibraryAbandonment {
     try work.validate(); try cancellation.check(); try validateCleanupAuthority()
     try journal.validateAbandonment(work)
+    // No public lookup, hash, coordination or unlink is needed when the user's
+    // durable intent is to keep files. This does not assert that a file exists.
+    if work.preservePublicFile == true {
+      try cancellation.check(); try validateCleanupAuthority()
+      try journal.validateAbandonment(work)
+      return .preservedByRequest
+    }
     #if canImport(Darwin)
     try checkRoot(); try cancellation.check(); try validateCleanupAuthority()
     try journal.validateAbandonment(work)
@@ -456,6 +463,7 @@ final class LokalTransferLibrary: @unchecked Sendable {
     defer { _ = flock(writer, LOCK_UN) }
     try checkRoot(); try validateOwnership(); try cancellation.check()
     var work = try journal.reserveImport(id: job.id, revision: job.revision, songID: songID)
+    guard work.preservePublicFile != true else { throw LokalTransferError.invalidTransition }
     let location = try LokalTransferLibraryLocation(parent: parent, directory: directory)
     if work.location == nil {
       guard job.phase == .validating else { throw LokalTransferError.invalidTransition }
