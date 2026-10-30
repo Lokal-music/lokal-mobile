@@ -73,7 +73,7 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
 
   Timer? _pollTimer;
   Timer? _linkTimer;
-  Timer? _syncDebounce;
+  Timer? _statsDebounce;
   String? _notificationArtworkKey;
   String? _notificationArtwork;
   LinkSyncCoordinator? _linkSync;
@@ -82,7 +82,8 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
   final _copyNotification = FileCopyNotification();
   LinkFileCopy? _copyPlanner;
   bool _socketWanted = false, _openingSocket = false, _receivingTheme = false;
-  DateTime _lastLibrarySyncAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastStatsSyncAt = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _statsSyncInFlight = false;
   Map<String, dynamic>? _desktopState;
   DateTime? _desktopStateAt;
   DateTime _lastActivity = DateTime.now(), _lastPhoneStateAt = DateTime.now();
@@ -126,18 +127,11 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     final link = ref.read(lokalLinkServiceProvider);
     final messages = link.messages.listen(_onLinkMessage);
     final connections = link.connections.listen(_socketConnectionChanged);
-    final journalChanges = LinkJournal.instance.changes.stream.listen((_) {
-      if (_disposed ||
-          !state.socketConnected ||
-          !state.mergeApproved ||
-          _linkSync?.busy == true)
-        return;
-      _syncDebounce?.cancel();
-      _syncDebounce = Timer(
-        const Duration(milliseconds: 400),
-        () => unawaited(_syncLink(background: true)),
-      );
-    });
+    // Only play events may initiate background synchronization. Library,
+    // metadata, likes and playlists still require explicit Sync now.
+    final historyChanges = LinkJournal.instance.historyChanges.stream.listen(
+      (_) => _scheduleStatsSync(const Duration(seconds: 15)),
+    );
     ref.listen(lokalAppearanceProvider, (_, appearance) {
       if (!_receivingTheme && link.connected) unawaited(_sendTheme(appearance));
     });
@@ -150,8 +144,8 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
         FavoritesService.remoteDelegate = null;
       _pollTimer?.cancel();
       _linkTimer?.cancel();
-      _syncDebounce?.cancel();
-      unawaited(journalChanges.cancel());
+      _statsDebounce?.cancel();
+      unawaited(historyChanges.cancel());
       unawaited(messages.cancel());
       unawaited(connections.cancel());
       NotificationService().release(_notificationOwner);
@@ -233,10 +227,10 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
   void disconnect() {
     _syncNotification.pause();
     _socketWanted = false;
-    _syncDebounce?.cancel();
     _notificationArtworkKey = null;
     _notificationArtwork = null;
     _linkTimer?.cancel();
+    _statsDebounce?.cancel();
     _linkSync = null;
     unawaited(ref.read(lokalLinkServiceProvider).disconnect());
     NotificationService().release(_notificationOwner);
@@ -285,7 +279,8 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
   Future<void> refresh() async {
     _lastActivity = DateTime.now();
     if (state.socketConnected) {
-      await _syncLink();
+      // Refreshing playback/connection state must not initiate library sync.
+      _refreshSocketSnapshot();
       return;
     }
     if (!_shouldPoll) return connect();
@@ -397,6 +392,25 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
       );
     _syncNotification.begin(deviceName: state.desktopName);
     await sync.enableMerge();
+    _lastActivity = DateTime.now();
+  }
+
+  /// The only post-merge entry point for a full desktop/phone library sync.
+  /// Pairing, reconnecting, periodic link polls and local journal edits
+  /// intentionally do not call this method.
+  Future<void> syncNow() async {
+    _lastActivity = DateTime.now();
+    if (!state.socketConnected || _linkSync == null || !state.mergeApproved) {
+      throw StateError('Connect and merge with your desktop before syncing.');
+    }
+    if (_syncInFlight ||
+        _statsSyncInFlight ||
+        _linkSync!.busy ||
+        state.fileCopyProgress.busy) {
+      throw StateError('A desktop sync or file copy is already running.');
+    }
+    _syncNotification.begin(deviceName: state.desktopName);
+    await _syncLink();
     _lastActivity = DateTime.now();
   }
 
@@ -579,7 +593,10 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
         const Duration(seconds: 2),
         (_) => _tickLink(),
       );
-      unawaited(_syncLink());
+      // Connection alone never starts a full library scan. Defer the first
+      // bounded stats exchange until the socket and startup UI have settled.
+      _lastStatsSyncAt = DateTime.now();
+      _scheduleStatsSync(const Duration(seconds: 8));
       _publishLocalState();
     } catch (error) {
       if (_disposed || generation != _generation) return;
@@ -691,6 +708,7 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     if (!state.syncProgress.busy &&
         !state.fileCopyProgress.busy &&
         !_downloadOutbox.busy &&
+        !PlayerService().isPlayingNotifier.value &&
         DateTime.now().difference(_lastActivity) > const Duration(minutes: 3)) {
       disconnect();
       state = state.copyWith(
@@ -700,17 +718,49 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     }
     _refreshSocketSnapshot();
     _publishLocalState();
-    final now = DateTime.now();
-    const interval = Duration(minutes: 1);
-    if (now.difference(_lastLibrarySyncAt) >= interval)
-      unawaited(_syncLink(background: true));
+    if (DateTime.now().difference(_lastStatsSyncAt) >=
+        const Duration(minutes: 2)) {
+      unawaited(_syncStats());
+    }
   }
 
-  Future<void> _syncLink({bool background = false}) async {
+  void _scheduleStatsSync(Duration delay) {
+    if (_disposed || !state.socketConnected || !state.mergeApproved) return;
+    _statsDebounce?.cancel();
+    _statsDebounce = Timer(delay, () => unawaited(_syncStats()));
+  }
+
+  Future<void> _syncStats() async {
+    final coordinator = _linkSync;
+    if (_disposed ||
+        !state.socketConnected ||
+        !state.mergeApproved ||
+        !Database.isInitialized ||
+        _syncInFlight ||
+        _statsSyncInFlight ||
+        state.fileCopyProgress.busy ||
+        coordinator == null ||
+        coordinator.busy) {
+      return;
+    }
+    _statsDebounce?.cancel();
+    _statsSyncInFlight = true;
+    _lastStatsSyncAt = DateTime.now();
+    try {
+      await coordinator.synchronizeStats();
+    } catch (_) {
+      // Offline peers or malformed replies must never interrupt playback.
+      // Journal cursors checkpoint only acknowledged/committed pages, so the
+      // next connected tick or manual Sync now can safely retry.
+    } finally {
+      _statsSyncInFlight = false;
+    }
+  }
+
+  Future<void> _syncLink() async {
     if (_syncInFlight || state.fileCopyProgress.busy || _linkSync?.busy == true)
       return;
     _syncInFlight = true;
-    _lastLibrarySyncAt = DateTime.now();
     final generation = _generation;
     try {
       final credentials = _credentials;
@@ -719,12 +769,32 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
           credentials,
           connected: () => !_disposed && state.socketConnected,
         );
-      await _linkSync?.synchronize(background: background);
+      // The coordinator deliberately skips when disconnected. For an
+      // explicit user action, skipping is not success.
+      final coordinator = _linkSync;
+      if (_disposed ||
+          generation != _generation ||
+          !state.socketConnected ||
+          coordinator == null ||
+          !ref.read(lokalLinkServiceProvider).connected) {
+        throw StateError('Desktop disconnected before library sync. Reconnect and retry.');
+      }
+      await coordinator.synchronize();
+      if (_disposed ||
+          generation != _generation ||
+          !state.socketConnected ||
+          !ref.read(lokalLinkServiceProvider).connected ||
+          !identical(_linkSync, coordinator)) {
+        throw StateError('Desktop disconnected during library sync. Reconnect and retry.');
+      }
     } catch (_) {
-      if (!_disposed && generation == _generation)
+      if (!_disposed && generation == _generation) {
         state = state.copyWith(
-          error: 'Library sync paused. Your local data is safe; Lokal will retry when connected.',
+          error: 'Library sync paused. Your local data is safe; tap Sync now when connected.',
         );
+      }
+      _syncNotification.pause();
+      rethrow;
     } finally {
       _syncInFlight = false;
     }

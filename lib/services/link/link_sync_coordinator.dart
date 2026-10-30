@@ -100,32 +100,41 @@ class LinkSyncCoordinator {
       throw StateError('The music library is not ready.');
   }
 
-  Future<void> _run(Future<void> Function() action) {
+  Future<void> _run(
+    Future<void> Function() action, {
+    bool fullSync = true,
+  }) {
     final active = _active;
     if (active != null) return active;
-    final task = _execute(action);
+    final task = _execute(action, fullSync: fullSync);
     _active = task;
     return task.whenComplete(() {
       if (identical(_active, task)) _active = null;
     });
   }
 
-  Future<void> _execute(Future<void> Function() action) async {
-    _report(LinkSyncPhase.preparing);
+  Future<void> _execute(
+    Future<void> Function() action, {
+    bool fullSync = true,
+  }) async {
+    if (fullSync) _report(LinkSyncPhase.preparing);
     try {
       _requireReady();
       await action();
       _requireReady();
-      final completedAt = DateTime.now();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(
-        '$_prefix.last_sync',
-        completedAt.millisecondsSinceEpoch,
-      );
-      if (_progress.catalogSongs case final count?) {
-        await prefs.setInt('$_prefix.catalog_songs', count);
+      // Stats-only sync does not update the full-library sync timestamp.
+      if (fullSync) {
+        final completedAt = DateTime.now();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(
+          '$_prefix.last_sync',
+          completedAt.millisecondsSinceEpoch,
+        );
+        if (_progress.catalogSongs case final count?) {
+          await prefs.setInt('$_prefix.catalog_songs', count);
+        }
+        _report(LinkSyncPhase.complete, completedAt: completedAt);
       }
-      _report(LinkSyncPhase.complete, completedAt: completedAt);
     } catch (_) {
       _report(
         LinkSyncPhase.paused,
@@ -183,6 +192,98 @@ class LinkSyncCoordinator {
     } finally {
       _background = false;
     }
+  }
+
+  /// Automatic listening-statistics synchronization: one bounded journal page
+  /// in each direction, no catalog, file, playlist, tag or lyrics operations.
+  /// Older listening history is left for a later tick or manual full sync.
+  Future<void> synchronizeStats() async {
+    if (_active != null || !socket.connected || !Database.isInitialized) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('$_prefix.merge') != true || _active != null) return;
+    _background = true;
+    try {
+      await _run(_syncStatsBatch, fullSync: false);
+    } finally {
+      _background = false;
+    }
+  }
+
+  Future<void> _syncStatsBatch() async {
+    _requireReady();
+    final prefs = await SharedPreferences.getInstance();
+    final journal = LinkJournal.instance;
+    const pageSize = 50;
+
+    // One acknowledged outbound page per run, then checkpoint the cursor.
+    final pushKey = '$_prefix.history.push';
+    final outgoing = await journal.historyAfter(
+      prefs.getInt(pushKey) ?? 0,
+      limit: pageSize,
+    );
+    final pushed = outgoing['items'] as List;
+    if (pushed.isNotEmpty) {
+      await socket.request('history.push', {'items': pushed});
+      _requireReady();
+      await prefs.setInt(pushKey, outgoing['cursor'] as int);
+    }
+
+    // The desktop currently caps replies at 250 events. Consume only one
+    // response per cycle to avoid monopolizing launch or playback resources.
+    final pullKey = '$_prefix.history.pull';
+    final reply = await socket.request('history.pull', {
+      'cursor': prefs.getInt(pullKey) ?? 0,
+    });
+    _requireReady();
+    final incoming = reply.body['items'];
+    final nextCursor = reply.body['cursor'];
+    if (incoming is! List ||
+        incoming.length > 250 ||
+        nextCursor is! int) {
+      throw const FormatException('Invalid desktop listening-history page.');
+    }
+    if (incoming.isNotEmpty) {
+      final accepted = await journal.mergeHistory(incoming);
+      final songs = SongRepository();
+      final candidatesByTitle = <String, List<Song>>{};
+      final projected =
+          <({String songId, String eventId, DateTime playedAt, int listenedMs})>[];
+      for (final item in accepted) {
+        // The journal always retains remote-only plays. Local recent history
+        // is updated only for bounded, matching phone songs.
+        final rawTrack = item['track'];
+        Object? track = rawTrack;
+        if (track is! Map && item['track_json'] is String) {
+          try {
+            track = jsonDecode(item['track_json'] as String);
+          } on FormatException {
+            // Keep the play in the stats journal even if its optional
+            // track metadata cannot be projected to local recent history.
+            continue;
+          }
+        }
+        if (track is! Map) continue;
+        final wire = Map<String, dynamic>.from(track);
+        final title = wire['title'] as String? ?? '';
+        if (title.isEmpty) continue;
+        final candidates = candidatesByTitle[title] ??=
+            await songs.getHistoryMatchCandidates(title);
+        if (candidates.isEmpty) continue;
+        final song = await journal.match(wire, candidates: candidates);
+        if (song == null) continue;
+        projected.add((
+          songId: song.id,
+          eventId: item['event_id'] as String,
+          playedAt: DateTime.fromMillisecondsSinceEpoch(item['played_at'] as int),
+          listenedMs: item['ms_played'] as int,
+        ));
+      }
+      await RecentlyPlayedRepository().recordLinkPlays(projected);
+      MilestoneService.changes.add(null);
+    }
+    // Only advance after journal and any matching local-history projections
+    // were committed; interrupted runs can safely replay deduplicated events.
+    await prefs.setInt(pullKey, nextCursor);
   }
 
   Future<void> _synchronize({required bool importCatalog}) async {
