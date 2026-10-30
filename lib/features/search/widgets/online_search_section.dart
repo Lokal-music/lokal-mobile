@@ -329,9 +329,13 @@ class _OnlineSearchSectionState extends ConsumerState<OnlineSearchSection> {
         _say('This track has no advertised Dolby Atmos version.');
         return;
       }
-      if (!await AtmosPlaybackSupport.availableFor(result.track.atmosRequestable ? 'ac4' : 'eac3-joc')) {
-        _say(result.track.atmosRequestable
-            ? 'AC-4 playback is not supported by this device\'s native decoder or direct audio output. You can still try Download Amazon AC-4 from the song menu.'
+      // Match the native decoder to this recording's advertised Atmos
+      // presentation, not the provider-wide AC-4 capability flag.
+      final nativeCodec = result.track.atmosCodec ??
+          (result.track.atmosRequestable ? 'ac4' : 'eac3-joc');
+      if (!await AtmosPlaybackSupport.availableFor(nativeCodec)) {
+        _say(nativeCodec == 'ac4'
+            ? 'AC-4 playback is not supported by this device. You can still download the confirmed Atmos edition from the song menu.'
             : 'This device does not report native support for E-AC-3 JOC or direct audio output.');
         return;
       }
