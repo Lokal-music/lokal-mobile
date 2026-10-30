@@ -43,6 +43,8 @@ class WebdavService implements NetworkSourceService {
     } else {
       final nativeClient = HttpClient();
       nativeClient.badCertificateCallback = _validateUntrustedCertificate;
+      nativeClient.connectionTimeout = const Duration(seconds: 15);
+      nativeClient.maxConnectionsPerHost = 2;
       _client = IOClient(nativeClient);
     }
   }
@@ -270,6 +272,10 @@ class WebdavService implements NetworkSourceService {
     for (var attempt = 0; attempt < 2; attempt++) {
       final request = http.Request('PROPFIND', uri)
         ..followRedirects = false
+        // Several Android builds report uncaught _HttpClient._returnConnection
+        // errors after failed NAS requests. Do not return these connections
+        // to Dart's keep-alive pool while certificate trust is changing.
+        ..headers['Connection'] = 'close'
         ..headers['Depth'] = '$depth'
         ..headers['Content-Type'] = 'application/xml; charset=utf-8'
         ..headers['Authorization'] = _basicAuth(server)
@@ -473,6 +479,7 @@ class WebdavService implements NetworkSourceService {
     await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
       ..followRedirects = false
+      ..headers['Connection'] = 'close'
       ..headers['Authorization'] = _basicAuth(server);
     final streamed = await _client.send(request).timeout(const Duration(seconds: 30));
     if (streamed.statusCode != 200) {
@@ -517,6 +524,7 @@ class WebdavService implements NetworkSourceService {
     await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
       ..followRedirects = false
+      ..headers['Connection'] = 'close'
       ..headers['Authorization'] = _basicAuth(server);
     final response =
         await _client.send(request).timeout(const Duration(minutes: 5));
