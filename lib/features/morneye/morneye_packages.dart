@@ -1913,8 +1913,11 @@ class MorneyePackages {
         options: addon.qualityOptions,
         provider: provider,
       );
+      // E-AC-3 is not automatically Atmos. The current native path can
+      // preserve *verified JOC* but cannot render generic E-AC-3 through the
+      // normal Rust decoder. Keep this selection in its native bitstream,
+      // require positive JOC evidence and never silently FLAC-transcode it.
       final explicitAmazonJoc = amazonProvider &&
-          quality?.trim().toLowerCase() == 'eac3' &&
           chosen.trim().toLowerCase() == 'eac3';
       // Play and Save must send the exact configured quality to the addon.
       // A native encoded rendition is verified below; never silently
