@@ -425,6 +425,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           try job.validate()
           _ = try authorization.downloadRequest(for: job)
           guard job.direction == .download, job.phase == .queued, job.revision == 1,
+                self.pauses[self.scope(job)] == nil,
                 job.expectedBytes == nil || job.expectedBytes! <= LokalTransferFiles.maximumBytes else {
             throw LokalTransferError.invalidRecord
           }
