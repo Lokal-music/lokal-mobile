@@ -33,8 +33,10 @@ class WebdavService implements NetworkSourceService {
     http.Client? client,
     SongRepository? songRepository,
     NetworkCacheService? networkCache,
+    Future<void> Function(Uri)? ensureLocalAccess,
   })  : _songRepository = songRepository,
-        _networkCache = networkCache {
+        _networkCache = networkCache,
+        _ensureLocalAccess = ensureLocalAccess ?? NetworkLocalAccess.ensure {
     if (client != null) {
       _client = client;
     } else {
@@ -51,11 +53,13 @@ class WebdavService implements NetworkSourceService {
     http.Client? client,
     SongRepository? songRepository,
     NetworkCacheService? networkCache,
+    Future<void> Function(Uri)? ensureLocalAccess,
   }) =>
       WebdavService._(
         client: client,
         songRepository: songRepository,
         networkCache: networkCache,
+        ensureLocalAccess: ensureLocalAccess,
       );
 
   static const String _coverMarkerScheme = 'webdav-cover://';
@@ -70,6 +74,7 @@ class WebdavService implements NetworkSourceService {
     'cover', 'folder', 'album', 'albumart', 'front',
   ];
 
+  final Future<void> Function(Uri) _ensureLocalAccess;
   late final http.Client _client;
 
   static const _certificatePrefix = 'network_webdav_certificate_sha256_';
@@ -251,7 +256,7 @@ class WebdavService implements NetworkSourceService {
     int depth = 1,
   }) async {
     var uri = Uri.parse(url);
-    await NetworkLocalAccess.ensure(uri);
+    await _ensureLocalAccess(uri);
     await _loadCertificateTrust(uri);
     for (var attempt = 0; attempt < 2; attempt++) {
       final request = http.Request('PROPFIND', uri)
@@ -400,7 +405,7 @@ class WebdavService implements NetworkSourceService {
   ) async {
     final href = utf8.decode(base64Decode(marker));
     final uri = _requestUri(server, href);
-    await NetworkLocalAccess.ensure(uri);
+    await _ensureLocalAccess(uri);
     await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
       ..followRedirects = false
@@ -428,7 +433,7 @@ class WebdavService implements NetworkSourceService {
     // decode once, then re-encode at the request boundary.
     final href = _tryDecode(remoteId);
     final uri = _requestUri(server, href);
-    await NetworkLocalAccess.ensure(uri);
+    await _ensureLocalAccess(uri);
     await _loadCertificateTrust(uri);
     final request = http.Request('GET', uri)
       ..followRedirects = false
@@ -483,6 +488,9 @@ class WebdavService implements NetworkSourceService {
     // certificate pin, so a self-signed NAS must take the verified cache
     // path instead of failing on the second TLS handshake.
     if (await hasTrustedCertificate(server)) return null;
+    // Direct Media3/Rust playback bypasses this Dart HTTP client. Request
+    // Android local-network access before handing off the authenticated URL.
+    await _ensureLocalAccess(uri);
     return (url: uri.toString(), headers: {'Authorization': _basicAuth(server)});
   }
 
