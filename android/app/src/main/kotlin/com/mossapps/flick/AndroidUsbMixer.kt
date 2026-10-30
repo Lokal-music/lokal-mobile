@@ -116,8 +116,9 @@ object AndroidUsbMixer {
 
     /**
      * Open only at the source rate. Rust's float callback preserves at most 24
-     * significant PCM bits, so use 24-bit packed or zero-padded 32-bit integer
-     * transport; never advertise original 32-bit PCM sample exactness here.
+     * significant PCM bits. A 16-bit-only USB path is valid for 16-bit
+     * sources; 24-bit packed or zero-padded 32-bit are used for 24-bit sources.
+     * Never advertise original 32-bit PCM sample exactness here.
      * Fail closed when Android/USB cannot provide one of those exact routes.
      */
     @JvmStatic
@@ -126,6 +127,8 @@ object AndroidUsbMixer {
         if (!requested(context) || channels != 2 || rate !in 8_000..768_000) return 0
         if (Build.VERSION.SDK_INT < 34) return 0
         val manager = context.getSystemService(AudioManager::class.java) ?: return 0
+        val sourceBits = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong(SOURCE_BITS_KEY, 0L).toInt()
         val candidates = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).filter {
             it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
                 it.type == AudioDeviceInfo.TYPE_USB_HEADSET
@@ -138,17 +141,31 @@ object AndroidUsbMixer {
                         it.format.sampleRate == rate &&
                         it.format.channelMask == AudioFormat.CHANNEL_OUT_STEREO &&
                         it.format.encoding in setOf(
+                            AudioFormat.ENCODING_PCM_16BIT,
                             AudioFormat.ENCODING_PCM_24BIT_PACKED,
                             AudioFormat.ENCODING_PCM_32BIT,
-                        )
+                        ) &&
+                        (if (it.format.encoding == AudioFormat.ENCODING_PCM_16BIT) 16
+                            else if (it.format.encoding == AudioFormat.ENCODING_PCM_24BIT_PACKED) 24
+                            else 32) >= sourceBits
                 }
-                .sortedBy { if (it.format.encoding == AudioFormat.ENCODING_PCM_24BIT_PACKED) 0 else 1 }
+                .sortedBy {
+                    when (it.format.encoding) {
+                        AudioFormat.ENCODING_PCM_16BIT -> 0
+                        AudioFormat.ENCODING_PCM_24BIT_PACKED -> 1
+                        else -> 2
+                    }
+                }
 
             for (option in options) {
                 if (!manager.setPreferredMixerAttributes(ATTRIBUTES, device, option)) continue
                 var track: AudioTrack? = null
                 try {
-                    val bits = if (option.format.encoding == AudioFormat.ENCODING_PCM_24BIT_PACKED) 24 else 32
+                    val bits = when (option.format.encoding) {
+                        AudioFormat.ENCODING_PCM_16BIT -> 16
+                        AudioFormat.ENCODING_PCM_24BIT_PACKED -> 24
+                        else -> 32
+                    }
                     val frameBytes = (bits / 8) * channels
                     val minimum = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_STEREO, option.format.encoding)
                     require(minimum > 0) { "Invalid AudioTrack buffer requirement" }
