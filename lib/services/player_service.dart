@@ -2191,6 +2191,9 @@ class PlayerService {
   bool get isBitPerfectModeEnabled =>
       (currentEngineType == AudioEngineType.usbDacExperimental &&
           _uac2Service.isBitPerfectEnabledSync) ||
+      (currentEngineType == AudioEngineType.rustOboe &&
+          Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+          _uac2Service.isBitPerfectEnabledSync) ||
       (currentEngineType == AudioEngineType.dapInternalHighRes &&
           _uac2Service.isDapBitPerfectEnabledSync);
   bool get isBitPerfectProcessingLocked =>
