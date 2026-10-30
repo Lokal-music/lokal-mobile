@@ -866,6 +866,7 @@ Future<List<_PlaybackSource>> _morneyeSources(
               sourceName: addon.displayName,
               artwork: song.thumbnail,
               atmosAvailable: song.atmosAvailable,
+              atmosCodec: song.atmosCodec,
               // This flag denotes only that the installed *Amazon addon*
               // offers an optional AC-4 request. It does NOT certify that
               // this specific search result has an AC-4 or Atmos edition.
@@ -916,7 +917,8 @@ Future<List<_PlaybackSource>> _morneyeSources(
           }
           final tryAtmos = found.atmosRequested;
           final explicitTier = explicitMorneyePlaybackTier(
-              atmosRequested: tryAtmos, provider: addon.name);
+              atmosRequested: tryAtmos, provider: addon.name,
+              atmosCodec: found.atmosCodec);
           final requestedTier = explicitTier ?? '';
           final cacheKey = morneyePlaybackCacheKey(
             addonKey: addon.key,
