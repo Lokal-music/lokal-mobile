@@ -42,6 +42,18 @@ void main() {
     expect(tidalAtmosAvailable({'audio_modes': 'AC-4'}), isFalse);
   });
 
+  test('explicit Amazon spatial modes select the correct codec', () {
+    expect(morneyeExplicitAtmosMode({'audio_modes': 'E_AC_3_JOC'}), 'EAC3_JOC');
+    expect(morneyeAmazonAtmosCodec({'audio_modes': 'E_AC_3_JOC'}), 'eac3-joc');
+    expect(morneyeAmazonAtmosCodec({'audio_modes': 'AC_4_ATMOS'}), 'ac4');
+    expect(morneyeExplicitAtmosMode({'audioQualities': ['HD', 'ATMOS']}), 'DOLBY_ATMOS');
+    expect(morneyeAmazonAtmosCodec({'audioQualities': ['ATMOS']}), isNull,
+        reason: 'A generic catalogue flag does not specify the codec');
+    expect(morneyeAmazonAtmosCodec({'audio_modes': 'E-AC-3'}), isNull);
+    expect(morneyeAmazonAtmosCodec({'audio_modes': 'AC-4'}), isNull);
+    expect(morneyeAmazonAtmosCodec({}), isNull);
+  });
+
   test('lossless, hi-res and multichannel alone do not prove Atmos', () {
     expect(tidalAtmosAvailable({
       'audioQuality': 'HI_RES_LOSSLESS', 'audioModes': ['STEREO'],
