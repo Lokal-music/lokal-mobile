@@ -590,8 +590,9 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
         const Duration(seconds: 2),
         (_) => _tickLink(),
       );
-      // Connection alone never starts a full library scan. Schedule a small,
-      // nonblocking listening-history exchange after the socket settles.
+      // Connection alone never starts a full library scan. Defer the first
+      // bounded stats exchange until the socket and startup UI have settled.
+      _lastStatsSyncAt = DateTime.now();
       _scheduleStatsSync(const Duration(seconds: 8));
       _publishLocalState();
     } catch (error) {
