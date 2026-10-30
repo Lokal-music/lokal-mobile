@@ -754,7 +754,8 @@ class DiscoveryAddon {
     // A search result can embed a Qobuz sample URL. Discard only recognized
     // previews and request a fresh full stream from the add-on endpoint.
     // Unsafe, encrypted or DRM inline responses still fail closed.
-    if (settings.isEmpty && track.inlineStream case final inline?) {
+    if (settings.isEmpty && track.inlineStream != null) {
+      final inline = track.inlineStream!;
       try {
         return parseStream(inline, expectedDuration: track.duration);
       } on _PreviewOnlyAddonStream {
