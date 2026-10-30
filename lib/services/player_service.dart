@@ -5641,6 +5641,25 @@ class PlayerService {
 
     final engineForSong = _routeEngineForSong(normalizedEngine, song);
 
+    if (Uac2PreferencesService.isAndroidMixerUsbSelectedSync) {
+      // Never present a truncated 32-bit or unknown-precision source as
+      // bit-perfect. Probe local files if metadata is incomplete; otherwise
+      // the Android USB mixer will decline and the Rust fallback will play.
+      int? measuredBits = song.bitDepth;
+      if (measuredBits == null || measuredBits <= 0) {
+        final path = await _resolveRustPath(song);
+        if (path != null && path.isNotEmpty) {
+          try {
+            final probed = await rust_audio.audioProbeFormat(path: path);
+            measuredBits = probed.bitsPerSample;
+          } catch (error) {
+            _debugLog('[USB-MIXER] Unable to verify source precision: $error');
+          }
+        }
+      }
+      await _preferencesService.setAndroidMixerSourceBitDepth(measuredBits);
+    }
+
     switch (engineForSong) {
       case AudioEngineType.normalAndroid:
         if (normalizedEngine == AudioEngineType.usbDacExperimental) {
