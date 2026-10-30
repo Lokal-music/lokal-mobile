@@ -125,7 +125,6 @@ flutter:
     - shaders/cover_cloud_dissolve.frag
 
   assets:
-    - assets/morneye/amazon-new.sflx
     - assets/spotify/session_hook.js
     - assets/icons/flicklogo.png
     - assets/icons/flicklogo_svg.svg

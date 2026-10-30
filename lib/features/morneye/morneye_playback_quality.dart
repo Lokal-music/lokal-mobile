@@ -1,13 +1,13 @@
 /// A codec/quality identifier is not catalogue evidence of Dolby Atmos.
-/// Atmos playback requires an explicit user action; ordinary playback must
-/// always choose a stereo or lossless tier from the installed addon manifest.
+/// Selecting an encoded Atmos tier in an add-on's settings is a playback
+/// preference, not evidence that a particular song has an Atmos edition.
 bool isMorneyeAtmosQuality(String? value) => RegExp(
   r'^(?:DOLBY[_ -]?ATMOS|ATMOS|AC-?4)$',
   caseSensitive: false,
 ).hasMatch(value?.trim() ?? '');
 
 /// The Amazon extension also exposes E-AC-3 as a spatial tier, but E-AC-3
-/// alone is NOT Atmos. Never inherit either spatial option for normal play.
+/// alone is NOT Atmos. Do not invent catalogue tags from either option.
 bool morneyeSpatialOption(Map option, {String? provider}) =>
     option['kind']?.toString().toLowerCase() == 'spatial' ||
     (provider?.toLowerCase().startsWith('amazon') == true &&
@@ -26,17 +26,15 @@ String chooseMorneyeDownloadQuality({
   // download call. In particular, the Amazon Atmos action requests 'ac4'.
   if (requested != null && requested.isNotEmpty) return requested;
 
-  final configuredSpatial =
-      morneyeSpatialOption({'id': configured}, provider: provider) ||
-      options.any(
-        (option) =>
-            option is Map &&
-            option['id']?.toString().toLowerCase() ==
-                configured?.toLowerCase() &&
-            morneyeSpatialOption(option, provider: provider),
-      );
-  if (configured != null && configured.isNotEmpty && !configuredSpatial) {
-    return configured;
+  // The add-on's selected quality is the playback preference, not just a
+  // download preference. Always request its exact manifest tier first,
+  // including AC-4/JOC when selected. Selection is not proof of availability.
+  if (configured != null && configured.isNotEmpty) {
+    for (final option in options) {
+      if (option is Map && option['id']?.toString() == configured) {
+        return configured;
+      }
+    }
   }
 
   final candidates = <String>[];
@@ -48,19 +46,13 @@ String chooseMorneyeDownloadQuality({
     if (id.isNotEmpty) candidates.add(id);
   }
 
-  // A configured spatial tier should prefer the best offered stereo option.
-  if (configuredSpatial) {
-    for (final tier in ['HI_RES_LOSSLESS', 'LOSSLESS', 'HIGH', 'BEST']) {
-      for (final id in candidates) {
-        if (id.toUpperCase() == tier) return id;
-      }
+  // Without an explicit selection, prefer the highest documented stereo
+  // quality. Never infer an Atmos capability from the add-on manifest alone.
+  for (final tier in const ['HI_RES_LOSSLESS', 'LOSSLESS']) {
+    for (final id in candidates) {
+      if (id.toUpperCase() == tier) return id;
     }
-    if (candidates.isNotEmpty) return candidates.first;
-    return provider.toLowerCase().startsWith('tidal')
-        ? 'HI_RES_LOSSLESS'
-        : 'default';
   }
-
   for (final option in options) {
     if (option is! Map || morneyeSpatialOption(option, provider: provider)) {
       continue;
@@ -70,11 +62,17 @@ String chooseMorneyeDownloadQuality({
       if (id.isNotEmpty) return id;
     }
   }
-  return candidates.isNotEmpty ? candidates.first : 'default';
+  if (candidates.isNotEmpty) return candidates.first;
+  // Preserve Tidal's stereo fallback when an absent Atmos tier was saved.
+  if (isMorneyeAtmosQuality(configured) &&
+      provider.toLowerCase().startsWith('tidal')) {
+    return 'HI_RES_LOSSLESS';
+  }
+  return 'default';
 }
 
-/// Saving can intentionally keep an addon-specific user setting. Regular
-/// playback never inherits an Atmos-only download preference.
+/// Play and Save both honor the selected add-on tier. Neither a manifest
+/// option nor a configured quality proves that a particular track has it.
 String resolveMorneyeRequestQuality({
   required bool forPlayback,
   required String? requested,
@@ -82,12 +80,8 @@ String resolveMorneyeRequestQuality({
   required List<dynamic> options,
   required String provider,
 }) {
-  if (!forPlayback &&
-      requested == null &&
-      configured != null &&
-      configured.isNotEmpty) {
-    return configured;
-  }
+  // The user's explicitly chosen tier is authoritative for playback and
+  // downloads; an explicit one-off request overrides that preference.
   return chooseMorneyeDownloadQuality(
     requested: requested,
     configured: configured,
@@ -96,7 +90,7 @@ String resolveMorneyeRequestQuality({
   );
 }
 
-/// Only an explicit Atmos action changes the ordinary requested quality.
+/// An explicit per-song Atmos action overrides the configured quality.
 String? explicitMorneyePlaybackTier({
   required bool atmosRequested,
   String? provider,
@@ -111,8 +105,7 @@ String? explicitMorneyePlaybackTier({
 
 /// Amazon's search rows usually omit per-track codec and available audio
 /// modes. Show the *normal playback tier we will request*, never a fabricated
-/// per-track FLAC/AC-4 guarantee. A configured spatial download tier cannot
-/// silently become the regular playback tier.
+/// per-track FLAC/AC-4 guarantee. A spatial selection is not a search tag.
 String? amazonRequestedPlaybackQualityLabel({
   required String? configured,
   required List<dynamic> options,

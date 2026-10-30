@@ -28,8 +28,6 @@ import 'morneye_playback_quality.dart';
 
 const morneyeRegistry =
     'https://raw.githubusercontent.com/mornyeapp/Mornye-Extension/refs/heads/main/registry.json';
-const morneyeAmazonNewRegistry =
-    'https://raw.githubusercontent.com/CHEYCKIT/Mornye-Extension/refs/heads/feature/amazon-new-release-20261029/amazon-new-registry.json';
 const morneyeCompatVersion = '5.1.0';
 /// Mornye's documented .spotiflac-ext format and its legacy/newer archives.
 bool morneyeIsPackageFileName(String filename) => RegExp(
@@ -785,20 +783,17 @@ class MorneyePackages {
         }
       }
     }
-    // The bundled Amazon (New) package has a separate update feed; official
-    // Morneye sources remain on their original registry.
-    final needsAmazonNewRepo =
-        !_repos.any((repository) => repository.url == morneyeAmazonNewRegistry);
-    if (needsAmazonNewRepo) {
-      _repos.add(MorneyeRepository(
-        id: _sha256(utf8.encode(morneyeAmazonNewRegistry)).substring(0, 16),
-        url: morneyeAmazonNewRegistry,
-        name: 'Amazon (New) updates',
-      ));
-    }
+    // Remove only the update feed that earlier builds injected automatically.
+    // Keep an already installed Amazon (New) addon and every user-added repo.
+    const legacyAmazonNewFeed =
+        'https://raw.githubusercontent.com/CHEYCKIT/Mornye-Extension/refs/heads/feature/amazon-new-release-20261029/amazon-new-registry.json';
+    final oldCount = _repos.length;
+    _repos.removeWhere((r) =>
+        r.url == legacyAmazonNewFeed && r.name == 'Amazon (New) updates');
+    final removedBundledFeed = oldCount != _repos.length;
     _loaded = true;
     if (oldDefaultId != null || migratedAddonRepositoryIds ||
-        currentDefaultId != null && needsAmazonNewRepo) _save();
+        removedBundledFeed) _save();
   }
 
   void _save() => morneyeAtomicWrite(
@@ -1918,26 +1913,21 @@ class MorneyePackages {
         options: addon.qualityOptions,
         provider: provider,
       );
+      // E-AC-3 is not automatically Atmos. The current native path can
+      // preserve *verified JOC* but cannot render generic E-AC-3 through the
+      // normal Rust decoder. Keep this selection in its native bitstream,
+      // require positive JOC evidence and never silently FLAC-transcode it.
       final explicitAmazonJoc = amazonProvider &&
-          quality?.trim().toLowerCase() == 'eac3' &&
           chosen.trim().toLowerCase() == 'eac3';
-      if (forPlayback && !isMorneyeAtmosQuality(quality) &&
-          !explicitAmazonJoc &&
-          (morneyeSpatialOption({'id': chosen}, provider: provider) ||
-              addon.qualityOptions.any((o) => o is Map && o['id'] == chosen &&
-                  morneyeSpatialOption(o, provider: provider)))) {
-        throw const MorneyePackageError(
-          'Normal playback unexpectedly selected a Dolby Atmos download tier.',
-        );
-      }
-      // Saves retain the user's Amazon AC-4 setting even without an explicit
-      // per-track tier. Playback's resolved tier has already excluded it.
-      final amazonAc4 = amazonProvider &&
-          chosen.trim().toLowerCase() == 'ac4';
-      // An explicit E-AC-3 selection is Atmos only when initiated by a
-      // confirmed JOC action. The decoded file must then pass the JOC probe.
-      final explicitAtmos = isMorneyeAtmosQuality(quality) ||
-          explicitAmazonJoc || (!forPlayback && amazonAc4);
+      // Play and Save must send the exact configured quality to the addon.
+      // A native encoded rendition is verified below; never silently
+      // substitute FLAC when Atmos was requested.
+      // AC-4 is a codec preference and must be validated from the delivered
+      // file; it never creates a catalogue Atmos badge.
+      final selectedAc4 = chosen.trim().toLowerCase().replaceAll('-', '') == 'ac4';
+      // Amazon E-AC-3 must pass the JOC probe before it can be played.
+      final explicitAtmos = isMorneyeAtmosQuality(chosen) ||
+          explicitAmazonJoc;
       if (explicitAtmos) AtmosDiagnostics.record('addon_download_start', {
         'source': provider == 'tidal' ? 'tidal' : 'other',
         'quality': chosen,
@@ -2057,26 +2047,26 @@ class MorneyePackages {
       // Preserve the original compressed stream, including Atmos objects.
       // Amazon exposes 'ac4'; Tidal exposes 'DOLBY_ATMOS' (E-AC-3 JOC).
       // AC-4 verifies the codec, not independently its immersive presentation.
-      final verifiedAtmos = explicitAtmos && (amazonAc4
+      final verifiedAtmos = explicitAtmos && (selectedAc4
           ? await AtmosPlaybackSupport.isAc4File(file)
           : await AtmosPlaybackSupport.isJocFile(file));
       if (explicitAtmos) AtmosDiagnostics.record('source_validation', {
-        'codec': amazonAc4 ? 'ac4' : 'eac3_joc',
+        'codec': selectedAc4 ? 'ac4' : 'eac3_joc',
         'encoded': verifiedAtmos,
         'outcome': verifiedAtmos ? 'confirmed' : 'rejected',
       });
       if (explicitAtmos && !verifiedAtmos) {
-        throw MorneyeSourceVerificationError(amazonAc4 ? 'AC-4' : 'E-AC-3 JOC');
+        throw MorneyeSourceVerificationError(selectedAc4 ? 'AC-4' : 'E-AC-3 JOC');
       }
       if (verifiedAtmos) {
         // Media3, not Rust/FFmpeg PCM, retains the original encoded data.
         return MorneyeDownload(
           File(file),
           {...track.cast<String, Object?>(), ...result.cast<String, Object?>()},
-          {'codec': amazonAc4 ? 'ac4' : 'eac3-joc', 'format': 'isomp4'},
+          {'codec': selectedAc4 ? 'ac4' : 'eac3-joc', 'format': 'isomp4'},
           staged,
           atmosEncoded: true,
-          atmosCodec: amazonAc4 ? 'ac4' : 'eac3-joc',
+          atmosCodec: selectedAc4 ? 'ac4' : 'eac3-joc',
         );
       }
 
