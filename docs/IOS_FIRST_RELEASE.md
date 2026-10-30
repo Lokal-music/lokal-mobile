@@ -1,62 +1,49 @@
-# First iPhone sideload release
+# iPhone completion milestones
 
-Scope decision: 30 October 2026. This is the current release checklist and
-supersedes older statements that make unfinished native background transfers
-mandatory for the first IPA. Historical build/architecture records remain evidence,
-not an expanding release backlog.
+Scope decision: 30 October 2026. The user restored the native background-transfer
+work after temporarily trimming it. Complete the fixed milestones below; do not
+keep expanding the feature list. Build120 is a foreground-copy engineering
+checkpoint, separate from the finished native-engine target.
 
-## Ship the existing foreground transfer path
+## Fixed work remaining
 
-Keep the implemented iOS16+ app: local import and ordinary CUE handling, library,
-playlists, lyrics/artwork, playback and lock-screen controls, online services and
-add-ons, downloads, desktop link/copying, network libraries, share/export, and
-supported casting/output adapters. Applicable merged Android changes through
-PR350 are included. This scope change does not remove ordinary app features.
-Background **audio playback** remains required.
-
-Desktop file copying uses the existing Dart flow. Keep Lokal open with the iPhone unlocked and the desktop
-awake on Wi-Fi; after interruption, check for missing files again. Do not promise
-that copies continue while iOS suspends or terminates the app. The copy UI states
-that requirement. Completed files remain available locally.
-
-Keep the Clear/Forget, writer-generation and historical-ID safeguards in PRs356–357.
-Do not undo tested data-safety work to shorten the plan. Native `libraryImport`
-and `upload` capabilities remain false. Ordinary foreground copy/upload is still
-available; those flags describe the replacement native engine.
-
-## Defer replacement-engine work
-
-| Deferred work | Why it does not block this release |
+| Milestone | Completion evidence |
 | --- | --- |
-| Native background import/upload and durable queue/progress UI | Foreground copying is already implemented. No first-release promise of suspended-app transfer completion. |
-| CUE mapping for a native-import receipt anchor | Applies to the disabled replacement importer. Ordinary local/foreground-imported CUE support stays in scope. |
-| Native transfer history pruning and identity watermark | No product jobs are admitted by the replacement importer; retain its bounded admission and existing receipts rather than add pruning. |
-| New positive native-import integration fixture and storage-failure/OS-daemon recovery qualification | Required before enabling the replacement engine, not before shipping the established foreground path. Existing checks of shipped behavior remain required. |
-| Home Screen widgets and impractical Android-specific direct audio paths | Already excluded by the user; lock-screen controls and ordinary iOS audio stay in scope. |
+| 1. Integrated import | Installed coordinator + actual native transport/lease/file writer + actual Isar + bundled media reader complete a verified import and reconcile without duplicates. The isolated probe is now in source; Apple execution is pending. |
+| 2. Library identity and retirement | Atomic CUE mapping preserves import history and user identities; all relevant mutations retire writers; bounded history cleanup retains identity evidence. Actual rollback/reopen tests cover the boundaries. |
+| 3. Native uploads and queue | Owned uploads, ambiguity-safe/idempotent retry, durable progress/cancel/retry and pairing retirement work together. Real protocol tests cover the desktop contract; unavailable features are not advertised. |
+| 4. Lifecycle and final IPA | Storage-failure cancellation and actual OS suspension/relaunch pass. Enable the engine only after its gates pass, then qualify the exact release/AOT IPA, simulator app and independent package/source/symbol audit. |
 
-## Bounded exit checklist
+Keep the implemented iOS16+ app and relevant Android parity through merged PR350:
+ordinary imports/CUE, library/playlists, lyrics/artwork, local/online playback,
+add-ons/downloads, desktop link, network libraries, share/export and supported
+casting/output adapters. Background audio remains required. Home Screen widgets
+and impractical Android-specific direct audio remain excluded.
 
-1. **Freeze a candidate.** Use the stack through PR357 plus this scope/UI change.
-   Check review findings for actual data-loss, security, startup or playback defects.
-   Add no speculative transfer infrastructure or unrelated feature work.
-2. **Qualify that exact source once.** Require a successful release/AOT iPhone IPA,
-   the existing selected regressions and installed iOS18.6/26 acceptance, and the
-   independent package/source/checksum/symbol audit. Earlier builds103/111 do not
-   qualify later source. CI waits remain skipped until the packaging/qualification
-   step is taken; local Dart compilation is not a substitute for Apple acceptance.
-3. **Hand off the matching unsigned IPA.** Include its build/commit, checksum,
-   source/notices/symbols and the Windows signing/upgrade instructions. The user
-   handles physical installation, upgrade and device playback/route checks.
+Keep PR356–357 data-safety and historical-ID fixes. Native `libraryImport` and
+`upload` flags stay false until the replacement engine is accepted. Foreground
+copying remains usable: keep Lokal open with the iPhone unlocked and the desktop
+awake on Wi-Fi, and check again after interruptions to retry unfinished files.
+The iPhone copy UI remains accurate while native transfers are disabled.
 
-Aim for one candidate qualification run. Rebuild only for a concrete failure or
-critical review finding; a discovered optional improvement goes to follow-up.
-Record untested device/service combinations honestly rather than inventing
-acceptance or turning every future enhancement into another prerequisite.
+## Candidate qualification and handoff
+
+Preserve each frozen candidate's source and qualification evidence. Build120
+may qualify the foreground-copy checkpoint; it does not contain later engine
+changes. Use the existing app/simulator acceptance and independent IPA audit,
+and rebuild only for actual implementation changes or concrete failures.
+
+The user handles physical iPhone signing, installation/upgrade and device
+playback/route acceptance using the Windows instructions. Provide the matching
+unsigned IPA, build/commit, checksum, source/notices and symbols. Never infer
+physical acceptance from host tests or report an unexecuted native probe as passed.
 
 ```mermaid
 flowchart LR
-  F[Freeze existing app and foreground copying] --> Q[Qualify exact source and audit IPA]
-  Q --> H[Unsigned IPA and Windows handoff]
-  H --> D[User's physical iPhone acceptance]
-  N[Replacement native background engine] -. later release .-> L[Separate activation and qualification]
+  P[Installed import integration] --> I[Library identity and retirement]
+  I --> U[Native uploads and durable queue]
+  U --> O[OS lifecycle acceptance]
+  O --> Q[Enable engine and qualify exact IPA]
+  Q --> D[User device acceptance]
+  F[Frozen foreground-copy build120] --> H[Independent checkpoint qualification]
 ```

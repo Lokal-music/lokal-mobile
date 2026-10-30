@@ -1,10 +1,11 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-The current, bounded release plan is [First iPhone sideload release](IOS_FIRST_RELEASE.md).
-The replacement native background-transfer engine is deferred; its CUE mapping,
-queue/upload/history and OS-daemon work do not block the first foreground-copy IPA.
-Keep the completed data-safety fixes and background audio playback. The historical
-build ledgers below do not override that scope decision.
+The current completion milestones are [iPhone completion plan](IOS_FIRST_RELEASE.md).
+The user restored the native background-transfer work after the temporary scope
+trim. Build120 remains a frozen foreground-copy engineering checkpoint; it does
+not satisfy the full native-engine target. Keep the completed data-safety fixes,
+ordinary app features and background audio. Widgets and impractical direct-audio
+features remain excluded. Historical ledgers do not expand the fixed milestones.
 
 Status: implementation and hosted native validation, 30 October 2026 (Europe/Paris).
 Release scope updated 29 October 2026 (Europe/Paris): **iOS Home Screen widgets
@@ -124,10 +125,10 @@ It also adapts #339–340 catalogue metadata and ordinary stereo quality isolati
 Android AC-4 decoder/actions remain excluded.
 Its host contracts are separate from build86 acceptance; this continuation still
 needs its own Apple execution. Product native import/upload stays disabled.
-The later native-engine activation work includes CUE integration, owned uploads,
-persisted progress and OS suspension/relaunch acceptance. These are follow-up
-engine gates under the current first-release scope, not prerequisites for the
-foreground-copy IPA. See
+The native-engine activation work includes CUE integration, owned uploads,
+persisted progress and OS suspension/relaunch acceptance. The user restored
+these to the completion target; a foreground-copy IPA is a separate checkpoint,
+not proof that the full native engine is finished. See
 [the publication sequence](IOS_TRANSFERS.md#tracked-publication-foundation)
 for the implemented boundary and remaining gates. Home Screen widgets remain
 excluded.
@@ -268,8 +269,9 @@ establish iOS parity.
 ## Product brief
 
 Deliver a sideloadable iPhone version with the Android product's features wherever
-iOS reasonably supports them. The first release uses the bounded scope above;
-replacement background-transfer infrastructure is a later milestone. Preserve Lokal's visual
+iOS reasonably supports them. Completion follows the fixed milestones above;
+the foreground-only engineering checkpoint remains separate from the finished
+native background-transfer engine. Preserve Lokal's visual
 identity, local-first library, optional online services, and existing Android
 behavior. Do not trade away online sources, add-ons, or desktop integration to
 reach an early release date.

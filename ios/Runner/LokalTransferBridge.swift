@@ -161,9 +161,10 @@ final class LokalTransferBridge {
   private var wantsObservation = false
   private var active: Bool
 
-  init(messenger: FlutterBinaryMessenger, host: LokalTransferHost) {
+  init(messenger: FlutterBinaryMessenger, host: LokalTransferHost,
+       channelName: String = "lokal/transfers") {
     self.host = host
-    channel = FlutterMethodChannel(name: "lokal/transfers", binaryMessenger: messenger)
+    channel = FlutterMethodChannel(name: channelName, binaryMessenger: messenger)
     lease = LokalTransferObservationLease(host)
     importEngine = LokalTransferImportEngineLease(host.importOwnership)
     active = UIApplication.shared.applicationState == .active
@@ -388,3 +389,86 @@ final class LokalTransferBridge {
     } catch { reply.failure(error) }
   }
 }
+
+#if DEBUG
+/// Isolated installed-app contract fixture. It cannot write production transfer
+/// state, choose a caller destination, change Keychain, or enable product imports.
+/// Ephemeral networking deliberately makes no OS-background-delivery claim.
+@MainActor
+final class LokalTransferIntegrationHarness {
+  private struct Configuration: Decodable { let port: Int }
+  private struct Paths: Encodable, Sendable {
+    let musicRoot: String
+    let databaseDirectory: String
+  }
+  private let channel: FlutterMethodChannel
+  private let messenger: FlutterBinaryMessenger
+  private var host: LokalTransferHost?
+  private var bridge: LokalTransferBridge?
+  private var root: URL?
+  private var stopping = false
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    channel = FlutterMethodChannel(name: "lokal/transfers-integration-control",
+      binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      let reply = LokalTransferReply(result)
+      guard let self else { reply.failure(LokalTransferError.invalidTransition); return }
+      do {
+        switch call.method {
+        case "configure":
+          guard self.host == nil, self.root == nil, !self.stopping,
+                let typed = call.arguments as? FlutterStandardTypedData,
+                typed.data.count <= 1024,
+                let fields = try JSONSerialization.jsonObject(with: typed.data) as? [String: Any],
+                Set(fields.keys) == Set(["port"]) else { throw LokalTransferError.invalidRecord }
+          let configuration = try JSONDecoder().decode(Configuration.self, from: typed.data)
+          guard (1...65535).contains(configuration.port) else { throw LokalTransferError.invalidRecord }
+          let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appendingPathComponent("lokal-import-integration-" + UUID().uuidString)
+          try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+          self.root = root
+          let music = root.appendingPathComponent("Music")
+          let database = root.appendingPathComponent("Isar")
+          let native = root.appendingPathComponent("Native")
+          for directory in [music, database, native] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+          }
+          let authorization = try LokalTransferAuthorization(desktopID: "integration-fixture-pc",
+            origin: "http://127.0.0.1:\(configuration.port)", token: "lokal-integration-fixture",
+            pairingID: "579d4066-94a7-4d77-8102-3aeb89c4db64")
+          let host = LokalTransferHost(container: { native }, configuration: { .ephemeral },
+            library: { try LokalTransferLibrary(root: music) }, credentials: { authorization })
+          self.host = host
+          self.bridge = LokalTransferBridge(messenger: self.messenger, host: host,
+            channelName: "lokal/transfers-integration")
+          host.start()
+          reply.encode(.success(Paths(musicRoot: music.path, databaseDirectory: database.path)))
+        case "reset":
+          guard !self.stopping, call.arguments == nil else { throw LokalTransferError.invalidTransition }
+          self.stopping = true
+          self.bridge = nil
+          let root = self.root
+          if let host = self.host {
+            host.shutdown {
+              DispatchQueue.main.async { self.finishReset(root: root, reply: reply) }
+            }
+          } else { self.finishReset(root: root, reply: reply) }
+        default: reply.unsupported()
+        }
+      } catch { reply.failure(error) }
+    }
+  }
+
+  private func finishReset(root: URL?, reply: LokalTransferReply) {
+    host = nil
+    self.root = nil
+    defer { stopping = false }
+    do {
+      if let root { try FileManager.default.removeItem(at: root) }
+      reply.encode(.success(true))
+    } catch { reply.failure(error) }
+  }
+}
+#endif

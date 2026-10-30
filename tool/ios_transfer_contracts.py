@@ -88,14 +88,15 @@ def main() -> None:
                     framework = (engine / item['LibraryIdentifier']).resolve()
                     if not framework.is_relative_to(engine.resolve()):
                         raise ValueError('Flutter framework is outside its installed SDK.')
-                    bridge = subprocess.run(
-                        [*command, '-target', target, '-sdk', sdk_path,
-                         '-F', str(framework), '-typecheck', *map(str, SOURCES),
-                         str(ROOT / 'ios/Runner/LokalTransferBridge.swift')],
-                        check=False, timeout=180)
-                    sdk_failed |= bridge.returncode != 0
-                    status = 'passed' if bridge.returncode == 0 else 'FAILED'
-                    print(f'Transfer Flutter bridge SDK check {status}: {target}', flush=True)
+                    for mode, defines in [('release', []), ('debug', ['-D', 'DEBUG'])]:
+                        bridge = subprocess.run(
+                            [*command, *defines, '-target', target, '-sdk', sdk_path,
+                             '-F', str(framework), '-typecheck', *map(str, SOURCES),
+                             str(ROOT / 'ios/Runner/LokalTransferBridge.swift')],
+                            check=False, timeout=180)
+                        sdk_failed |= bridge.returncode != 0
+                        status = 'passed' if bridge.returncode == 0 else 'FAILED'
+                        print(f'Transfer Flutter bridge SDK check {status}: {target} ({mode})', flush=True)
         subprocess.run([*command, *map(str, SOURCES),
                         str(ROOT / 'ios/Transfers/Tests/NetworkContracts.swift'),
                         str(ROOT / 'ios/Transfers/Tests/LibraryContracts.swift'),

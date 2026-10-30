@@ -210,7 +210,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
 
   /// Only native code selects the existing application's Documents/Music root.
   /// Do not follow a replaced Music symlink or accept a Flutter destination.
-  private static func applicationMusicLibrary() throws -> LokalTransferLibrary {
+  static func applicationMusicLibrary() throws -> LokalTransferLibrary {
     let documents = try FileManager.default.url(for: .documentDirectory,
       in: .userDomainMask, appropriateFor: nil, create: true)
     let parent = open(documents.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
