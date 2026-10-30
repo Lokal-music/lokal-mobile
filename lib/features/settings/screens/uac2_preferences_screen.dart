@@ -595,6 +595,10 @@ class _Uac2PreferencesSectionsState
     final modeDescription = switch (diagnostics?.pathManagement) {
       AudioPathManagement.directUsbExperimental =>
         l10n.exclusiveUsbIsActiveAndBypassing,
+      AudioPathManagement.androidMixerBitPerfect =>
+        'Android 14+ bit-perfect USB mixer is active. '
+            'The USB DAC and sample rate were verified; audio bypasses '
+            'Android mixing, DSP and software volume.',
       AudioPathManagement.alsaDirectDap => l10n.directAlsaOutputIsActiveAnd,
       AudioPathManagement.managedDirectExclusive =>
         l10n.exclusiveDirectPcmIsActiveAnd,
