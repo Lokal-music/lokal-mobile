@@ -1448,8 +1448,18 @@ class PlayerService {
   }
 
   Future<void> setGaplessPlaybackEnabled(bool enabled) async {
+    final wasEnabled = gaplessPlaybackEnabledNotifier.value;
     gaplessPlaybackEnabledNotifier.value = enabled;
     await _preferencesService.setGaplessPlaybackEnabled(enabled);
+    // A mid-song toggle must prepare the successor now, not wait for the
+    // following track to start. Avoid replacing an already-prepared crossfade.
+    if (enabled && !wasEnabled && !_isCrossfadeActive &&
+        _shouldQueueNextTrack && _playlist.length > 1 &&
+        isPlayingNotifier.value) {
+      unawaited(_queueNextTrackForGapless().catchError((Object error) {
+        _debugLog('[gapless] Could not prepare successor on enable: $error');
+      }));
+    }
   }
 
   Future<void> setDuckOnInterruption(bool enabled) async {
