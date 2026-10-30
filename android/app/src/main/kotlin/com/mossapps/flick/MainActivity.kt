@@ -112,6 +112,7 @@ class MainActivity: FlutterActivity() {
     private val CAST_EVENT_CHANNEL = "com.mossapps.flick/cast_events"
     private val DLNA_ROUTE_CHANNEL = "com.mossapps.flick/dlna_route"
     private val DIAGNOSTICS_CHANNEL = "com.mossapps.flick/diagnostics"
+    private val crashBreadcrumbs by lazy { NativeCrashBreadcrumbs(applicationContext) }
     private val SPOTIFY_AUTH_CHANNEL = "konnekted/spotify_auth"
     private val LOCKER_PACKAGE = "com.mossapps.locker"
     private val LOCKER_RETURN_URI = "locker://return?source=flick"
@@ -1384,7 +1385,7 @@ class MainActivity: FlutterActivity() {
                 "recordCrashBreadcrumb" -> {
                     val stage = call.argument<String>("stage")
                     result.success(stage != null &&
-                        NativeCrashBreadcrumbs(this).record(stage))
+                        crashBreadcrumbs.record(stage))
                 }
                 "getBuildFlavor" -> result.success(BuildConfig.FLAVOR)
                 "getPerformanceSnapshot" -> result.success(mapOf(
