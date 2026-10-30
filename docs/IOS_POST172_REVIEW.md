@@ -1403,3 +1403,19 @@ iPhone-guarded late-preload refusal, explicit certificate/redirect checks, and
 actual Isar preservation after failed WebDAV walks. This does not establish
 physical NAS compatibility, TLS behavior on a specific NAS, measured gapless
 latency, or Apple simulator/device acceptance for this source.
+
+
+## Continuation: open Android PR363 source-priority UI
+
+Reviewed open PR363 head `f5df3092e6ed9af03693b7826c05ba7fc19e1aba`
+and incorporated its relevant shared changes into the same iPhone draft.
+New HTTP/Morneye installs move to the top of automatic playback priority;
+upgrades retain the saved order. The editor supports long-press row dragging,
+immediate handle dragging, haptics and a bounded scrolling viewport. Row moves
+retain hidden/disabled source positions. Explicit source picks remain exact.
+
+The iPhone continuation also treats a rejected preference write as an error and
+restores the preference cache, allowing the optimistic UI to roll back and retry.
+Regression checks exercise real handle/long-press gestures, persistent movement,
+new install versus upgrade, and rejected-write recovery. This source review does
+not assert that the upstream open PR has merged or has passed its own CI.
