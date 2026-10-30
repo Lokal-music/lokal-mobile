@@ -110,4 +110,22 @@ void main() {
     expect(requests, 3); // 429 must never enter the empty-results cache.
     client.close();
   });
+
+  test('temporary exact lookup failure does not poison the cache', () async {
+    var requests = 0;
+    final client = MockClient((request) async {
+      requests++;
+      return requests == 1
+          ? http.Response('', 429, headers: {'Retry-After': '60'})
+          : http.Response(jsonEncode(_record), 200);
+    });
+    final service = OnlineLyricsService(client: client);
+    expect(await service.fetchExact(title: 'Chan Chan', artist: 'Kiko'), isNull);
+    expect(
+      (await service.fetchExact(title: 'Chan Chan', artist: 'Kiko'))?.id,
+      42,
+    );
+    expect(requests, 2);
+    client.close();
+  });
 }
