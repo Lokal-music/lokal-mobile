@@ -612,6 +612,33 @@ mod tests {
     }
 
     #[test]
+    fn gapless_queue_fills_a_single_output_buffer_across_track_boundary() {
+        let (mut first, mut first_writer) = AudioSource::new(source_info("first.flac"));
+        let (mut second, mut second_writer) = AudioSource::new(source_info("second.flac"));
+        first.set_ready();
+        first.set_playing();
+        second.set_ready();
+        assert_eq!(first_writer.write(&[0.1, 0.2, 0.3, 0.4]), 4);
+        assert_eq!(second_writer.write(&[0.5, 0.6, 0.7, 0.8]), 4);
+        first_writer.finish();
+        second_writer.finish();
+
+        let mut provider = SourceProvider::new(48_000, 2);
+        provider.set_current(first);
+        provider.queue_next(second);
+
+        let mut output = [0.0; 8];
+        let (read, ended) = provider.read(&mut output);
+        assert_eq!(read, 8);
+        assert_eq!(output, [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+        assert_eq!(ended.unwrap().info.path, PathBuf::from("first.flac"));
+        assert_eq!(
+            provider.current().unwrap().info.path,
+            PathBuf::from("second.flac")
+        );
+    }
+
+    #[test]
     fn read_clears_finished_current_source_without_next_track() {
         let (mut source, mut producer) = AudioSource::new(source_info("track.flac"));
         source.set_ready();

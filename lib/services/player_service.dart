@@ -1448,8 +1448,21 @@ class PlayerService {
   }
 
   Future<void> setGaplessPlaybackEnabled(bool enabled) async {
+    final wasEnabled = gaplessPlaybackEnabledNotifier.value;
     gaplessPlaybackEnabledNotifier.value = enabled;
     await _preferencesService.setGaplessPlaybackEnabled(enabled);
+    if (enabled && !wasEnabled && !_usingRustBackend) {
+      _androidEngine?.prepareGaplessAfterToggle();
+    }
+    // A mid-song toggle must prepare the successor now, not wait for the
+    // following track to start. Avoid replacing an already-prepared crossfade.
+    if (enabled && !wasEnabled && !_isCrossfadeActive &&
+        _shouldQueueNextTrack && _playlist.length > 1 &&
+        isPlayingNotifier.value) {
+      unawaited(_queueNextTrackForGapless().catchError((Object error) {
+        _debugLog('[gapless] Could not prepare successor on enable: $error');
+      }));
+    }
   }
 
   Future<void> setDuckOnInterruption(bool enabled) async {
@@ -1806,6 +1819,11 @@ class PlayerService {
       if (_playlist.isNotEmpty && !_usingRustBackend &&
           !requiresOnDemandAndroidSequence(_playlist)) {
         unawaited(_rebuildPlaylist());
+      } else if (!_usingRustBackend &&
+          _androidEngine?.isSingleTrackOnly == true) {
+        // Reordering/removing the next logical track invalidates the native
+        // preloaded child. Otherwise Media3 may advance to a deleted entry.
+        unawaited(_androidEngine!.invalidateOnDemandGaplessSuccessor());
       }
     });
   }
@@ -2883,6 +2901,7 @@ class PlayerService {
       stemClipLookup: AutoMixStemClipCache.instance.read,
       stemVolumeProvider: () => _currentVolume,
       onNextSong: _resolveAndroidCrossfadeNext,
+      gaplessEnabledProvider: () => gaplessPlaybackEnabledNotifier.value,
       onTrackAdvanced: _onAndroidTrackAdvanced,
       onTrackError: _onAndroidTrackError,
     );
@@ -6311,7 +6330,8 @@ class PlayerService {
   /// is no successor so the engine lets the track end naturally.
   Song? _resolveAndroidCrossfadeNext() {
     if (_playlist.isEmpty) return null;
-    if (loopModeNotifier.value == LoopMode.one) return null;
+    if (loopModeNotifier.value == LoopMode.one ||
+        loopModeNotifier.value == LoopMode.stopAfterCurrent) return null;
     final isLastTrack = _currentIndex >= _playlist.length - 1;
     if (isLastTrack && loopModeNotifier.value != LoopMode.all) return null;
     final next = _playlist[isLastTrack ? 0 : _currentIndex + 1];
@@ -7385,6 +7405,12 @@ class PlayerService {
     // user taps Repeat All can stall the main player, particularly for HTTP
     // and on-demand sources. Keep the current stream, index and position.
     await _updateLoopMode();
+    if (!_usingRustBackend &&
+        _androidEngine?.isSingleTrackOnly == true) {
+      // Stop After Current, Repeat One and Repeat All can all change which
+      // successor is legal. Remove any child queued under the old mode.
+      await _androidEngine!.invalidateOnDemandGaplessSuccessor();
+    }
     if (mode == LoopMode.all &&
         !_usingRustBackend &&
         _playlist.length > 1 &&

@@ -80,6 +80,11 @@ class _Player implements ja.AudioPlayer {
   }
 
   @override
+  Future<void> addAudioSource(ja.AudioSource source) async {
+    sources.add(source as ja.IndexedAudioSource);
+  }
+
+  @override
   Future<void> removeAudioSourceRange(int start, int end) async {
     sources.removeRange(start, end);
     if (activeIndex != null && activeIndex! >= end) {
@@ -206,6 +211,145 @@ void main() {
     );
     expect(requiresOnDemandAndroidSequence([progressive]), isTrue);
     expect(requiresOnDemandAndroidSequence([morneye]), isTrue);
+  });
+
+  testWidgets('on-demand gapless preloads one source and maps logical indices',
+      (tester) async {
+    final library = List<Song>.generate(
+      80,
+      (i) => Song(
+        id: 'song-$i', title: 'Recording $i', artist: 'Artist',
+        duration: const Duration(minutes: 3), fileType: 'FLAC',
+        filePath: '/music/song-$i.flac',
+      ),
+    );
+    final player = _Player();
+    var logicalIndex = 30;
+    var sourcesBuilt = 0;
+    final played = <Song>[];
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async =>
+          throw StateError('Do not construct the whole large playlist'),
+      sourceBuilder: (song) async {
+        sourcesBuilt++;
+        return ja.AudioSource.uri(Uri.file(song.filePath!));
+      },
+      playlistProvider: () => library,
+      selectedPlaylistIndexProvider: () => logicalIndex,
+      onNativePlaylistIndex: (i) => logicalIndex = i,
+      onNextSong: () => logicalIndex + 1 < library.length
+          ? library[logicalIndex + 1] : null,
+      gaplessEnabledProvider: () => true,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    final subscription = engine.playbackStateStream.listen((state) {
+      if (state.currentTrack != null) played.add(state.currentTrack!);
+    });
+    addTearDown(() async {
+      await subscription.cancel();
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+
+    await engine.load(library[30]);
+    await tester.pump();
+    await tester.pump();
+    expect(player.sources.length, 2);
+    expect(sourcesBuilt, 2);
+    expect(engine.isSingleTrackOnly, isTrue,
+        reason: 'logical queue still uses manual end-of-list completion');
+
+    player.activeIndex = 1;
+    player.indices.add(1);
+    await tester.pump();
+    await tester.pump();
+    expect(logicalIndex, 31);
+    expect(played.last.id, 'song-31');
+    expect(player.sources.length, 3);
+    expect(sourcesBuilt, 3);
+
+    // Advance far enough to require dropping already played slots. The
+    // full 80-item Library must never be materialized in Media3.
+    for (var i = 32; i <= 46; i++) {
+      player.activeIndex = player.sources.length - 1;
+      player.indices.add(player.activeIndex);
+      await tester.pump();
+      await tester.pump();
+      expect(logicalIndex, i);
+    }
+    expect(player.sources.length, lessThan(16));
+    expect(sourcesBuilt, 18);
+    expect(played.last.id, 'song-46');
+  });
+
+  testWidgets('on-demand queue mutation invalidates stale native successor',
+      (tester) async {
+    final songs = List<Song>.generate(
+      70,
+      (index) => Song(
+        id: 'track-$index',
+        title: 'Track $index',
+        artist: 'Artist',
+        duration: const Duration(minutes: 3),
+        fileType: 'FLAC',
+        filePath: '/music/$index.flac',
+      ),
+    );
+    final player = _Player();
+    var allowNext = true;
+    final engine = AndroidAudioEngine(
+      playerProvider: () async => player,
+      sourcesBuilder: () async => throw StateError('Must use fast-start'),
+      sourceBuilder: (song) async =>
+          ja.AudioSource.uri(Uri.file(song.filePath!)),
+      playlistProvider: () => songs,
+      selectedPlaylistIndexProvider: () => 0,
+      onNextSong: () => allowNext ? songs[1] : null,
+      gaplessEnabledProvider: () => true,
+      configurePlayer: (_) async {},
+      disposeEngine: () async {},
+      shouldSuppressTrackSync: () => false,
+      shouldIgnoreTrack: (_) => false,
+      shouldFastStartCurrentTrackOnly: () => false,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await player.errors.close();
+      await player.positions.close();
+      await player.indices.close();
+      await player.durations.close();
+      await player.processing.close();
+    });
+    await engine.load(songs.first);
+    await tester.pump();
+    expect(player.sources.length, 2);
+
+    // Stop After Current must remove the native child before Media3 can
+    // advance into an already prepared successor.
+    allowNext = false;
+    await engine.invalidateOnDemandGaplessSuccessor();
+    await tester.pump();
+    expect(player.sources.length, 1);
+
+    // Queue edit: the new logical successor must replace the old native one.
+    songs[1] = Song(
+      id: 'replacement', title: 'Replacement', artist: 'Artist',
+      duration: const Duration(minutes: 3), fileType: 'FLAC',
+      filePath: '/music/replacement.flac',
+    );
+    allowNext = true;
+    await engine.invalidateOnDemandGaplessSuccessor();
+    await tester.pump();
+    expect(player.sources.length, 2);
   });
 
   test('large Library queues prepare only the tapped track', () async {
