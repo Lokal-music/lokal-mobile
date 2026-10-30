@@ -36,6 +36,35 @@ an actual registered-channel integration probe accepted in build 78. Dashed
 connections are remaining product work. OS background execution still needs
 separate iOS suspension/relaunch acceptance.
 
+## Scoped URLSession retirement (source continuation, not product-enabled)
+
+The next native safety boundary is implemented in `LokalTransferJournal.retireNetworkScope`
+and `LokalTransferRuntime.retireNetworkScope`. A current app-owned Flutter
+client submits one exact pairing scope. The native bridge synchronously revokes
+old queued submission tickets before dispatch. SQLite then atomically advances
+all non-complete, non-cancelled network job revisions and persists a
+`pairingChanged` tombstone. If *any* matching job is importing into the Isar
+catalogue, the entire transaction is refused with no partial changes. No
+network task is cancelled until the journal write commits.
+
+The runtime cancels matching URLSession tasks, waits for their delegate
+completions and an ordered native file-worker barrier before replying. Late
+callbacks cannot publish into retired revisions; journal recovery reloads the
+tombstone before pumping work. Ordinary retry, enqueue and pairing resume
+cannot reuse that retired pairing. Other desktop/pairing scopes are untouched.
+Frozen import custody and verified staging are **not** deleted by this
+network-only operation: separate app-attested Isar retirement and public-file
+cleanup still own them.
+
+This bridge is **not yet invoked by the product Forget/Clear actions** while
+`libraryImport=false` and `upload=false`. Doing so now would require
+installing an app-owned transfer client/explicit pairing mapping before any
+credential removal and proving native cancellation for all task identities,
+including stale background daemon tasks. The new isolated native and Dart
+regression cases are source-level coverage, **not CI or device acceptance** at
+this checkpoint. iOS background suspension/relaunch, signing, physical device
+and true import/upload recovery remain outstanding.
+
 ## Existing paths and the suspension gap
 
 `LinkFileCopy` rechecks both catalogues before explicit copying, so retries can
