@@ -991,7 +991,11 @@ Future<List<_PlaybackSource>> _morneyeSources(
                   morneyeCanPlayWhileDownloading(addon.name)
               ? MorneyeLiveSession()
               : null;
-          if (tryAtmos && !forDownload && !found.atmosDownload &&
+          if (morneyeNeedsSpatialPlaybackOutput(
+                spatialRequested: tryAtmos,
+                forDownload: forDownload,
+                atmosDownload: found.atmosDownload,
+              ) &&
               !await AtmosPlaybackSupport.available) {
             AtmosDiagnostics.record('request_rejected', {'reason': 'decoder_unavailable'});
             throw const DiscoveryException(
