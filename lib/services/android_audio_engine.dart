@@ -443,6 +443,14 @@ class AndroidAudioEngine implements AudioEngine {
     if (pending != null) await pending;
     if (!identical(_onDemandGaplessSlots, slots) ||
         !identical(_player, player)) return;
+    if (player.sequence.length > slots.length + 1) {
+      // A full native rebuild superseded the one-track look-ahead while an
+      // invalidation was pending. Never trim that full sequence as if it
+      // belonged to the obsolete rolling window.
+      _onDemandGaplessSlots = null;
+      _syncPlaylistStateFromPlayer();
+      return;
+    }
     final current = player.currentIndex;
     if (current == null || current < 0 || current >= slots.length) return;
     if (player.sequence.length > current + 1) {
