@@ -1484,7 +1484,8 @@ pub fn create_audio_engine(
     // app volume, because the conversion happens downstream of the gain.
     let dap_force_dsp = !dap_bit_perfect_enabled
         && device_profile.as_ref().is_some_and(|p| p.is_dap())
-        && !will_attempt_usb;
+        && !will_attempt_usb
+        && !android_mixer_requested;
     let mut requested_sample_rate = if dap_force_dsp {
         let dsd_active = crate::api::audio_api::current_dsd_track_rate().is_some();
         match preferred_sample_rate.filter(|&r| r > 0) {
