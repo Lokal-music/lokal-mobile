@@ -98,7 +98,7 @@ impl MixerHandle {
             let class = mixer_class(env)?;
             env.call_static_method(&class, jni_str!("bits"), jni_sig!("(J)I"), &[JValue::Long(id)])?.i()
         })? as usize;
-        if bits != 24 && bits != 32 {
+        if !matches!(bits, 16 | 24 | 32) {
             let mut handle = Self { id, bits };
             handle.close();
             return Err(format!("Unsupported Android USB mixer PCM packing: {} bits", bits));
@@ -196,7 +196,12 @@ fn render(
             let quantized = ((sample.clamp(-1.0, 1.0) * 8_388_608.0) as i32)
                 .clamp(-8_388_608, 8_388_607);
             let offset = i * (handle.bits / 8);
-            if handle.bits == 24 {
+            if handle.bits == 16 {
+                let pcm16 = (sample.clamp(-1.0, 1.0) * 32_768.0) as i32;
+                bytes[offset..offset + 2].copy_from_slice(
+                    &(pcm16.clamp(-32_768, 32_767) as i16).to_le_bytes()
+                );
+            } else if handle.bits == 24 {
                 let raw = quantized.to_le_bytes();
                 bytes[offset..offset + 3].copy_from_slice(&raw[..3]);
             } else {
