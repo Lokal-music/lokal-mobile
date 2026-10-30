@@ -4909,8 +4909,13 @@ class MainActivity: FlutterActivity() {
                 NativeTombstoneSummary.decode(bytes)
                     ?: "Native tombstone present but stack could not be decoded"
             } else {
-                stream.bufferedReader().use { it.readText().take(16 * 1024) }
-                    .trim().takeIf { it.isNotEmpty() }
+                stream.bufferedReader().use { reader ->
+                    val buffer = CharArray(16 * 1024)
+                    val length = reader.read(buffer)
+                    if (length > 0) String(buffer, 0, length).trim()
+                        .takeIf { it.isNotEmpty() }
+                    else null
+                }
             }
         } catch (_: Exception) {
             null
