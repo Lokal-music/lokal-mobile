@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flick/data/entities/ios_transfer_receipt_entity.dart';
+import 'package:flick/data/entities/ios_song_identity_entity.dart';
+import 'package:flick/services/ios_library_scan_epoch.dart';
 import 'package:flick/data/entities/song_entity.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +16,11 @@ Future<Map<String, Object>> probeIosImportScanGuard() async {
   Isar? opened;
   try {
     final db = await Isar.open(
-      [SongEntitySchema, IosTransferReceiptEntitySchema],
+      [
+        SongEntitySchema,
+        IosTransferReceiptEntitySchema,
+        IosSongIdentityEntitySchema,
+      ],
       directory: root.path,
       name: 'ios_import_scan_probe',
       relaxedDurability: false,
@@ -49,12 +56,18 @@ Future<Map<String, Object>> probeIosImportScanGuard() async {
     });
     final stale = scan(target);
     final ordinary = scan('${root.path}/Ordinary.wav');
-    await repository.upsertScannedSongs([stale, ordinary]);
+    await IosLibraryScanEpoch.run(
+      () => repository.upsertScannedSongs([stale, ordinary]),
+    );
     expect(await db.songEntitys.count(), 2);
     expect(stale.id, Isar.autoIncrement);
     expect(ordinary.id, greaterThan(0));
-    await repository.deleteScannedSongsByIds([42]);
-    await repository.deleteScannedSongsByPath(['lokal://3/fixture']);
+    await IosLibraryScanEpoch.run(
+      () => repository.deleteScannedSongsByIds([42]),
+    );
+    await IosLibraryScanEpoch.run(
+      () => repository.deleteScannedSongsByPath(['lokal://3/fixture']),
+    );
     expect(await db.songEntitys.get(42), isNotNull);
 
     // Ordinary user entry points must retain their explicit mutation semantics.
@@ -70,17 +83,30 @@ Future<Map<String, Object>> probeIosImportScanGuard() async {
       await db.songEntitys.put(row);
       await db.iosTransferReceiptEntitys.put(receipt);
     });
-    await repository.upsertScannedSong(stale);
-    await repository.upsertScannedSong(scan(target.toUpperCase(), id: 42));
+    await IosLibraryScanEpoch.run(() => repository.upsertScannedSong(stale));
+    await IosLibraryScanEpoch.run(
+      () => repository.upsertScannedSong(scan(target.toUpperCase(), id: 42)),
+    );
     expect((await db.songEntitys.get(42))!.title, 'User edit');
     expect((await db.songEntitys.get(42))!.filePath, target);
     final current = (await db.songEntitys.get(42))!..title = 'Fresh scan';
-    await repository.upsertScannedSong(current);
+    await IosLibraryScanEpoch.run(() => repository.upsertScannedSong(current));
     expect((await db.songEntitys.get(42))!.title, 'Fresh scan');
-    await repository.deleteScannedSongsByIds([42]);
+    await IosLibraryScanEpoch.run(
+      () => repository.deleteScannedSongsByIds([42]),
+    );
     expect(await db.songEntitys.get(42), isNotNull);
-    await repository.deleteSong(42);
-    await repository.upsertScannedSong(stale);
+    final entered = Completer<void>(), release = Completer<void>();
+    final oldScan = IosLibraryScanEpoch.run(() async {
+      entered.complete();
+      await release.future;
+      await repository.upsertScannedSong(stale);
+    });
+    final refused = expectLater(oldScan, throwsStateError);
+    await entered.future;
+    await IosLibraryScanEpoch.withMutation(() => repository.deleteSong(42));
+    release.complete();
+    await refused;
     expect(await db.songEntitys.get(42), isNull);
     expect(await db.songEntitys.count(), 1);
     return {

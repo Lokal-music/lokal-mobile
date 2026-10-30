@@ -9,7 +9,9 @@ import 'package:flick/features/morneye/morneye_network.dart';
 import 'package:flick/features/morneye/morneye_packages.dart';
 import 'package:flick/features/morneye/morneye_runtime.dart';
 import 'package:flick/features/morneye/morneye_storage.dart';
+import 'package:flick/services/playback_source_priority.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 
 import 'morneye_fakes.dart';
@@ -750,6 +752,30 @@ void main() {
         throwsA(isA<MorneyePackageError>()),
       );
       expect(packages.addons, isEmpty);
+    });
+
+    test('new package is prioritized but updating it keeps user order', () async {
+      SharedPreferences.setMockInitialValues({
+        PlaybackSourcePriority.key: ['mono', 'yt'],
+      });
+      engine.scripts['v1'] = downloader();
+      engine.scripts['v2'] = downloader();
+      final addon = await packages.install(
+        bytes: packageBytes(manifestFor('qobuz', version: '1.0.0'), 'v1'),
+      );
+      expect(await PlaybackSourcePriority.load(),
+          ['a-${addon.key}', 'mono', 'yt']);
+      await PlaybackSourcePriority.reorder(
+          ['a-${addon.key}', 'mono', 'yt'], 0, 3);
+      expect(await PlaybackSourcePriority.load(),
+          ['mono', 'yt', 'a-${addon.key}']);
+
+      await packages.install(
+        bytes: packageBytes(manifestFor('qobuz', version: '2.0.0'), 'v2'),
+      );
+      expect(await PlaybackSourcePriority.load(),
+          ['mono', 'yt', 'a-${addon.key}'],
+          reason: 'An upgrade must not promote an existing package');
     });
 
     test('updates but never downgrades', () async {

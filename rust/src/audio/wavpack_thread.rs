@@ -273,6 +273,8 @@ fn wavpack_pcm_decode_thread(
     let mut int_buf = vec![0i32; buf_samples];
     let mut interleaved = Vec::with_capacity(buf_samples);
     let mut resample_out = Vec::new();
+    let mut decoded_frames: u64 = 0;
+    let mut written_resampled_samples: u64 = 0;
 
     log::info!(
         "[WV-PCM] Starting: rate={}/{} ch={}/{} bps={} float={}",
@@ -296,6 +298,7 @@ fn wavpack_pcm_decode_thread(
         }
 
         let frames_read = unpacked as usize;
+        decoded_frames += frames_read as u64;
         let total_samples = frames_read * samples_per_frame;
 
         interleaved.clear();
@@ -323,26 +326,49 @@ fn wavpack_pcm_decode_thread(
             interleaved.clone()
         };
 
-        let output = if let Some(ref mut rs) = resampler {
-            resample_out.resize(pcm_data.len() * 2, 0.0f32);
-            let n = rs
-                .process_interleaved(&pcm_data, &mut resample_out)
-                .map_err(|e| anyhow!("Resampling error: {}", e))?;
-            resample_out[..n].to_vec()
+        if let Some(ref mut rs) = resampler {
+            // A 44.1 kHz input decoded into a 192 kHz engine can expand by
+            // more than 4x. process_interleaved writes only what fits in the
+            // caller buffer; drain its retained output queue after every call.
+            resample_out.resize(8192, 0.0f32);
+            let mut first = true;
+            loop {
+                let input = if first { &pcm_data[..] } else { &[][..] };
+                first = false;
+                let n = rs
+                    .process_interleaved(input, &mut resample_out)
+                    .map_err(|e| anyhow!("Resampling error: {}", e))?;
+                if n == 0 { break; }
+                write_to_ring_buffer(&resample_out[..n], &mut producer, &stop_signal);
+                written_resampled_samples += n as u64;
+                if stop_signal.load(Ordering::Acquire) || producer.should_stop() { break; }
+            }
         } else {
-            pcm_data
-        };
-
-        write_to_ring_buffer(&output, &mut producer, &stop_signal);
+            write_to_ring_buffer(&pcm_data, &mut producer, &stop_signal);
+        }
     }
 
     if let Some(ref mut rs) = resampler {
+        // Flush may process a zero-padded final input chunk. Only publish the
+        // real track duration at the output clock, then drain every queued
+        // frame so no samples are silently dropped at the boundary.
+        let expected_frames = ((decoded_frames as u128 * output_sample_rate as u128)
+            + file_sample_rate as u128 / 2) / file_sample_rate as u128;
+        let expected_samples = expected_frames * output_channels as u128;
         resample_out.resize(8192, 0.0f32);
-        let n = rs
-            .flush(&mut resample_out)
-            .map_err(|e| anyhow!("Resampler flush error: {}", e))?;
-        if n > 0 {
-            write_to_ring_buffer(&resample_out[..n], &mut producer, &stop_signal);
+        loop {
+            if stop_signal.load(Ordering::Acquire) || producer.should_stop() { break; }
+            let n = rs
+                .flush(&mut resample_out)
+                .map_err(|e| anyhow!("Resampler flush error: {}", e))?;
+            if n == 0 { break; }
+            let remaining = expected_samples.saturating_sub(written_resampled_samples as u128);
+            let real_samples = (n as u128).min(remaining) as usize;
+            if real_samples > 0 {
+                write_to_ring_buffer(&resample_out[..real_samples], &mut producer, &stop_signal);
+                written_resampled_samples += real_samples as u64;
+            }
+            if remaining <= n as u128 { break; }
         }
     }
 

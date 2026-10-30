@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flick/data/entities/ios_transfer_receipt_entity.dart';
+import 'package:flick/data/entities/ios_song_identity_entity.dart';
 import 'package:flick/data/entities/network_server_entity.dart';
 import 'package:flick/data/entities/song_entity.dart';
 import 'package:flick/models/ios_transfer_models.dart';
@@ -77,6 +78,7 @@ Future<Map<String, Object>> probeIosImportPipeline(File generatedWav) async {
         SongEntitySchema,
         NetworkServerEntitySchema,
         IosTransferReceiptEntitySchema,
+        IosSongIdentityEntitySchema,
       ],
       name: 'import_probe_${id.replaceAll('-', '')}',
       directory: paths['databaseDirectory'] as String,

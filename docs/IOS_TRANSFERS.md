@@ -1281,6 +1281,35 @@ partially deleted CUE group. Android keeps its existing deletion/upsert path.
 Actual Isar tests cover preparation refusal, first expansion, range insertion,
 manual identity preservation, stale-snapshot/overlap refusal, post-replacement
 rollback and reopen, anchored-range removal and unchanged public-file SHA-256.
-This source does not yet implement whole-CUE removal back to a full-file row;
-that restoration and bounded history retirement remain in milestone2. Native
-product capabilities remain disabled until the complete activation gates pass.
+Whole-CUE removal re-reads actual full-file metadata, including its duration,
+before the same writer replaces the whole group. It prefers the still-live
+original anchor, otherwise a surviving derived identity; a removed anchor is
+never restored. Missing/invalid metadata retains the existing group. This runs
+even when the last CUE/log sidecar has disappeared, while ordinary/Android
+cleanup keeps its existing sidecar condition. Rollback/reopen and re-expansion
+are covered by actual Isar contracts. Bounded history retirement remains in
+milestone2. Native product capabilities remain disabled until all gates pass.
+
+### Durable recording identity floor
+
+A private singleton collection stores the greatest allocated Song ID. iPhone
+startup seeds it from the existing library and receipts before publishing the
+database; each allocation advances it in the same writer as insertion. Library
+clear records the floor before removing songs. Deleting derived CUE ranges,
+clearing receipts and reopening an empty database cannot reset this counter.
+Unknown versions, exhaustion and attempts to recreate a deleted explicit ID
+fail without resetting the store. Android keeps Isar's existing allocation.
+
+The counter retains identity evidence needed for later history compaction; it
+does not authorize deleting live import receipts or native custody. Those retain
+file/recovery provenance until a separate acknowledged cleanup is safe.
+
+```mermaid
+flowchart LR
+  M[Full-file metadata / CUE ranges] --> E[Current scan generation]
+  E --> W[One Isar writer: validate snapshot]
+  W --> C[Retain or allocate IDs above durable floor]
+  C --> P[Put accepted replacement rows]
+  P --> R[Remove obsolete ranges]
+  R --> T[Commit rows and identity floor together]
+```

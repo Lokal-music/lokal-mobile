@@ -1,4 +1,5 @@
 import 'ios_transfer_song_identity.dart';
+
 import 'dart:convert';
 
 import 'package:isar_community/isar.dart';
@@ -351,6 +352,7 @@ class IosTransferImportStore {
       // delayed old engine cannot reserve a new row after the barrier commits.
       await validateOwnership();
       _current(isCurrent);
+      final createSong = song == null;
       if (song == null) {
         final metadata = job.intent.metadata;
         song = SongEntity()
@@ -370,9 +372,9 @@ class IosTransferImportStore {
           ..year = metadata.year
           ..fileType = metadata.fileExtension
           ..dateAdded = _now();
-        await retainIosImportSongIdentitiesInTransaction(isar, [song]);
-        await isar.songEntitys.put(song);
       }
+      await retainIosImportSongIdentitiesInTransaction(isar, [song]);
+      if (createSong) await isar.songEntitys.put(song);
       await _boundary('prepare:afterSong');
       _current(isCurrent);
       final receipt = IosTransferReceiptEntity()

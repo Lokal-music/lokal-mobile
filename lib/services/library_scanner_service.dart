@@ -2169,7 +2169,7 @@ class LibraryScannerService {
             sidecarStopwatch.elapsed,
           );
 
-          if (cueMap.isNotEmpty || logMap.isNotEmpty) {
+          if (cueMap.isNotEmpty || logMap.isNotEmpty || Platform.isIOS) {
             final existingSongsAfterScan = await _songRepository
                 .getSongEntitiesByFolder(folderUri);
             // Separate raw entities from CUE tracks — the old collapsible map
@@ -2192,8 +2192,61 @@ class LibraryScannerService {
             final orphanedCuePaths = existingCuePaths
                 .where((p) => !cueMap.containsKey(p))
                 .toList();
-            if (orphanedCuePaths.isNotEmpty) {
-              await _songRepository.deleteScannedCueTracksByPath(orphanedCuePaths);
+            final ordinaryOrphans = <String>[];
+            for (final audioPath in orphanedCuePaths) {
+              if (Platform.isIOS && iosTransferOperationKeyForPath(audioPath) != null) {
+                // A CUE track's duration describes a range, never the full file.
+                // Re-read the actual file before replacing any of its rows.
+                final metadata = await _extractRustMetadataForUri(audioPath, rawPath: audioPath);
+                if (metadata == null || _isCancelled) continue;
+                final expected = existingSongsAfterScan.where((row) => row.filePath == audioPath).toList();
+                final fallback = expected.firstOrNull;
+                if (fallback == null) continue;
+                final modified = DateTime.fromMillisecondsSinceEpoch(metadata.lastModified);
+                final replacement = SongEntity()
+                  ..filePath = audioPath
+                  ..title = (metadata.title?.trim().isNotEmpty ?? false)
+                      ? metadata.title!.trim() : _extractTitleFromFilename(audioPath.split('/').last)
+                  ..artist = (metadata.artist?.trim().isNotEmpty ?? false)
+                      ? metadata.artist!.trim() : l10n.unknownArtist
+                  ..album = metadata.album
+                  ..albumArtist = metadata.albumArtist
+                  ..genre = metadata.genre
+                  ..year = metadata.year
+                  ..trackNumber = metadata.trackNumber
+                  ..discNumber = metadata.discNumber
+                  ..durationMs = metadata.durationMs?.toInt()
+                  ..fileType = metadata.format.toUpperCase()
+                  ..fileSize = metadata.fileSize.toInt()
+                  ..lastModified = modified
+                  ..folderUri = folderUri
+                  ..relativeFolderPath = fallback.relativeFolderPath
+                  ..albumArtPath = _carriedArtworkPath(fallback,
+                      lastModified: modified, fileSize: metadata.fileSize.toInt())
+                  ..bitrate = AudioMetadataUtils.normalizeStoredBitrateKbps(metadata.bitrate,
+                      sampleRate: metadata.sampleRate, bitDepth: metadata.bitDepth)
+                  ..sampleRate = metadata.sampleRate
+                  ..bitDepth = metadata.bitDepth
+                  ..channels = fallback.channels
+                  ..replaygainTrackGain = metadata.replaygainTrackGain
+                  ..replaygainTrackPeak = metadata.replaygainTrackPeak
+                  ..replaygainAlbumGain = metadata.replaygainAlbumGain
+                  ..replaygainAlbumPeak = metadata.replaygainAlbumPeak
+                  ..metadataComplete = true;
+                if ((replacement.durationMs ?? 0) <= 0 ||
+                    (replacement.fileSize ?? 0) <= 0 || replacement.fileType!.isEmpty) continue;
+                final mapped = await _songRepository.replaceImportedCueTracks(
+                  audioPath, [replacement], expected: expected,
+                );
+                if (!mapped) ordinaryOrphans.add(audioPath);
+              } else {
+                ordinaryOrphans.add(audioPath);
+              }
+            }
+            // Preserve ordinary/Android cleanup's existing sidecar condition.
+            // Native groups are removed only by accepted atomic replacement.
+            if ((cueMap.isNotEmpty || logMap.isNotEmpty) && ordinaryOrphans.isNotEmpty) {
+              await _songRepository.deleteScannedCueTracksByPath(ordinaryOrphans);
             }
 
             // Process CUE files

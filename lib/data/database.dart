@@ -7,10 +7,12 @@ import 'entities/artist_entity.dart';
 import 'entities/link_event_entities.dart';
 import 'entities/folder_entity.dart';
 import 'entities/ios_transfer_receipt_entity.dart';
+import 'entities/ios_song_identity_entity.dart';
 import 'entities/network_server_entity.dart';
 import 'entities/recently_played_entity.dart';
 import 'entities/song_audio_cache_entity.dart';
 import 'entities/song_entity.dart';
+import '../services/ios_transfer_song_identity.dart';
 
 export 'entities/artist_entity.dart';
 export 'entities/link_event_entities.dart';
@@ -68,10 +70,11 @@ class Database {
       LibraryOpEntitySchema,
       // Private import recovery state; never exported through the peer journal.
       if (Platform.isIOS) IosTransferReceiptEntitySchema,
+      if (Platform.isIOS) IosSongIdentityEntitySchema,
     ];
 
     try {
-      _instance = await Isar.open(
+      final opened = await Isar.open(
         schemas,
         directory: dir.path,
         name: _databaseName,
@@ -79,6 +82,20 @@ class Database {
         // durable truth. Other platforms retain their existing default mode.
         relaxedDurability: !Platform.isIOS,
       );
+      try {
+        if (Platform.isIOS) {
+          await opened.writeTxn(() async {
+            if (await opened.iosSongIdentityEntitys.count() == 0) {
+              await retainIosImportSongIdentitiesInTransaction(opened, []);
+            }
+          });
+        }
+        // Publish only after the old library's identity floor is durable.
+        _instance = opened;
+      } catch (_) {
+        await opened.close();
+        rethrow;
+      }
     } on IsarError catch (e) {
       if (Platform.isIOS) rethrow;
       if (e.message.contains('MDBX_INCOMPATIBLE')) {

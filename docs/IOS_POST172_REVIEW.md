@@ -1380,3 +1380,42 @@ Ported shared behavior from PR350 head `4ab24776bffe00cab884e3d8c7abb7677de422ab
 iPhone adaptation: AC-4 playback remains unavailable; JOC playback requires native capability. Saving verified encoded bytes does not require a playback decoder. An AC-4 file is labeled AC-4 and never manufactures catalogue Atmos evidence. The same verified codec metadata is retained by staged Morneye saves. Native Android decoder/USB sources are untouched.
 
 This is later source than the existing qualified packages. Local focused contracts are recorded separately; no CI, simulator or physical acceptance is inferred for this continuation. CI waits remain skipped at the user's request. Native product background import/upload remain disabled.
+
+
+## Continuation: merged Android PR361–362
+
+Reviewed PR361 head `f908cfcaa03c8cf782255507a70450e83703e621`
+and PR362 head `336f0c78be56bc9c01c494fba7902470ecad212c`.
+Both were merged before this review; their relevant changes are integrated.
+
+| Change | iPhone integration |
+| --- | --- |
+| Live Autoplay/Gapless search toggles | Build filtered settings inside the listening Consumer; both toggles can be changed twice without stale values. |
+| Bounded successor preparation | Preserve exact logical queue occurrences and prune consumed native slots. The shared system-player adapter retains iPhone request scopes, checks after asynchronous source resolution, and waits for pending preparation before replacement/collapse. Disabling Gapless trims the speculative successor. |
+| Android PCM rate transitions | Carry upstream Rust queue/rate and WAVPack changes, preserving request-generation guards and raw/DSD exclusions. No bit-perfect claim for resampled PCM. |
+| SMB NAS diagnostics | Validate URL without double decoding; distinguish negotiation/login, share attachment and directory-list permission failures. Preserve the Rust bridge contract. |
+| WebDAV certificate approval | Show origin and SHA-256 for explicit approval; persist only after authenticated WebDAV verification. Pinned NAS playback uses verified local caching because system players do not share the Dart pin. No global certificate bypass. |
+| WebDAV traversal/download failures | Refuse unsafe redirects and malformed collection responses; incomplete sync cannot purge indexed tracks or advance its success timestamp. Download to a temporary file, check completeness, publish atomically. |
+| Local-network permission | Reuse the existing Android bridge prompt on Android. iPhone retains its OS local-network declaration and socket-triggered permission behavior. |
+
+Host verification includes settings double toggles, bounded queue/index behavior,
+iPhone-guarded late-preload refusal, explicit certificate/redirect checks, and
+actual Isar preservation after failed WebDAV walks. This does not establish
+physical NAS compatibility, TLS behavior on a specific NAS, measured gapless
+latency, or Apple simulator/device acceptance for this source.
+
+
+## Continuation: open Android PR363 source-priority UI
+
+Reviewed open PR363 head `f5df3092e6ed9af03693b7826c05ba7fc19e1aba`
+and incorporated its relevant shared changes into the same iPhone draft.
+New HTTP/Morneye installs move to the top of automatic playback priority;
+upgrades retain the saved order. The editor supports long-press row dragging,
+immediate handle dragging, haptics and a bounded scrolling viewport. Row moves
+retain hidden/disabled source positions. Explicit source picks remain exact.
+
+The iPhone continuation also treats a rejected preference write as an error and
+restores the preference cache, allowing the optimistic UI to roll back and retry.
+Regression checks exercise real handle/long-press gestures, persistent movement,
+new install versus upgrade, and rejected-write recovery. This source review does
+not assert that the upstream open PR has merged or has passed its own CI.

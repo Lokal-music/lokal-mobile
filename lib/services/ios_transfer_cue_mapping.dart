@@ -7,7 +7,7 @@ import 'ios_library_scan_epoch.dart';
 import 'ios_transfer_scan_guard.dart';
 import 'ios_transfer_song_identity.dart';
 
-/// Metadata-only range replacement. Caller owns Isar's writer; no native file
+/// Metadata-only CUE/full-file replacement. Caller owns Isar's writer; no native file
 /// authority is granted and the original import receipt stays immutable.
 class IosTransferCueMapping {
   IosTransferCueMapping(this.isar);
@@ -47,18 +47,33 @@ class IosTransferCueMapping {
       throw StateError('The recording changed. Start a new scan.');
     }
     final ordered = List<SongEntity>.of(tracks);
+    final wholeFile =
+        ordered.length == 1 &&
+        ordered.single.startOffsetMs == null &&
+        ordered.single.endOffsetMs == null;
+    if (wholeFile &&
+        (current.isEmpty ||
+            (ordered.single.durationMs ?? 0) <= 0 ||
+            ordered.single.durationMs! > 31536000000 ||
+            (ordered.single.fileSize ?? 0) <= 0 ||
+            (ordered.single.fileType?.trim().isEmpty ?? true))) {
+      throw StateError('Read full-file metadata before removing CUE tracks.');
+    }
     for (final row in ordered) {
       final start = row.startOffsetMs, end = row.endOffsetMs;
       if (row.filePath != path ||
-          start == null ||
-          start < 0 ||
-          start > 31536000000 ||
-          (end != null && (end <= start || end > 31536000000)) ||
+          (!wholeFile &&
+              (start == null ||
+                  start < 0 ||
+                  start > 31536000000 ||
+                  (end != null && (end <= start || end > 31536000000)))) ||
           (row.id != Isar.autoIncrement && !snapshot.containsKey(row.id))) {
         throw StateError('Invalid CUE recording identity or range.');
       }
     }
-    ordered.sort((a, b) => a.startOffsetMs!.compareTo(b.startOffsetMs!));
+    if (!wholeFile) {
+      ordered.sort((a, b) => a.startOffsetMs!.compareTo(b.startOffsetMs!));
+    }
     for (var i = 1; i < ordered.length; i++) {
       if (ordered[i - 1].startOffsetMs == ordered[i].startOffsetMs ||
           ordered[i - 1].endOffsetMs == null ||
@@ -71,10 +86,18 @@ class IosTransferCueMapping {
         if (row.startOffsetMs != null) row.startOffsetMs!: row,
     };
     final raw = current.where((row) => row.startOffsetMs == null).firstOrNull;
+    final byId = List<SongEntity>.of(current)
+      ..sort((a, b) => a.id.compareTo(b.id));
     final retained = <int>{};
     for (var i = 0; i < ordered.length; i++) {
       final row = ordered[i];
-      final previous = ranges[row.startOffsetMs] ?? (i == 0 ? raw : null);
+      final previous = wholeFile
+          ? raw ??
+                current
+                    .where((value) => value.id == receipt.localSongId)
+                    .firstOrNull ??
+                byId.first
+          : ranges[row.startOffsetMs] ?? (i == 0 ? raw : null);
       if (previous == null) {
         row.id = Isar.autoIncrement;
       } else {
