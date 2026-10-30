@@ -814,8 +814,9 @@ class _Uac2PreferencesSectionsState
             label: 'Android 14+ USB bit-perfect mixer',
             description: 'Uses Android’s native AudioTrack and mixer API. '
                 'Requires Android 14+ and a DAC advertising bit-perfect mixer '
-                'attributes. Exact PCM up to 24 significant bits only; '
-                'unsupported content falls back to normal playback.',
+                'attributes. Exact PCM up to 24 significant bits only. '
+                'Android volume is bypassed: lower the DAC hardware volume '
+                'before playback. Unsupported content plays normally.',
             selected: effective == AudioEnginePreference.androidMixerUsb,
             onTap: (sheet) => select(
               sheet,
