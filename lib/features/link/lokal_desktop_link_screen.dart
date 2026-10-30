@@ -443,9 +443,16 @@ class _LokalDesktopLinkScreenState
                                   destructive: true,
                                 );
                                 if (confirmed && mounted) {
-                                  await IosTransferRoot.withMutationBarrier(
+                                  final expected = await ref
+                                      .read(lokalRemoteCredentialsStoreProvider)
+                                      .read();
+                                  if (!mounted) return;
+                                  await IosTransferRoot.withPairingRetirement(
                                     context,
-                                    controller.forgetConfiguration,
+                                    expected: expected,
+                                    mutation: () => controller.forgetConfiguration(
+                                      expected: expected,
+                                    ),
                                   );
                                 }
                               }),
