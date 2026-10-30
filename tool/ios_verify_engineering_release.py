@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+from itertools import zip_longest
 import json
 from pathlib import Path
 import plistlib
 import re
 import subprocess
 import tarfile
+import tempfile
 import zipfile
 
 
@@ -47,8 +49,58 @@ def _source_blobs(repo: Path) -> dict[str, str]:
     return result
 
 
-def _blob_hash(data: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+def _verify_source_export(source: Path, repo: Path, tracked: dict[str, str]) -> int:
+    """Compare every exported member to a fresh Git archive of this checkout.
+
+    Git archive applies export-ignore, export-subst and eol attributes. In
+    particular, vendored Opus marks common.props eol=crlf, so the exported
+    bytes legitimately differ from the stored Git blob. Comparing against a
+    separately generated canonical export preserves byte-level verification
+    without weakening it to a line-ending-tolerant comparison.
+    """
+    seen: set[str] = set()
+    with tempfile.TemporaryFile() as canonical:
+        subprocess.run(
+            ["git", "-C", str(repo), "archive", "--format=tar", "HEAD"],
+            stdout=canonical, check=True,
+        )
+        canonical.seek(0)
+        with tarfile.open(source, "r:gz") as packaged, tarfile.open(
+            fileobj=canonical, mode="r:"
+        ) as reference:
+            actual_files = (entry for entry in packaged if not entry.isdir())
+            expected_files = (entry for entry in reference if not entry.isdir())
+            for actual, expected in zip_longest(actual_files, expected_files):
+                _require(actual is not None and expected is not None,
+                         "Source archive member count differs from HEAD export")
+                _require(actual.name == expected.name,
+                         f"Source archive path differs from HEAD export: {actual.name}")
+                _require(actual.name not in seen,
+                         f"Duplicate source path: {actual.name}")
+                seen.add(actual.name)
+                _require(actual.name in tracked,
+                         f"Untracked source archive path: {actual.name}")
+                _require(actual.type == expected.type,
+                         f"Source archive type differs from HEAD: {actual.name}")
+                _require(actual.isfile() or actual.issym(),
+                         f"Unexpected source entry type: {actual.name}")
+                if actual.issym():
+                    _require(actual.linkname == expected.linkname,
+                             f"Source symlink differs from HEAD: {actual.name}")
+                else:
+                    actual_stream = packaged.extractfile(actual)
+                    expected_stream = reference.extractfile(expected)
+                    _require(actual_stream is not None and expected_stream is not None,
+                             f"Unreadable source: {actual.name}")
+                    with actual_stream, expected_stream:
+                        while True:
+                            actual_chunk = actual_stream.read(1024 * 1024)
+                            expected_chunk = expected_stream.read(1024 * 1024)
+                            _require(actual_chunk == expected_chunk,
+                                     f"Source archive bytes differ from HEAD: {actual.name}")
+                            if not actual_chunk:
+                                break
+    return len(seen)
 
 
 def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
@@ -130,27 +182,9 @@ def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
                  f"Missing Dart AOT symbols: {name}")
 
     tracked = _source_blobs(repo)
-    seen: set[str] = set()
-    with tarfile.open(source, "r:gz") as archive:
-        for entry in archive:
-            if entry.isdir():
-                continue
-            _require(entry.isfile() or entry.issym(),
-                     f"Unexpected source entry type: {entry.name}")
-            _require(entry.name not in seen, f"Duplicate source path: {entry.name}")
-            seen.add(entry.name)
-            expected = tracked.get(entry.name)
-            _require(expected is not None, f"Untracked source archive path: {entry.name}")
-            if entry.issym():
-                data = entry.linkname.encode("utf-8", "surrogateescape")
-            else:
-                handle = archive.extractfile(entry)
-                _require(handle is not None, f"Unreadable source: {entry.name}")
-                data = handle.read()
-            _require(_blob_hash(data) == expected,
-                     f"Source archive bytes differ from HEAD: {entry.name}")
-    _require(len(seen) >= min_sources, "Incomplete source archive")
-    _require(len(seen) >= int(len(tracked) * 0.95),
+    source_count = _verify_source_export(source, repo, tracked)
+    _require(source_count >= min_sources, "Incomplete source archive")
+    _require(source_count >= int(len(tracked) * 0.95),
              "Unexpected number of unexported source files")
     return {
         "source_commit": metadata["source_commit"],
@@ -158,7 +192,7 @@ def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
         "ipa_sha256": sha,
         "binaries": len(binaries),
         "native_dsyms": len(dsyms),
-        "source_files_checked": len(seen),
+        "source_files_checked": source_count,
         "disposition": "Unsigned engineering package only",
     }
 
