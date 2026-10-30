@@ -1417,6 +1417,12 @@ Song progressiveAddonSong(DiscoveryTrack track, ResolvedDiscoveryAudio audio) {
   );
 }
 
+class _ExplicitSpatialFailure {
+  const _ExplicitSpatialFailure(this.cause, this.stackTrace);
+  final Object cause;
+  final StackTrace stackTrace;
+}
+
 Future<List<OnlineSource>> _playbackSources(
   DiscoveryHttp web,
   DiscoverySettings settings,
@@ -1428,6 +1434,7 @@ Future<List<OnlineSource>> _playbackSources(
   bool includeMorneye = true,
   String? selectedSourceId,
   bool respectEnabledDiscoverySources = false,
+  bool stopOnExplicitSpatialFailure = false,
 }) async {
   final registry = DiscoverySourceRegistry(web, settings);
   final youtube = YoutubeAudio(web);
@@ -1518,6 +1525,25 @@ Future<List<OnlineSource>> _playbackSources(
           final audio = await registry.resolve(
             found, cancel: cancel, forDownload: forDownload,
           );
+          final selectedSpatial = await addon.requestedSpatialCodec(cancel: cancel);
+          if (selectedSpatial != null) {
+            // HTTP add-ons use a separate protocol from Mornye packages.
+            // A configured Atmos tier must pass through the native verifier,
+            // not progressive PCM playback or a catalogue quality label.
+            onStatus?.call('Verifying selected spatial audio from ${addon.displayName}…');
+            try {
+              return await cache().prepare(
+                found, audio, cancel: cancel,
+                requestedSpatialCodec: selectedSpatial,
+                requireNativeOutput: !forDownload,
+              );
+            } catch (error, stackTrace) {
+              if (stopOnExplicitSpatialFailure) {
+                throw _ExplicitSpatialFailure(error, stackTrace);
+              }
+              rethrow;
+            }
+          }
           if (forDownload) {
             return cache().prepare(
               found, audio, cancel: cancel,
@@ -1851,6 +1877,7 @@ Future<Song?> findDiscoverySong(
       morneye ?? MorneyeService.instance,
       cancel: cancel,
       respectEnabledDiscoverySources: true,
+      stopOnExplicitSpatialFailure: true,
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();
@@ -1953,6 +1980,9 @@ Future<Song?> findDiscoverySong(
           '[OnlineSource] source playback failed source=${source.id} '
           'reason=${_onlineFailureKind(error)}',
         );
+        if (error is _ExplicitSpatialFailure) {
+          Error.throwWithStackTrace(error.cause, error.stackTrace);
+        }
         // An Atmos server timeout must not silently switch to stereo.
         if (found.atmosAvailable &&
             error is DiscoveryException &&

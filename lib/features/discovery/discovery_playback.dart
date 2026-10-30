@@ -15,6 +15,7 @@ import '../../services/artwork_pixel_validation.dart';
 import '../../src/rust/api/audio_api.dart' as native;
 import '../../src/rust/api/morneye_api.dart' as morneye;
 import '../../services/catalogue_quality.dart';
+import '../../services/atmos_playback_support.dart';
 import 'discovery_http.dart';
 import 'discovery_models.dart';
 import 'discovery_sources.dart';
@@ -23,12 +24,15 @@ typedef DiscoveryAudioProbe = Future<native.AudioProbeFormat> Function(
   String path,
 );
 
+typedef DiscoverySpatialProbe = Future<bool> Function(String path, String codec);
+
 /// Downloads actual media before engine handoff. Never treats a URL as a File.
 /// The native probe is mandatory; provider file/quality labels are ignored.
 class DiscoveryPlaybackCache {
   DiscoveryPlaybackCache({
     required this.http,
     DiscoveryAudioProbe? probe,
+    DiscoverySpatialProbe? spatialProbe,
     Future<Directory> Function()? directory,
     Set<String> Function()? protectedPaths,
     this.maxFileBytes = 512 * 1024 * 1024,
@@ -38,12 +42,17 @@ class DiscoveryPlaybackCache {
     Future<void> Function(String audio, String cover)? embedCover,
   }) : _embedCover = embedCover ?? _embedCoverInFile,
        _probe = probe ?? ((path) => native.audioProbeFormat(path: path)),
+       _spatialProbe = spatialProbe ?? ((path, codec) =>
+           codec == 'ac4'
+               ? AtmosPlaybackSupport.isAc4File(path)
+               : AtmosPlaybackSupport.isJocFile(path)),
        _directory = directory ?? _defaultDirectory,
        _protectedPaths = protectedPaths ?? (() => {});
 
   final DiscoveryHttp http;
   final Future<void> Function(String audio, String cover) _embedCover;
   final DiscoveryAudioProbe _probe;
+  final DiscoverySpatialProbe _spatialProbe;
   final Future<Directory> Function() _directory;
   final Set<String> Function() _protectedPaths;
   final int maxFileBytes;
@@ -63,6 +72,8 @@ class DiscoveryPlaybackCache {
     ResolvedDiscoveryAudio audio, {
     Future<void>? cancel,
     void Function(int bytes)? onProgress,
+    String? requestedSpatialCodec,
+    bool requireNativeOutput = true,
   }) async {
     if (_busy) {
       throw const DiscoveryException('Another recording is being prepared.');
@@ -77,6 +88,13 @@ class DiscoveryPlaybackCache {
     var cancelled = false;
     if (cancel != null) unawaited(cancel.then((_) => cancelled = true));
     try {
+      if (requestedSpatialCodec != null && requireNativeOutput &&
+          !await AtmosPlaybackSupport.availableFor(requestedSpatialCodec)) {
+        throw const DiscoveryException(
+          'The device cannot decode the selected native spatial audio tier. '
+          'Change the HTTP add-on quality to lossless, or use a compatible output.',
+        );
+      }
       final root = await _directory();
       await root.create(recursive: true);
       // The maximum track size was previously reserved in full even when only
@@ -185,10 +203,31 @@ class DiscoveryPlaybackCache {
       await output.close();
       output = null;
       if (cancelled) throw const DiscoveryException('Request cancelled.');
-      final format = sniffAudioContainer(prefix);
+      // A spatial HTTP rendition must be staged as its original compressed
+      // file. The ordinary Symphonia PCM probe may not understand E-AC-3 JOC
+      // or AC-4 and must not silently relabel or transcode them.
+      final format = requestedSpatialCodec == 'ac4'
+          ? 'mp4'
+          : requestedSpatialCodec == 'eac3-joc'
+              ? 'm4a'
+              : sniffAudioContainer(prefix);
       ready = await partial.rename(p.setExtension(partial.path, '.$format'));
       partial = null;
-      final song = await _verified(track, ready, format, hash);
+      if (requestedSpatialCodec != null) {
+        final encoded = await _spatialProbe(ready.path, requestedSpatialCodec);
+        if (!encoded) {
+          throw const DiscoveryException(
+            'This HTTP add-on did not deliver the selected native spatial '
+            'audio format. No stereo version was substituted.',
+          );
+        }
+      }
+      final song = requestedSpatialCodec == null
+          ? await _verified(track, ready, format, hash)
+          : await _verifiedAtmos(track, ready, hash,
+              sourceInfo: {
+                'codec': requestedSpatialCodec == 'ac4' ? 'ac4' : 'eac3-joc',
+              });
       if (cancelled) throw const DiscoveryException('Request cancelled.');
       ready = null; // Ownership passes to bounded cache / PlayerService.
       return song;

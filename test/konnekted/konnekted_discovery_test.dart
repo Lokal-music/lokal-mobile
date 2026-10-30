@@ -6,6 +6,7 @@ import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/discovery/lastfm_discovery.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_destination.dart';
+import 'package:flick/features/konnekted/discovery_snapshot_cache.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/konnekted/konnekted_discovery_view.dart';
 import 'package:flick/features/konnekted/konnekted_home.dart';
@@ -107,6 +108,18 @@ Future<Map<String, dynamic>> _lastfm(
   };
 }
 
+class _MemoryDiscoverySnapshotCache extends DiscoverySnapshotCache {
+  const _MemoryDiscoverySnapshotCache();
+
+  @override
+  Future<DiscoveryCached<LokalDiscovery>?> readLokal(
+      String source, String account) async => null;
+
+  @override
+  Future<void> writeLokal(
+      String source, String account, LokalDiscovery data) async {}
+}
+
 Widget _app(Widget child, {String? account = 'me'}) => ProviderScope(
   overrides: [
     konnektedLibraryProvider.overrideWithValue(AsyncData(_library)),
@@ -117,6 +130,8 @@ Widget _app(Widget child, {String? account = 'me'}) => ProviderScope(
     ),
     konnektedLastfmAccountProvider.overrideWith((ref) async => account),
     konnektedLastfmCallProvider.overrideWithValue(_lastfm),
+    konnektedDiscoverySnapshotCacheProvider.overrideWithValue(
+        const _MemoryDiscoverySnapshotCache()),
   ],
   child: MaterialApp(
     theme: LokalTheme.build(LokalTokens.resolve(LokalThemeId.dark)),
@@ -569,12 +584,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Albums For You'), findsOneWidget);
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
-    final provider = tester.getSemantics(find.bySemanticsLabel('Last.fm'));
-    expect(provider.hasAction(SemanticsAction.longPress), isTrue);
-    tester.binding.pipelineOwner.semanticsOwner!.performAction(
-      provider.id, SemanticsAction.longPress,
-    );
+    try {
+      final provider = tester.getSemantics(find.bySemanticsLabel('Last.fm'));
+      expect(provider.getSemanticsData().hasAction(SemanticsAction.longPress), isTrue);
+      tester.binding.pipelineOwner.semanticsOwner!.performAction(
+        provider.id, SemanticsAction.longPress,
+      );
+    } finally {
+      semantics.dispose();
+    }
     await tester.pumpAndSettle();
     expect(find.text('Choose sections to show and drag to reorder.'),
         findsOneWidget);

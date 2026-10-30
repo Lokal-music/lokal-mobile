@@ -323,6 +323,23 @@ class YoutubeMusicCatalog {
   }
 }
 
+final _addonQualityKey = RegExp(r'quality|codec|format|audio', caseSensitive: false);
+
+bool _isAddonQualityKey(String key) => _addonQualityKey.hasMatch(key);
+
+/// An HTTP addon quality setting requests a rendition, not catalogue Atmos.
+String? httpAddonRequestedSpatialCodec(Map<String, String> settings) {
+  for (final entry in settings.entries) {
+    if (!_isAddonQualityKey(entry.key)) continue;
+    final id = entry.value.trim().toUpperCase()
+        .replaceAll(RegExp(r'[ -]'), '_');
+    if (const {'AC4_ATMOS', 'AC_4_ATMOS'}.contains(id)) return 'ac4';
+    if (const {'ATMOS', 'DOLBY_ATMOS', 'EAC3_JOC', 'E_AC_3_JOC'}
+        .contains(id)) return 'eac3-joc';
+  }
+  return null;
+}
+
 /// Supported manifest option for an HTTP add-on select setting.
 class AddonSettingOption {
   const AddonSettingOption(this.value, this.label);
@@ -547,6 +564,44 @@ class DiscoveryAddon {
   final String displayName;
   final Map<String, String> settings;
 
+  /// A provider may use a custom quality value with an explicitly Atmos-
+  /// labeled option. Inspect that manifest label only if the selected ID is
+  /// not a standard stereo or recognized spatial tier.
+  Future<String?> requestedSpatialCodec({Future<void>? cancel}) async {
+    final direct = httpAddonRequestedSpatialCodec(settings);
+    if (direct != null) return direct;
+    final chosen = settings.entries.where((entry) =>
+        _isAddonQualityKey(entry.key)).toList();
+    final knownStereo = RegExp(
+      r'^(?:LOSSLESS|HI_RES(?:_LOSSLESS)?|HIGH|LOW|BEST|FLAC|AAC|OPUS)$',
+      caseSensitive: false,
+    );
+    final unknown = chosen.where((entry) => !knownStereo.hasMatch(entry.value));
+    if (unknown.isEmpty) return null;
+
+    final manifest = await health(cancel: cancel);
+    for (final entry in unknown) {
+      final options = manifest.settings
+          .where((setting) => setting.key == entry.key)
+          .expand((setting) => setting.options)
+          .where((option) => option.value == entry.value);
+      if (options.isEmpty) {
+        throw const DiscoveryException(
+          'The selected add-on quality is not in the current manifest.',
+        );
+      }
+      final label = options.first.label;
+      if (RegExp(r'Atmos', caseSensitive: false).hasMatch(label) &&
+          RegExp(r'AC[- ]?4', caseSensitive: false).hasMatch(label)) {
+        return 'ac4';
+      }
+      if (RegExp(r'Atmos|\bJOC\b', caseSensitive: false).hasMatch(label)) {
+        return 'eac3-joc';
+      }
+    }
+    return null;
+  }
+
   Uri _endpoint(List<String> suffix, [Map<String, String>? query]) =>
       base.replace(
         pathSegments: [...base.pathSegments, ...suffix],
@@ -738,7 +793,8 @@ class DiscoveryAddon {
     // A search result can embed a Qobuz sample URL. Discard only recognized
     // previews and request a fresh full stream from the add-on endpoint.
     // Unsafe, encrypted or DRM inline responses still fail closed.
-    if (track.inlineStream case final inline?) {
+    if (!settings.keys.any(_isAddonQualityKey) && track.inlineStream != null) {
+      final inline = track.inlineStream!;
       try {
         return parseStream(inline, expectedDuration: track.duration);
       } on _PreviewOnlyAddonStream {
