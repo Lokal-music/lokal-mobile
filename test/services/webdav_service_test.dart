@@ -224,6 +224,37 @@ void main() {
   group('request URLs', () {
     NetworkServerEntity server() => _server();
 
+    test('direct playback requests local-network access before returning URL',
+        () async {
+      final requests = <Uri>[];
+      final service = WebdavService.create(
+        client: MockClient((request) async => http.Response('', 200)),
+        ensureLocalAccess: (uri) async {
+          requests.add(uri);
+        },
+      );
+      final descriptor = await service.streamDescriptor(
+        server(), Uri.encodeComponent('/music/song.flac'),
+      );
+      expect(requests, hasLength(1));
+      expect(requests.single.host, 'dav.example.com');
+      expect(descriptor?.url, contains('/music/song.flac'));
+    });
+
+    test('direct playback does not return credentials if LAN access is denied',
+        () async {
+      final service = WebdavService.create(
+        client: MockClient((request) async => http.Response('', 200)),
+        ensureLocalAccess: (uri) async => throw StateError('LAN permission denied'),
+      );
+      await expectLater(
+        service.streamDescriptor(
+          server(), Uri.encodeComponent('/music/song.flac'),
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
     test('streamDescriptor re-encodes without fragment/query corruption',
         () async {
       final service = WebdavService.create(
