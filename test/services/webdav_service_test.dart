@@ -212,6 +212,31 @@ void main() {
     });
   });
 
+  group('multistatus schema', () {
+    test('allows one RFC 4918 top-level DAV responsedescription after responses', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>/music/</D:href></D:response>'
+          '<D:responsedescription>Directory listing</D:responsedescription>'
+          '</D:multistatus>';
+      expect(WebdavService.isValidMultistatusForTest(body), isTrue);
+    });
+
+    test('rejects nested, unnamespaced or wrongly ordered responses', () {
+      expect(WebdavService.isValidMultistatusForTest(
+        '<html><multistatus><response><href>/music/</href></response></multistatus></html>',
+      ), isFalse);
+      expect(WebdavService.isValidMultistatusForTest(
+        '<multistatus><response><href>/music/</href></response></multistatus>',
+      ), isFalse);
+      expect(WebdavService.isValidMultistatusForTest(
+        '<D:multistatus xmlns:D="DAV:">'
+        '<D:responsedescription>First</D:responsedescription>'
+        '<D:response><D:href>/music/</D:href></D:response>'
+        '</D:multistatus>',
+      ), isFalse);
+    });
+  });
+
   group('parse', () {
     test('multistatus splits collections from files and skips self', () {
       final entries =
