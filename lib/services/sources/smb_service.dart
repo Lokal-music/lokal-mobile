@@ -237,7 +237,7 @@ class SmbService implements NetworkSourceService {
     await _ensureLanAccess(s);
     final session = await _connect(s, server);
     try {
-      return session.read(path);
+      return await session.read(path);
     } finally {
       await session.close();
     }
