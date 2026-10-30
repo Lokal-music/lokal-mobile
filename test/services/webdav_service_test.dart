@@ -66,6 +66,31 @@ void main() {
       expect(entries.last.size, 128);
     });
 
+    test('relative child href is resolved under an unslashed WebDAV collection', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>Album%20One/</D:href>'
+          '<D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype>'
+          '</D:prop></D:propstat></D:response>'
+          '</D:multistatus>';
+      final entries = WebdavService.parseMultistatusForTest(
+        body, '/disk1_part1',
+        requestUrl: 'https://192.168.8.1:6008/disk1_part1',
+        shareRoot: '/disk1_part1',
+      );
+      expect(entries.single.href, '/disk1_part1/Album One/');
+    });
+
+    test('encoded slash is rejected rather than crossing a folder boundary', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>/disk1_part1/Album%2FPrivate.flac</D:href>'
+          '</D:response></D:multistatus>';
+      expect(() => WebdavService.parseMultistatusForTest(
+        body, '/disk1_part1',
+        requestUrl: 'https://192.168.8.1:6008/disk1_part1',
+        shareRoot: '/disk1_part1',
+      ), throwsA(isA<FormatException>()));
+    });
+
     test('blocks cross-origin and outside-share hrefs before indexing', () {
       for (final href in [
         'https://other.example/disk1_part1/song.flac',
