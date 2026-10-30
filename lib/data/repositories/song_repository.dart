@@ -1,5 +1,6 @@
 import 'dart:io';
 import '../../services/ios_library_scan_epoch.dart';
+import '../../services/ios_transfer_song_identity.dart';
 
 import 'package:flick/core/utils/artist_credits.dart';
 
@@ -172,6 +173,9 @@ class SongRepository {
         entity.id = existing.id;
       }
 
+      if (Platform.isIOS) {
+        await retainIosImportSongIdentitiesInTransaction(_isar, [entity]);
+      }
       await _isar.songEntitys.put(entity);
     });
   }
@@ -205,7 +209,12 @@ class SongRepository {
           entity.id = existing.id;
         }
       }
-      if (accepted.isNotEmpty) await _isar.songEntitys.putAll(accepted);
+      if (accepted.isNotEmpty) {
+        if (Platform.isIOS) {
+          await retainIosImportSongIdentitiesInTransaction(_isar, accepted);
+        }
+        await _isar.songEntitys.putAll(accepted);
+      }
     });
   }
 

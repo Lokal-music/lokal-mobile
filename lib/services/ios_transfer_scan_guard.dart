@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 
 import '../data/entities/ios_transfer_receipt_entity.dart';
 import '../data/entities/song_entity.dart';
+import 'ios_library_scan_epoch.dart';
 
 /// Match the native ASCII operation suffix rather than the display title.
 /// This also handles APFS case/Unicode spelling and /var parent aliases without
@@ -45,9 +46,22 @@ class IosTransferScanGuard {
     if (receipt.state != 'committed') return false;
     // A scan started before import completion has no current local ID. It must
     // not create a duplicate via an alias or overwrite the newly committed row.
-    if (incoming.id != receipt.localSongId) return false;
     final current = await isar.songEntitys.get(receipt.localSongId);
-    return current != null && current.filePath == incoming.filePath;
+    if (current == null) {
+      // A new user scan may index retained public bytes after explicit removal.
+      // It gets a different ID via the receipt-aware allocator; the historical
+      // import anchor and its completed transfer are never recreated.
+      if (!IosLibraryScanEpoch.current ||
+          !incoming.filePath.endsWith('/${receipt.relativePath}') ||
+          incoming.id == receipt.localSongId) {
+        return false;
+      }
+      if (incoming.id == Isar.autoIncrement) return true;
+      final rescanned = await isar.songEntitys.get(incoming.id);
+      return rescanned != null && rescanned.filePath == incoming.filePath;
+    }
+    return incoming.id == receipt.localSongId &&
+        current.filePath == incoming.filePath;
   }
 
   Future<bool> allowsRemovalInTransaction(int songId) async {

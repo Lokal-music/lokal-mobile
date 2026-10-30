@@ -1195,3 +1195,29 @@ actual suspension/relaunch qualification. The generation fence does not grant
 a scanner permission to replace a protected committed import anchor or change
 its historical receipt. Other network-source writers need their own verified
 mutation admission before enabling native background transfer coexistence.
+
+### Fresh rescans retain historical import identities
+
+A follow-up actual-Isar probe demonstrated that clearing Songs resets its
+allocator to 1; deleting all rows without `clear()` also resets the allocator
+when the empty collection is reopened. Changing the deletion API alone cannot
+protect an import receipt that deliberately outlives its deleted Song.
+
+The iPhone repository, desktop-copy/catalogue writer and new native import
+reservation now allocate new Song IDs above both live Songs and retained
+receipt IDs, inside the same Isar transaction as insertion. Bulk allocations
+also avoid explicit IDs in that batch. A stale explicit ID cannot recreate a
+deleted receipt anchor; invalid, duplicate or exhausted allocations fail before
+insertion. Existing current rows retain their IDs. Android allocation is unchanged.
+
+A new scan with a current mutation generation may index retained public bytes
+at their canonical import-relative path after explicit deletion. That scan gets
+a separate Song ID; the old committed receipt still reports its original
+recording as removed, and the old native transfer cannot recreate it. Later
+fresh scans may refresh the separate row. Unwitnessed scans, retired generations,
+alternate relative-path spellings and attempts to recreate the old anchor remain refused.
+
+This does not implement CUE expansion of a still-present native import anchor.
+That needs an atomic anchor-preserving range replacement. Receipt pruning also
+needs a durable identity high-water mark before deleting the last historical
+ID evidence; do not prune those receipts as an incidental cleanup.

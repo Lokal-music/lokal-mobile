@@ -1,6 +1,7 @@
 import '../lyrics_service.dart';
 import '../ios_foreground_transfer_barrier.dart';
 import '../ios_library_scan_epoch.dart';
+import '../ios_transfer_song_identity.dart';
 import 'desktop_music_storage.dart';
 import 'desktop_catalogue_import.dart';
 import 'desktop_genre_reconciliation.dart';
@@ -60,6 +61,14 @@ class LokalDesktopSource extends NetworkSourceService {
   }
   Future<T> _trackLibraryTransfer<T>(Future<T> Function() operation) =>
       _iosLibraryMutations ? _libraryTransfers.run(operation) : operation();
+  Future<void> _putLibrarySong(SongEntity row) =>
+      Database.instance.writeTxn(() async {
+        if (_iosLibraryMutations) {
+          await retainIosImportSongIdentitiesInTransaction(Database.instance, [row]);
+        }
+        await Database.songs.put(row);
+      });
+
   final _cache = NetworkCacheService();
   final _musicStorage = DesktopMusicStorage();
   Future<String>? _legacyDirectory;
@@ -436,7 +445,7 @@ class LokalDesktopSource extends NetworkSourceService {
       await _musicStorage.saveEntity(
         saved,
         persist: (row) async {
-          await Database.instance.writeTxn(() => Database.songs.put(row));
+          await _putLibrarySong(row);
         },
       );
       await syncCopiedLyrics(server, copies: [saved]);
@@ -769,7 +778,7 @@ class LokalDesktopSource extends NetworkSourceService {
           genre?.isNotEmpty == true) {
         entity.genre = genre;
         final localRow = entity;
-        await Database.instance.writeTxn(() => Database.songs.put(localRow));
+        await _putLibrarySong(localRow);
       }
       return SongRepository().songFromEntity(entity);
     }
@@ -785,7 +794,7 @@ class LokalDesktopSource extends NetworkSourceService {
           isUnclassifiedLinkGenre(row.genre) &&
           genre?.isNotEmpty == true) {
         row.genre = genre;
-        await Database.instance.writeTxn(() => Database.songs.put(row));
+        await _putLibrarySong(row);
         return SongRepository().songFromEntity(row);
       }
       return local;
@@ -814,7 +823,7 @@ class LokalDesktopSource extends NetworkSourceService {
     // Always retain a resolvable marker; artwork failure must not erase it.
     entity.albumArtPath ??= 'lokal-cover://$remoteId';
     final saved = entity;
-    await Database.instance.writeTxn(() => Database.songs.put(saved));
+    await _putLibrarySong(saved);
     return SongRepository().songFromEntity(saved);
   }
 
@@ -1071,7 +1080,7 @@ class LokalDesktopSource extends NetworkSourceService {
     await _musicStorage.saveEntity(
       entity,
       persist: (row) async {
-        await Database.instance.writeTxn(() => Database.songs.put(row));
+        await _putLibrarySong(row);
       },
     );
   }
