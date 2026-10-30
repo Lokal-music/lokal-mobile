@@ -43,10 +43,18 @@ class _LokalRemoteSettingsScreenState
     setState(() => _saving = true);
     try {
       final controller = ref.read(lokalRemoteControllerProvider.notifier);
-      await controller.saveConfiguration(
-        origin: _origin.text,
-        remoteToken: _remoteToken.text,
-        apiKey: _apiKey.text,
+      final expected = await ref
+          .read(lokalRemoteCredentialsStoreProvider)
+          .read();
+      if (!mounted) return;
+      await IosTransferRoot.withPairingRetirement(
+        context,
+        expected: expected,
+        mutation: () => controller.saveConfiguration(
+          origin: _origin.text,
+          remoteToken: _remoteToken.text,
+          apiKey: _apiKey.text,
+        ),
       );
       // Do not retain bearer values in editable controller text after saving.
       _remoteToken.clear();
