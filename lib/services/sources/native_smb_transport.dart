@@ -52,7 +52,20 @@ class Libsmb2Transport implements NativeSmbSession {
     final separator = username.indexOf('\\');
     final domain = separator > 0 ? username.substring(0, separator) : '';
     final user = separator > 0 ? username.substring(separator + 1) : username;
-    final address = port == 445 ? host : '$host:$port';
+    // dart_smb2 0.1.3 supplies no custom-port option to libsmb2.
+    // Appending :port changes the hostname, but does not change port 445.
+    if (port != 445) {
+      throw UnsupportedError(
+        'Native SMB supports port 445 only. Use the NAS SMB port 445.',
+      );
+    }
+    if (user.isNotEmpty && password.isEmpty) {
+      throw const FormatException(
+        'SMB password missing for the named account. Re-enter the password '
+        'instead of connecting as an anonymous guest.',
+      );
+    }
+    final address = host;
     final pool = await _native.synchronized(() => Smb2Pool.connect(
       host: address,
       share: share,
@@ -61,6 +74,7 @@ class Libsmb2Transport implements NativeSmbSession {
       domain: domain,
       workers: 1,
       timeoutSeconds: 20,
+      signing: true,
       version: Smb2Version.any,
     ));
     return Libsmb2Transport._(pool);
