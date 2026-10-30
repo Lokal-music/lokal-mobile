@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -25,6 +26,15 @@ const _multistatus = '<?xml version="1.0"?>'
     '<D:propstat><D:prop><D:resourcetype/><D:getcontentlength>9876</D:getcontentlength></D:prop></D:propstat>'
     '</D:response>'
     '</D:multistatus>';
+
+class _StreamResponseClient extends http.BaseClient {
+  _StreamResponseClient(this.respond);
+  final Future<http.StreamedResponse> Function(http.BaseRequest) respond;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      respond(request);
+}
 
 NetworkServerEntity _server({String? token}) {
   final entity = NetworkServerEntity()
@@ -495,6 +505,46 @@ void main() {
       expect(uri.pathSegments.join('/'), 'music/Album #1/What?.flac');
       expect(uri.fragment, isEmpty);
       expect(uri.hasQuery, isFalse);
+    });
+
+    test('cover 404 cancels unread response before releasing connection', () async {
+      var cancelled = false;
+      final controller = StreamController<List<int>>(
+        onCancel: () => cancelled = true,
+      );
+      final service = WebdavService.create(
+        client: _StreamResponseClient(
+          (_) async => http.StreamedResponse(controller.stream, 404),
+        ),
+      );
+      final marker = base64Encode(utf8.encode('/music/cover.jpg'));
+      await expectLater(
+        service.getCoverArt(server(), marker),
+        throwsA(isA<WebdavNetworkException>()),
+      );
+      expect(cancelled, isTrue);
+      await controller.close();
+    });
+
+    test('oversized cover response cancels stream before allocation', () async {
+      var cancelled = false;
+      final controller = StreamController<List<int>>(
+        onCancel: () => cancelled = true,
+      );
+      final service = WebdavService.create(
+        client: _StreamResponseClient(
+          (_) async => http.StreamedResponse(
+            controller.stream, 200, contentLength: 20 * 1024 * 1024,
+          ),
+        ),
+      );
+      final marker = base64Encode(utf8.encode('/music/cover.jpg'));
+      await expectLater(
+        service.getCoverArt(server(), marker),
+        throwsA(isA<WebdavNetworkException>()),
+      );
+      expect(cancelled, isTrue);
+      await controller.close();
     });
 
     test('getCoverArt requests the re-encoded path', () async {
