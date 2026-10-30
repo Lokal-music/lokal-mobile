@@ -160,7 +160,7 @@ void main() {
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: null,
         options: options, provider: 'tidal',
-      ), 'LOSSLESS');
+      ), 'HI_RES_LOSSLESS');
     });
 
     test('add-on quality settings control playback and downloads', () {
