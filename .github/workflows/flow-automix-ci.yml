@@ -7,6 +7,14 @@ on:
       - 'lib/services/android_audio_engine.dart'
       - 'lib/services/automix_*.dart'
       - 'lib/services/player_service.dart'
+      - 'lib/services/audio_session_manager.dart'
+      - 'lib/services/uac2_preferences_service.dart'
+      - 'lib/services/uac2_service.dart'
+      - 'rust/src/audio/android_mixer.rs'
+      - 'rust/src/audio/engine.rs'
+      - 'rust/src/audio/manager.rs'
+      - 'android/app/src/main/kotlin/com/mossapps/flick/AndroidUsbMixer.kt'
+      - 'test/services/android_usb_mixer_preferences_test.dart'
       - 'test/flow/**'
       - 'test/services/automix_*.dart'
       - 'test/services/android_audio_*.dart'
@@ -17,6 +25,14 @@ on:
       - 'lib/services/android_audio_engine.dart'
       - 'lib/services/automix_*.dart'
       - 'lib/services/player_service.dart'
+      - 'lib/services/audio_session_manager.dart'
+      - 'lib/services/uac2_preferences_service.dart'
+      - 'lib/services/uac2_service.dart'
+      - 'rust/src/audio/android_mixer.rs'
+      - 'rust/src/audio/engine.rs'
+      - 'rust/src/audio/manager.rs'
+      - 'android/app/src/main/kotlin/com/mossapps/flick/AndroidUsbMixer.kt'
+      - 'test/services/android_usb_mixer_preferences_test.dart'
       - 'test/flow/**'
       - 'test/services/automix_*.dart'
       - 'test/services/android_audio_*.dart'
@@ -45,5 +61,8 @@ jobs:
           test/services/automix_stem_clip_test.dart
           test/services/android_audio_engine_crossfade_test.dart
           test/services/android_audio_failed_source_test.dart
+          test/services/android_usb_mixer_preferences_test.dart
+          test/services/motion_art_suppression_test.dart
+          test/services/output_precision_preferences_test.dart
       - name: Compile Flutter Android APK
         run: flutter build apk --debug --no-pub
