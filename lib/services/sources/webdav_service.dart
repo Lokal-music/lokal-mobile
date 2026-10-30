@@ -307,7 +307,12 @@ class WebdavService implements NetworkSourceService {
     throw StateError('WebDAV redirect limit exceeded');
   }
 
-  List<_DavEntry> _parseMultistatus(String body, String requestedHref) {
+  List<_DavEntry> _parseMultistatus(
+    String body,
+    String requestedHref, {
+    String? requestUrl,
+    String? shareRoot,
+  }) {
     final results = <_DavEntry>[];
     XmlDocument doc;
     try {
@@ -323,7 +328,9 @@ class WebdavService implements NetworkSourceService {
           ?.innerText
           .trim();
       if (href == null) continue;
-      final decoded = _tryDecode(href);
+      final decoded = requestUrl == null
+          ? _tryDecode(href)
+          : _resolveDavHref(href, requestUrl, shareRoot ?? requestedHref);
       // Skip the self entry (the requested collection itself).
       if (_samePath(decoded, requestedHref)) continue;
 
@@ -345,6 +352,34 @@ class WebdavService implements NetworkSourceService {
     return results;
   }
 
+  /// RFC 4918 permits both absolute and relative hrefs. Some GL.iNet and
+  /// other NAS WebDAV servers return absolute HTTPS URLs in PROPFIND bodies.
+  /// Treating the entire URL as a path broke recursive scans and could cause
+  /// invalid requests such as https://nas/https%3A%2F%2Fnas%2Falbum.
+  static String _resolveDavHref(
+    String href,
+    String requestUrl,
+    String shareRoot,
+  ) {
+    final parent = Uri.parse(requestUrl);
+    final resolved = parent.resolve(href);
+    if (resolved.origin != parent.origin ||
+        resolved.scheme != parent.scheme ||
+        resolved.userInfo.isNotEmpty ||
+        resolved.hasQuery ||
+        resolved.hasFragment) {
+      throw const FormatException('Cross-origin or malformed WebDAV href');
+    }
+    final path = _tryDecode(resolved.path);
+    final root = shareRoot.endsWith('/') && shareRoot.length > 1
+        ? shareRoot.substring(0, shareRoot.length - 1)
+        : shareRoot;
+    if (path != root && !path.startsWith('$root/')) {
+      throw FormatException('WebDAV href is outside the shared folder: $path');
+    }
+    return path;
+  }
+
   bool _samePath(String a, String b) {
     String norm(String s) => s.endsWith('/') && s.length > 1
         ? s.substring(0, s.length - 1)
@@ -357,11 +392,15 @@ class WebdavService implements NetworkSourceService {
   @visibleForTesting
   static List<({String href, bool isCollection, int? size})> parseMultistatusForTest(
     String body,
-    String requestedHref,
-  ) {
+    String requestedHref, {
+    String? requestUrl,
+    String? shareRoot,
+  }) {
     final svc = WebdavService._();
     return svc
-        ._parseMultistatus(body, requestedHref)
+        ._parseMultistatus(
+          body, requestedHref, requestUrl: requestUrl, shareRoot: shareRoot,
+        )
         .map((e) => (
               href: e.href,
               isCollection: e.isCollection,
@@ -387,8 +426,8 @@ class WebdavService implements NetworkSourceService {
       final response = await _propfind(server, server.baseUrl, depth: 0);
       // PROPFIND normally returns 207, including the target folder.
       // A plain HTML 200 response is not evidence of a WebDAV server.
-      if (response.statusCode == 207 &&
-          response.body.contains('multistatus')) return true;
+      if ((response.statusCode == 207 || response.statusCode == 200) &&
+          _isMultistatusDocument(response.body)) return true;
       _lastPingError = response.statusCode == 400 &&
               response.body.startsWith('WebDAV redirected')
           ? response.body
@@ -555,6 +594,8 @@ class WebdavService implements NetworkSourceService {
     // path used both to build child URLs and to derive album/artist names.
     final queue = <_DavDir>[];
     final allDirs = <String>[];
+    final visitedDirs = <String>{};
+    final scanErrors = <String>[];
     final origin = _origin(server);
 
     String rootPath;
@@ -570,24 +611,33 @@ class WebdavService implements NetworkSourceService {
     var scanIncomplete = false;
     while (queue.isNotEmpty) {
       final dir = queue.removeAt(0);
+      if (!visitedDirs.add(dir.path)) continue;
       List<_DavEntry> entries;
       try {
         final response = await _propfind(server, dir.url);
         if ((response.statusCode != 207 && response.statusCode != 200) ||
             !_isMultistatusDocument(response.body)) {
           scanIncomplete = true;
+          final detail = response.statusCode == 207
+              ? 'invalid multistatus XML'
+              : 'HTTP ${response.statusCode}';
+          scanErrors.add('${dir.path}: $detail');
           AppLog.instance.add(
             'WebDAV directory scan failed at "${dir.path}" on '
-            '${server.label}: HTTP ${response.statusCode} or invalid multistatus',
+            '${server.label}: $detail',
           );
           filesProcessed++;
           yield _progress(server, songsFound, allDirs.length, filesProcessed,
               dir.path);
           continue;
         }
-        entries = _parseMultistatus(response.body, dir.path);
+        entries = _parseMultistatus(
+          response.body, dir.path,
+          requestUrl: dir.url, shareRoot: rootPath,
+        );
       } catch (e) {
         scanIncomplete = true;
+        scanErrors.add('${dir.path}: $e');
         AppLog.instance
             .add('WebDAV sync skipped "${dir.path}" on ${server.label}: $e');
         filesProcessed++;
@@ -639,8 +689,9 @@ class WebdavService implements NetworkSourceService {
     // lastSyncedAt following an incomplete walk.
     if (scanIncomplete) {
       throw WebdavNetworkException(
-        'Library scan incomplete; previously indexed songs were preserved. '
-        'Check server permissions or connectivity and retry.',
+        'Library scan incomplete (${scanErrors.length} folder error(s)). '
+        '${scanErrors.take(2).join('; ')}. Previously indexed songs were '
+        'preserved; check the NAS share and retry.',
       );
     }
     await purgeAndStampNetworkSync(
