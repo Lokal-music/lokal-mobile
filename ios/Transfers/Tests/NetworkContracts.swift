@@ -212,9 +212,23 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   let _: LokalTransferSummary = try native { runtime.enqueue([slow], reply: $0) }
   _ = try awaitJob(runtime, id: slow.id, phase: [.transferring])
   let ticket = try ownership.capture(client)
-  let retired: LokalTransferSummary = try native {
-    runtime.retireNetworkScope(scope, ticket: ticket, reply: $0)
+  let firstResult = NativeResult<LokalTransferSummary>()
+  let secondResult = NativeResult<LokalTransferSummary>()
+  let firstDone = DispatchSemaphore(value: 0)
+  let secondDone = DispatchSemaphore(value: 0)
+  runtime.retireNetworkScope(scope, ticket: ticket) { result in
+    firstResult.set(result); firstDone.signal()
   }
+  runtime.retireNetworkScope(scope, ticket: ticket) { result in
+    secondResult.set(result); secondDone.signal()
+  }
+  try require(firstDone.wait(timeout: .now() + 10) == .success &&
+      secondDone.wait(timeout: .now() + 10) == .success,
+    "concurrent same-scope retirement replies must both drain")
+  let retired = try firstResult.get()
+  let repeated = try secondResult.get()
+  try require(repeated.pauses == retired.pauses,
+    "duplicate unlink cannot bypass the first cancellation or clear its pause")
   try require(retired.pauses == [LokalTransferPause(scope: scope, reason: .pairingChanged)],
     "scoped retirement waits for task callback and persists an explicit pause")
   let old = try awaitJob(runtime, id: slow.id, phase: [.cancelled])
