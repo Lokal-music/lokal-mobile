@@ -281,6 +281,9 @@ final class LokalTransferBridge {
         guard let owner = importOwner, request.clientID == clientID else {
           throw LokalTransferError.staleRevision
         }
+        // Retire native tickets synchronously at bridge dispatch, before a
+        // previously queued enqueue could commit after the journal's batch.
+        try host.importOwnership.retireSubmissions(owner)
         let ticket = try host.importOwnership.capture(owner)
         host.withRuntime({ runtime in
           runtime.retireNetworkScope(request.scope, ticket: ticket) { reply.encode($0) }
