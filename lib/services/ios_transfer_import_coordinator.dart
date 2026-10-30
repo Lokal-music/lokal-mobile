@@ -56,6 +56,7 @@ class IosTransferImportCoordinator {
   int _epoch = 0;
 
   bool get enabled => _enabled;
+  bool get eligible => _eligible;
   bool get busy => _running != null;
   Stream<void> get updates => _updates.stream;
   Map<String, IosTransferCoordinatorIssue> get issues =>
