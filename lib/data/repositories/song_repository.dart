@@ -51,6 +51,16 @@ class SongRepository {
     return songs;
   }
 
+  /// Look up a single local song by path without materializing or sorting
+  /// the entire library (important for opt-in desktop download transfers).
+  Future<Song?> getSongByFilePath(String filePath) async {
+    final entity = await _isar.songEntitys
+        .filter()
+        .filePathEqualTo(filePath)
+        .findFirst();
+    return entity == null ? null : _entityToSong(entity);
+  }
+
   /// Get songs by folder URI.
   Future<List<Song>> getSongsByFolder(String folderUri) async {
     final entities = await _isar.songEntitys
