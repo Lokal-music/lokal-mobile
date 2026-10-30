@@ -43,10 +43,18 @@ class _LokalRemoteSettingsScreenState
     setState(() => _saving = true);
     try {
       final controller = ref.read(lokalRemoteControllerProvider.notifier);
-      await controller.saveConfiguration(
-        origin: _origin.text,
-        remoteToken: _remoteToken.text,
-        apiKey: _apiKey.text,
+      final expected = await ref
+          .read(lokalRemoteCredentialsStoreProvider)
+          .read();
+      if (!mounted) return;
+      await IosTransferRoot.withPairingRetirement(
+        context,
+        expected: expected,
+        mutation: () => controller.saveConfiguration(
+          origin: _origin.text,
+          remoteToken: _remoteToken.text,
+          apiKey: _apiKey.text,
+        ),
       );
       // Do not retain bearer values in editable controller text after saving.
       _remoteToken.clear();
@@ -72,6 +80,7 @@ class _LokalRemoteSettingsScreenState
   }
 
   Future<void> _forget() async {
+    if (_saving) return;
     final confirmed = await showLokalConfirmSheet(
       context: context,
       title: 'Forget Lokal desktop?',
@@ -80,13 +89,32 @@ class _LokalRemoteSettingsScreenState
       destructive: true,
     );
     if (!confirmed || !mounted) return;
-    await IosTransferRoot.withMutationBarrier(
-      context,
-      ref.read(lokalRemoteControllerProvider.notifier).forgetConfiguration,
-    );
-    _origin.clear();
-    _remoteToken.clear();
-    _apiKey.clear();
+    setState(() => _saving = true);
+    try {
+      final expected = await ref
+          .read(lokalRemoteCredentialsStoreProvider)
+          .read();
+      if (!mounted) return;
+      await IosTransferRoot.withPairingRetirement(
+        context,
+        expected: expected,
+        mutation: () => ref
+            .read(lokalRemoteControllerProvider.notifier)
+            .forgetConfiguration(expected: expected),
+      );
+      if (!mounted) return;
+      _origin.clear();
+      _remoteToken.clear();
+      _apiKey.clear();
+    } catch (error) {
+      if (mounted) {
+        _showError(error is StateError
+            ? error.message.toString()
+            : _safeMessage(error));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _command(LokalRemoteAction action, {double? value}) async {

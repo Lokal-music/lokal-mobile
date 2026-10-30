@@ -14,6 +14,9 @@ abstract interface class LokalRemoteCredentialsStore {
   Future<LokalRemoteCredentials?> read();
   Future<void> write(LokalRemoteCredentials credentials);
   Future<void> clear();
+  /// Compare and delete in the same serialized credential-store operation.
+  /// A replacement pairing must never be erased by a stale Forget callback.
+  Future<void> clearIfMatching(LokalRemoteCredentials? expected);
 }
 
 /// Stores an atomic origin/pairing/credential record in secure storage.
@@ -112,6 +115,29 @@ class SecureLokalRemoteCredentialsStore implements LokalRemoteCredentialsStore {
       throw StateError('Could not save desktop connection preferences.');
     }
   }
+
+  static bool sameAuthority(
+    LokalRemoteCredentials? current,
+    LokalRemoteCredentials? expected,
+  ) {
+    if (current == null || expected == null) return current == expected;
+    return current.origin == expected.origin &&
+        current.desktopId == expected.desktopId &&
+        current.desktopUserId == expected.desktopUserId &&
+        current.pairingID == expected.pairingID &&
+        current.remoteToken == expected.remoteToken &&
+        current.apiKey == expected.apiKey;
+  }
+
+  @override
+  Future<void> clearIfMatching(LokalRemoteCredentials? expected) =>
+      _serial(() async {
+        final current = await _read();
+        if (!sameAuthority(current, expected)) {
+          throw StateError('Desktop pairing changed. Refresh and retry.');
+        }
+        await _clear();
+      });
 
   @override
   Future<void> clear() => _serial(_clear);

@@ -65,6 +65,46 @@ void main() {
     expect(value.remoteToken, 'synthetic-transfer-contract-token');
   });
 
+  test('stale Forget cannot clear credentials from a replacement pairing', () async {
+    final store = SecureLokalRemoteCredentialsStore(secureStorage: secure);
+    final first = LokalRemoteCredentials(
+      origin: Uri.parse('http://192.0.2.20:5443'),
+      desktopId: 'contract-desktop',
+      remoteToken: 'synthetic-old',
+    );
+    await store.write(first);
+    final captured = (await store.read())!;
+    await store.write(LokalRemoteCredentials(
+      origin: Uri.parse('http://192.0.2.20:5443'),
+      desktopId: 'contract-desktop',
+      remoteToken: 'synthetic-repaired',
+    ));
+    await expectLater(store.clearIfMatching(captured), throwsStateError);
+    expect((await store.read())!.remoteToken, 'synthetic-repaired');
+    final fresh = await store.read();
+    await store.clearIfMatching(fresh);
+    expect(await store.read(), isNull);
+  });
+
+  test('conditional forget is serialized with an already-dispatched write', () async {
+    final store = SecureLokalRemoteCredentialsStore(secureStorage: secure);
+    await store.write(LokalRemoteCredentials(
+      origin: Uri.parse('http://192.0.2.20:5443'),
+      desktopId: 'contract-desktop',
+      remoteToken: 'synthetic-initial',
+    ));
+    final captured = await store.read();
+    final replacing = store.write(LokalRemoteCredentials(
+      origin: Uri.parse('https://new-device.invalid'),
+      desktopId: 'new-desktop',
+      remoteToken: 'synthetic-new',
+    ));
+    final staleClear = store.clearIfMatching(captured);
+    await replacing;
+    await expectLater(staleClear, throwsStateError);
+    expect((await store.read())!.desktopId, 'new-desktop');
+  });
+
   test(
     'a partial preferences write cannot redirect a stored bearer token',
     () async {

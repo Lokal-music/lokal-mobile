@@ -36,6 +36,14 @@ class _Store implements LokalRemoteCredentialsStore {
       value = credentials;
 
   @override
+  Future<void> clearIfMatching(LokalRemoteCredentials? expected) async {
+    if (!SecureLokalRemoteCredentialsStore.sameAuthority(value, expected)) {
+      throw StateError('Pairing changed.');
+    }
+    value = null;
+  }
+
+  @override
   Future<void> clear() async => value = null;
 }
 
@@ -115,7 +123,7 @@ void main() {
         code: '123456',
       );
       await link.started.future;
-      await controller.forgetConfiguration();
+      await controller.forgetConfiguration(expected: null);
       link.response.complete(
         LokalRemoteCredentials(
           origin: Uri.parse('http://desktop'),
@@ -131,6 +139,25 @@ void main() {
       );
     },
   );
+  test('a stale confirmed Forget leaves the replacement desktop intact', () async {
+    final store = _Store()..value = _credentials;
+    final container = _container(store, _Service([]));
+    addTearDown(container.dispose);
+    final controller = container.read(lokalRemoteControllerProvider.notifier);
+    final expected = await store.read();
+    final replacement = LokalRemoteCredentials(
+      origin: Uri.parse('http://replacement-desktop'),
+      desktopId: 'replacement-id',
+      remoteToken: 'synthetic-replacement',
+    );
+    store.value = replacement;
+    await expectLater(
+      controller.forgetConfiguration(expected: expected),
+      throwsStateError,
+    );
+    expect(store.value, same(replacement));
+  });
+
   test(
     'reconnect keeps the last good state through a transient failure',
     () async {

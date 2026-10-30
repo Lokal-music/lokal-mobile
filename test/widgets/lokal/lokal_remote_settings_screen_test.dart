@@ -23,6 +23,13 @@ class _Store implements LokalRemoteCredentialsStore {
   Future<void> write(LokalRemoteCredentials credentials) async {}
 
   @override
+  Future<void> clearIfMatching(LokalRemoteCredentials? expected) async {
+    if (!SecureLokalRemoteCredentialsStore.sameAuthority(value, expected)) {
+      throw StateError('Pairing changed.');
+    }
+  }
+
+  @override
   Future<void> clear() async {}
 }
 

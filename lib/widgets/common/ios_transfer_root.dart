@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 
 import '../../data/database.dart';
+import '../../models/lokal_remote_state.dart';
+import '../../services/ios_pairing_retirement.dart';
 import '../../services/ios_transfer_import_coordinator.dart';
 import '../../services/ios_transfer_mutation_barrier.dart';
 import '../../services/ios_transfer_import_store.dart';
@@ -13,8 +15,10 @@ import '../../services/ios_transfer_media_probe.dart';
 import '../../services/ios_transfer_transport.dart';
 
 /// App lifetime, rather than a tab/screen, owns import observation. Native
-/// libraryImport=false keeps this inert while cleanup/upload/lifecycle gates
-/// remain unfinished; Android and the existing foreground copy flows continue.
+/// libraryImport=false keeps product imports disabled while cleanup/upload
+/// gates remain unfinished. An explicit pairing mutation may temporarily
+/// attach a native owner to revoke URLSession authority before Keychain changes.
+/// Android and the existing foreground copy flows remain unchanged.
 class IosTransferRoot extends StatefulWidget {
   const IosTransferRoot({super.key, required this.child});
   final Widget child;
@@ -32,6 +36,22 @@ class IosTransferRoot extends StatefulWidget {
       throw StateError('iPhone transfer owner is unavailable.');
     }
     return root._withMutation(mutation);
+  }
+
+  /// The stronger Forget boundary always checks native journal truth, even
+  /// while product background import is disabled. Generic library mutations
+  /// do not imply that credentials may be revoked.
+  static Future<T> withPairingRetirement<T>(
+    BuildContext context, {
+    required LokalRemoteCredentials? expected,
+    required Future<T> Function() mutation,
+  }) {
+    if (kIsWeb || !Platform.isIOS) return mutation();
+    final root = context.findAncestorStateOfType<_IosTransferRootState>();
+    if (root == null) {
+      throw StateError('iPhone transfer owner is unavailable.');
+    }
+    return root._withPairingRetirement(expected, mutation);
   }
 
   @override
@@ -69,6 +89,64 @@ class _IosTransferRootState extends State<IosTransferRoot>
       },
       resume: () async {
         if (paused) await coordinator.resumeAfterMutation();
+      },
+      mutate: mutation,
+    );
+  }
+
+  Future<T> _withPairingRetirement<T>(
+    LokalRemoteCredentials? expected,
+    Future<T> Function() mutation,
+  ) {
+    final coordinator = _coordinator, native = _native;
+    if (coordinator == null || native == null) {
+      throw StateError('iPhone transfer owner is unavailable.');
+    }
+    StreamSubscription<void>? observation;
+    var paused = false;
+    return _mutations.run<T>(
+      pause: () async {
+        if (!mounted) throw StateError('iPhone transfer owner was disposed.');
+        try {
+          await coordinator.start();
+          if (!mounted) throw StateError('iPhone transfer owner was disposed.');
+          if (coordinator.eligible && !coordinator.enabled) {
+            throw StateError('iPhone transfer recovery must succeed first.');
+          }
+          if (coordinator.enabled) {
+            await coordinator.pauseForMutation();
+            paused = true;
+          }
+          // The product adapter currently never attaches a native client.
+          // Observe explicitly for this one critical operation and keep its
+          // client alive until the callback + file-work barrier has replied.
+          observation = native.changes.listen(
+            (_) {},
+            onError: (Object _, StackTrace __) {},
+          );
+          await native.drainImports();
+          await IosPairingRetirement.retireBeforeForget(
+            expected: expected,
+            recover: native.recover,
+            currentPairing: native.currentPairing,
+            retire: native.retireNetworkScope,
+          );
+          if (!mounted) throw StateError('iPhone transfer owner was disposed.');
+        } catch (_) {
+          try {
+            await observation?.cancel();
+          } finally {
+            if (paused) await coordinator.resumeAfterMutation();
+          }
+          rethrow;
+        }
+      },
+      resume: () async {
+        try {
+          await observation?.cancel();
+        } finally {
+          if (paused) await coordinator.resumeAfterMutation();
+        }
       },
       mutate: mutation,
     );
