@@ -362,7 +362,7 @@ class AndroidAudioEngine implements AudioEngine {
         slots.length != player.sequence.length) return;
 
     _onDemandPreparingEpoch = epoch;
-    unawaited(() async {
+    final pending = () async {
       var appended = false;
       try {
         if (index >= 12) {
@@ -426,7 +426,30 @@ class AndroidAudioEngine implements AudioEngine {
           _syncTrackFromIndex(player.currentIndex);
         }
       }
-    }());
+    }();
+    _onDemandPreparation = pending;
+    unawaited(pending);
+  }
+
+  /// Invalidate the speculative native successor whenever shuffle, queue
+  /// membership/order or loop semantics change. Wait for any in-flight native
+  /// append before trimming so it cannot resurrect a removed track.
+  Future<void> invalidateOnDemandGaplessSuccessor() async {
+    final slots = _onDemandGaplessSlots;
+    final player = _player;
+    if (slots == null || player == null) return;
+    ++_onDemandGaplessEpoch;
+    final pending = _onDemandPreparation;
+    if (pending != null) await pending;
+    if (!identical(_onDemandGaplessSlots, slots) ||
+        !identical(_player, player)) return;
+    final current = player.currentIndex;
+    if (current == null || current < 0 || current >= slots.length) return;
+    if (player.sequence.length > current + 1) {
+      await player.removeAudioSourceRange(current + 1, player.sequence.length);
+    }
+    slots.removeRange(current + 1, slots.length);
+    _prepareOnDemandGaplessNext();
   }
 
   void _startOnDemandGaplessWindow(Song song, int logicalIndex) {
@@ -652,6 +675,7 @@ class AndroidAudioEngine implements AudioEngine {
   List<({Song song, int playlistIndex})>? _onDemandGaplessSlots;
   int _onDemandGaplessEpoch = 0;
   int? _onDemandPreparingEpoch;
+  Future<void>? _onDemandPreparation;
 
   // Crossfade state. [_player] is always the currently-audible/active player;
   // [_secondary] is the idle slot reused as the incoming player on each fade.
@@ -939,6 +963,12 @@ class AndroidAudioEngine implements AudioEngine {
     final player = _player;
     if (player == null) return;
 
+    final window = _onDemandGaplessSlots;
+    if (window != null && player.sequence.length > window.length + 1) {
+      // Full playlist was restored outside the rolling native window.
+      ++_onDemandGaplessEpoch;
+      _onDemandGaplessSlots = null;
+    }
     if (_onDemandGaplessSlots == null && shouldExitSingleTrackMode(
       loadedSingleTrackOnly: _loadedSingleTrackOnly,
       playerSequenceLength: player.sequence.length,
