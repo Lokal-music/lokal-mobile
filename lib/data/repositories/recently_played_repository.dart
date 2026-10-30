@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:isar_community/isar.dart';
@@ -463,7 +464,24 @@ class RecentlyPlayedRepository {
 
   /// Watch for changes in the history collection.
   Stream<void> watchHistory() {
-    return _isar.recentlyPlayedEntitys.watchLazy();
+    late final StreamController<void> controller;
+    StreamSubscription<void>? recentSubscription;
+    StreamSubscription<void>? journalSubscription;
+    controller = StreamController<void>(
+      onListen: () {
+        recentSubscription = _isar.recentlyPlayedEntitys.watchLazy().listen(
+          (_) => controller.add(null),
+        );
+        journalSubscription = _isar.playEventEntitys.watchLazy().listen(
+          (_) => controller.add(null),
+        );
+      },
+      onCancel: () async {
+        await recentSubscription?.cancel();
+        await journalSubscription?.cancel();
+      },
+    );
+    return controller.stream;
   }
 
   /// Get the most-played songs for a specific artist.
@@ -568,26 +586,64 @@ class RecentlyPlayedRepository {
         .sortByPlayedAtDesc()
         .findAll();
 
-    if (entries.isEmpty) {
-      return const [];
+    final result = <RecentlyPlayedEntry>[];
+    final displayedEventIds = <String>{};
+    if (entries.isNotEmpty) {
+      final allSongEntities = await _songRepository.getAllSongEntities();
+      final songMap = {for (final entity in allSongEntities) entity.id: entity};
+      for (final entry in entries) {
+        final songEntity = songMap[entry.songId];
+        if (songEntity == null) continue;
+        if (entry.eventId != null) displayedEventIds.add(entry.eventId!);
+        result.add(
+          RecentlyPlayedEntry(
+            song: _entityToSong(songEntity),
+            playedAt: entry.playedAt,
+            listenedMs: entry.listenedMs,
+          ),
+        );
+      }
     }
 
-    final allSongEntities = await _songRepository.getAllSongEntities();
-    final songMap = {for (final entity in allSongEntities) entity.id: entity};
-
-    final result = <RecentlyPlayedEntry>[];
-    for (final entry in entries) {
-      final songEntity = songMap[entry.songId];
-      if (songEntity == null) continue;
+    // A desktop play should contribute listening minutes even if its song
+    // has not been imported into the phone library. The immutable journal is
+    // deduplicated by event ID; don't count projected local history twice.
+    final events = await _isar.playEventEntitys
+        .where()
+        .playedAtBetween(
+          start.millisecondsSinceEpoch,
+          endExclusive.millisecondsSinceEpoch,
+          includeUpper: false,
+        )
+        .findAll();
+    for (final event in events) {
+      if (displayedEventIds.contains(event.eventId)) continue;
+      Map<String, dynamic> track;
+      try {
+        track = Map<String, dynamic>.from(jsonDecode(event.trackJson) as Map);
+      } catch (_) {
+        track = {};
+      }
+      final length = track['duration'];
+      final durationMs = length is num && length.isFinite && length > 0
+          ? (length * 1000).round()
+          : event.msPlayed;
       result.add(
         RecentlyPlayedEntry(
-          song: _entityToSong(songEntity),
-          playedAt: entry.playedAt,
-          listenedMs: entry.listenedMs,
+          song: Song(
+            id: 'history:${event.trackKey}',
+            title: (track['title'] as String?) ?? 'Unknown track',
+            artist: (track['artist'] as String?) ?? 'Unknown artist',
+            album: track['album'] as String?,
+            duration: Duration(milliseconds: durationMs),
+            fileType: 'history',
+            isExternal: true,
+          ),
+          playedAt: DateTime.fromMillisecondsSinceEpoch(event.playedAt),
+          listenedMs: event.msPlayed,
         ),
       );
     }
-
     return result;
   }
 
