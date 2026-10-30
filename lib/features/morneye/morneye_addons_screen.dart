@@ -11,6 +11,7 @@ import 'package:flick/widgets/lokal/lokal_toast.dart';
 
 import 'morneye_auth_sheet.dart';
 import 'morneye_packages.dart';
+import 'morneye_playback_quality.dart';
 import 'morneye_service.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 
@@ -644,16 +645,31 @@ class _AddonRowState extends State<_AddonRow> {
               child: _SettingField(
                 field: {
                   'key': 'downloadQuality',
-                  'label': 'Quality',
+                  'label': 'Playback & download quality',
                   'type': 'select',
                   'options': [
                     for (final q in quality)
                       {'value': q['id'], 'label': q['label'] ?? q['id']},
                   ],
                 },
-                value: _values['downloadQuality'] ?? quality.first['id'],
+                value: chooseMorneyeDownloadQuality(
+                  requested: null,
+                  configured: _values['downloadQuality']?.toString(),
+                  options: _addon.qualityOptions,
+                  provider: _addon.name.replaceFirst(RegExp(r'-web$'), ''),
+                ),
                 onChanged: (value) =>
                     setState(() => _values['downloadQuality'] = value),
+              ),
+            ),
+          if (quality.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Lokal requests the selected format on playback and download. '
+                'Spatial audio requires native decoder support; availability '
+                'is checked from the delivered file, not search tags.',
+                style: TextStyle(color: t.muted, fontSize: 12),
               ),
             ),
           Wrap(
