@@ -85,12 +85,47 @@ abstract final class PlaybackSourcePriority {
     ];
   }
 
-  static Future<void> move(List<String> visible, int from, int to) async {
-    final saved = <String>{...await load(), ...visible}.toList();
-    final a = saved.indexOf(visible[from]), b = saved.indexOf(visible[to]);
-    final old = saved[a];
-    saved[a] = saved[b];
-    saved[b] = old;
-    await (await SharedPreferences.getInstance()).setStringList(key, saved);
+  /// Put a newly installed add-on first, without changing the order of all
+  /// other sources. Called only for new installs, not package updates.
+  static Future<void> promoteNewAddon(String sourceId) async {
+    final saved = await load();
+    await (await SharedPreferences.getInstance()).setStringList(
+      key,
+      [sourceId, ...saved.where((id) => id != sourceId)],
+    );
   }
+
+  /// Reorder visible sources using Flutter's pre-removal drop index.
+  /// Hidden/disabled sources retain their relative positions in the saved list.
+  static Future<void> reorder(
+    List<String> visible,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    if (oldIndex < 0 || oldIndex >= visible.length ||
+        newIndex < 0 || newIndex > visible.length) {
+      throw RangeError('Invalid playback source reorder indices');
+    }
+    if (visible.toSet().length != visible.length) {
+      throw ArgumentError('Playback source IDs must be unique');
+    }
+    final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
+    if (target == oldIndex) return;
+    final reordered = [...visible];
+    final moving = reordered.removeAt(oldIndex);
+    reordered.insert(target, moving);
+
+    final saved = <String>{...await load(), ...visible}.toList();
+    final visibleIds = visible.toSet();
+    var cursor = 0;
+    final result = [
+      for (final id in saved)
+        if (visibleIds.contains(id)) reordered[cursor++] else id,
+    ];
+    await (await SharedPreferences.getInstance()).setStringList(key, result);
+  }
+
+  /// Move a row to a final visible index (rather than exchanging two rows).
+  static Future<void> move(List<String> visible, int from, int to) =>
+      reorder(visible, from, from < to ? to + 1 : to);
 }
