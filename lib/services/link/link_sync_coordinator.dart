@@ -200,7 +200,7 @@ class LinkSyncCoordinator {
   Future<void> synchronizeStats() async {
     if (_active != null || !socket.connected || !Database.isInitialized) return;
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool('$_prefix.merge') != true) return;
+    if (prefs.getBool('$_prefix.merge') != true || _active != null) return;
     _background = true;
     try {
       await _run(_syncStatsBatch, fullSync: false);
