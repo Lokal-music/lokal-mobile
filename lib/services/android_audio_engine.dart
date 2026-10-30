@@ -363,6 +363,7 @@ class AndroidAudioEngine implements AudioEngine {
 
     _onDemandPreparingEpoch = epoch;
     unawaited(() async {
+      var appended = false;
       try {
         if (index >= 12) {
           // Remove old playlist entries behind the active decoder in place,
@@ -407,6 +408,7 @@ class AndroidAudioEngine implements AudioEngine {
             identical(_onDemandGaplessSlots, slots) &&
             identical(_player, player)) {
           slots.add((song: next, playlistIndex: nextIndex));
+          appended = true;
         }
       } catch (error) {
         // Never stop the current source due to failed speculative preparation.
@@ -414,6 +416,15 @@ class AndroidAudioEngine implements AudioEngine {
         devLog('[Playback] On-demand gapless preload failed: $error');
       } finally {
         if (_onDemandPreparingEpoch == epoch) _onDemandPreparingEpoch = null;
+        // Media3 can auto-advance while addAudioSource is still completing.
+        // A native index event can precede our mapping insertion, so resync
+        // if the just-appended successor has already become current.
+        if (appended && epoch == _onDemandGaplessEpoch &&
+            identical(_onDemandGaplessSlots, slots) &&
+            identical(_player, player) &&
+            player.currentIndex == slots.length - 1) {
+          _syncTrackFromIndex(player.currentIndex);
+        }
       }
     }());
   }
