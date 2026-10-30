@@ -15,7 +15,7 @@ import '../models/ios_transfer_orphan.dart';
 import 'link/link_protocol.dart' show linkUuid;
 import 'ios_transfer_coordinator_port.dart';
 
-Uint8List _prepareIntents(List<IosTransferIntent> intents) {
+Uint8List _prepareIntents(List<IosTransferIntent> intents, String clientId) {
   if (intents.isEmpty ||
       intents.length > iosTransferMaximumJobs ||
       intents.map((intent) => intent.id).toSet().length != intents.length) {
@@ -28,13 +28,25 @@ Uint8List _prepareIntents(List<IosTransferIntent> intents) {
     }
   }
   final bytes = Uint8List.fromList(
-    utf8.encode(jsonEncode([for (final intent in intents) intent.toJson()])),
+    utf8.encode(
+      jsonEncode({
+        'clientID': clientId,
+        'intents': [for (final intent in intents) intent.toJson()],
+      }),
+    ),
   );
   if (bytes.length > iosTransferMaximumBytes) {
     throw const FormatException('Transfer request exceeds its byte limit.');
   }
   return bytes;
 }
+
+// Keep the isolate closure outside the transport's lexical context. A local
+// ownership-check closure can otherwise capture the transport and its Futures.
+Future<Uint8List> _encodeSubmission(
+  List<IosTransferIntent> intents,
+  String clientId,
+) => Isolate.run(() => _prepareIntents(intents, clientId));
 
 /// One application coordinator owns this transport. Native storage/networking
 /// survives Dart/engine replacement; this class owns only typed calls and the
@@ -62,6 +74,9 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   String? _subscription;
   String? _observedClient;
   Future<void>? _observationReady;
+  final _submissions = <Future<IosTransferSummary>>{};
+  int _submissionEpoch = 0;
+  bool _submissionsPaused = false;
   (BinaryMessenger, String) get _key => (channel.binaryMessenger, channel.name);
   @override
   Stream<void> get changes => _changes.stream;
@@ -136,15 +151,76 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     return List.unmodifiable(raw.map(IosTransferJob.fromJson));
   }
 
-  Future<IosTransferSummary> enqueue(List<IosTransferIntent> intents) async {
-    if (!supported || _disposed) {
+  Future<IosTransferSummary> enqueue(List<IosTransferIntent> intents) {
+    final task = _enqueue(intents, _submissionEpoch);
+    _submissions.add(task);
+    return task.whenComplete(() => _submissions.remove(task));
+  }
+
+  Future<IosTransferSummary> _enqueue(
+    List<IosTransferIntent> intents,
+    int epoch,
+  ) async {
+    if (!supported || _disposed || _submissionsPaused) {
       throw StateError('Native transfer transport unavailable.');
+    }
+    final client = _subscription, ready = _observationReady;
+    if (client == null || ready == null) {
+      throw StateError('Submission requires the active root transfer client.');
     }
     // Freeze consent before the first await; large plans are validated/encoded
     // away from the audio/UI isolate and submitted as one native transaction.
     final frozen = List<IosTransferIntent>.unmodifiable(intents);
-    final bytes = await Isolate.run(() => _prepareIntents(frozen));
-    return IosTransferSummary.fromJson(await _invoke('enqueue', bytes));
+    void check() {
+      if (_disposed ||
+          _submissionsPaused ||
+          _submissionEpoch != epoch ||
+          _subscription != client ||
+          _observedClient != client ||
+          !identical(_owners[_key], this)) {
+        throw StateError('Transfer submission was retired.');
+      }
+    }
+
+    await ready;
+    check();
+    final bytes = await _encodeSubmission(frozen, client);
+    check();
+    final result = await _invoke('enqueue', bytes);
+    check();
+    return IosTransferSummary.fromJson(result);
+  }
+
+  /// Fence app encoding synchronously, then invalidate already dispatched
+  /// native tickets and await their replies. This is not OS task cancellation
+  /// or the final storage clear barrier; the mutation owner must perform both.
+  @override
+  Future<void> pauseSubmissions() {
+    _submissionsPaused = true;
+    _submissionEpoch++;
+    final pending = _submissions.toList();
+    final fence = _subscription == null
+        ? Future<Object?>.value(true)
+        : _importCall('retireSubmissions', {});
+    return () async {
+      try {
+        if (await fence != true) {
+          throw const FormatException(
+            'Invalid native submission retirement response.',
+          );
+        }
+      } finally {
+        await Future.wait([
+          for (final task in pending)
+            task.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        ]);
+      }
+    }();
+  }
+
+  @override
+  void resumeSubmissions() {
+    if (!_disposed) _submissionsPaused = false;
   }
 
   Future<IosTransferJob> _control(String method, IosTransferJob job) async {
@@ -534,6 +610,8 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   }
 
   Future<void> _stop() async {
+    _submissionEpoch++;
+    _submissionsPaused = true;
     final id = _subscription;
     _subscription = null;
     _observedClient = null;
@@ -556,6 +634,10 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     if (_disposed) return;
     _disposed = true;
     await _stop();
+    await Future.wait([
+      for (final task in _submissions.toList())
+        task.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    ]);
     await _changes.close();
   }
 }

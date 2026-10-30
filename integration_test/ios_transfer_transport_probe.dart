@@ -100,6 +100,27 @@ Future<void> probeIosTransferTransport(
       );
     }
 
+    final retiredSubmissions = await const MethodChannel('lokal/transfers')
+        .invokeMethod<Object?>(
+          'retireSubmissions',
+          Uint8List.fromList(
+            utf8.encode(jsonEncode({'clientID': activeClient})),
+          ),
+        )
+        .timeout(const Duration(seconds: 10));
+    expect(jsonDecode(utf8.decode(retiredSubmissions! as Uint8List)), true);
+    await rejectedControl('retireSubmissions', {
+      'clientID': retiredClient!,
+    }, 'TRANSFER_CHANGED');
+    await rejectedControl('enqueue', {
+      'intents': [
+        {
+          'phase': 'complete',
+          'headers': {'authorization': 'synthetic-forbidden-token'},
+        },
+      ],
+    }, 'INVALID_TRANSFER_REQUEST');
+
     await rejectedControl('claimImport', {
       'id': missingJobId,
       'revision': 1,
@@ -126,7 +147,7 @@ Future<void> probeIosTransferTransport(
       'id': missingJobId,
       'revision': 1,
       'reconcileOnly': false,
-      'clientID': retiredClient!,
+      'clientID': retiredClient,
     }, 'TRANSFER_CHANGED');
     await rejectedControl('claimImportCleanup', {
       'id': missingJobId,
@@ -179,6 +200,9 @@ Future<void> probeIosTransferTransport(
       'library_import_api': capability.libraryImport,
       'upload_api': capability.upload,
       'invalid_intent_rejected_without_commit': true,
+      'submission_envelope_rejects_native_state': true,
+      'current_client_retires_submissions_directly': true,
+      'retired_client_cannot_retire_replacement_submissions': true,
       'replacement_observer_survives_old_disposal': true,
       'private_import_control_rejects_injection': true,
       'unclaimed_import_guard_rejected_without_commit': true,

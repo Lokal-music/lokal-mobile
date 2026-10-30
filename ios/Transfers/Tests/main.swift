@@ -250,6 +250,20 @@ do {
   try require(LokalTransferProtocol.page(Data("{\"offset\":0,\"limit\":100}".utf8)).limit == 100,
     "bounded page request accepted")
   let contractClient = "b7d96b93-6526-4f1f-a1af-688ffb5c799d"
+  let submissionFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
+    URL(fileURLWithPath: "test/fixtures/ios_transfer_submission_v1.json"))) as! [String: Any]
+  let decodedSubmission = try LokalTransferProtocol.submission(JSONSerialization.data(withJSONObject: submissionFixture))
+  try require(decodedSubmission.clientID == contractClient && decodedSubmission.jobs.count == 1,
+    "Swift decodes the shared client-bound submission envelope")
+  for field in ["headers", "sourcePath", "phase", "epoch"] {
+    var row = submissionFixture; row[field] = "caller"
+    try rejects("submission envelope never accepts native state or credentials") {
+      _ = try LokalTransferProtocol.submission(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  try rejects("array-only submission cannot bypass current root consent") {
+    _ = try LokalTransferProtocol.submission(JSONSerialization.data(withJSONObject: submissionFixture["intents"]!))
+  }
   let cleanupFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
     URL(fileURLWithPath: "test/fixtures/ios_transfer_cleanup_v1.json"))) as! [String: Any]
   let cleanupClaim = cleanupFixture["claim"] as! [String: Any]

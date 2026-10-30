@@ -10,8 +10,8 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 Hosted Xcode 26.0.1 builds the complete simulator app and release/AOT iPhone
-app for the iOS 16+ port. The current parity source includes **121 reviewed merged
-mobile PRs after #172 through #337**. Search keyboard behavior, the single
+app for the iOS 16+ port. The current parity source includes **123 reviewed merged
+mobile PRs after #172 through #340**. Search keyboard behavior, the single
 authoritative queue, inline Home modes, configurable Discovery shelves and
 transparent Cover Flow, circular shader artwork transitions, expanded artist
 catalogues and 0.01× speed controls are included in the latest continuation.
@@ -67,10 +67,13 @@ The unsigned build86 IPA SHA-256 is
 `398d7b2f4d17de1f143bcb33c92673e379a2bcad669c9b13746b58dd94c7159e`.
 
 Later source connects runtime resolution/finalization to actual root Isar
-retirement and adds bookkeeping-only recovery for older no-custody reservations.
+retirement, adds bookkeeping-only recovery for older no-custody reservations,
+and fences queued submission consent across root retirement and held mutations.
+It also adapts #339–340 catalogue metadata and ordinary stereo quality isolation;
+Android AC-4 decoder/actions remain excluded.
 Its host contracts are separate from build86 acceptance; this continuation still
 needs its own Apple execution. Product native import/upload stays disabled.
-The next release work is queued submission and clear/unpair/deletion/CUE barriers,
+The next release work is app-wide clear/unpair/deletion/CUE integration and OS-task barriers,
 owned uploads and persisted progress, followed by OS suspension/relaunch
 acceptance. See
 [the publication sequence](IOS_TRANSFERS.md#tracked-publication-foundation)

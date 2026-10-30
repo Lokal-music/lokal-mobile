@@ -39,6 +39,10 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     let owner: Owner
     fileprivate let barrier: UUID
   }
+  struct SubmissionTicket: Sendable {
+    let owner: Owner
+    fileprivate let epoch: UUID
+  }
   enum Permission: Equatable, Sendable { case write, reconcileOnly, cleanup, orphanCleanup }
   struct Lease: Sendable {
     let id: String
@@ -54,6 +58,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   private var engineID: String?
   private var owner: Owner?
   private var barrier = UUID()
+  private var submissionEpoch = UUID()
   private var active: Lease?
   private var cleanupPending = false
 
@@ -77,6 +82,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
 
   func attachEngine() -> String {
     locked {
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
       let id = UUID().uuidString.lowercased()
@@ -94,6 +100,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
       guard self.engineID == engineID else { throw LokalTransferError.invalidTransition }
       let next = Owner(engineID: engineID, clientID: clientID)
       if owner != next {
+        submissionEpoch = UUID()
         barrier = UUID()
         retireActive()
         owner = next
@@ -116,6 +123,30 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
       guard owner == ticket.owner, barrier == ticket.barrier else {
         throw LokalTransferError.staleRevision
       }
+    }
+  }
+
+  /// Submission consent is independent of individual import lease releases.
+  /// Capture at the bridge before dispatch, then check on the runtime queue.
+  func captureSubmission(_ owner: Owner) throws -> SubmissionTicket {
+    try locked {
+      guard self.owner == owner else { throw LokalTransferError.staleRevision }
+      return SubmissionTicket(owner: owner, epoch: submissionEpoch)
+    }
+  }
+
+  func validateSubmission(_ ticket: SubmissionTicket) throws {
+    try locked {
+      guard owner == ticket.owner, submissionEpoch == ticket.epoch else {
+        throw LokalTransferError.staleRevision
+      }
+    }
+  }
+
+  func retireSubmissions(_ owner: Owner) throws {
+    try locked {
+      guard self.owner == owner else { throw LokalTransferError.staleRevision }
+      submissionEpoch = UUID()
     }
   }
 
@@ -269,6 +300,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func stopClient(_ value: Owner) {
     locked {
       guard owner == value else { return }
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
       owner = nil
@@ -278,6 +310,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func detachEngine(_ value: String) {
     locked {
       guard engineID == value else { return }
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
       owner = nil
@@ -288,6 +321,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   /// Advance the barrier even when no file operation has claimed a lease yet.
   func revokeAll() {
     locked {
+      submissionEpoch = UUID()
       barrier = UUID()
       retireActive()
     }
@@ -303,6 +337,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func revoke(scope: LokalTransferScope) throws {
     let scope = try normalized(scope)
     locked {
+      submissionEpoch = UUID()
       barrier = UUID()
       if active?.scope == scope { retireActive() }
     }

@@ -404,10 +404,13 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
 
   /// Submission is idempotent for the same frozen intent ID, including when
   /// a Flutter reply was lost after native persistence or task creation.
-  func enqueue(_ requested: [LokalTransferJob], reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
+  func enqueue(_ requested: [LokalTransferJob],
+               submission: LokalTransferImportOwnership.SubmissionTicket? = nil,
+               reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
     queue.async {
       do {
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
+        if let submission { try self.importOwnership.validateSubmission(submission) }
         guard let authorization = try self.credentials() else { throw LokalTransferError.invalidRecord }
         var new: [LokalTransferJob] = []
         guard !requested.isEmpty, requested.count <= LokalTransferJournal.maximumJobs,
@@ -435,10 +438,12 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           }
         }
         if !new.isEmpty {
+          if let submission { try self.importOwnership.validateSubmission(submission) }
           try self.journal.create(new)
           for job in new { self.jobs[job.id] = job; self.order.append(job.id) }
           self.generation += 1
         }
+        if let submission { try self.importOwnership.validateSubmission(submission) }
         self.pump()
         self.notify()
         reply(.success(self.summaryValue()))

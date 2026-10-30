@@ -260,7 +260,8 @@ class LokalAtmosPill extends StatelessWidget {
   const LokalAtmosPill({super.key});
 
   static const String description =
-      "Tidal offers an Atmos version. Lokal requests the original E-AC-3 JOC stream when Android's native decoder or passthrough route supports it.";
+      'The catalogue lists a Dolby Atmos edition. This describes the source; '
+      'playback and spatial output depend on a supported decoder and connected device.';
 
   @override
   Widget build(BuildContext context) => Tooltip(

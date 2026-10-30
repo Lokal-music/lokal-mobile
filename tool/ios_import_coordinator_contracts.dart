@@ -43,6 +43,7 @@ class NativeFixture implements IosTransferCoordinatorPort {
   IosTransferCleanupResolution? resolution;
   int cleanupCalls = 0, finalizations = 0;
   int recoveries = 0;
+  int submissionPauses = 0, submissionResumes = 0;
   Completer<void>? recoveryEntered, recoveryWait;
   bool loseCleanupReply = false, loseFinalizationReply = false;
   final released = Completer<void>();
@@ -94,6 +95,16 @@ class NativeFixture implements IosTransferCoordinatorPort {
       startupDrainEntered!.complete();
       await startupDrain!.future;
     }
+  }
+
+  @override
+  Future<void> pauseSubmissions() async {
+    submissionPauses++;
+  }
+
+  @override
+  void resumeSubmissions() {
+    submissionResumes++;
   }
 
   @override
@@ -521,12 +532,13 @@ Future<void> main(List<String> arguments) async {
         native.recoveryEntered = Completer<void>();
         native.recoveryWait = Completer<void>();
         final before = native.recoveries;
+        final resuming = owner.resumeAfterMutation();
+        await native.recoveryEntered!.future;
         final first = owner.foreground(), second = owner.foreground();
         require(
           identical(first, second),
           'Concurrent foreground calls share one lifecycle operation',
         );
-        await native.recoveryEntered!.future;
         var mutationFinished = false;
         final mutation = owner.pauseForMutation().then(
           (_) => mutationFinished = true,
@@ -537,7 +549,7 @@ Future<void> main(List<String> arguments) async {
           'Mutation waits for the actual old lifecycle recovery',
         );
         native.recoveryWait!.complete();
-        await Future.wait([first, second, mutation]);
+        await Future.wait([resuming, first, second, mutation]);
         require(
           !owner.enabled &&
               owner.issues.isEmpty &&
@@ -547,8 +559,14 @@ Future<void> main(List<String> arguments) async {
         native.recoveryWait = null;
         await owner.foreground();
         require(
-          owner.enabled,
-          'A new foreground resumes only after the completed mutation barrier',
+          !owner.enabled && native.recoveries == before + 1,
+          'An unrelated foreground cannot release a held clear/unpair mutation',
+        );
+        final resumes = native.submissionResumes;
+        await owner.resumeAfterMutation();
+        require(
+          owner.enabled && native.submissionResumes == resumes + 1,
+          'Only the mutation owner explicitly resumes fresh submissions after its storage barrier',
         );
       } finally {
         await owner.dispose();
@@ -796,6 +814,37 @@ Future<void> main(List<String> arguments) async {
         if (native.startupDrain?.isCompleted == false) {
           native.startupDrain!.complete();
         }
+        await owner.dispose();
+      }
+    });
+    await scenario('mutation-during-startup', (fixture, native) async {
+      native.startupDrain = Completer<void>();
+      native.startupDrainEntered = Completer<void>();
+      final owner = coordinator(fixture, native);
+      try {
+        final starting = owner.start();
+        await native.startupDrainEntered!.future;
+        final mutation = owner.pauseForMutation();
+        await owner.foreground();
+        require(
+          !owner.enabled &&
+              native.submissionPauses == 1 &&
+              native.publications == 0,
+          'Mutation retires startup submissions before awaiting its blocked file drain',
+        );
+        native.startupDrain!.complete();
+        await Future.wait([starting, mutation]);
+        require(
+          !owner.enabled && native.publications == 0,
+          'A drained old startup cannot enable a held mutation',
+        );
+        await owner.resumeAfterMutation();
+        require(
+          owner.enabled && native.phase == 'complete' && owner.issues.isEmpty,
+          'Explicit mutation completion retries a retired startup and finishes one import',
+        );
+      } finally {
+        if (!native.startupDrain!.isCompleted) native.startupDrain!.complete();
         await owner.dispose();
       }
     });

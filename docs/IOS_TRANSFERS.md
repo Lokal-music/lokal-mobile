@@ -990,3 +990,47 @@ reopen recovery and preserves an unrelated file at the target path without
 calling file cleanup. Its native port remains an explicit fixture; portable
 native HTTP/ownership/codec checks are separate evidence, with Apple execution
 still pending for this source.
+
+### Submission consent and held mutations (outside build86)
+
+Submission now has a strict client-bound `{clientID, intents}` envelope. Dart
+freezes consent before its first await, encodes away from the UI isolate, and
+checks its local epoch/current observer before posting and after the native
+reply. The isolate closure has its own top-level context so it cannot capture
+the transport's unsendable Futures. Array-only requests, native state, paths
+and credentials are refused at the bridge. A shared Swift/Dart fixture checks
+the envelope.
+
+Native captures a separate submission ticket synchronously before host dispatch.
+Its epoch is independent of per-import lease releases. Client/engine handoff,
+scope/global revocation and direct `retireSubmissions` invalidate old tickets;
+the runtime checks before authorization, immediately before journal creation,
+and before starting network work. A request already persisted when retirement
+occurs still belongs to the subsequent native cancellation/storage barrier;
+epoch fencing is not OS-task cancellation.
+
+```mermaid
+flowchart LR
+  A[Frozen user plan] --> B[Dart epoch and current root]
+  B --> C[Isolate encoding]
+  C --> D[Recheck before channel]
+  D --> E[Native root ticket before queue]
+  E --> F[Recheck before journal]
+  F --> G[Durable idempotent job]
+  R[Mutation or root retirement] --> B
+  R --> D
+  R --> E
+  R --> F
+```
+
+Root mutation pause now fences submissions before awaiting older work, drains
+pending submission replies and import/cleanup leases, and remains held across
+foreground events. Only explicit `resumeAfterMutation` releases it after the
+caller finishes its actual storage operation. Startup retired during the pause
+is retried rather than permanently cached. Tests exercise held foreground and
+startup recovery with actual Isar, direct retirement while native authorization
+is blocked, no stale persistence, fresh HTTP submission/idempotency, stale
+success refusal and pending-reply drainage. Native Isar attestation/root RPC
+fixtures remain explicit. The UI's app-wide clear/unpair ownership, OS-task
+cancellation, journal/WAL handle retirement and installed acceptance are still
+required; these foundations do not enable product native import/upload.

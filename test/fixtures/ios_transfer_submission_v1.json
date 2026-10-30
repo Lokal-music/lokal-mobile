@@ -1,0 +1,35 @@
+{
+  "clientID": "b7d96b93-6526-4f1f-a1af-688ffb5c799d",
+  "intents": [
+    {
+      "id": "ae97c9b1-ec57-4ede-89e7-de6213202380",
+      "identity": {
+        "desktopID": "contract-desktop",
+        "sourceID": "original-7",
+        "localSongID": "42",
+        "localServerID": 3,
+        "desktopUserID": "contract-user",
+        "origin": "http://192.0.2.20:5443",
+        "pairingID": "14093104-64d4-44f7-8c8b-8b4b14399067"
+      },
+      "metadata": {
+        "title": "曲 — Café",
+        "artist": "Fixture artist",
+        "album": "Fixture album",
+        "albumArtist": "Fixture album artist",
+        "genre": "Jazz",
+        "durationMs": 120000,
+        "sampleRate": 96000,
+        "bitDepth": 24,
+        "bitrate": 2000,
+        "trackNumber": 2,
+        "discNumber": 1,
+        "year": 2026,
+        "fileExtension": "flac"
+      },
+      "createdMs": 1000,
+      "expectedBytes": 12,
+      "expectedSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

@@ -13,6 +13,8 @@ abstract interface class IosTransferCoordinatorPort {
   Future<IosTransferCapability> capability();
   Future<IosTransferSummary> recover();
   Future<void> drainImports();
+  Future<void> pauseSubmissions();
+  void resumeSubmissions();
   Future<IosTransferImportWorkPage> importWorkPage({
     IosTransferWorkCursor? after,
     int limit = 100,

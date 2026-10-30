@@ -44,6 +44,7 @@ class IosTransferImportCoordinator {
   IosTransferImportStore? _store;
   StreamSubscription<void>? _observation;
   Future<void>? _starting, _running, _foregrounding;
+  Future<void>? _pausing;
   IosTransferImportLease? _active;
   IosTransferCleanupLease? _activeCleanup;
   IosTransferOrphanLease? _activeOrphan;
@@ -51,6 +52,7 @@ class IosTransferImportCoordinator {
   (String, Future<void>)? _lastRelease;
   bool _disposed = false, _enabled = false, _eligible = false;
   bool _dirty = false, _needsRecovery = true;
+  bool _mutationPaused = false;
   int _epoch = 0;
 
   bool get enabled => _enabled;
@@ -90,7 +92,8 @@ class IosTransferImportCoordinator {
     );
   }
 
-  Future<void> start() => _starting ??= _start();
+  Future<void> start() =>
+      _mutationPaused ? Future.value() : (_starting ??= _start());
   Future<void> _start() async {
     final epoch = _epoch;
     try {
@@ -110,6 +113,7 @@ class IosTransferImportCoordinator {
       await native.drainImports();
       if (_disposed || epoch != _epoch) return;
       _enabled = true;
+      native.resumeSubmissions();
       _issues.remove('root');
       await requestDrain();
     } catch (_) {
@@ -130,7 +134,7 @@ class IosTransferImportCoordinator {
       });
 
   Future<void> _foreground() async {
-    if (_disposed) return;
+    if (_disposed || _mutationPaused) return;
     if (!_eligible || _store == null) {
       await start();
       return;
@@ -149,6 +153,7 @@ class IosTransferImportCoordinator {
         _store = await _openStore();
         if (_disposed || epoch != _epoch) return;
         _enabled = true;
+        native.resumeSubmissions();
       } catch (_) {
         if (!_disposed && epoch == _epoch) {
           _enabled = false;
@@ -618,27 +623,50 @@ class IosTransferImportCoordinator {
   }
 
   /// Revoke app writes before a caller takes the actual Isar clear/delete
-  /// writer barrier. Native OS-task cancellation and submission epochs must
-  /// also be integrated by that caller before product import is enabled.
-  Future<void> pauseForMutation() async {
+  /// writer barrier. Foreground events cannot resume a held mutation. The
+  /// caller still must cancel/drain OS tasks and complete its actual storage
+  /// mutation before explicitly calling resumeAfterMutation().
+  Future<void> pauseForMutation() {
+    if (_disposed) return Future.value();
+    _mutationPaused = true;
+    return _pausing ??= _pauseForMutation();
+  }
+
+  Future<void> _pauseForMutation() async {
+    final submissions = native.pauseSubmissions();
     _enabled = false;
     _epoch++;
     _dirty = false;
     _cancelActive();
     final active = _active;
-    if (active != null) await _release(active);
     final cleanup = _activeCleanup;
-    if (cleanup != null) await _releaseCleanup(cleanup);
     final orphan = _activeOrphan;
-    if (orphan != null) await _releaseOrphan(orphan);
+    await Future.wait([
+      submissions,
+      if (active != null) _release(active),
+      if (cleanup != null) _releaseCleanup(cleanup),
+      if (orphan != null) _releaseOrphan(orphan),
+    ]);
     await _running;
     await _starting;
     await _foregrounding;
     await native.drainImports();
   }
 
+  Future<void> resumeAfterMutation() async {
+    final pausing = _pausing;
+    await pausing;
+    if (_disposed || !identical(_pausing, pausing)) return;
+    _mutationPaused = false;
+    _pausing = null;
+    // A startup retired before eligibility/store initialization must retry.
+    _starting = null;
+    await foreground();
+  }
+
   Future<void> dispose() async {
     if (_disposed) return;
+    final submissions = native.pauseSubmissions().catchError((Object _) {});
     _disposed = true;
     _enabled = false;
     _epoch++;
@@ -664,6 +692,7 @@ class IosTransferImportCoordinator {
     await _running;
     await _starting;
     await _foregrounding;
+    await submissions;
     await _observation?.cancel();
     await _updates.close();
   }

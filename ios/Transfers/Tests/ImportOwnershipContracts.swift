@@ -27,7 +27,13 @@ func runImportOwnershipContracts(job: LokalTransferJob) throws {
     _ = try registry.claim(pending, job: job, permission: .write)
   }
   let ticket = try registry.capture(first)
+  let submission = try registry.captureSubmission(first)
   let lease = try registry.claim(ticket, job: job, permission: .write)
+  try registry.validateSubmission(submission)
+  try registry.retireSubmissions(first)
+  try rejects("queued submission retires independently of the active publication lease") {
+    try registry.validateSubmission(submission)
+  }
   try registry.validate(first, jobID: job.id, revision: job.revision,
     leaseID: lease.id, requiresWrite: true)
   try require(registry.claim(ticket, job: job, permission: .write).id == lease.id,

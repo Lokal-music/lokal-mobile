@@ -121,6 +121,7 @@ func runNetworkContracts(origin: String, length: Int64, checksum: String) throws
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
   try runCleanupResolutionContracts(origin: origin, length: length, checksum: checksum)
   try runOrphanCleanupContracts(origin: origin, length: length, checksum: checksum)
+  try runSubmissionContracts(origin: origin, length: length, checksum: checksum)
   let manager = FileManager.default
   let root = manager.temporaryDirectory.resolvingSymlinksInPath()
     .appendingPathComponent("lokal-native-network-" + UUID().uuidString)
@@ -426,6 +427,9 @@ private final class PublicationGate: @unchecked Sendable {
   let entered = DispatchSemaphore(value: 0)
   let resume = DispatchSemaphore(value: 0)
   init(_ boundary: String?) { self.boundary = boundary }
+  func arm(_ value: String) {
+    lock.lock(); boundary = value; lock.unlock()
+  }
   func visit(_ value: String) {
     lock.lock()
     let block = boundary == value
@@ -441,6 +445,55 @@ private final class PublicationGate: @unchecked Sendable {
 
 /// The actual native runtime, HTTP-retained WAV, ownership registry, serial file
 /// worker and journal. This still does not acknowledge media or an Isar Song.
+private func runSubmissionContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-submission-epoch-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? manager.removeItem(at: root) }
+  let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token")
+  let gate = PublicationGate(nil)
+  let ownership = LokalTransferImportOwnership()
+  let runtime = try LokalTransferRuntime(container: root, importOwnership: ownership,
+    credentials: { gate.visit("credentials"); return authorization })
+  defer {
+    gate.resume.signal()
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+  }
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+  let ticket = try ownership.captureSubmission(owner)
+  let job = try LokalTransferJob(direction: .download,
+    identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: "import-fixture", localSongID: "42", origin: origin),
+    metadata: LokalTransferMetadata(title: "Submission epoch", artist: "Native fixture", album: nil, fileExtension: "wav"),
+    nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  let journal = try LokalTransferJournal(container: root)
+  let before = try journal.snapshot().generation
+  gate.arm("credentials")
+  let result = NativeResult<LokalTransferSummary>(), done = DispatchSemaphore(value: 0)
+  runtime.enqueue([job], submission: ticket) { result.set($0); done.signal() }
+  try require(gate.entered.wait(timeout: .now() + 10) == .success, "actual runtime submission blocks during credentials")
+  // This direct fence must return while the runtime queue is still blocked.
+  try ownership.retireSubmissions(owner)
+  gate.resume.signal()
+  try require(done.wait(timeout: .now() + 10) == .success, "retired queued submission returns")
+  try rejects("consent retired during queued authorization cannot persist work") { _ = try result.get() }
+  try require(journal.snapshot().jobs.isEmpty && journal.snapshot().generation == before,
+    "retired runtime submission creates no durable job or generation")
+  let fresh = try ownership.captureSubmission(owner)
+  let _: LokalTransferSummary = try native { runtime.enqueue([job], submission: fresh, reply: $0) }
+  _ = try awaitJob(runtime, id: job.id, phase: [.downloaded])
+  let _: LokalTransferSummary = try native { runtime.enqueue([job], submission: fresh, reply: $0) }
+  try require(journal.snapshot().jobs.count == 1, "fresh owned consent remains idempotent after a lost reply")
+  ownership.revokeAll()
+  try rejects("clear invalidates a ticket captured before host dispatch") {
+    let _: LokalTransferSummary = try native { runtime.enqueue([job], submission: fresh, reply: $0) }
+  }
+  print("Native submission epochs passed: actual blocked authorization, immediate fence, no stale persistence, fresh HTTP work and idempotency. Clear/unpair OS-task integration remains pending.")
+}
+
 private func runOrphanCleanupContracts(origin: String, length: Int64, checksum: String) throws {
   let manager = FileManager.default
   let root = manager.temporaryDirectory.resolvingSymlinksInPath()

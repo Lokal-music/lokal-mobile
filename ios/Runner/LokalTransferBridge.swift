@@ -102,7 +102,9 @@ private func executeTransfer(_ operation: LokalTransferOperation, payload: Data?
       let request = try LokalTransferProtocol.page(payload!)
       runtime.page(offset: request.offset, limit: request.limit) { reply.encode($0) }
     case .enqueue:
-      runtime.enqueue(try LokalTransferProtocol.intents(payload!)) { reply.encode($0) }
+      // Submission is decoded and ticketed synchronously in handle(), before
+      // host dispatch. Never provide an unowned generic execution path.
+      reply.failure(LokalTransferError.invalidRecord)
     case .resume:
       runtime.resume(scope: try LokalTransferProtocol.scope(payload!)) { reply.encode($0) }
     case .cancel, .retry, .verify:
@@ -200,6 +202,16 @@ final class LokalTransferBridge {
   }
 
   private func handle(_ call: FlutterMethodCall, reply: LokalTransferReply) {
+    if call.method == "retireSubmissions" {
+      do {
+        guard let data = call.arguments as? FlutterStandardTypedData else { throw LokalTransferError.invalidRecord }
+        let request = try LokalTransferProtocol.client(data.data)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        try host.importOwnership.retireSubmissions(owner)
+        reply.encode(.success(true))
+      } catch { reply.failure(error) }
+      return
+    }
     if call.method == "observe" || call.method == "stopObserving" {
       do {
         guard let data = call.arguments as? FlutterStandardTypedData, data.data.count <= 8192 else {
@@ -237,6 +249,16 @@ final class LokalTransferBridge {
     } else {
       guard call.arguments == nil else { reply.failure(LokalTransferError.invalidRecord); return }
       bytes = nil
+    }
+    if operation == .enqueue {
+      do {
+        let request = try LokalTransferProtocol.submission(bytes!)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ticket = try host.importOwnership.captureSubmission(owner)
+        host.withRuntime({ runtime in runtime.enqueue(request.jobs, submission: ticket) { reply.encode($0) } },
+                         unavailable: { reply.failure($0) })
+      } catch { reply.failure(error) }
+      return
     }
     host.withRuntime({ runtime in
       executeTransfer(operation, payload: bytes, runtime: runtime, reply: reply)

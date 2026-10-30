@@ -200,4 +200,16 @@ enum LokalTransferProtocol {
       return job
     }
   }
+
+  /// The app submits consent under one current root client. Array-only plans
+  /// are no longer accepted at the bridge; native contracts may use intents().
+  static func submission(_ data: Data) throws -> (clientID: String, jobs: [LokalTransferJob]) {
+    guard !data.isEmpty, data.count <= maximumPayloadBytes,
+          let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          Set(row.keys) == ["clientID", "intents"],
+          let clientID = row["clientID"] as? String,
+          UUID(uuidString: clientID)?.uuidString.lowercased() == clientID,
+          let rows = row["intents"] as? [[String: Any]] else { throw LokalTransferError.invalidRecord }
+    return (clientID, try intents(JSONSerialization.data(withJSONObject: rows)))
+  }
 }

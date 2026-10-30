@@ -1,6 +1,6 @@
 # iPhone review of mobile PRs after #172
 
-Current review: **121 merged product PRs after #172 through #337**. The newest
+Current review: **123 merged product PRs after #172 through #340**. The newest
 continuation includes on-demand large queues, provider resolution, subtitle
 alignment, smooth player expansion, per-minor release notes and direct Help
 navigation. Reviewed
@@ -1320,3 +1320,23 @@ All 55 focused Link/genre checks pass, including actual Genres page alias search
 fatal-info analysis is clean. These changes are later than frozen PR338/build85
 and require the next batched Apple acceptance. Build84 remains qualified only
 through #332; this audit does not extend its source scope.
+
+## Follow-up: PRs #339–340 Amazon quality isolation
+
+Reviewed merged #339 `26b7553785cf0921f8706da913d5844ea7ca7570` and its
+corrective #340 `7160dfa450ce2ed447d711c0438a9550c02ead42`. The rolling audit
+now covers 123 merged product PRs through #340. Build86 remains frozen through
+#337; the additions below are later source with host acceptance only.
+
+| Area | iPhone disposition |
+| --- | --- |
+| Combined catalogue modes | Parse comma/semicolon/pipe-separated explicit modes, including Amazon responses. AC-4, plain E-AC-3 and multichannel metadata alone do not invent an Atmos badge. |
+| Normal provider playback | Exclude Amazon AC-4 and plain E-AC-3 spatial download defaults from ordinary stereo requests, including sparse manifests and spatial options with nonstandard IDs. Preserve explicit saving preferences and non-Amazon identifiers. Prefer offered BEST before HIGH when falling back from a spatial default; retain explicit HIGH requests. |
+| Catalogue tooltip | Describe an explicitly advertised edition independently of the provider and distinguish source availability from playback/spatial output. |
+| Android AC-4 decoder, direct routes, handoff, probe/cache codec diagnostics | Excluded native audio work under the user's scope exception. Do not add Try Amazon AC-4/AC-4 playback actions or claim an iPhone AC-4 decoder/presentation. Existing iPhone playback and Android native sources are preserved. |
+
+The malformed/duplicated Dart module in #339 is not copied; the port retains one
+compilable selector and adapts the relevant #340 isolation behavior. Decoder,
+source-verification and UI assertions require their own supported platform
+evidence; these shared changes do not qualify an authenticated Amazon stream or
+physical spatial output.
