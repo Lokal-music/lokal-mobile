@@ -33,7 +33,10 @@ class LinkFileCopy {
     required this.socket,
     required this.connected,
     required this.onProgress,
-  });
+  }) : _libraryEpoch = LokalDesktopSource.instance.libraryTransferEpoch;
+  final int _libraryEpoch;
+  bool get _currentLibrary =>
+      _libraryEpoch == LokalDesktopSource.instance.libraryTransferEpoch;
   final LokalRemoteCredentials credentials;
   final LokalLinkService socket;
   final bool Function() connected;
@@ -57,6 +60,7 @@ class LinkFileCopy {
 
   void _check() {
     _preview.check();
+    if (!_currentLibrary) throw StateError('The library changed. Retry the copy preview.');
     if (!connected())
       throw StateError('Reconnect to your desktop to continue copying.');
   }
@@ -88,7 +92,8 @@ class LinkFileCopy {
           () => source.hasOriginalFile(credentials, id),
         )) {
           confirmedDesktopIds.add(id);
-          await source.rememberDesktopOriginal(song, server.id, id);
+          await source.rememberDesktopOriginal(song, server.id, id,
+              stillCurrent: () => _currentLibrary && !cancelled && connected());
           return true;
         }
       }
@@ -258,6 +263,7 @@ class LinkFileCopy {
               candidates[index],
               server.id,
               remoteId,
+              stillCurrent: () => _currentLibrary && !cancelled && connected(),
             );
           }
         }

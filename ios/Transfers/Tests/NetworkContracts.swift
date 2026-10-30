@@ -199,6 +199,59 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   try require(try batch.retireNetworkScope(scope, nowMs: 2001).isEmpty,
     "repeated scoped retirement cannot increment an already cancelled job revision")
 
+  // Clear Library retires old consent without revoking this desktop pairing.
+  let clearRoot = root.appendingPathComponent("clear")
+  try manager.createDirectory(at: clearRoot, withIntermediateDirectories: false)
+  let clearJournal = try LokalTransferJournal(container: clearRoot)
+  let clearJob = try request("clear-old")
+  try clearJournal.create([clearJob])
+  let cleared = try clearJournal.retireNetworkScope(scope, nowMs: 2000, retirePairing: false)
+  let clearSnapshot = try LokalTransferJournal(container: clearRoot).snapshot()
+  try require(cleared.count == 1 && clearSnapshot.pauses.isEmpty &&
+      clearSnapshot.jobs.first?.phase == .cancelled,
+    "library clear cancels old revisions without revoking the pairing")
+  let cleanupBinding = try cleared[0].retired.cancelledDownloadForCleanup()
+  try require(cleanupBinding.taskBinding == clearJob.taskBinding &&
+      cleanupBinding.stagedName == clearJob.stagedName,
+    "private cleanup derives the exact pre-cancellation revision")
+  try rejects("uncancelled job cannot authorize cancellation cleanup") {
+    _ = try clearJob.cancelledDownloadForCleanup()
+  }
+  _ = try batch.retireNetworkScope(scope, nowMs: 2002, retirePairing: false)
+  try require(try batch.snapshot().pauses == batchAfter.pauses,
+    "library clear cannot remove a previous Forget tombstone")
+
+  // Real network work can be explicitly requested again after a Clear.
+  let clearOwnership = LokalTransferImportOwnership()
+  let clearEngine = clearOwnership.attachEngine()
+  let clearClient = try clearOwnership.attachClient(engineID: clearEngine,
+    clientID: UUID().uuidString.lowercased())
+  let clearAuth = try LokalTransferAuthorization(desktopID: "fixture-pc",
+    origin: origin, token: "transfer-fixture-token")
+  let clearRuntime = try LokalTransferRuntime(container: clearRoot,
+    importOwnership: clearOwnership, credentials: { clearAuth })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    clearRuntime.shutdown { done.signal() }
+    _ = done.wait(timeout: .now() + 10)
+  }
+  let clearSlow = try request("slow")
+  let _: LokalTransferSummary = try native { clearRuntime.enqueue([clearSlow], reply: $0) }
+  _ = try awaitJob(clearRuntime, id: clearSlow.id, phase: [.transferring])
+  let clearTicket = try clearOwnership.beginScopeRetirement(clearClient, scope: scope)
+  let clearReceipt: LokalTransferSummary = try native {
+    clearRuntime.retireNetworkScope(scope, ticket: clearTicket, retirePairing: false, reply: $0)
+  }
+  try require(clearReceipt.pauses.isEmpty &&
+      (try awaitJob(clearRuntime, id: clearSlow.id, phase: [.cancelled])).revision == 2,
+    "clear waits for real cancellation without a permanent pause")
+  let fresh = try request("clear-fresh")
+  let _: LokalTransferSummary = try native { clearRuntime.enqueue([fresh], reply: $0) }
+  _ = try awaitJob(clearRuntime, id: fresh.id, phase: [.downloaded])
+  let _: LokalTransferSummary = try native { clearRuntime.recover($0) }
+  try require((try awaitJob(clearRuntime, id: clearSlow.id, phase: [.cancelled])).revision == 2,
+    "fresh explicit work never resurrects the pre-clear revision")
+
   // Exercise the real ephemeral URLSession delegate, not a fake task list.
   let liveRoot = root.appendingPathComponent("live")
   try manager.createDirectory(at: liveRoot, withIntermediateDirectories: false)
@@ -219,7 +272,7 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   let slow = try request("slow")
   let _: LokalTransferSummary = try native { runtime.enqueue([slow], reply: $0) }
   _ = try awaitJob(runtime, id: slow.id, phase: [.transferring])
-  let ticket = try ownership.capture(client)
+  let ticket = try ownership.beginScopeRetirement(client, scope: scope)
   let firstResult = NativeResult<LokalTransferSummary>()
   let secondResult = NativeResult<LokalTransferSummary>()
   let firstDone = DispatchSemaphore(value: 0)

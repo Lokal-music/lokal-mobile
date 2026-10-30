@@ -233,7 +233,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["retireNetworkScope", "drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["cancelNetworkScopePreservingFiles", "preserveImportPublicFile", "retireNetworkScope", "drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -276,17 +276,17 @@ final class LokalTransferBridge {
         let ticket = try host.importOwnership.capture(owner)
         host.withRuntime({ runtime in runtime.drainImports(ticket: ticket) { reply.encode($0) } },
                          unavailable: { reply.failure($0) })
-      } else if call.method == "retireNetworkScope" {
+      } else if call.method == "retireNetworkScope" || call.method == "cancelNetworkScopePreservingFiles" {
         let request = try LokalTransferProtocol.scopeRetirement(data.data)
         guard let owner = importOwner, request.clientID == clientID else {
           throw LokalTransferError.staleRevision
         }
         // Retire native tickets synchronously at bridge dispatch, before a
         // previously queued enqueue could commit after the journal's batch.
-        try host.importOwnership.retireSubmissions(owner)
-        let ticket = try host.importOwnership.capture(owner)
+        let ticket = try host.importOwnership.beginScopeRetirement(owner, scope: request.scope)
+        let retirePairing = call.method == "retireNetworkScope"
         host.withRuntime({ runtime in
-          runtime.retireNetworkScope(request.scope, ticket: ticket) { reply.encode($0) }
+          runtime.retireNetworkScope(request.scope, ticket: ticket, retirePairing: retirePairing) { reply.encode($0) }
         }, unavailable: { reply.failure($0) })
       } else if call.method == "importWorkPage" || call.method == "importCandidatesPage" {
         let request = try LokalTransferProtocol.importWorkPage(data.data)
@@ -308,6 +308,13 @@ final class LokalTransferBridge {
         let ticket = try ownership.beginCleanup(ownership.capture(owner))
         host.withRuntime({ runtime in runtime.claimOrphanCleanup(request, ticket: ticket) { reply.encode($0) } },
                          unavailable: { ownership.abortCleanup(ticket); reply.failure($0) })
+      } else if call.method == "preserveImportPublicFile" {
+        let request = try LokalTransferProtocol.importLease(data.data)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        try host.importOwnership.validateCleanup(owner, jobID: request.id,
+          revision: request.revision, leaseID: request.leaseID)
+        host.withRuntime({ runtime in runtime.preserveImportPublicFile(request, owner: owner) { reply.encode($0) } },
+                         unavailable: { reply.failure($0) })
       } else if call.method == "claimImportCleanup" {
         let request = try LokalTransferProtocol.importCleanupClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }

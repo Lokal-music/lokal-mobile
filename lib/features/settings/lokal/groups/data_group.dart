@@ -283,7 +283,7 @@ List<LokalSettingsSection> dataSettings(
             );
             if (!ok || !context.mounted) return;
             try {
-              await IosTransferRoot.withMutationBarrier(
+              await IosTransferRoot.withLibraryClearBarrier(
                 context,
                 () => SongRepository().deleteAllSongs(),
               );

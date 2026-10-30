@@ -9,7 +9,12 @@ Never _invalidCleanup() =>
 
 enum IosTransferCleanupMode { abandoned, committed }
 
-enum IosTransferAbandonment { removedOwnedFile, missingFile, preservedUserFile }
+enum IosTransferAbandonment {
+  removedOwnedFile,
+  missingFile,
+  preservedUserFile,
+  preservedByRequest,
+}
 
 /// Native file handling finished; this never substitutes for an Isar receipt.
 class IosTransferCleanupResolution {

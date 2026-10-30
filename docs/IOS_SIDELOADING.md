@@ -26,31 +26,34 @@ setup is required for the sideloaded app.
 `Lokal-unsigned.ipa.json` identifies the source commit, version/build and Apple
 toolchain. The artifact also contains the project's license/notices and matching
 source archive. Simulator screenshots/logs are in the diagnostics artifact.
-The latest complete hosted iPhone engineering checkpoint is
-[build 87](https://github.com/lokal-music/lokal-mobile/actions/runs/40980148351)
-from [PR #345](https://github.com/lokal-music/lokal-mobile/pull/345).
-It passes both full iOS 18.6/26.0 installed simulator suites, builds the unsigned
-release/AOT IPA and passes 1,163 selected Flutter regressions. The separate
-[Apple-native run 12](https://github.com/lokal-music/lokal-mobile/actions/runs/40980148329)
-passes iOS 16 device/simulator SDK/Flutter bridge checks and 20 native rounds.
-The artifact is `Lokal-iPhone-engineering-unsigned-87-attempt1`.
-Its build-reported IPA SHA-256 is
-`56f5ef87e1cf1435c37bd24fdf3fc49a4205d048ba35729ca468c96c68c8a386`.
-The source tree is `41b64dc303351f48cc3211c39eae8aa414a07fc2`.
+The latest complete hosted engineering checkpoint recorded for this stack is
+[build 111 on PR349](https://github.com/lokal-music/lokal-mobile/actions/runs/41005225249).
+Its iPhone build, iOS26 acceptance and independent IPA-audit jobs passed. Use
+its own packaged manifest and checksum when downloading; a checksum from an
+earlier build does not verify build111.
 
-Build 87 is an **unsigned engineering checkpoint**, not a public or physically
-qualified build. It has not been independently re-inspected here. Subsequent
-source changes to the app-wide destructive mutation entry points are newer
-than build 87; use only a successful matching newer artifact to test those.
-Native product import/upload remain disabled; ordinary foreground copy flows
-remain active. Physical iPhone signing/installation and upgrades, actual iOS 16
-runtime, live online accounts/receivers, and OS background transfer
-suspension/relaunch still require real-device acceptance.
+The separately qualified
+[build103 on PR345](https://github.com/lokal-music/lokal-mobile/actions/runs/40992683570)
+also passed iOS18.6/26 acceptance and its independent package audit. Its artifact
+is `Lokal-iPhone-engineering-unsigned-103-attempt1`, with IPA SHA-256
+`b976c72a458edd43ad743da8241ddd1d1368e4aae821218824f86d3e72d62a7d`
+and source tree `4e94d6a6c0ed685428ed7dad3afcc27a6939d0b6`.
+These qualification records are distinct from downloading and reinspecting
+the packages in this workspace, and neither is physical-device acceptance.
 
-Build 86 is the independently reverified prior fallback:
-[run 40951126722](https://github.com/lokal-music/lokal-mobile/actions/runs/40951126722),
+Newer source through PR355 and the subsequent Clear/Forget preservation
+continuation is **not contained in those earlier artifacts**. CI waits are
+skipped at the user's request; use a successful matching newer artifact to
+test that source. Native product import/upload remain disabled; ordinary
+foreground copies remain active. Signing, installation/upgrade, live services
+and receivers, and physical playback acceptance remain outstanding. Future
+native background-transfer activation also requires OS suspension/relaunch
+and the remaining [transfer gates](IOS_TRANSFERS.md).
+
+Build86 remains a separately preserved older fallback:
+[run40951126722](https://github.com/lokal-music/lokal-mobile/actions/runs/40951126722),
 IPA SHA-256 `398d7b2f4d17de1f143bcb33c92673e379a2bcad669c9b13746b58dd94c7159e`.
-Keep its frozen source and crash symbols separate from build 87.
+Keep every package's frozen source and crash symbols with that exact build.
 
 ## Sign and install
 

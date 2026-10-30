@@ -5,6 +5,7 @@ import '../models/ios_transfer_cleanup.dart';
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_recovery.dart';
 import '../models/ios_transfer_orphan.dart';
+import 'ios_pairing_retirement.dart';
 import 'ios_transfer_coordinator_port.dart';
 import 'ios_transfer_import_store.dart';
 import 'ios_transfer_media.dart';
@@ -45,6 +46,8 @@ class IosTransferImportCoordinator {
   StreamSubscription<void>? _observation;
   Future<void>? _starting, _running, _foregrounding;
   Future<void>? _pausing;
+  Future<void>? _mutationRecoveryTask;
+  bool _mutationRecovery = false;
   IosTransferImportLease? _active;
   IosTransferCleanupLease? _activeCleanup;
   IosTransferOrphanLease? _activeOrphan;
@@ -62,7 +65,10 @@ class IosTransferImportCoordinator {
   Map<String, IosTransferCoordinatorIssue> get issues =>
       Map.unmodifiable(_issues);
   String _key(IosTransferJob job) => '${job.id}:${job.revision}';
-  bool _current(int epoch) => !_disposed && _enabled && epoch == _epoch;
+  bool _current(int epoch) =>
+      !_disposed &&
+      epoch == _epoch &&
+      (_enabled || (_mutationPaused && _mutationRecovery));
   void _check(int epoch) {
     if (!_current(epoch)) throw StateError('Import coordinator retired.');
   }
@@ -363,7 +369,11 @@ class IosTransferImportCoordinator {
     }
   }
 
-  Future<void> _cleanupWork(IosTransferImportWork work, int epoch) async {
+  Future<void> _cleanupWork(
+    IosTransferImportWork work,
+    int epoch, {
+    bool preservePublic = false,
+  }) async {
     final key = _key(work.job);
     IosTransferCleanupLease? lease;
     try {
@@ -371,6 +381,10 @@ class IosTransferImportCoordinator {
       _activeCleanup = lease;
       _check(epoch);
       lease.validateFor(work);
+      if (preservePublic && lease.resolution == null) {
+        await native.preserveImportPublicFile(lease);
+        _check(epoch);
+      }
       var decision = await _store!.peek(work.job, work.target);
       _check(epoch);
       if (decision == null || decision.receipt.localSongId != lease.songId) {
@@ -386,7 +400,11 @@ class IosTransferImportCoordinator {
         _activeCleanup = null;
         lease = null;
         _check(epoch);
-        await _import(work.job, epoch);
+        if (_mutationRecovery) {
+          await _finishHistorical(work, epoch);
+        } else {
+          await _import(work.job, epoch);
+        }
         _pendingReservations.remove(key);
         return;
       }
@@ -654,7 +672,116 @@ class IosTransferImportCoordinator {
     await native.drainImports();
   }
 
+  /// Runs only after the mutation pause and native recovery, under the verified
+  /// pairing scope. Ordinary import/publication stays disabled throughout.
+  Future<void> reconcileImportsForMutation(
+    IosTransferScope? scope, {
+    bool afterNetworkRetirement = false,
+  }) async {
+    if (_mutationRecoveryTask != null) {
+      throw StateError('Another iPhone mutation recovery is active.');
+    }
+    final task = _reconcileImportsForMutation(
+      scope,
+      afterNetworkRetirement: afterNetworkRetirement,
+    );
+    _mutationRecoveryTask = task;
+    try {
+      await task;
+    } finally {
+      _mutationRecoveryTask = null;
+    }
+  }
+
+  Future<void> _reconcileImportsForMutation(
+    IosTransferScope? scope, {
+    required bool afterNetworkRetirement,
+  }) async {
+    scope?.validate();
+    await _pausing;
+    if (_disposed || !_mutationPaused || _enabled) {
+      throw StateError('Import reconciliation requires a held mutation.');
+    }
+    final epoch = _epoch;
+    _store = await _openStore();
+    if (_disposed || !_mutationPaused || epoch != _epoch) {
+      throw StateError('Mutation recovery was retired.');
+    }
+    _mutationRecovery = true;
+    try {
+      if (afterNetworkRetirement) {
+        int? afterId;
+        var visited = 0;
+        do {
+          _check(epoch);
+          final page = await _store!.pendingReservations(afterId: afterId);
+          _check(epoch);
+          visited += page.entries.length;
+          if (visited > iosTransferMaximumJobs) {
+            throw const FormatException(
+              'Mutation reservation budget exceeded.',
+            );
+          }
+          for (final pending in page.entries) {
+            if (scope != null &&
+                !IosPairingRetirement.sameScope(scope, pending.scope)) {
+              continue;
+            }
+            _issues.remove(pending.operationKey);
+            await _retireOrphan(pending, epoch);
+            _check(epoch);
+            if (_issues.containsKey(pending.operationKey)) {
+              throw StateError(
+                'iPhone reservation recovery must finish before changing library data.',
+              );
+            }
+          }
+          afterId = page.nextId;
+        } while (afterId != null);
+        return;
+      }
+      IosTransferWorkCursor? cursor;
+      var visited = 0;
+      do {
+        _check(epoch);
+        final page = await native.importWorkPage(after: cursor);
+        _check(epoch);
+        visited += page.entries.length;
+        if (visited > iosTransferMaximumJobs) {
+          throw const FormatException('Mutation recovery budget exceeded.');
+        }
+        for (final work in page.entries) {
+          if (scope != null &&
+              !IosPairingRetirement.sameScope(
+                scope,
+                work.job.intent.identity.scope,
+              )) {
+            continue;
+          }
+          final key = _key(work.job);
+          _issues.remove(key);
+          if (work.isCurrentRevision &&
+              work.currentPhase == IosTransferPhase.complete) {
+            await _finishHistorical(work, epoch);
+          } else {
+            await _cleanupWork(work, epoch, preservePublic: true);
+          }
+          _check(epoch);
+          if (_issues.containsKey(key)) {
+            throw StateError(
+              'iPhone import reconciliation must finish before removing this pairing.',
+            );
+          }
+        }
+        cursor = page.nextCursor;
+      } while (cursor != null);
+    } finally {
+      _mutationRecovery = false;
+    }
+  }
+
   Future<void> resumeAfterMutation() async {
+    await _mutationRecoveryTask;
     final pausing = _pausing;
     await pausing;
     if (_disposed || !identical(_pausing, pausing)) return;
@@ -693,6 +820,9 @@ class IosTransferImportCoordinator {
     await _running;
     await _starting;
     await _foregrounding;
+    try {
+      await _mutationRecoveryTask;
+    } catch (_) {}
     await submissions;
     await _observation?.cancel();
     await _updates.close();

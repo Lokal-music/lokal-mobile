@@ -318,13 +318,15 @@ class NativeFixture implements IosTransferCoordinatorPort {
       } else {
         phase = 'cancelled';
         final file = File(fixture.store().absolutePath(fixture.target));
-        var outcome = 'missingFile';
+        var outcome = preservePublic ? 'preservedByRequest' : 'missingFile';
         if (await file.exists()) {
           final digest = (await sha256.bind(file.openRead()).first).toString();
-          if (published && digest == lease.job.receivedSha256) {
+          if (!preservePublic &&
+              published &&
+              digest == lease.job.receivedSha256) {
             await file.delete();
             outcome = 'removedOwnedFile';
-          } else {
+          } else if (!preservePublic) {
             outcome = 'preservedUserFile';
           }
         }
@@ -375,6 +377,13 @@ class NativeFixture implements IosTransferCoordinatorPort {
       throw StateError('Fixture lost finalization reply');
     }
     event();
+  }
+
+  bool preservePublic = false;
+  @override
+  Future<void> preserveImportPublicFile(IosTransferCleanupLease lease) async {
+    await validateImportCleanup(lease);
+    preservePublic = true;
   }
 
   @override
@@ -524,6 +533,105 @@ Future<void> main(List<String> arguments) async {
     readMedia: reader ?? readMedia,
   );
   try {
+    await scenario('mutation-preserves-published-preparation', (
+      fixture,
+      native,
+    ) async {
+      await fixture.prepare();
+      native.enabled = false;
+      native.phase = 'importing';
+      native.songId = 42;
+      native.published = true;
+      final file = File(fixture.store().absolutePath(fixture.target));
+      await file.parent.create(recursive: true);
+      await fixture.audio.copy(file.path);
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        await owner.pauseForMutation();
+        await owner.reconcileImportsForMutation(
+          fixture.job().intent.identity.scope,
+        );
+        require(
+          !owner.enabled &&
+              native.publications == 0 &&
+              native.preservePublic &&
+              native.cleanupCalls == 1 &&
+              native.finalizations == 1 &&
+              owner.issues.isEmpty,
+          'Held mutation reconciles actual Isar without activating ordinary imports',
+        );
+        require(
+          (await fixture.store().peek(
+                    fixture.job(),
+                    fixture.target,
+                  ))!.receipt.state ==
+                  'retired' &&
+              await file.exists() &&
+              (await file.readAsBytes()).length ==
+                  fixture.job().receivedBytes &&
+              (await fixture.db.songEntitys.get(42))!.sourceType == 'lokal',
+          'Prepared retirement preserves the public file and original Song before user metadata action',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
+    await scenario('mutation-retires-orphan-after-network', (
+      fixture,
+      native,
+    ) async {
+      await fixture.prepare();
+      native.enabled = false;
+      native.phase = 'cancelled';
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        await owner.pauseForMutation();
+        await owner.reconcileImportsForMutation(
+          fixture.job().intent.identity.scope,
+          afterNetworkRetirement: true,
+        );
+        require(
+          (await fixture.store().pendingReservations()).entries.isEmpty &&
+              native.orphanClaims == 1 &&
+              native.cleanupCalls == 0 &&
+              native.publications == 0,
+          'Post-cancellation mutation retires only verified orphan bookkeeping',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
+    await scenario('mutation-refuses-missing-Isar', (fixture, native) async {
+      native.enabled = false;
+      native.phase = 'importing';
+      native.songId = 42;
+      native.published = true;
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        await owner.pauseForMutation();
+        var refused = false;
+        try {
+          await owner.reconcileImportsForMutation(
+            fixture.job().intent.identity.scope,
+          );
+        } on StateError {
+          refused = true;
+        }
+        require(
+          refused &&
+              native.cleanupCalls == 0 &&
+              native.finalizations == 0 &&
+              native.publications == 0 &&
+              native.preservePublic,
+          'Missing Isar binding blocks mutation without deleting files or inventing commitment',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
     await scenario('coalesced-foreground-mutation', (fixture, native) async {
       final owner = coordinator(fixture, native);
       try {

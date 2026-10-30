@@ -923,7 +923,12 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     await sendRawCommand('fadePause');
   }
 
-  Future<void> _receiveHandoff(Map<String, dynamic> value) async {
+  Future<void> _receiveHandoff(Map<String, dynamic> value) =>
+      LokalDesktopSource.instance.runLibraryTransfer(
+        () => _receiveHandoffTracked(value),
+      );
+
+  Future<void> _receiveHandoffTracked(Map<String, dynamic> value) async {
     final raw = value['queue'], index = value['index'];
     if (raw is! List ||
         raw.isEmpty ||

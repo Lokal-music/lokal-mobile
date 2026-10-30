@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'ios_library_scan_epoch.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -294,6 +295,16 @@ class LibraryScannerService {
 
   /// Scan a single folder using appropriate method for platform.
   Stream<ScanProgress> scanFolder(
+    String folderUri,
+    String displayName, {
+    ScanMode mode = ScanMode.quick,
+  }) => Platform.isIOS
+      ? IosLibraryScanEpoch.bind(
+          () => _scanFolderEntry(folderUri, displayName, mode: mode),
+        )
+      : _scanFolderEntry(folderUri, displayName, mode: mode);
+
+  Stream<ScanProgress> _scanFolderEntry(
     String folderUri,
     String displayName, {
     ScanMode mode = ScanMode.quick,
@@ -2374,6 +2385,15 @@ class LibraryScannerService {
   Stream<ScanProgress> scanAllFolders({
     ScanMode mode = ScanMode.quick,
     bool forceDeepScan = false,
+  }) => Platform.isIOS
+      ? IosLibraryScanEpoch.bind(
+          () => _scanAllFoldersEntry(mode: mode, forceDeepScan: forceDeepScan),
+        )
+      : _scanAllFoldersEntry(mode: mode, forceDeepScan: forceDeepScan);
+
+  Stream<ScanProgress> _scanAllFoldersEntry({
+    ScanMode mode = ScanMode.quick,
+    bool forceDeepScan = false,
   }) async* {
     _isCancelled = false;
     final totalStopwatch = Stopwatch()..start();
@@ -2511,7 +2531,11 @@ class LibraryScannerService {
 
   /// Efficiently check for externally deleted files across all folders.
   /// Only removes songs whose file paths no longer exist on disk.
-  Future<void> refreshDeletions() async {
+  Future<void> refreshDeletions() => Platform.isIOS
+      ? IosLibraryScanEpoch.run(_refreshDeletionsEntry)
+      : _refreshDeletionsEntry();
+
+  Future<void> _refreshDeletionsEntry() async {
     final stopwatch = Stopwatch()..start();
     final folders = await _folderRepository.getAllFolders();
     if (folders.isEmpty) return;

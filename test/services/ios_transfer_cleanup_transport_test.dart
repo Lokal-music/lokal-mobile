@@ -97,13 +97,13 @@ void main() {
       ...cleanup(),
       'currentRevision': 2,
       'currentPhase': 'cancelled',
-      'resolution': {'mode': 'abandoned', 'abandonment': 'preservedUserFile'},
+      'resolution': {'mode': 'abandoned', 'abandonment': 'preservedByRequest'},
     });
     expect(claim.job.revision, 1);
     expect(claim.currentRevision, 2);
     expect(
       claim.resolution!.abandonment,
-      IosTransferAbandonment.preservedUserFile,
+      IosTransferAbandonment.preservedByRequest,
     );
     expect(
       IosTransferCleanupLease.fromJson({
@@ -212,10 +212,12 @@ void main() {
         IosTransferImportWork.fromJson(work()),
       );
       await native.validateImportCleanup(claim);
+      await native.preserveImportPublicFile(claim);
       await native.releaseImportCleanup(claim);
       expect(calls, [
         'claimImportCleanup',
         'validateImportCleanup',
+        'preserveImportPublicFile',
         'releaseImport',
       ]);
       foreignReply = true;

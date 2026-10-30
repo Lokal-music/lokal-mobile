@@ -45,6 +45,7 @@ abstract interface class IosTransferCoordinatorPort {
     IosTransferImportWork work,
   );
   Future<void> validateImportCleanup(IosTransferCleanupLease lease);
+  Future<void> preserveImportPublicFile(IosTransferCleanupLease lease);
   Future<IosTransferResolvedCleanup> resolveImportCleanup(
     IosTransferCleanupLease lease, {
     required IosTransferReceiptEntity receipt,

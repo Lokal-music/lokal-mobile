@@ -28,6 +28,9 @@ class IosPairingRetirement {
     required Future<IosTransferSummary> Function() recover,
     required Future<IosTransferPairing?> Function() currentPairing,
     required Future<IosTransferSummary> Function(IosTransferScope scope) retire,
+    required Future<void> Function(IosTransferScope scope) reconcileImports,
+    required Future<void> Function(IosTransferScope scope)
+    reconcileReservations,
   }) async {
     // Recover URLSession identities before inspecting any journal count.
     // Native cancellation/cleanup still owns its own serial queue.
@@ -60,12 +63,16 @@ class IosPairingRetirement {
     if (native == null || !sameScope(requested, native.scope)) {
       throw StateError('iPhone transfer pairing changed. Reconnect and retry.');
     }
+    await reconcileImports(native.scope);
     final retired = await retire(native.scope);
     if (retired.persistenceFailed ||
-        !retired.pauses.any((pause) =>
-            pause.reason == 'pairingChanged' &&
-            sameScope(pause.scope, native.scope))) {
+        !retired.pauses.any(
+          (pause) =>
+              pause.reason == 'pairingChanged' &&
+              sameScope(pause.scope, native.scope),
+        )) {
       throw StateError('iPhone transfer retirement was not acknowledged.');
     }
+    await reconcileReservations(native.scope);
   }
 }

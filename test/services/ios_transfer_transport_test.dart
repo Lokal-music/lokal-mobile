@@ -122,7 +122,7 @@ void main() {
         return null;
       }
       if (call.method == 'stopObserving') return null;
-      expect(call.method, 'retireNetworkScope');
+      expect(call.method, anyOf('retireNetworkScope', 'cancelNetworkScopePreservingFiles'));
       expect(request(call), {
         'clientID': await ready.future,
         'scope': scope.toJson(),
@@ -146,6 +146,8 @@ void main() {
         expect(result.total, 1);
         expect(result.pauses.single.scope.pairingId, scope.pairingId);
         expect(retired, 1);
+        await transport.cancelNetworkScopePreservingFiles(scope);
+        expect(retired, 2);
         await expectLater(
           transport.retireNetworkScope(const IosTransferScope(
             desktopId: 'fixture-pc',
@@ -153,7 +155,7 @@ void main() {
           )),
           throwsFormatException,
         );
-        expect(retired, 1);
+        expect(retired, 2);
       } finally {
         await listener.cancel();
       }

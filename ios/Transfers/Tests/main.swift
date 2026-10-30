@@ -77,6 +77,16 @@ func rawDocument(_ url: URL, id: String, replacement: Data? = nil) throws -> Dat
 
 var contractStage = "startup"
 do {
+  if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--preserve-import" {
+    let boundary = CommandLine.arguments[4]
+    let store = try LokalTransferJournal(container: URL(fileURLWithPath: CommandLine.arguments[2]),
+      testingCommitBoundary: { if $0 == boundary { exit(97) } })
+    guard let work = try store.importCustody(id: CommandLine.arguments[3], revision: 1) else {
+      throw LokalTransferError.missingJob
+    }
+    _ = try store.preserveImportPublicFile(work)
+    exit(0)
+  }
   if CommandLine.arguments.count == 6 && CommandLine.arguments[1] == "--tracked-copy" {
     let container = URL(fileURLWithPath: CommandLine.arguments[2])
     let store = try LokalTransferJournal(container: container)

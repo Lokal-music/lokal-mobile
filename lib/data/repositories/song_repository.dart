@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../services/ios_library_scan_epoch.dart';
 
 import 'package:flick/core/utils/artist_credits.dart';
 
@@ -157,6 +158,7 @@ class SongRepository {
     bool fromScanner = false,
   }) async {
     await _isar.writeTxn(() async {
+      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       if (guard != null && !await guard.allowsUpsertInTransaction(entity)) {
         return;
@@ -187,6 +189,7 @@ class SongRepository {
     if (entities.isEmpty) return;
 
     await _isar.writeTxn(() async {
+      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       final accepted = <SongEntity>[];
       for (final entity in entities) {
@@ -297,6 +300,7 @@ class SongRepository {
     if (uniquePaths.isEmpty) return;
 
     await _isar.writeTxn(() async {
+      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       for (final path in uniquePaths) {
         if (guard == null) {
@@ -349,6 +353,7 @@ class SongRepository {
     if (uniquePaths.isEmpty) return;
 
     await _isar.writeTxn(() async {
+      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       for (final path in uniquePaths) {
         if (guard == null) {
@@ -388,6 +393,7 @@ class SongRepository {
   }) async {
     if (ids.isEmpty) return;
     await _isar.writeTxn(() async {
+      if (fromScanner && Platform.isIOS) IosLibraryScanEpoch.requireCurrent();
       final guard = fromScanner ? _iosScanGuard : null;
       if (guard == null) {
         await _isar.songEntitys.deleteAll(ids);

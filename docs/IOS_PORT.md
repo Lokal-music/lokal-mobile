@@ -10,6 +10,27 @@ The original audit used `42f8f1dbc939`; implementation is tracked in
 [PR #172](https://github.com/lokal-music/lokal-mobile/pull/172).
 
 
+### Current engineering baseline and source continuation
+
+The later qualified engineering baseline is build **103** on PR345, followed
+by build **111** on PR349; both completed the hosted iOS18.6/26 acceptance and
+independent IPA-audit stages. Build103 artifacts are at
+[run40992683570](https://github.com/lokal-music/lokal-mobile/actions/runs/40992683570),
+and build111 at
+[run41005225249](https://github.com/lokal-music/lokal-mobile/actions/runs/41005225249).
+They still require signing and physical-iPhone installation/upgrade acceptance.
+The older build87 details below are retained as historical evidence.
+
+Newer stacked source through PR355 includes merged Android product changes
+through **#350**, stronger folder/server/duplicate deletion barriers, durable
+pairing retirement and a shared app-lifetime owner. The next source continuation
+adds preserve-public Clear/Forget receipt reconciliation, reversible Clear
+cancellation, foreground desktop-copy/sync/handoff drainage and stale scan-writer
+refusal. [Transfer architecture and remaining activation gates](IOS_TRANSFERS.md)
+distinguish the current implementation from earlier qualified artifacts. CI
+waits remain skipped at the user's request; those artifacts do not contain
+this newer source. Native background import/upload remain disabled.
+
 ### Build 87 and the subsequent app-mutation continuation
 
 [Build 87](https://github.com/lokal-music/lokal-mobile/actions/runs/40980148351)

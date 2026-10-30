@@ -134,6 +134,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private var shuttingDown = false
   private struct PendingNetworkRetirement {
     let scope: LokalTransferScope
+    let ticket: LokalTransferImportOwnership.RetirementTicket
     var taskIDs: Set<Int>
     let reply: LokalTransferCompletion<LokalTransferSummary>
   }
@@ -706,15 +707,16 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   /// the app it may discard that pairing. The frozen Isar custody remains for
   /// later cleanup; an importing row refuses this operation atomically.
   func retireNetworkScope(_ scope: LokalTransferScope,
-                          ticket: LokalTransferImportOwnership.Ticket,
+                          ticket: LokalTransferImportOwnership.RetirementTicket,
+                          retirePairing: Bool = true,
                           reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
     queue.async {
       do {
         guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
           throw LokalTransferError.invalidTransition
         }
-        try self.importOwnership.validateTicket(ticket)
-        let changes = try self.journal.retireNetworkScope(scope, nowMs: Self.now())
+        try self.importOwnership.validateRetirement(ticket, scope: scope)
+        let changes = try self.journal.retireNetworkScope(scope, nowMs: Self.now(), retirePairing: retirePairing)
         for change in changes {
           self.importOwnership.revoke(jobID: change.previous.id, revision: change.previous.revision)
           self.jobs[change.retired.id] = change.retired
@@ -723,7 +725,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           }
         }
         self.generation += 1
-        self.pauses[scope] = .pairingChanged
+        if retirePairing { self.pauses[scope] = .pairingChanged }
         let activeIDs = changes.compactMap { change -> Int? in
           guard let taskID = change.previous.taskID, self.tasks[taskID] != nil else { return nil }
           return taskID
@@ -736,7 +738,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           .union(self.pendingNetworkRetirements.filter { $0.scope == scope }
             .flatMap { $0.taskIDs })
         self.pendingNetworkRetirements.append(PendingNetworkRetirement(
-          scope: scope, taskIDs: pending, reply: reply))
+          scope: scope, ticket: ticket, taskIDs: pending, reply: reply))
         for id in activeIDs { self.tasks[id]?.cancel() }
         self.finishNetworkRetirements()
         self.notify()
@@ -763,13 +765,32 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     }
     pendingNetworkRetirements = waiting
     for item in finished {
+      let retired = jobs.values.filter { self.scope($0) == item.scope && $0.direction == .download && $0.phase == .cancelled }
       fileQueue.async {
-        self.queue.async {
-          guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
-            item.reply(.failure(LokalTransferError.invalidTransition))
-            return
+        let cleaned: Result<Void, Error> = Result {
+          try self.importOwnership.validateRetirement(item.ticket, scope: item.scope)
+          for job in retired {
+            let previous = try job.cancelledDownloadForCleanup()
+            if try self.journal.importCustody(id: previous.id, revision: previous.revision) == nil {
+              try self.files.discard(previous)
+            }
           }
-          item.reply(.success(self.summaryValue()))
+        }
+        self.queue.async {
+          // Earlier file callbacks may have scheduled final private cleanup.
+          // Cross their second file/runtime barrier before acknowledging.
+          self.fileQueue.async {
+            self.queue.async {
+              do {
+                try cleaned.get()
+                try self.importOwnership.validateRetirement(item.ticket, scope: item.scope)
+                guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
+                  throw LokalTransferError.invalidTransition
+                }
+                item.reply(.success(self.summaryValue()))
+              } catch { item.reply(.failure(error)) }
+            }
+          }
         }
       }
     }
@@ -973,6 +994,27 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         self.importOwnership.abortCleanup(ticket)
         reply(.failure(error))
       }
+    }
+  }
+
+  /// Restrict file handling before an app metadata mutation. This is neither
+  /// a receipt attestation nor permission to touch public files.
+  func preserveImportPublicFile(_ request: LokalTransferProtocol.ImportLease,
+                                owner: LokalTransferImportOwnership.Owner,
+                                reply: @escaping LokalTransferCompletion<Bool>) {
+    queue.async {
+      do {
+        guard request.clientID == owner.clientID, self.reconciled,
+              !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
+        try self.importOwnership.validateCleanup(owner, jobID: request.id,
+          revision: request.revision, leaseID: request.leaseID)
+        guard let work = try self.journal.importCustody(id: request.id, revision: request.revision) else {
+          throw LokalTransferError.staleRevision
+        }
+        _ = try self.journal.preserveImportPublicFile(work)
+        if work.preservePublicFile != true { self.generation += 1; self.notify() }
+        reply(.success(true))
+      } catch { reply(.failure(error)) }
     }
   }
 

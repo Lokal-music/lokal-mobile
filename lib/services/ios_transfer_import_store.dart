@@ -54,12 +54,14 @@ class IosTransferPendingReservation {
     required this.songId,
     required this.relativePath,
     required this.retiring,
+    required this.scope,
   });
   final int id;
   final String operationKey;
   final int songId;
   final String relativePath;
   final bool retiring;
+  final IosTransferScope scope;
 }
 
 class IosTransferPendingPage {
@@ -241,6 +243,11 @@ class IosTransferImportStore {
             songId: row.localSongId,
             relativePath: path,
             retiring: row.state == 'retiring',
+            scope: IosTransferScope(
+              desktopId: row.desktopId,
+              origin: row.origin,
+              pairingId: row.pairingId,
+            )..validate(),
           ),
         );
       }
