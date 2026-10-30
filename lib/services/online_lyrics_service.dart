@@ -1,7 +1,9 @@
 import 'lyrics_matching.dart';
 
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flick/core/constants/app_constants.dart';
 import 'package:http/http.dart' as http;
 
 class OnlineLyricsResult {
@@ -86,16 +88,74 @@ class OnlineLyricsResult {
   }
 }
 
+/// A response from LRCLIB that was not a successful lyrics lookup.
+class OnlineLyricsHttpException implements Exception {
+  const OnlineLyricsHttpException(this.statusCode, {this.retryAfter});
+
+  final int statusCode;
+  final Duration? retryAfter;
+
+  @override
+  String toString() => 'LRCLIB HTTP $statusCode';
+}
+
 class OnlineLyricsService {
   static const String _baseUrl = 'https://lrclib.net/api';
   static const Duration _requestTimeout = Duration(seconds: 8);
   static const int _maxCacheEntries = 50;
+  static const Duration _maxRetryDelay = Duration(seconds: 5);
+  // LRCLIB requires an identifiable app/version/project User-Agent.
+  static const Map<String, String> _headers = {
+    'Accept': 'application/json',
+    'User-Agent': 'Lokal-Mobile/$kAppVersion (https://github.com/lokal-music/lokal-mobile)',
+  };
 
   // Static so state survives per-sheet instance recreation — same singleton
   // idiom as album_art_import_service.
   static final http.Client _client = http.Client();
   static final Map<String, OnlineLyricsResult?> _exactCache = {};
   static final Map<String, List<OnlineLyricsResult>> _searchCache = {};
+
+  OnlineLyricsService({
+    http.Client? client,
+    Future<void> Function(Duration)? delay,
+  }) : _http = client ?? _client,
+       _delay = delay ?? ((duration) => Future<void>.delayed(duration));
+
+  final http.Client _http;
+  final Future<void> Function(Duration) _delay;
+
+  static Duration? _retryAfter(http.Response response) {
+    final header = response.headers['retry-after']?.trim();
+    if (header == null || header.isEmpty) return null;
+    final seconds = int.tryParse(header);
+    if (seconds != null) {
+      return Duration(seconds: seconds < 0 ? 0 : seconds);
+    }
+    try {
+      final remaining = HttpDate.parse(header).difference(DateTime.now().toUtc());
+      return remaining.isNegative ? Duration.zero : remaining;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// Retry a busy/rate-limited search once, only when Retry-After is short.
+  /// Longer server-requested waits must not be silently ignored.
+  Future<http.Response> _searchRequest(Uri uri) async {
+    for (var attempt = 0; ; attempt++) {
+      final response = await _http
+          .get(uri, headers: _headers)
+          .timeout(_requestTimeout);
+      if (attempt > 0 ||
+          (response.statusCode != 429 && response.statusCode != 503)) {
+        return response;
+      }
+      final wait = _retryAfter(response) ?? const Duration(seconds: 1);
+      if (wait > _maxRetryDelay) return response;
+      await _delay(wait);
+    }
+  }
 
   /// Explicit playback search refresh also retries previously cached misses.
   static void clearLookupCache() {
@@ -223,7 +283,7 @@ class OnlineLyricsService {
     final uri = Uri.parse('$_baseUrl/get')
         .replace(queryParameters: queryParams);
     try {
-      final response = await _client.get(uri).timeout(_requestTimeout);
+      final response = await _http.get(uri, headers: _headers).timeout(_requestTimeout);
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final result = OnlineLyricsResult.fromJson(json);
@@ -274,7 +334,7 @@ class OnlineLyricsService {
     final uri = Uri.parse('$_baseUrl/search')
         .replace(queryParameters: queryParams);
     try {
-      final response = await _client.get(uri).timeout(_requestTimeout);
+      final response = await _searchRequest(uri);
       if (response.statusCode == 200) {
         final list = jsonDecode(response.body) as List<dynamic>;
         final results = list
@@ -283,9 +343,14 @@ class OnlineLyricsService {
         _put(_searchCache, cacheKey, results);
         return results;
       }
-      if (reportErrors)
-        throw Exception('Lyrics search HTTP ${response.statusCode}');
-      if (response.statusCode < 500) {
+      if (reportErrors) {
+        throw OnlineLyricsHttpException(
+          response.statusCode,
+          retryAfter: _retryAfter(response),
+        );
+      }
+      // Never cache a transient HTTP failure (notably 429/503) as a miss.
+      if (response.statusCode == 404) {
         _put(_searchCache, cacheKey, const []);
       }
     } catch (_) {
