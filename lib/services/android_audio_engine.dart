@@ -11,6 +11,7 @@ import 'package:flick/services/audio_engine.dart';
 import 'package:flick/core/utils/dev_log.dart';
 import 'package:flick/core/utils/app_log.dart';
 import 'package:flick/services/atmos_diagnostics.dart';
+import 'package:flick/services/process_exit_diagnostics_service.dart';
 import 'package:flick/services/ios_local_audio_requests.dart';
 import 'package:flick/services/ios_local_audio_players.dart';
 import 'package:flick/services/local_audio_lifecycle.dart';
@@ -879,7 +880,9 @@ class AndroidAudioEngine implements AudioEngine {
     _checkLive();
     final existing = _player;
     if (existing != null) return existing;
+    unawaited(ProcessExitDiagnosticsService.recordBreadcrumb('audio:engine-init'));
     final player = await _createPlayer(_playerProvider);
+    unawaited(ProcessExitDiagnosticsService.recordBreadcrumb('audio:engine-ready'));
     _player = player;
     _providerPlayer = player;
     _attachListeners(player);
@@ -1342,6 +1345,7 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> load(Song track) => _run(() async {
+    unawaited(ProcessExitDiagnosticsService.recordBreadcrumb('audio:load-start'));
     ++_onDemandGaplessEpoch;
     _onDemandGaplessSlots = null;
     final preparing = _onDemandNativeMutation;
@@ -1524,6 +1528,7 @@ class AndroidAudioEngine implements AudioEngine {
 
   @override
   Future<void> play() => _run(() async {
+    unawaited(ProcessExitDiagnosticsService.recordBreadcrumb('audio:play-requested'));
     final stem = _stemPlayer;
     if (stem != null) {
       _stemPausedByUser = false;

@@ -24,6 +24,33 @@ def binary_uuids(binary: Path) -> set[str]:
     return set(re.findall(r"UUID: ([0-9A-F-]+)", command("xcrun", "dwarfdump", "--uuid", str(binary))))
 
 
+def inspect_smb(app: Path, executable: Path, binaries: list[Path]) -> dict:
+    framework = app / 'Frameworks/libsmb2.framework/libsmb2'
+    license_path = 'Frameworks/App.framework/flutter_assets/assets/licenses/libsmb2.txt'
+    if framework not in binaries or not (app / license_path).is_file():
+        raise ValueError('Native SMB framework or LGPL notice is missing')
+    # Dart's iOS loader uses DynamicLibrary.process(), so embedding a library
+    # is insufficient: it must be reachable from the executable's load graph.
+    by_install_name = {'@rpath/' + binary.relative_to(app / 'Frameworks').as_posix(): binary
+                       for binary in binaries if app / 'Frameworks' in binary.parents}
+    pending = [executable]
+    seen = set()
+    while pending:
+        binary = pending.pop()
+        if binary in seen:
+            continue
+        seen.add(binary)
+        for row in command('xcrun', 'otool', '-L', str(binary)).splitlines()[1:]:
+            name = row.strip().split(' (compatibility version', 1)[0]
+            if name in by_install_name:
+                pending.append(by_install_name[name])
+    if framework not in seen:
+        raise ValueError('Native SMB dylib is embedded but not loaded for Dart FFI')
+    return {'framework': framework.relative_to(app).as_posix(),
+            'license': license_path, 'ffi_load_reachable': True,
+            'upstream_archive_sha256': 'c9b05f037865affe0ebdac71a0013e1b53e72ad007b5f3a00331eeeb56ba43f1'}
+
+
 def inspect_bundle(app: Path) -> dict:
     info = plistlib.loads((app / "Info.plist").read_bytes())
     executable = app / info["CFBundleExecutable"]
@@ -54,6 +81,7 @@ def inspect_bundle(app: Path) -> dict:
         metadata = plistlib.loads((framework / "Info.plist").read_bytes())
         binaries.append(framework / metadata["CFBundleExecutable"])
     binaries.extend(app.glob("Frameworks/*.dylib"))
+    smb = inspect_smb(app, executable, binaries)
     uuids = {}
     for binary in binaries:
         archs = command("xcrun", "lipo", "-archs", str(binary)).split()
@@ -78,6 +106,7 @@ def inspect_bundle(app: Path) -> dict:
         "binaries_inspected": len(binaries),
         "cast_resources_verified": list(cast_resources),
         "binary_uuids": uuids,
+        "native_smb": smb,
         "signing": "Unsigned build; must be signed locally before installation",
         "validation": "Binary/package inspection only; device acceptance is separate",
         "runtime_tests": "Consult the associated workflow run; these execute after packaging",

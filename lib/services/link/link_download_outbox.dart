@@ -67,14 +67,17 @@ class LinkDownloadOutbox {
     try {
       final key = 'lokal.link.${credentials.desktopId}.download_outbox';
       final pending = List<String>.from(prefs.getStringList(key) ?? []);
-      final songs = await SongRepository().getAllSongs();
+      if (pending.isEmpty) return;
+      final repository = SongRepository();
       for (final path in pending) {
         if (!connected()) break;
         if (await File(path).exists()) {
-          final matches = songs.where((song) => song.filePath == path);
-          if (matches.isEmpty) continue;
+          // Never fetch every song for one pending download. Large libraries
+          // can otherwise freeze manual sync before it even starts.
+          final song = await repository.getSongByFilePath(path);
+          if (song == null) continue;
           await LokalDesktopSource.instance.uploadToDesktop(
-            matches.first,
+            song,
             credentials,
           );
         }

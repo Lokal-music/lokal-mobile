@@ -1,0 +1,2 @@
+# Optional, isolated loopback protocol test tool; never an app dependency.
+impacket==0.13.0

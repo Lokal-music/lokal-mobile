@@ -7,6 +7,8 @@ import '../data/database.dart';
 import '../data/repositories/song_repository.dart';
 import '../models/song.dart';
 import '../src/rust/api/audio_api.dart' as rust_audio;
+import 'album_art_service.dart';
+import 'process_exit_diagnostics_service.dart';
 import 'sources/network_source_service.dart';
 
 /// Bridges playback/download for network-sourced songs.
@@ -29,6 +31,8 @@ class RemoteSourceService {
   /// Songs whose format probe failed (e.g. AAC-in-M4A Symphonia gap);
   /// skip retrying them every play.
   final Set<String> _probeFailed = {};
+  final Set<String> _artworkPending = {};
+  final Set<String> _metadataPending = {};
 
   Future<NetworkServerEntity> _serverFor(Song song) async {
     final serverId = song.remoteServerId;
@@ -58,6 +62,12 @@ class RemoteSourceService {
       throw StateError('Network song has no remote id');
     }
     final service = networkSourceServiceFor(sourceType);
+    final diagnosed = reportProgress && (sourceType == 'smb' || sourceType == 'webdav');
+    if (diagnosed) {
+      unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+        'nas:$sourceType:download-start',
+      ));
+    }
     try {
       final path = await service.stream(
         server,
@@ -67,10 +77,68 @@ class RemoteSourceService {
             ? (p) => downloadProgressNotifier.value = p
             : null,
       );
-      unawaited(_backfillAudioFormat(song, path));
+      if (diagnosed) {
+        unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+          'nas:$sourceType:cache-ready',
+        ));
+      }
+      if (sourceType == 'smb' || sourceType == 'webdav') {
+        if (reportProgress) {
+          // Native artwork extraction and format probing read the same NAS
+          // cache file. Do them in one deduplicated job for the playing song,
+          // not four parallel Rust calls for prefetched songs.
+          unawaited(_backfillMetadata(song, path));
+        }
+      } else {
+        // Preserve the existing format-backfill behavior for other network
+        // protocols, which are outside this NAS-specific stability change.
+        unawaited(_backfillAudioFormat(song, path));
+      }
       return path;
+    } catch (_) {
+      if (diagnosed) {
+        unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+          'nas:$sourceType:download-error',
+        ));
+      }
+      rethrow;
     } finally {
       if (reportProgress) downloadProgressNotifier.value = null;
+    }
+  }
+
+  Future<void> _backfillMetadata(Song song, String localPath) async {
+    final key = song.filePath ?? song.id;
+    if (!_metadataPending.add(key)) return;
+    unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+      'nas:metadata-start',
+    ));
+    try {
+      await _backfillArtwork(song);
+      unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+        'nas:artwork-done',
+      ));
+      await _backfillAudioFormat(song, localPath);
+      unawaited(ProcessExitDiagnosticsService.recordBreadcrumb(
+        'nas:metadata-done',
+      ));
+    } finally {
+      _metadataPending.remove(key);
+    }
+  }
+
+  Future<void> _backfillArtwork(Song song) async {
+    final filePath = song.filePath;
+    if (filePath == null || !_artworkPending.add(filePath)) return;
+    try {
+      await AlbumArtService.instance.resolveArtworkPath(
+        existingPath: song.albumArt,
+        audioSourcePath: filePath,
+      );
+    } catch (e) {
+      AppLog.instance.add('Network artwork backfill failed: $e');
+    } finally {
+      _artworkPending.remove(filePath);
     }
   }
 

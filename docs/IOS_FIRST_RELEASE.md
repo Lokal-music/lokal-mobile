@@ -14,7 +14,7 @@ checkpoint, separate from the finished native-engine target.
 | 3. Native uploads and queue | Owned uploads, ambiguity-safe/idempotent retry, durable progress/cancel/retry and pairing retirement work together. Real protocol tests cover the desktop contract; unavailable features are not advertised. |
 | 4. Lifecycle and final IPA | Storage-failure cancellation and actual OS suspension/relaunch pass. Enable the engine only after its gates pass, then qualify the exact release/AOT IPA, simulator app and independent package/source/symbol audit. |
 
-Keep the implemented iOS16+ app and relevant Android parity through merged PR362 plus reviewed open PR363:
+Keep the implemented iOS16+ app and relevant Android parity through merged PR368 (including PR363 source priority):
 ordinary imports/CUE, library/playlists, lyrics/artwork, local/online playback,
 add-ons/downloads, desktop link, network libraries, share/export and supported
 casting/output adapters. PR361's live settings-search and bounded gapless queue
@@ -22,7 +22,11 @@ changes retain the iPhone retirement guards; PR362's SMB diagnostics, WebDAV
 certificate approval and failed-sync preservation are included. Android's LAN
 permission prompt remains Android-only; iOS uses its existing local-network
 permission declaration. PR363 adds new-install promotion and drag-and-drop
-source priority, with preference rejection treated as a save failure. Host tests do not establish NAS interoperability or
+source priority, with preference rejection treated as a save failure. PR365 adds native libsmb2 and NAS WebDAV href compatibility, with iPhone
+scan-retirement guards and pinned-framework preparation/package checks. PR367
+bounds NAS artwork/resource use and recovers embedded art; PR368 makes full
+desktop sync manual while automatic listening-stat pages remain bounded. See
+[the NAS verification scope](IOS_NAS.md). Host tests do not establish iPhone NAS interoperability or
 measured gapless latency on an iPhone. Background audio remains required. Home Screen widgets
 and impractical Android-specific direct audio remain excluded.
 

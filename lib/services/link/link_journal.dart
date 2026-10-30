@@ -15,6 +15,8 @@ class LinkJournal {
   LinkJournal._();
   static final instance = LinkJournal._();
   final changes = StreamController<void>.broadcast();
+  /// Play-event updates only; used by the bounded stats sync scheduler.
+  final historyChanges = StreamController<void>.broadcast();
   bool applyingRemote = false;
   final Map<String, String> _trackKeys = {};
   bool _keysLoaded = false;
@@ -124,10 +126,13 @@ class LinkJournal {
   }) async {
     if (!Database.isInitialized || msPlayed < 30000) return;
     await _serial(() async {
-      final songs = await SongRepository().getAllSongs();
-      final found = songs.where((song) => song.id == songId);
-      if (found.isEmpty) return;
-      final song = found.first;
+      // All persisted phone songs have numeric Isar IDs. Non-numeric online
+      // placeholders cannot be found by scanning the entire local catalog.
+      final numericId = int.tryParse(songId);
+      if (numericId == null) return;
+      final entity = await Database.instance.songEntitys.get(numericId);
+      if (entity == null) return;
+      final song = SongRepository().songFromEntity(entity);
       final event = PlayEventEntity()
         ..eventId = eventId
         ..deviceId = await deviceId()
@@ -146,6 +151,7 @@ class LinkJournal {
           await isar.playEventEntitys.put(event);
       });
       changes.add(null);
+      historyChanges.add(null);
     });
   }
 
@@ -264,11 +270,14 @@ class LinkJournal {
     await prefs.setString('lokal.link.playlists_snapshot', jsonEncode(current));
   }
 
-  Future<Map<String, dynamic>> historyAfter(int cursor) async {
+  Future<Map<String, dynamic>> historyAfter(int cursor, {int limit = 250}) async {
+    if (limit < 1 || limit > 250) {
+      throw RangeError.range(limit, 1, 250, 'limit');
+    }
     final rows = await Database.instance.playEventEntitys
         .where()
         .idGreaterThan(cursor)
-        .limit(250)
+        .limit(limit)
         .findAll();
     return {
       'items': [
@@ -285,7 +294,7 @@ class LinkJournal {
           },
       ],
       'cursor': rows.isEmpty ? cursor : rows.last.id,
-      'hasMore': rows.length == 250,
+      'hasMore': rows.length == limit,
     };
   }
 

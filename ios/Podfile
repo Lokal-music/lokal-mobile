@@ -49,6 +49,13 @@ post_install do |installer|
     end
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      if target.name == 'dart_smb2'
+        # Its iOS FFI loader uses DynamicLibrary.process(). Retain a real C
+        # reference so Release dead stripping cannot remove the dylib load.
+        anchor = '-Wl,-u,_smb2_init_context'
+        flags = config.build_settings['OTHER_LDFLAGS'] || ['$(inherited)']
+        config.build_settings['OTHER_LDFLAGS'] = flags.is_a?(Array) ? flags + [anchor] : "#{flags} #{anchor}"
+      end
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)', 'PERMISSION_CAMERA=1', 'PERMISSION_PHOTOS=1', 'PERMISSION_PHOTOS_ADD_ONLY=1']
     end
   end

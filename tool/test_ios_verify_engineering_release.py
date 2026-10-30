@@ -105,6 +105,40 @@ class ReleasePackageTests(unittest.TestCase):
             json.dumps(self.metadata)
         )
 
+    def _add_smb(self, *, bad_notice=False, bad_uuid=False):
+        (self.repo / 'assets/licenses').mkdir(parents=True)
+        (self.repo / 'assets/licenses/libsmb2.txt').write_bytes(b'Complete LGPL fixture')
+        (self.repo / 'pubspec.lock').write_text('packages:\n  dart_smb2:\n    version: "0.1.3"\n')
+        subprocess.run(['git', '-C', str(self.repo), 'add', '.'], check=True)
+        subprocess.run(['git', '-C', str(self.repo), 'commit', '-qm', 'native SMB dependency'], check=True)
+        self.metadata['source_commit'] = subprocess.check_output(['git', '-C', str(self.repo), 'rev-parse', 'HEAD'], text=True).strip()
+        self.metadata['source_tree'] = subprocess.check_output(['git', '-C', str(self.repo), 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+        with self.source.open('wb') as target:
+            subprocess.run(['git', '-C', str(self.repo), 'archive', '--format=tar.gz', 'HEAD'], stdout=target, check=True)
+        binary = 'Frameworks/libsmb2.framework/libsmb2'
+        notice = 'Frameworks/App.framework/flutter_assets/assets/licenses/libsmb2.txt'
+        self.metadata['binary_uuids'][binary] = ['wrong' if bad_uuid else '1052E70C-84DF-3BBE-9541-0D948E7E6FF9']
+        self.metadata['native_smb'] = {'framework': binary, 'license': notice, 'ffi_load_reachable': True,
+            'upstream_archive_sha256': 'c9b05f037865affe0ebdac71a0013e1b53e72ad007b5f3a00331eeeb56ba43f1'}
+        with zipfile.ZipFile(self.ipa, 'a') as archive:
+            archive.writestr('Payload/Runner.app/' + binary, b'Native fixture')
+            archive.writestr('Payload/Runner.app/' + notice, b'Tampered' if bad_notice else b'Complete LGPL fixture')
+        self._write_manifest()
+
+    def test_smb_source_requires_packaged_framework_and_exact_notice(self):
+        self._add_smb()
+        self.assertEqual(verify(self.artifact, self.repo, min_sources=4)['binaries'], 3)
+
+    def test_smb_notice_tamper_refused_even_with_matching_ipa_checksum(self):
+        self._add_smb(bad_notice=True)
+        with self.assertRaisesRegex(ReleaseAuditError, 'notice differs'):
+            verify(self.artifact, self.repo, min_sources=4)
+
+    def test_smb_upstream_binary_version_drift_refused(self):
+        self._add_smb(bad_uuid=True)
+        with self.assertRaisesRegex(ReleaseAuditError, 'UUID differs'):
+            verify(self.artifact, self.repo, min_sources=4)
+
     def test_accepted_engineering_package(self) -> None:
         report = verify(self.artifact, self.repo, min_sources=2)
         self.assertEqual(report["source_files_checked"], 2)

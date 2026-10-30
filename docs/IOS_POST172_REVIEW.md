@@ -1419,3 +1419,59 @@ restores the preference cache, allowing the optimistic UI to roll back and retry
 Regression checks exercise real handle/long-press gestures, persistent movement,
 new install versus upgrade, and rejected-write recovery. This source review does
 not assert that the upstream open PR has merged or has passed its own CI.
+
+## Continuation: merged Android PR365 NAS transport
+
+Integrated PR365 head `bcd22c94941245637d2f8b76bfc1edb6aa9e001f`:
+native libsmb2 SMB2/3 sessions, configured-folder login checks and WebDAV
+same-origin absolute/relative href compatibility. Saved NAS configuration is
+retained. SMB uses port445; custom ports receive an explicit error. Incomplete
+folder walks preserve existing tracks and the previous successful-sync time.
+The Rust SMB source remains available; the shared service now uses dart_smb2.
+
+The iPhone integration stages the checksum-pinned upstream r8 XCFramework before
+CocoaPods, validates device/simulator architectures, deployment floors, native
+dependencies and FFI exports, and retains its load reference in Release. The
+installed acceptance probe opens actual FFI contexts on main and worker isolates.
+Packaging requires the loaded framework and bundled LGPL notice; the independent
+IPA audit checks its pinned UUID and source-matching license. Apple execution of
+these additions remains pending.
+
+SMB and WebDAV scans now use the existing iPhone scan-generation barrier. An old
+listing cannot recreate tracks or stamp a successful sync after Clear Library or
+server removal. Tests exercise those races against actual Isar with the iPhone
+repository policy enabled; fresh scans remain valid and retain retired IDs.
+Downloads await each file write before reading another bounded native chunk.
+
+A separate authenticated loopback fixture exercises the actual Linux r8 native
+library with SMB2, Unicode paths, repeated sessions, cover reads, bounded download
+progress, exact output bytes and failed-download cleanup. It does not qualify an
+Apple binary, a particular NAS, SMB3 encryption or suspended execution. See
+[the NAS verification instructions](IOS_NAS.md). No native background-transfer
+capability is enabled by this parity update.
+
+## Continuation: merged Android PR367–368
+
+PR367 head `732b740751624abfc7dc6c3cf954d9985e2a9393` adds embedded
+artwork recovery from already cached NAS audio, preserving opaque percent-encoded
+remote IDs. SMB/WebDAV cover reads are capped at12MiB; WebDAV connection counts
+and timeouts are bounded. Playing-track artwork/format backfill is deduplicated
+and sequential; prefetched NAS tracks do not start parallel metadata reads.
+Android crash diagnostics are retained as Android-only behavior; the iPhone
+system-player adapter keeps its existing request/lifecycle checks.
+
+PR368 head `5659e36eafa158559bfa915e75f41b7aee8df5a4` makes full desktop
+library/metadata/likes/playlist sync manual through Sync now after initial merge.
+Connection, reconnect and timers only schedule listening-stat exchanges. Each
+stats cycle sends at most50 events and consumes one desktop page of at most250;
+it does not advance the full-sync success timestamp. Single-path and bounded
+title lookups avoid materializing the catalog for incremental work. Remote-only
+plays contribute to recap listening time without double-counting locally
+projected events. The iPhone coordinator retains its foreground-transfer drain
+around both full sync and these stats writes, including pause cancellation.
+
+Host verification includes actual Isar replay/deduplication and remote-only recap
+accounting, capped candidate lookup, manual-sync wiring, NAS byte limits,
+provider/pairing/drain and shared playback regressions. The real native SMB2
+fixture also rejects an oversized cover before allocation. These passes do not
+establish Apple package/lifecycle acceptance or physical Android behavior.

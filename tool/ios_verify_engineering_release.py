@@ -137,6 +137,9 @@ def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
         "IPA sidecar checksum mismatch",
     )
 
+    tracked = _source_blobs(repo)
+    smb_required = 'pubspec.lock' in tracked and bool(re.search(
+        r'^  dart_smb2:', _git(repo, 'show', 'HEAD:pubspec.lock'), re.M))
     with zipfile.ZipFile(ipa) as archive:
         names = set(archive.namelist())
         _require(archive.testzip() is None, "Corrupt IPA ZIP member")
@@ -156,6 +159,22 @@ def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
                  "Missing native binary inventory")
         _require(info.get("CFBundleExecutable") in binaries,
                  "Missing main executable in native inventory")
+        if smb_required:
+            relative = 'Frameworks/libsmb2.framework/libsmb2'
+            notice = 'Frameworks/App.framework/flutter_assets/assets/licenses/libsmb2.txt'
+            _require(relative in binaries, 'Missing native SMB binary inventory')
+            _require(binaries.get(relative) == ['1052E70C-84DF-3BBE-9541-0D948E7E6FF9'],
+                     'Native SMB binary UUID differs from pinned r8 framework')
+            _require(f'Payload/Runner.app/{notice}' in names, 'Missing native SMB LGPL notice')
+            expected_notice = subprocess.check_output(['git', '-C', str(repo), 'show', 'HEAD:assets/licenses/libsmb2.txt'])
+            _require(archive.read(f'Payload/Runner.app/{notice}') == expected_notice,
+                     'Native SMB LGPL notice differs from source')
+            smb = metadata.get('native_smb', {})
+            _require(smb.get('framework') == relative and smb.get('license') == notice and
+                     smb.get('ffi_load_reachable') is True and
+                     smb.get('upstream_archive_sha256') ==
+                     'c9b05f037865affe0ebdac71a0013e1b53e72ad007b5f3a00331eeeb56ba43f1',
+                     'Missing native SMB load-graph inspection')
         for relative, uuids in binaries.items():
             _require(f"Payload/Runner.app/{relative}" in names,
                      f"Missing device binary: {relative}")
@@ -181,7 +200,6 @@ def verify(artifact: Path, repo: Path, *, min_sources: int = 500) -> dict:
         _require((artifact / "Symbols" / name).is_file(),
                  f"Missing Dart AOT symbols: {name}")
 
-    tracked = _source_blobs(repo)
     source_count = _verify_source_export(source, repo, tracked)
     _require(source_count >= min_sources, "Incomplete source archive")
     _require(source_count >= int(len(tracked) * 0.95),

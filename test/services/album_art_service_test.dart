@@ -40,6 +40,31 @@ void main() {
     });
   });
 
+  group('network audio artwork fallback', () {
+    test('retains percent-encoded WebDAV IDs used by the audio cache', () {
+      expect(
+        AlbumArtService.networkRemoteIdFromAudioPath(
+          'webdav://5/%2Fdisk1_part1%2FMusic%2FGenda%20Phool.flac',
+        ),
+        '%2Fdisk1_part1%2FMusic%2FGenda%20Phool.flac',
+      );
+    });
+
+    test('retains SMB nested remote paths, including special characters', () {
+      expect(
+        AlbumArtService.networkRemoteIdFromAudioPath(
+          'smb://7/Music/Album/01 - Song.flac',
+        ),
+        'Music/Album/01 - Song.flac',
+      );
+    });
+
+    test('does not resolve malformed paths into unrelated cache entries', () {
+      expect(AlbumArtService.networkRemoteIdFromAudioPath('webdav://5'), isNull);
+      expect(AlbumArtService.networkRemoteIdFromAudioPath('http://'), isNull);
+    });
+  });
+
   group('resolveMissingArtwork progress', () {
     test('reports every song, including skipped ones', () async {
       final reported = <(int, int)>[];

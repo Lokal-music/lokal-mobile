@@ -103,6 +103,15 @@ class _LokalDesktopLinkScreenState
     }
   });
 
+  Future<void> _syncNow() => _run(() async {
+    await ref.read(lokalRemoteControllerProvider.notifier).syncNow();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(lokalText('Libraries are up to date.'))),
+      );
+    }
+  });
+
   Future<void> _copyFiles() => _run(() async {
     final controller = ref.read(lokalRemoteControllerProvider.notifier);
     try {
@@ -304,7 +313,7 @@ class _LokalDesktopLinkScreenState
             const SizedBox(height: 8),
             Text(
               lokalText(
-                'Desktop songs appear in Library and stream from your PC. Audio files are copied only when you choose to download or send them.',
+                'Listening history, minutes and play counts sync automatically in small batches while your desktop is linked. Full desktop-library, metadata, likes and playlist sync is manual: tap Sync now. No full library scan runs on startup or reconnection. Optional phone-download transfers stay queued until Sync now.',
               ),
               style: TextStyle(color: t.muted),
             ),
@@ -326,7 +335,7 @@ class _LokalDesktopLinkScreenState
                       link.fileCopyProgress.busy ||
                       !link.socketConnected
                   ? null
-                  : _merge,
+                  : _syncNow,
               child: Text(l10n.syncNow),
             ),
           ],
