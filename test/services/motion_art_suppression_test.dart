@@ -51,7 +51,7 @@ void main() {
       );
     });
 
-    test('non-exclusive engines are never suppressed', () {
+    test('standard Android output does not suppress motion art', () {
       expect(
         shouldSuppressMotionArt(
           bitPerfectEnabled: true,
@@ -60,13 +60,15 @@ void main() {
         ),
         isFalse,
       );
+      // Rust/Oboe is the session mode used for the opt-in Android 14 USB
+      // mixer, whose exclusive PCM sink must suppress competing media.
       expect(
         shouldSuppressMotionArt(
           bitPerfectEnabled: true,
           engine: AudioEngineType.rustOboe,
           allowDuringBitPerfect: false,
         ),
-        isFalse,
+        isTrue,
       );
     });
   });
