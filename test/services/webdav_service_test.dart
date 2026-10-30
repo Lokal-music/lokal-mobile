@@ -40,6 +40,130 @@ NetworkServerEntity _server({String? token}) {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  group('NAS href interoperability', () {
+    test('absolute same-origin WebDAV hrefs resolve as share-relative paths', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>https://192.168.8.1:6008/disk1_part1/</D:href>'
+          '<D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype>'
+          '</D:prop></D:propstat></D:response>'
+          '<D:response><D:href>https://192.168.8.1:6008/disk1_part1/Album%20One/</D:href>'
+          '<D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype>'
+          '</D:prop></D:propstat></D:response>'
+          '<D:response><D:href>https://192.168.8.1:6008/disk1_part1/100%25%20Real.flac</D:href>'
+          '<D:propstat><D:prop><D:getcontentlength>128</D:getcontentlength>'
+          '</D:prop></D:propstat></D:response>'
+          '</D:multistatus>';
+      final entries = WebdavService.parseMultistatusForTest(
+        body, '/disk1_part1',
+        requestUrl: 'https://192.168.8.1:6008/disk1_part1/',
+        shareRoot: '/disk1_part1',
+      );
+      expect(entries.map((entry) => entry.href).toList(), [
+        '/disk1_part1/Album One/',
+        '/disk1_part1/100% Real.flac',
+      ]);
+      expect(entries.first.isCollection, isTrue);
+      expect(entries.last.size, 128);
+    });
+
+    test('root share accepts children and skips its self href', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>/</D:href></D:response>'
+          '<D:response><D:href>/Album/</D:href>'
+          '<D:propstat><D:prop><D:resourcetype><D:collection/>'
+          '</D:resourcetype></D:prop></D:propstat></D:response>'
+          '</D:multistatus>';
+      final entries = WebdavService.parseMultistatusForTest(
+        body, '/', requestUrl: 'https://nas.example/',
+        shareRoot: '/',
+      );
+      expect(entries, hasLength(1));
+      expect(entries.single.href, '/Album/');
+      expect(entries.single.isCollection, isTrue);
+    });
+
+    test('collection href ends with exactly one slash', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>/disk1_part1/</D:href></D:response>'
+          '<D:response><D:href>/disk1_part1/Album/</D:href>'
+          '<D:propstat><D:prop><D:resourcetype><D:collection/>'
+          '</D:resourcetype></D:prop></D:propstat></D:response>'
+          '</D:multistatus>';
+      final entries = WebdavService.parseMultistatusForTest(
+        body, '/disk1_part1/',
+        requestUrl: 'https://nas.example/disk1_part1/',
+        shareRoot: '/disk1_part1/',
+      );
+      expect(entries, hasLength(1));
+      expect(entries.single.href, '/disk1_part1/Album/');
+    });
+
+    test('invalid HTTP 200 body is reported as XML failure during sync', () async {
+      final service = WebdavService.create(
+        client: MockClient((_) async =>
+            http.Response('<html>Router files, not WebDAV</html>', 200)),
+      );
+      await expectLater(
+        service.syncLibrary(_server()).toList(),
+        throwsA(isA<WebdavNetworkException>().having(
+          (error) => error.toString(), 'message',
+          allOf(contains('invalid multistatus XML'), isNot(contains('HTTP 200'))),
+        )),
+      );
+    });
+
+    test('relative child href is resolved under an unslashed WebDAV collection', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>Album%20One/</D:href>'
+          '<D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype>'
+          '</D:prop></D:propstat></D:response>'
+          '</D:multistatus>';
+      final entries = WebdavService.parseMultistatusForTest(
+        body, '/disk1_part1',
+        requestUrl: 'https://192.168.8.1:6008/disk1_part1',
+        shareRoot: '/disk1_part1',
+      );
+      expect(entries.single.href, '/disk1_part1/Album One/');
+    });
+
+    test('encoded slash is rejected rather than crossing a folder boundary', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>/disk1_part1/Album%2FPrivate.flac</D:href>'
+          '</D:response></D:multistatus>';
+      expect(() => WebdavService.parseMultistatusForTest(
+        body, '/disk1_part1',
+        requestUrl: 'https://192.168.8.1:6008/disk1_part1',
+        shareRoot: '/disk1_part1',
+      ), throwsA(isA<FormatException>()));
+    });
+
+    test('blocks cross-origin and outside-share hrefs before indexing', () {
+      for (final href in [
+        'https://other.example/disk1_part1/song.flac',
+        '/another_share/song.flac',
+      ]) {
+        final body = '<D:multistatus xmlns:D="DAV:">'
+            '<D:response><D:href>$href</D:href></D:response>'
+            '</D:multistatus>';
+        expect(
+          () => WebdavService.parseMultistatusForTest(
+            body, '/disk1_part1',
+            requestUrl: 'https://192.168.8.1:6008/disk1_part1/',
+            shareRoot: '/disk1_part1',
+          ),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+
+    test('real WebDAV XML in HTTP 200 can pass connection probe', () async {
+      final service = WebdavService.create(
+        client: MockClient((_) async => http.Response(_multistatus, 200)),
+      );
+      expect(await service.ping(_server()), isTrue);
+    });
+  });
+
   group('auth', () {
     test('resolveToken stores base64(password)', () async {
       final client = MockClient((request) async => http.Response('', 200));

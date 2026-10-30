@@ -7,7 +7,7 @@ import '../../data/entities/song_entity.dart';
 import '../../data/repositories/song_repository.dart';
 import '../library_scanner_service.dart' show ScanProgress;
 import '../network_cache_service.dart';
-import '../../src/rust/api/smb_api.dart';
+import 'native_smb_transport.dart';
 import 'network_source_service.dart';
 import 'local_network_access.dart';
 
@@ -24,8 +24,21 @@ class SmbService implements NetworkSourceService {
   SmbService._({
     SongRepository? songRepository,
     NetworkCacheService? networkCache,
+    NativeSmbConnector? connector,
   })  : _songRepository = songRepository,
-        _networkCache = networkCache;
+        _networkCache = networkCache,
+        _connector = connector ?? Libsmb2Transport.connect;
+
+  /// Allows a mock SMB transport in tests without native libraries or NAS.
+  static SmbService create({
+    SongRepository? songRepository,
+    NetworkCacheService? networkCache,
+    NativeSmbConnector? connector,
+  }) => SmbService._(
+    songRepository: songRepository,
+    networkCache: networkCache,
+    connector: connector,
+  );
 
   static SmbService instance = SmbService._();
 
@@ -38,6 +51,18 @@ class SmbService implements NetworkSourceService {
 
   SongRepository? _songRepository;
   NetworkCacheService? _networkCache;
+  final NativeSmbConnector _connector;
+
+  Future<NativeSmbSession> _connect(
+    ({String host, int port, String share, String rootPath}) s,
+    NetworkServerEntity server,
+  ) => _connector(
+    host: s.host,
+    port: s.port,
+    share: s.share,
+    username: server.username ?? '',
+    password: _password(server),
+  );
 
   SongRepository get _repo => _songRepository ??= SongRepository();
   NetworkCacheService get _cache => _networkCache ??= NetworkCacheService();
@@ -130,14 +155,15 @@ class SmbService implements NetworkSourceService {
     try {
       final s = _parseServer(server);
       await _ensureLanAccess(s);
-      await smbPing(
-        host: s.host,
-        port: s.port,
-        share: s.share,
-        user: server.username ?? '',
-        pass: _password(server),
-      );
-      return true;
+      final session = await _connect(s, server);
+      try {
+        // Test the configured *folder*, not merely SMB authentication.
+        // Some NASes grant tree access but deny listing the selected folder.
+        await session.list(s.rootPath);
+        return true;
+      } finally {
+        await session.close();
+      }
     } catch (e) {
       _lastPingError = e is FormatException ? e.message : describePingError(e);
       AppLog.instance.add('SMB ping failed: $e');
@@ -209,14 +235,12 @@ class SmbService implements NetworkSourceService {
     final path = utf8.decode(base64Decode(marker));
     final s = _parseServer(server);
     await _ensureLanAccess(s);
-    return await smbReadFile(
-      host: s.host,
-      port: s.port,
-      share: s.share,
-      path: path,
-      user: server.username ?? '',
-      pass: _password(server),
-    );
+    final session = await _connect(s, server);
+    try {
+      return await session.read(path);
+    } finally {
+      await session.close();
+    }
   }
 
   @override
@@ -234,20 +258,22 @@ class SmbService implements NetworkSourceService {
     await _ensureLanAccess(s);
     final destPath =
         await _cache.pathFor(server.id, remoteId, extension: extension);
-    await for (final p in smbDownloadFile(
-      host: s.host,
-      port: s.port,
-      share: s.share,
-      path: remoteId,
-      user: server.username ?? '',
-      pass: _password(server),
-      destPath: destPath,
-    )) {
-      if (onProgress != null && p.total.toInt() > 0) {
-        onProgress(p.received.toInt() / p.total.toInt());
-      }
+    final session = await _connect(s, server);
+    try {
+      await session.download(
+        remoteId,
+        destPath,
+        onProgress: (received, total) {
+          if (onProgress != null && total > 0) {
+            onProgress(received / total);
+          }
+        },
+      );
+      await _cache.commitDownload(destPath);
+      return destPath;
+    } finally {
+      await session.close();
     }
-    return destPath;
   }
 
   @override
@@ -263,35 +289,40 @@ class SmbService implements NetworkSourceService {
   Stream<ScanProgress> syncLibrary(NetworkServerEntity server) async* {
     final s = _parseServer(server);
     await _ensureLanAccess(s);
-    final user = server.username ?? '';
-    final pass = _password(server);
-
-    // Collect file entries grouped by parent directory (for per-folder
-    // cover/audio classification), yielding progress as the walk streams in.
-    final byDir = <String, List<SmbEntry>>{};
+    // Keep one signed/encrypted SMB2/3 session during the entire scan.
+    // If a folder fails, propagate the error: never interpret partial
+    // listings as deletions of previously indexed songs.
+    final byDir = <String, List<NativeSmbEntry>>{};
     var totalEntries = 0;
-    await for (final entry in smbListShare(
-      host: s.host,
-      port: s.port,
-      share: s.share,
-      user: user,
-      pass: pass,
-      rootPath: s.rootPath,
-    )) {
-      totalEntries++;
-      if (!entry.isDir) {
-        final parent = _parentDir(entry.path);
-        (byDir[parent] ??= <SmbEntry>[]).add(entry);
+    final session = await _connect(s, server);
+    try {
+      final queue = <String>[s.rootPath];
+      final visited = <String>{};
+      while (queue.isNotEmpty) {
+        final directory = queue.removeAt(0);
+        if (!visited.add(directory)) continue;
+        final entries = await session.list(directory);
+        for (final entry in entries) {
+          totalEntries++;
+          if (entry.isDir) {
+            queue.add(entry.path);
+          } else {
+            final parent = _parentDir(entry.path);
+            (byDir[parent] ??= <NativeSmbEntry>[]).add(entry);
+          }
+          if (totalEntries % 500 == 0) {
+            yield ScanProgress(
+              songsFound: 0,
+              totalFiles: totalEntries,
+              filesProcessed: totalEntries,
+              phase: 'Syncing ${server.label}',
+              currentFile: entry.name,
+            );
+          }
+        }
       }
-      if (totalEntries % 500 == 0) {
-        yield ScanProgress(
-          songsFound: 0,
-          totalFiles: totalEntries,
-          filesProcessed: totalEntries,
-          phase: 'Syncing ${server.label}',
-          currentFile: entry.name,
-        );
-      }
+    } finally {
+      await session.close();
     }
 
     final syncedRemoteIds = <String>{};
@@ -299,7 +330,7 @@ class SmbService implements NetworkSourceService {
     for (final dirPath in byDir.keys) {
       final entries = byDir[dirPath]!;
       String? coverPath;
-      final songEntries = <SmbEntry>[];
+      final songEntries = <NativeSmbEntry>[];
       for (final e in entries) {
         if (_isCoverName(e.name)) {
           coverPath ??= e.path;
@@ -339,7 +370,7 @@ class SmbService implements NetworkSourceService {
 
   SongEntity _songEntity({
     required NetworkServerEntity server,
-    required SmbEntry entry,
+    required NativeSmbEntry entry,
     required String remoteId,
     required String album,
     required String artist,
@@ -354,7 +385,7 @@ class SmbService implements NetworkSourceService {
       ..title = baseName.replaceAll(RegExp(r'^\d+[.\-\s]+'), '')
       ..artist = artist
       ..album = album.isEmpty ? null : album
-      ..fileSize = entry.size.toInt()
+      ..fileSize = entry.size
       ..fileType = ext
       ..albumArtPath = coverPath != null
           ? '$coverScheme${base64Encode(utf8.encode(coverPath))}'

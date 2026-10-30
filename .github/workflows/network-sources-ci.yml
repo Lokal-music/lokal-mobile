@@ -5,7 +5,10 @@ on:
     paths:
       - 'lib/services/sources/local_network_access.dart'
       - 'lib/services/sources/smb_service.dart'
+      - 'lib/services/sources/native_smb_transport.dart'
       - 'lib/services/sources/webdav_service.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
       - 'lib/features/settings/screens/network_server_edit_screen.dart'
       - 'rust/src/api/smb_api.rs'
       - 'test/services/smb_service_parse_test.dart'
@@ -31,12 +34,14 @@ jobs:
           dart analyze
           lib/services/sources/local_network_access.dart
           lib/services/sources/smb_service.dart
+          lib/services/sources/native_smb_transport.dart
           lib/services/sources/webdav_service.dart
           lib/features/settings/screens/network_server_edit_screen.dart
       - name: Run SMB, WebDAV and Android LAN permission regressions
         run: >-
           flutter test --no-pub
           test/services/smb_service_parse_test.dart
+          test/services/smb_native_transport_test.dart
           test/services/webdav_service_test.dart
           test/services/local_network_access_test.dart
       - name: Run Rust SMB transport tests
