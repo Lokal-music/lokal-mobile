@@ -644,7 +644,7 @@ class _AddonRowState extends State<_AddonRow> {
               child: _SettingField(
                 field: {
                   'key': 'downloadQuality',
-                  'label': 'Quality',
+                  'label': 'Playback & download quality',
                   'type': 'select',
                   'options': [
                     for (final q in quality)
@@ -654,6 +654,16 @@ class _AddonRowState extends State<_AddonRow> {
                 value: _values['downloadQuality'] ?? quality.first['id'],
                 onChanged: (value) =>
                     setState(() => _values['downloadQuality'] = value),
+              ),
+            ),
+          if (quality.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Lokal requests the selected format on playback and download. '
+                'Spatial audio requires native decoder support; availability '
+                'is checked from the delivered file, not search tags.',
+                style: TextStyle(color: t.muted, fontSize: 12),
               ),
             ),
           Wrap(
