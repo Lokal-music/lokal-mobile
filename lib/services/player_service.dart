@@ -6325,7 +6325,8 @@ class PlayerService {
   /// is no successor so the engine lets the track end naturally.
   Song? _resolveAndroidCrossfadeNext() {
     if (_playlist.isEmpty) return null;
-    if (loopModeNotifier.value == LoopMode.one) return null;
+    if (loopModeNotifier.value == LoopMode.one ||
+        loopModeNotifier.value == LoopMode.stopAfterCurrent) return null;
     final isLastTrack = _currentIndex >= _playlist.length - 1;
     if (isLastTrack && loopModeNotifier.value != LoopMode.all) return null;
     final next = _playlist[isLastTrack ? 0 : _currentIndex + 1];
