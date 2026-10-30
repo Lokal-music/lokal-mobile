@@ -43,9 +43,9 @@ void main() {
     expect(manual, contains('state.mergeApproved'));
     expect(manual, contains('state.socketConnected'));
     expect(manual, contains('await _syncLink();'));
-    expect(RegExp(r'_syncLink\\(').allMatches(controller).length, 2,
+    expect(RegExp(r'_syncLink\(').allMatches(controller).length, 2,
         reason: 'Only the user action and its method definition may reference _syncLink');
-    expect(RegExp(r'\\.synchronize\\(').allMatches(controller).length, 1);
+    expect(RegExp(r'\.synchronize\(').allMatches(controller).length, 1);
     expect(screen, contains('Future<void> _syncNow()'));
     expect(screen, contains(': _syncNow,'));
     expect(screen, contains('Desktop library sync is manual.'));
