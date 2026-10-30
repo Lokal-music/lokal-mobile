@@ -522,6 +522,8 @@ class AndroidAudioEngine implements AudioEngine {
       }
     } finally {
       _restoringFastStartPlaylist = false;
+      // Start the preload only after the native sequence mutation ends.
+      _prepareOnDemandGaplessNext();
     }
   }
 
