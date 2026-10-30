@@ -367,7 +367,10 @@ class Uac2Service {
     }
 
     if (Platform.isAndroid) {
-      if (!bitPerfectEnabled) {
+      if (!bitPerfectEnabled ||
+          await _preferencesService.getAudioEnginePreference() ==
+              AudioEnginePreference.androidMixerUsb) {
+        // Framework mixer output must leave USB interface ownership with Android.
         return;
       }
       final matchingDevice = await _resolvePreferredAndroidActivationDevice(
@@ -2129,6 +2132,7 @@ Future<void> stopPriorityAnchor() async {
   }
 
   bool _shouldActivateAndroidDirectUsb(Uac2DeviceInfo preferredDevice) {
+    if (Uac2PreferencesService.isAndroidMixerUsbSelectedSync) return false;
     // Status refreshes must not re-claim an interface already in use by Rust.
     if (_lastDirectUsbPlaybackActive == true &&
         _hasFrozenAndroidDirectUsbSession()) {
