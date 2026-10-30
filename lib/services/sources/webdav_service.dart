@@ -483,12 +483,14 @@ class WebdavService implements NetworkSourceService {
       ..headers['Authorization'] = _basicAuth(server);
     final streamed = await _client.send(request).timeout(const Duration(seconds: 30));
     if (streamed.statusCode != 200) {
+      await streamed.stream.listen(null).cancel();
       throw WebdavNetworkException('HTTP ${streamed.statusCode} for cover');
     }
     // Cover requests are untrusted NAS input. Avoid Response.fromStream,
     // which buffers arbitrarily large images into memory ahead of decoding.
     const limit = 12 * 1024 * 1024;
     if ((streamed.contentLength ?? 0) > limit) {
+      await streamed.stream.listen(null).cancel();
       throw WebdavNetworkException('NAS cover exceeds 12 MiB');
     }
     final bytes = BytesBuilder(copy: false);
@@ -529,6 +531,7 @@ class WebdavService implements NetworkSourceService {
     final response =
         await _client.send(request).timeout(const Duration(minutes: 5));
     if (response.statusCode != 200) {
+      await response.stream.listen(null).cancel();
       throw WebdavNetworkException('HTTP ${response.statusCode} for stream');
     }
     // Stream directly to a temporary cache file. Keeping an entire FLAC in a
