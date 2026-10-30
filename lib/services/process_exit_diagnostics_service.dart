@@ -22,6 +22,17 @@ class ProcessExitDiagnosticsService {
     // call does not overwrite the preceding process's ApplicationExitInfo.
     await recordBreadcrumb('app:startup');
     try {
+      // Java/Kotlin exceptions usually have REASON_CRASH rather than
+      // REASON_CRASH_NATIVE; Android's tombstone API does not retain their
+      // Java stack. Our crash handler persisted a privacy-safe call stack.
+      final javaCrash = await _channel.invokeMethod<String>(
+        'consumeJavaCrashInfo',
+      );
+      if (javaCrash != null && javaCrash.isNotEmpty) {
+        AppLog.instance.add('[java-crash-recovered] $javaCrash',
+            source: LogSource.crash);
+        await AppLog.instance.flushToDisk();
+      }
       final exits = await _channel.invokeListMethod<Object?>(
         'getProcessExitInfo',
       );
