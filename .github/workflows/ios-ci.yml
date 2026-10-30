@@ -474,6 +474,8 @@ jobs:
           path: ${{ runner.temp }}/iphone-release
       - name: Independently inspect IPA, source blobs and saved symbols
         run: |
+          # Do not let tee mask an audit exception: a green job must mean verified bytes.
+          set -o pipefail
           python3 tool/ios_verify_engineering_release.py "$RUNNER_TEMP/iphone-release" | tee "$RUNNER_TEMP/ios-release-audit.json"
           {
             printf '## Unsigned iPhone engineering IPA audit\n\n'
