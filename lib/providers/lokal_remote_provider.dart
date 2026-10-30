@@ -765,7 +765,24 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
           credentials,
           connected: () => !_disposed && state.socketConnected,
         );
-      await _linkSync?.synchronize();
+      // The coordinator deliberately skips when disconnected. For an
+      // explicit user action, skipping is not success.
+      final coordinator = _linkSync;
+      if (_disposed ||
+          generation != _generation ||
+          !state.socketConnected ||
+          coordinator == null ||
+          !ref.read(lokalLinkServiceProvider).connected) {
+        throw StateError('Desktop disconnected before library sync. Reconnect and retry.');
+      }
+      await coordinator.synchronize();
+      if (_disposed ||
+          generation != _generation ||
+          !state.socketConnected ||
+          !ref.read(lokalLinkServiceProvider).connected ||
+          !identical(_linkSync, coordinator)) {
+        throw StateError('Desktop disconnected during library sync. Reconnect and retry.');
+      }
     } catch (_) {
       if (!_disposed && generation == _generation) {
         state = state.copyWith(
