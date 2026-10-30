@@ -314,10 +314,12 @@ void main() {
       late String capturedAuth;
       late String capturedDepth;
       late String capturedMethod;
+      late String capturedConnection;
       final client = MockClient((request) async {
         capturedAuth = request.headers['Authorization'] ?? '';
         capturedDepth = request.headers['Depth'] ?? '';
         capturedMethod = request.method;
+        capturedConnection = request.headers['Connection'] ?? '';
         return http.Response(_multistatus, 207);
       });
       final service = WebdavService.create(client: client);
@@ -329,6 +331,7 @@ void main() {
       expect(ok, isTrue);
       expect(capturedMethod, 'PROPFIND');
       expect(capturedDepth, '0');
+      expect(capturedConnection, 'close');
       expect(
         capturedAuth,
         'Basic ${base64Encode(utf8.encode('alice:secret'))}',
