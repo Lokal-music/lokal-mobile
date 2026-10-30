@@ -5309,8 +5309,11 @@ class PlayerService {
     await _rustAudioService.setCrossfeed(
       isBitPerfectProcessingLocked ? 0 : crossfeedLevel,
     );
+    // The final policy pass must not restore a stored pitch value after the
+    // earlier bit-perfect branch zeroed it; pitch forces the Rust callback
+    // out of passthrough and invalidates the bit-perfect claim.
     await _rustAudioService.setPitchShiftSemitones(
-      pitchSemitonesNotifier.value,
+      isBitPerfectProcessingLocked ? 0.0 : pitchSemitonesNotifier.value,
     );
     _updatePriorityAnchor();
   }
