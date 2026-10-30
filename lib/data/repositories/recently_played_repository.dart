@@ -258,6 +258,45 @@ class RecentlyPlayedRepository {
     });
   }
 
+  /// Project a bounded desktop history page in one database transaction.
+  /// Individual recordPlay calls would otherwise issue up to 250 separate
+  /// writes and repeatedly invalidate listening-recap listeners.
+  Future<void> recordLinkPlays(
+    List<({String songId, String eventId, DateTime playedAt, int listenedMs})>
+        plays,
+  ) async {
+    if (plays.isEmpty) return;
+    await _isar.writeTxn(() async {
+      for (final play in plays) {
+        final songId = int.tryParse(play.songId);
+        if (songId == null) continue;
+        final existing = await _isar.recentlyPlayedEntitys
+            .where()
+            .eventIdEqualTo(play.eventId)
+            .findFirst();
+        if (existing != null) continue;
+        final row = RecentlyPlayedEntity()
+          ..songId = songId
+          ..playedAt = play.playedAt
+          ..eventId = play.eventId
+          ..listenedMs = play.listenedMs;
+        await _isar.recentlyPlayedEntitys.put(row);
+      }
+      final count = await _isar.recentlyPlayedEntitys.count();
+      if (count > maxHistoryEntries) {
+        final stale = await _isar.recentlyPlayedEntitys
+            .filter()
+            .eventIdIsNull()
+            .sortByPlayedAt()
+            .limit(count - maxHistoryEntries)
+            .findAll();
+        await _isar.recentlyPlayedEntitys.deleteAll(
+          stale.map((row) => row.id).toList(),
+        );
+      }
+    });
+  }
+
   /// Get recently played songs grouped by time period.
   /// Returns a map with keys like "Today", "Yesterday", "This Week", etc.
   Future<Map<String, List<RecentlyPlayedEntry>>> getGroupedHistory() async {
