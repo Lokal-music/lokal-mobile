@@ -1527,6 +1527,7 @@ Future<List<OnlineSource>> _playbackSources(
             return cache().prepare(
               found, audio, cancel: cancel,
               requestedSpatialCodec: selectedSpatial,
+              requireNativeOutput: !forDownload,
             );
           }
           if (forDownload) {
