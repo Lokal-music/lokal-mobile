@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -194,6 +195,15 @@ class _LokalDesktopLinkScreenState
               ),
               style: TextStyle(color: t.muted),
             ),
+            if (Platform.isIOS) ...[
+              const SizedBox(height: 8),
+              Text(
+                lokalText(
+                  'Keep Lokal open and your iPhone unlocked, with your desktop awake, while copying over Wi-Fi. If copying stops, check again to retry unfinished files.',
+                ),
+                style: TextStyle(color: t.muted),
+              ),
+            ],
             const SizedBox(height: 12),
             if (progress.phase == LinkCopyPhase.checking)
               TextButton.icon(

@@ -1,5 +1,15 @@
 # iPhone transfer architecture
 
+Current release decision: [ship the established foreground-copy path](IOS_FIRST_RELEASE.md).
+The replacement native background importer/uploader remains disabled and is
+**deferred from the first release**. The activation gates recorded below apply
+before enabling that engine. They do not block an IPA using foreground copies.
+Retain existing safety checks and receipts; do not add CUE mapping, queue/pruning
+or OS recovery infrastructure merely to finish the first-release checklist.
+Background audio playback is a separate, required shipped capability.
+
+The following sections retain historical implementation and qualification evidence.
+
 Status: native transport, app owner and typed Flutter bridge accepted through
 build84; product library adapter pending, 29 October 2026. Both real iOS16 SDK
 checks, 20 complete Apple native rounds in run9, actual Isar process contracts,
@@ -1015,7 +1025,8 @@ coalesced foreground/mutation retirement. Their native port/file ownership is
 explicitly a fixture. All 28 focused transport checks and fatal-info analysis
 pass. This later driver/root integration has no Apple SDK/installed acceptance
 yet. Native product import/upload remain false; owned uploads/progress,
-clear/unpair/CUE and OS lifecycle work remain release gates.
+clear/unpair/CUE and OS lifecycle work remained native-engine activation gates;
+the first-release foreground-copy scope is now defined above.
 
 ### Older no-custody reservation recovery (outside build86)
 

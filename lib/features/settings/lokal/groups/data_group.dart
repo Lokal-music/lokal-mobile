@@ -15,6 +15,7 @@ import 'package:flick/features/settings/widgets/lastfm_settings_tile.dart';
 import 'package:flick/features/settings/widgets/listenbrainz_settings_tile.dart';
 
 import 'dart:async';
+import 'dart:io';
 
 import '../../../link/lokal_desktop_link_screen.dart';
 
@@ -147,16 +148,17 @@ List<LokalSettingsSection> dataSettings(
       EcoDataModeToggle(),
     ],
   ),
-  LokalSettingsSection(
-    title: lokalText('Background'),
-    children: const [
-      LokalSettingCustom(
-        label: 'Battery optimization',
-        description: 'Allow background playback, scans and file transfers.',
-        child: BatteryOptimizationSetting(),
-      ),
-    ],
-  ),
+  if (Platform.isAndroid)
+    LokalSettingsSection(
+      title: lokalText('Background'),
+      children: const [
+        LokalSettingCustom(
+          label: 'Battery optimization',
+          description: 'Allow background playback, scans and file transfers.',
+          child: BatteryOptimizationSetting(),
+        ),
+      ],
+    ),
   LokalSettingsSection(
     title: lokalText('Library tools'),
     children: [
