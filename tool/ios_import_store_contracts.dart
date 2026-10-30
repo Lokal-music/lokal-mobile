@@ -1,3 +1,4 @@
+import 'package:flick/services/ios_transfer_cue_mapping.dart';
 import 'package:flick/services/ios_transfer_song_identity.dart';
 import 'package:flick/services/ios_library_scan_epoch.dart';
 // Actual Isar/libmdbx contracts. The native lease callback and media description
@@ -554,6 +555,71 @@ Future<void> main(List<String> arguments) async {
             await fixture.db.songEntitys.count() == 0,
         'Committed deletion never resurrects its recording',
       );
+    });
+    await scenario('atomic-native-cue-mapping', (fixture) async {
+      final path = fixture.store().absolutePath(fixture.target);
+      final mapping = IosTransferCueMapping(fixture.db);
+      SongEntity track(int start, int end) => SongEntity()
+        ..filePath = path ..title = 'CUE $start' ..artist = 'CUE artist'
+        ..startOffsetMs = start ..endOffsetMs = end ..durationMs = end - start
+        ..fileSize = fixture.copy.bytes ..dateAdded = DateTime.utc(2026);
+      Future<List<SongEntity>> rows() => fixture.db.songEntitys.where()
+          .filePathEqualToAnyStartOffsetMs(path).findAll();
+      Future<void> refuses(Future<Object?> Function() work) async {
+        var refused = false;
+        try { await work(); } on StateError { refused = true; }
+        require(refused, 'Unsafe CUE replacement must refuse');
+      }
+      await fixture.prepare();
+      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
+        mapping.replaceInTransaction(path, [track(0, 2000)], expected: []))));
+      require((await fixture.store().peek(fixture.job(), fixture.target))!.receipt.state == 'prepared',
+        'Preparing import refuses the entire CUE transaction');
+      await fixture.publishFixture();
+      await fixture.commit();
+      final original = await rows();
+      final cue = [track(0, 500), track(500, 2000)];
+      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
+        require(await mapping.replaceInTransaction(path, cue, expected: original),
+          'Native committed file is mapped atomically');
+      }));
+      require(cue[0].id == 42 && cue[1].id == 43 && await fixture.db.songEntitys.count() == 2,
+        'First CUE range retains raw identity; new range gets distinct identity');
+      require(!await fixture.db.writeTxn(() =>
+          IosTransferScanGuard(fixture.db).allowsRemovalInTransaction(43)),
+        'Ordinary scan cleanup cannot partially remove a protected derived range');
+      require(cue[0].dateAdded.isAtSameMomentAs(DateTime.utc(2020)) && cue[0].hasLocalEdits &&
+          cue[0].title == 'Current library title' && cue[0].remoteId == fixture.job().intent.identity.sourceId,
+        'Manual metadata, original date and desktop binding survive conversion');
+      final beforeExtension = await rows();
+      final extended = [track(0, 500), track(500, 1000), track(1000, 2000)];
+      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
+        mapping.replaceInTransaction(path, extended, expected: beforeExtension)));
+      require(extended.map((row) => row.id).join(',') == '42,43,44',
+        'Existing range IDs survive edits and an additional range');
+      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
+        mapping.replaceInTransaction(path, [track(0, 2000)], expected: original))));
+      final snapshot = await rows();
+      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
+        mapping.replaceInTransaction(path, [track(0, 1500), track(1000, 2000)], expected: snapshot))));
+      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
+        await mapping.replaceInTransaction(path, [track(500, 1000), track(1000, 2000)], expected: snapshot);
+        throw StateError('Induced post-replacement rollback');
+      })));
+      await fixture.close();
+      await fixture.open();
+      require(await fixture.db.songEntitys.count() == 3 && await fixture.db.songEntitys.get(42) != null,
+        'Actual rollback/reopen restores original anchor and all three ranges');
+      final current = await rows();
+      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
+        IosTransferCueMapping(fixture.db).replaceInTransaction(path,
+          [track(500, 1000), track(1000, 2000)], expected: current)));
+      final receipt = (await fixture.store().peek(fixture.job(), fixture.target))!;
+      require(receipt.committed && receipt.removedAfterCommit && receipt.receipt.localSongId == 42 &&
+          await fixture.db.songEntitys.get(43) != null && await fixture.db.songEntitys.get(44) != null,
+        'Removing the anchored CUE range keeps history and other range IDs, never recreates it');
+      require(sha256.convert(await File(path).readAsBytes()).toString() == fixture.copy.sha256,
+        'Metadata mapping never changes public audio bytes');
     });
     await scenario('historical-song-id-allocation', (fixture) async {
       await fixture.prepare();

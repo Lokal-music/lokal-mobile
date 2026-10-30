@@ -1,6 +1,7 @@
 import 'dart:io';
 import '../../services/ios_library_scan_epoch.dart';
 import '../../services/ios_transfer_song_identity.dart';
+import '../../services/ios_transfer_cue_mapping.dart';
 
 import 'package:flick/core/utils/artist_credits.dart';
 
@@ -216,6 +217,18 @@ class SongRepository {
         await _isar.songEntitys.putAll(accepted);
       }
     });
+  }
+
+  /// Native-import CUE conversion must replace all ranges in one writer.
+  /// False leaves ordinary files on their existing scanner path.
+  Future<bool> replaceImportedCueTracks(
+    String path,
+    List<SongEntity> tracks, {
+    required List<SongEntity> expected,
+  }) async {
+    if (!Platform.isIOS) return false;
+    return _isar.writeTxn(() => IosTransferCueMapping(_isar)
+        .replaceInTransaction(path, tracks, expected: expected));
   }
 
   /// Persist ReplayGain metadata for a path (written by the ReplayGain

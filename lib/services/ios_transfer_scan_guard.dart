@@ -65,6 +65,19 @@ class IosTransferScanGuard {
   }
 
   Future<bool> allowsRemovalInTransaction(int songId) async {
+    final row = await isar.songEntitys.get(songId);
+    final key = row == null
+        ? null
+        : iosTransferOperationKeyForPath(row.filePath);
+    if (key != null) {
+      final owner = await isar.iosTransferReceiptEntitys.getByOperationKey(key);
+      // Every derived CUE range shares the protected file. Only the atomic
+      // range mapper may remove it while a live import receipt owns the path.
+      if (owner != null &&
+          (owner.schemaVersion != 1 || owner.state != 'retired')) {
+        return false;
+      }
+    }
     final receipts = await isar.iosTransferReceiptEntitys
         .where()
         .localSongIdEqualTo(songId)
