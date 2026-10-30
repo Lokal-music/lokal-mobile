@@ -233,7 +233,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["retireNetworkScope", "drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -276,6 +276,18 @@ final class LokalTransferBridge {
         let ticket = try host.importOwnership.capture(owner)
         host.withRuntime({ runtime in runtime.drainImports(ticket: ticket) { reply.encode($0) } },
                          unavailable: { reply.failure($0) })
+      } else if call.method == "retireNetworkScope" {
+        let request = try LokalTransferProtocol.scopeRetirement(data.data)
+        guard let owner = importOwner, request.clientID == clientID else {
+          throw LokalTransferError.staleRevision
+        }
+        // Retire native tickets synchronously at bridge dispatch, before a
+        // previously queued enqueue could commit after the journal's batch.
+        try host.importOwnership.retireSubmissions(owner)
+        let ticket = try host.importOwnership.capture(owner)
+        host.withRuntime({ runtime in
+          runtime.retireNetworkScope(request.scope, ticket: ticket) { reply.encode($0) }
+        }, unavailable: { reply.failure($0) })
       } else if call.method == "importWorkPage" || call.method == "importCandidatesPage" {
         let request = try LokalTransferProtocol.importWorkPage(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }

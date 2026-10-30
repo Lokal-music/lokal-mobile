@@ -106,6 +106,63 @@ void main() {
     },
   );
 
+  test('scoped retirement binds to the observed client and contains only public pairing identity', () async {
+    const channel = MethodChannel('test/ios-retire-network-scope');
+    final ready = Completer<String>();
+    const scope = IosTransferScope(
+      desktopId: 'fixture-pc',
+      origin: 'https://music.example.test:8443',
+      pairingId: 'a7d96b93-6526-4f1f-a1af-688ffb5c799d',
+    );
+    var retired = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'observe') {
+        final owner = (request(call) as Map)['clientID'] as String;
+        ready.complete(owner);
+        return null;
+      }
+      if (call.method == 'stopObserving') return null;
+      expect(call.method, 'retireNetworkScope');
+      expect(request(call), {
+        'clientID': await ready.future,
+        'scope': scope.toJson(),
+      });
+      retired++;
+      return encoded({
+        ...summary(),
+        'counts': {'cancelled': 1},
+        'pauses': [
+          {'scope': scope.toJson(), 'reason': 'pairingChanged'},
+        ],
+      });
+    });
+    final transport = IosTransferTransport(channel: channel, supported: true);
+    try {
+      await expectLater(transport.retireNetworkScope(scope), throwsStateError);
+      final listener = transport.changes.listen((_) {});
+      try {
+        await ready.future;
+        final result = await transport.retireNetworkScope(scope);
+        expect(result.total, 1);
+        expect(result.pauses.single.scope.pairingId, scope.pairingId);
+        expect(retired, 1);
+        await expectLater(
+          transport.retireNetworkScope(const IosTransferScope(
+            desktopId: 'fixture-pc',
+            origin: 'https://credentials:secret@music.example.test',
+          )),
+          throwsFormatException,
+        );
+        expect(retired, 1);
+      } finally {
+        await listener.cancel();
+      }
+    } finally {
+      await transport.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
+
   test('import waits for root observation and sends no caller paths or account credentials', () async {
     const channel = MethodChannel('test/ios-import-root');
     final observing = Completer<void>();

@@ -502,6 +502,64 @@ final class LokalTransferJournal: @unchecked Sendable {
     }
   }
 
+  /// Atomically revoke a paired desktop's *network* work before cancelling
+  /// URLSession tasks. The persistent pause prevents pump() from reissuing a
+  /// request during process relaunch or after a lost native reply. An importing
+  /// job is an Isar/public-file ownership boundary: it must be reconciled by
+  /// the app coordinator, not silently cancelled as network work.
+  ///
+  /// The frozen import-custody table is deliberately unchanged. Its entries
+  /// still require the separate app-attested cleanup protocol.
+  func retireNetworkScope(_ scope: LokalTransferScope, nowMs: Int64)
+    throws -> [(previous: LokalTransferJob, retired: LokalTransferJob)] {
+    try scope.validate()
+    return try transaction { current in
+      let query = try statement("SELECT id,revision,document FROM jobs ORDER BY rowid")
+      var changes: [(previous: LokalTransferJob, retired: LokalTransferJob, data: Data, oldBytes: Int)] = []
+      do {
+        while true {
+          let code = sqlite3_step(query)
+          if code == SQLITE_DONE { break }
+          guard code == SQLITE_ROW else { throw LokalTransferError.database(code) }
+          let (job, oldBytes) = try decoded(query)
+          guard job.direction == .download,
+                job.identity.desktopID == scope.desktopID,
+                job.identity.origin == scope.origin,
+                job.identity.pairingID == scope.pairingID else { continue }
+          if job.phase == .importing {
+            throw LokalTransferError.invalidTransition
+          }
+          if job.phase == .cancelled || job.phase == .complete { continue }
+          var next = job
+          try next.cancel(nowMs: max(nowMs, job.updatedMs))
+          let data = try encoded(next)
+          changes.append((job, next, data, oldBytes))
+        }
+      } catch {
+        sqlite3_finalize(query)
+        throw error
+      }
+      sqlite3_finalize(query)
+
+      let update = try statement("UPDATE jobs SET revision=?,document=? WHERE id=? AND revision=?")
+      defer { sqlite3_finalize(update) }
+      for change in changes {
+        try check(sqlite3_reset(update))
+        try check(sqlite3_bind_int64(update, 1, Int64(change.retired.revision)))
+        try bind(change.data, at: 2, to: update)
+        try bind(change.previous.id, at: 3, to: update)
+        try check(sqlite3_bind_int64(update, 4, Int64(change.previous.revision)))
+        guard sqlite3_step(update) == SQLITE_DONE else {
+          throw LokalTransferError.database(sqlite3_errcode(database))
+        }
+        guard sqlite3_changes(database) == 1 else { throw LokalTransferError.staleRevision }
+        current.bytes += Int64(change.data.count - change.oldBytes)
+      }
+      try writePause(LokalTransferPause(scope: scope, reason: .pairingChanged))
+      return changes.map { (previous: $0.previous, retired: $0.retired) }
+    }
+  }
+
   private func decodedCustody(_ query: OpaquePointer) throws -> (LokalTransferImportCustody, Int) {
     let id = try text(query, 0)
     guard sqlite3_column_type(query, 1) == SQLITE_INTEGER,

@@ -20,6 +20,10 @@ enum LokalTransferProtocol {
   struct Client: Decodable, Sendable {
     let clientID: String
   }
+  struct ScopeRetirement: Decodable, Sendable {
+    let scope: LokalTransferScope
+    let clientID: String
+  }
   struct ImportWorkPage: Decodable, Sendable {
     let after: String?
     let limit: Int
@@ -167,6 +171,22 @@ enum LokalTransferProtocol {
 
   static func client(_ data: Data) throws -> Client {
     let value = try object(Client.self, data, keys: ["clientID"])
+    guard UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
+      throw LokalTransferError.invalidRecord
+    }
+    return value
+  }
+
+  static func scopeRetirement(_ data: Data) throws -> ScopeRetirement {
+    // The outer envelope is strict in object(); reject unknown nested fields
+    // too, rather than silently accepting an embedded credential/header map.
+    guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let nested = envelope["scope"] as? [String: Any],
+          Set(nested.keys).isSubset(of: ["desktopID", "origin", "pairingID"]) else {
+      throw LokalTransferError.invalidRecord
+    }
+    let value = try object(ScopeRetirement.self, data, keys: ["scope", "clientID"])
+    try value.scope.validate()
     guard UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
       throw LokalTransferError.invalidRecord
     }

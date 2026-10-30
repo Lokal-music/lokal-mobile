@@ -307,6 +307,18 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     }
   }
 
+  /// Private iPhone unlink primitive. The native journal atomically retires
+  /// the exact pairing's network revisions, cancels its URLSession tasks and
+  /// waits for callbacks plus outstanding native file work. It does NOT attest
+  /// Isar/public-file retirement and must be called only inside the root
+  /// mutation fence before removing pairing credentials.
+  Future<IosTransferSummary> retireNetworkScope(IosTransferScope scope) async {
+    scope.validate();
+    return IosTransferSummary.fromJson(
+      await _importCall('retireNetworkScope', {'scope': scope.toJson()}),
+    );
+  }
+
   /// Private cleanup claim only; product activation and the Isar decision are
   /// separate. Native revokes publication before draining the old file worker.
   @override

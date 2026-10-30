@@ -115,8 +115,153 @@ private func runHostContracts() throws {
   print("Native app-owner contracts passed: unavailable storage recovery, 12 concurrent clients, one session owner and retired teardown. Portable evidence only.")
 }
 
+/// Atomic SQLite rollback, durable exact-scope cancellation and real native
+/// URLSession callback drainage. This does not claim iOS daemon relaunch.
+private func runNetworkRetirementContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-network-retirement-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: false)
+  defer { try? manager.removeItem(at: root) }
+
+  let scope = LokalTransferScope(desktopID: "fixture-pc", origin: origin)
+  let clientID = UUID().uuidString.lowercased()
+  let envelope: [String: Any] = ["scope": [
+    "desktopID": scope.desktopID, "origin": scope.origin,
+    "headers": ["Authorization": "forbidden"],
+  ], "clientID": clientID]
+  try rejects("retirement rejects unknown nested credential fields") {
+    _ = try LokalTransferProtocol.scopeRetirement(JSONSerialization.data(withJSONObject: envelope))
+  }
+  func request(_ source: String, desktop: String = "fixture-pc") throws -> LokalTransferJob {
+    try LokalTransferJob(direction: .download,
+      identity: LokalTransferIdentity(desktopID: desktop, sourceID: source,
+        localSongID: nil, origin: origin),
+      metadata: LokalTransferMetadata(title: source, artist: "Retirement fixture",
+        album: nil, fileExtension: "wav"),
+      nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  }
+
+  // Importing Isar rows must block the *whole* scoped journal transaction,
+  // not merely the importing member after other jobs were already revoked.
+  let rollbackRoot = root.appendingPathComponent("rollback")
+  try manager.createDirectory(at: rollbackRoot, withIntermediateDirectories: false)
+  let rollback = try LokalTransferJournal(container: rollbackRoot)
+  let importing = try request("importing"), queued = try request("queued")
+  try rollback.create([importing, queued])
+  _ = try rollback.update(id: importing.id, revision: 1) {
+    try $0.bind(taskID: 61, nowMs: 1010)
+  }
+  _ = try rollback.update(id: importing.id, revision: 1) {
+    try $0.retainedDownload(taskID: 61, bytes: length, nowMs: 1020)
+  }
+  _ = try rollback.update(id: importing.id, revision: 1) {
+    try $0.acknowledgeDownload(taskID: 61, nowMs: 1030)
+  }
+  _ = try rollback.update(id: importing.id, revision: 1) {
+    try $0.verifiedDownload(bytes: length, sha256: checksum, nowMs: 1040)
+  }
+  _ = try rollback.update(id: importing.id, revision: 1) {
+    try $0.transition(to: .validating, nowMs: 1050)
+  }
+  _ = try rollback.update(id: importing.id, revision: 1) {
+    try $0.transition(to: .importing, nowMs: 1060)
+  }
+  let before = try rollback.snapshot()
+  try rejects("importing song refuses whole pairing retirement") {
+    _ = try rollback.retireNetworkScope(scope, nowMs: 2000)
+  }
+  let after = try LokalTransferJournal(container: rollbackRoot).snapshot()
+  try require(after.generation == before.generation && after.jobs == before.jobs &&
+      after.pauses == before.pauses,
+    "refusal leaves every network revision and pause untouched")
+
+  // The standalone journal batch commits all scoped revisions at once, and
+  // does not cancel an unrelated pairing at the same HTTP origin.
+  let batchRoot = root.appendingPathComponent("batch")
+  try manager.createDirectory(at: batchRoot, withIntermediateDirectories: false)
+  let batch = try LokalTransferJournal(container: batchRoot)
+  let a = try request("a"), b = try request("b"), foreign = try request("foreign", desktop: "other-pc")
+  try batch.create([a, b, foreign])
+  let batchBefore = try batch.snapshot()
+  let changes = try batch.retireNetworkScope(scope, nowMs: 2000)
+  let batchAfter = try LokalTransferJournal(container: batchRoot).snapshot()
+  try require(changes.count == 2 && changes.allSatisfy {
+      $0.retired.phase == .cancelled && $0.retired.revision == $0.previous.revision + 1
+    }, "batch retires exactly the intended pairing revisions")
+  try require(batchAfter.generation == batchBefore.generation + 1 &&
+      batchAfter.jobs.first(where: { $0.id == foreign.id }) == foreign &&
+      batchAfter.pauses == [LokalTransferPause(scope: scope, reason: .pairingChanged)],
+    "durable pause and job transitions share one generation, preserve foreign scope")
+  let reopenedBatch = try LokalTransferJournal(container: batchRoot).snapshot()
+  try require(reopenedBatch.jobs == batchAfter.jobs && reopenedBatch.pauses == batchAfter.pauses,
+    "reopen retains cancelled identities and pause after process replacement")
+  try require(try batch.retireNetworkScope(scope, nowMs: 2001).isEmpty,
+    "repeated scoped retirement cannot increment an already cancelled job revision")
+
+  // Exercise the real ephemeral URLSession delegate, not a fake task list.
+  let liveRoot = root.appendingPathComponent("live")
+  try manager.createDirectory(at: liveRoot, withIntermediateDirectories: false)
+  let foreignLive = try request("foreign", desktop: "other-pc")
+  try LokalTransferJournal(container: liveRoot).create([foreignLive])
+  let authorization = try LokalTransferAuthorization(
+    desktopID: "fixture-pc", origin: origin, token: "transfer-fixture-token")
+  let ownership = LokalTransferImportOwnership()
+  let engine = ownership.attachEngine()
+  let client = try ownership.attachClient(engineID: engine, clientID: UUID().uuidString.lowercased())
+  let runtime = try LokalTransferRuntime(container: liveRoot,
+    importOwnership: ownership, credentials: { authorization })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }
+    _ = done.wait(timeout: .now() + 10)
+  }
+  let slow = try request("slow")
+  let _: LokalTransferSummary = try native { runtime.enqueue([slow], reply: $0) }
+  _ = try awaitJob(runtime, id: slow.id, phase: [.transferring])
+  let ticket = try ownership.capture(client)
+  let firstResult = NativeResult<LokalTransferSummary>()
+  let secondResult = NativeResult<LokalTransferSummary>()
+  let firstDone = DispatchSemaphore(value: 0)
+  let secondDone = DispatchSemaphore(value: 0)
+  runtime.retireNetworkScope(scope, ticket: ticket) { result in
+    firstResult.set(result); firstDone.signal()
+  }
+  runtime.retireNetworkScope(scope, ticket: ticket) { result in
+    secondResult.set(result); secondDone.signal()
+  }
+  try require(firstDone.wait(timeout: .now() + 10) == .success &&
+      secondDone.wait(timeout: .now() + 10) == .success,
+    "concurrent same-scope retirement replies must both drain")
+  let retired = try firstResult.get()
+  let repeated = try secondResult.get()
+  try require(repeated.pauses == retired.pauses,
+    "duplicate unlink cannot bypass the first cancellation or clear its pause")
+  try require(retired.pauses == [LokalTransferPause(scope: scope, reason: .pairingChanged)],
+    "scoped retirement waits for task callback and persists an explicit pause")
+  let old = try awaitJob(runtime, id: slow.id, phase: [.cancelled])
+  try require(old.revision == 2 && old.receivedSHA256 == nil,
+    "late native completion cannot revive a retired URLSession job")
+  let snapshot = try LokalTransferJournal(container: liveRoot).snapshot()
+  try require(snapshot.jobs.first(where: { $0.id == foreignLive.id }) == foreignLive,
+    "real runtime keeps unrelated scopes untouched")
+  let forbidden = try request("after-auth")
+  try rejects("retired scope rejects a new plan while old credentials still exist") {
+    let _: LokalTransferSummary = try native { runtime.enqueue([forbidden], reply: $0) }
+  }
+  let recovered: LokalTransferSummary = try native { runtime.recover($0) }
+  try require(recovered.pauses == retired.pauses &&
+      (try awaitJob(runtime, id: slow.id, phase: [.cancelled])).revision == 2,
+    "runtime recovery never resurrects cancelled network work")
+  try rejects("the same pairing cannot clear its retirement tombstone by reconnecting") {
+    let _: LokalTransferSummary = try native { runtime.resume(scope: scope, reply: $0) }
+  }
+  print("Native scope retirement contracts passed: importing rollback, exact scope, durable journal, real URLSession callback drainage and recovery. Physical iOS suspension/Isar cleanup remain unqualified.")
+}
+
 func runNetworkContracts(origin: String, length: Int64, checksum: String) throws {
   try runHostContracts()
+  try runNetworkRetirementContracts(origin: origin, length: length, checksum: checksum)
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
   try runCleanupResolutionContracts(origin: origin, length: length, checksum: checksum)

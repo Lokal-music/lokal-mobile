@@ -117,6 +117,9 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private var generation: Int
   private var pauses: [LokalTransferScope: LokalTransferFailure]
   private var tasks: [Int: URLSessionTask] = [:]
+  // Reconciliation also cancels stale daemon tasks whose revision is already
+  // retired. Track their callbacks until the native unlink barrier drains.
+  private var staleScopeTasks: [Int: LokalTransferScope] = [:]
   private var progress: [String: LokalTransferProgress] = [:]
   private var reconciled = false
   private var persistenceFailed = false {
@@ -129,6 +132,12 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private var backgroundReplies: [BackgroundReply] = []
   private var backgroundEventsFinished = false
   private var shuttingDown = false
+  private struct PendingNetworkRetirement {
+    let scope: LokalTransferScope
+    var taskIDs: Set<Int>
+    let reply: LokalTransferCompletion<LokalTransferSummary>
+  }
+  private var pendingNetworkRetirements: [PendingNetworkRetirement] = []
   private var verifications: [String: [LokalTransferCompletion<LokalTransferJob>]] = [:]
   private var cleanupResolutions: [String: (mode: LokalTransferImportResolution.Mode,
     replies: [LokalTransferCompletion<LokalTransferResolvedCleanup>])] = [:]
@@ -420,6 +429,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
           try job.validate()
           _ = try authorization.downloadRequest(for: job)
           guard job.direction == .download, job.phase == .queued, job.revision == 1,
+                self.pauses[self.scope(job)] == nil,
                 job.expectedBytes == nil || job.expectedBytes! <= LokalTransferFiles.maximumBytes else {
             throw LokalTransferError.invalidRecord
           }
@@ -490,6 +500,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       generation = durable.generation
       pauses = Dictionary(uniqueKeysWithValues: durable.pauses.map { ($0.scope, $0.reason) })
       tasks.removeAll()
+      let actualIDs = Set(actual.map(\.taskIdentifier))
+      staleScopeTasks = staleScopeTasks.filter { actualIDs.contains($0.key) }
       progress = progress.filter { id, value in
         jobs[id]?.revision == value.revision && jobs[id]?.phase == .transferring
       }
@@ -498,6 +510,10 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
               job.direction == .download,
               job.revision == binding.revision, job.taskID == task.taskIdentifier,
               [.transferring, .received].contains(job.phase), task.originalRequest?.url == (try LokalTransferRequest.downloadURL(job)) else {
+          if let binding = LokalTransferTaskBinding(task.taskDescription),
+             let job = jobs[binding.id], job.direction == .download {
+            staleScopeTasks[task.taskIdentifier] = scope(job)
+          }
           task.cancel(); continue
         }
         tasks[task.taskIdentifier] = task
@@ -512,11 +528,18 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       }
       reconciled = true
       persistenceFailed = false
+      // A second recovery can observe tasks that disappeared after cancel,
+      // even if the old delegate callback was lost across an engine reset.
+      for index in pendingNetworkRetirements.indices {
+        pendingNetworkRetirements[index].taskIDs.formIntersection(actualIDs)
+      }
+      finishNetworkRetirements()
       pump()
       flushBackgroundReplies()
       notify()
     } catch {
       persistenceFailed = true
+      failNetworkRetirements(error)
       notify()
     }
   }
@@ -579,6 +602,11 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       else { failed(task, reason: .network, retryable: true) }
     }
     tasks.removeValue(forKey: task.taskIdentifier)
+    staleScopeTasks.removeValue(forKey: task.taskIdentifier)
+    for index in pendingNetworkRetirements.indices {
+      pendingNetworkRetirements[index].taskIDs.remove(task.taskIdentifier)
+    }
+    finishNetworkRetirements()
     if let binding = LokalTransferTaskBinding(task.taskDescription),
        progress[binding.id]?.revision == binding.revision { progress.removeValue(forKey: binding.id) }
     pump()
@@ -638,6 +666,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       guard !self.shuttingDown else { return }
       self.shuttingDown = true
       self.observer = nil
+      self.failNetworkRetirements(LokalTransferError.invalidTransition)
       self.session.invalidateAndCancel()
     }
   }
@@ -671,12 +700,88 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
     }
   }
 
+  /// All durable revisions for one exact pairing are retired as one SQLite
+  /// transaction *before* any matching URLSession task is cancelled. Await
+  /// delegate completion and the native file-worker barrier before telling
+  /// the app it may discard that pairing. The frozen Isar custody remains for
+  /// later cleanup; an importing row refuses this operation atomically.
+  func retireNetworkScope(_ scope: LokalTransferScope,
+                          ticket: LokalTransferImportOwnership.Ticket,
+                          reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
+    queue.async {
+      do {
+        guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
+          throw LokalTransferError.invalidTransition
+        }
+        try self.importOwnership.validateTicket(ticket)
+        let changes = try self.journal.retireNetworkScope(scope, nowMs: Self.now())
+        for change in changes {
+          self.importOwnership.revoke(jobID: change.previous.id, revision: change.previous.revision)
+          self.jobs[change.retired.id] = change.retired
+          if self.progress[change.previous.id]?.revision == change.previous.revision {
+            self.progress.removeValue(forKey: change.previous.id)
+          }
+        }
+        self.generation += 1
+        self.pauses[scope] = .pairingChanged
+        let activeIDs = changes.compactMap { change -> Int? in
+          guard let taskID = change.previous.taskID, self.tasks[taskID] != nil else { return nil }
+          return taskID
+        }
+        // A second unlink must wait for the first cancellation, even if the
+        // journal already contains only cancelled revisions. Include stale
+        // daemon tasks discovered during relaunch reconciliation as well.
+        let pending = Set(activeIDs)
+          .union(self.staleScopeTasks.compactMap { $0.value == scope ? $0.key : nil })
+          .union(self.pendingNetworkRetirements.filter { $0.scope == scope }
+            .flatMap { $0.taskIDs })
+        self.pendingNetworkRetirements.append(PendingNetworkRetirement(
+          scope: scope, taskIDs: pending, reply: reply))
+        for id in activeIDs { self.tasks[id]?.cancel() }
+        self.finishNetworkRetirements()
+        self.notify()
+      } catch {
+        // A failed journal write must not be mistaken for a safe unlink.
+        reply(.failure(error))
+      }
+    }
+  }
+
+  private func failNetworkRetirements(_ error: Error) {
+    let waiting = pendingNetworkRetirements
+    pendingNetworkRetirements.removeAll()
+    for item in waiting { item.reply(.failure(error)) }
+  }
+
+  private func finishNetworkRetirements() {
+    guard !pendingNetworkRetirements.isEmpty else { return }
+    var waiting: [PendingNetworkRetirement] = []
+    var finished: [PendingNetworkRetirement] = []
+    for item in pendingNetworkRetirements {
+      if item.taskIDs.isEmpty { finished.append(item) }
+      else { waiting.append(item) }
+    }
+    pendingNetworkRetirements = waiting
+    for item in finished {
+      fileQueue.async {
+        self.queue.async {
+          guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
+            item.reply(.failure(LokalTransferError.invalidTransition))
+            return
+          }
+          item.reply(.success(self.summaryValue()))
+        }
+      }
+    }
+  }
+
   func retry(id: String, revision: Int, reply: @escaping LokalTransferCompletion<LokalTransferJob>) {
     queue.async {
       do {
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
         guard let job = self.jobs[id], job.direction == .download else { throw LokalTransferError.missingJob }
-        guard job.revision == revision, let authorization = try self.credentials() else {
+        guard job.revision == revision, self.pauses[self.scope(job)] == nil,
+              let authorization = try self.credentials() else {
           throw LokalTransferError.staleRevision
         }
         _ = try authorization.downloadRequest(for: job)
@@ -703,6 +808,11 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
               authorization.pairingID == scope.pairingID,
               try LokalTransferRequest.originKey(authorization.origin) == LokalTransferRequest.originKey(scope.origin) else {
           throw LokalTransferError.invalidRecord
+        }
+        // An explicit pairing retirement is a durable tombstone, not a
+        // transient authentication pause that reconnect can silently lift.
+        guard self.pauses[scope] != .pairingChanged else {
+          throw LokalTransferError.invalidTransition
         }
         try self.journal.clearPause(scope)
         self.generation += 1
