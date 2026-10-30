@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _multistatus = '<?xml version="1.0"?>'
     '<D:multistatus xmlns:D="DAV:">'
@@ -37,6 +38,8 @@ NetworkServerEntity _server({String? token}) {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   group('auth', () {
     test('resolveToken stores base64(password)', () async {
       final client = MockClient((request) async => http.Response('', 200));
@@ -52,7 +55,7 @@ void main() {
       final service = WebdavService.create(
         client: MockClient((request) async => http.Response(_multistatus, 207)),
       );
-      expect(await service.trustPresentedCertificate(_server()), isFalse);
+      expect(await service.trustPresentedCertificate(_server(), approvedFingerprint: 'a' * 64), isFalse);
       expect(service.untrustedCertificateFingerprint, isNull);
     });
 
