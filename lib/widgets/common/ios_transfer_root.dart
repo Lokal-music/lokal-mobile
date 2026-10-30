@@ -3,15 +3,15 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/database.dart';
+import '../../providers/ios_transfer_provider.dart';
+import '../../services/ios_transfer_session.dart';
+
 import '../../models/lokal_remote_state.dart';
 import '../../services/ios_pairing_retirement.dart';
 import '../../services/ios_transfer_import_coordinator.dart';
 import '../../services/ios_transfer_mutation_barrier.dart';
-import '../../services/ios_transfer_import_store.dart';
-import '../../services/ios_transfer_media_probe.dart';
 import '../../services/ios_transfer_transport.dart';
 
 /// App lifetime, rather than a tab/screen, owns import observation. Native
@@ -19,7 +19,7 @@ import '../../services/ios_transfer_transport.dart';
 /// gates remain unfinished. An explicit pairing mutation may temporarily
 /// attach a native owner to revoke URLSession authority before Keychain changes.
 /// Android and the existing foreground copy flows remain unchanged.
-class IosTransferRoot extends StatefulWidget {
+class IosTransferRoot extends ConsumerStatefulWidget {
   const IosTransferRoot({super.key, required this.child});
   final Widget child;
 
@@ -55,14 +55,15 @@ class IosTransferRoot extends StatefulWidget {
   }
 
   @override
-  State<IosTransferRoot> createState() => _IosTransferRootState();
+  ConsumerState<IosTransferRoot> createState() => _IosTransferRootState();
 }
 
-class _IosTransferRootState extends State<IosTransferRoot>
+class _IosTransferRootState extends ConsumerState<IosTransferRoot>
     with WidgetsBindingObserver {
-  IosTransferTransport? _native;
-  IosTransferImportCoordinator? _coordinator;
-  final IosTransferMutationBarrier _mutations = IosTransferMutationBarrier();
+  IosTransferSession? _session;
+  IosTransferTransport? get _native => _session?.native;
+  IosTransferImportCoordinator? get _coordinator => _session?.coordinator;
+  IosTransferMutationBarrier get _mutations => _session!.mutations;
 
   Future<T> _withMutation<T>(Future<T> Function() mutation) {
     final coordinator = _coordinator;
@@ -155,42 +156,22 @@ class _IosTransferRootState extends State<IosTransferRoot>
   @override
   void initState() {
     super.initState();
-    if (kIsWeb || !Platform.isIOS) return;
+    _session = ref.read(iosTransferSessionProvider);
+    if (_session == null) return;
     WidgetsBinding.instance.addObserver(this);
-    final native = IosTransferTransport();
-    _native = native;
-    _coordinator = IosTransferImportCoordinator(
-      native: native,
-      store: () async {
-        if (!Database.isInitialized) {
-          throw StateError('Library is not available.');
-        }
-        final documents = await getApplicationDocumentsDirectory();
-        return IosTransferImportStore(
-          Database.instance,
-          musicRoot: '${documents.path}/Music',
-        );
-      },
-      readMedia: const IosTransferMediaProbe().inspect,
-    );
-    unawaited(_coordinator!.start());
+    unawaited(_session!.start());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_coordinator?.foreground());
+      unawaited(_session?.foreground());
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    final coordinator = _coordinator, native = _native;
-    unawaited(() async {
-      await coordinator?.dispose();
-      await native?.dispose();
-    }());
     super.dispose();
   }
 

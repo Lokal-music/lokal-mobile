@@ -1104,3 +1104,25 @@ cancellation and storage barriers for *all* database and pairing mutation
 entry points, native CUE/scanner ownership, durable upload/progress and actual
 iOS suspension/relaunch plus real iPhone sideload acceptance. This source is
 newer than the independently accepted build-87 artifact.
+
+### App lifetime mutation ownership after PR354
+
+The single transfer transport, coordinator and serialized mutation queue now
+belong to a non-auto-disposed app provider. The lifecycle widget borrows that
+session; replacing it cannot close an outstanding pairing retirement or create
+an independent Clear/Forget queue. ProviderContainer disposal drains the
+coordinator and attempts transport closure even if coordinator teardown fails.
+The session rejects a coordinator constructed with a different transport.
+
+The public Root library-mutation and pairing-retirement entry points from PR353
+are retained, including verified Keychain identity, compare-and-clear and
+one-shot observation while the product coordinator is disabled. Android/web
+operations retain their existing bypass. Native import/upload flags remain off.
+
+Twelve local lifetime, mutation and pairing-retirement checks pass, including a
+mutation held across widget detach/remount, no detached lifecycle callbacks,
+exactly one app-container disposal, stale authority refusal and serialized
+operations. Targeted fatal-info analysis is clean. CI waits remain skipped at
+the user's request; no Apple or physical qualification is claimed for this
+later source. Durable preserve-public custody policy and actual Isar/file
+reconciliation remain necessary before background-transfer activation.
