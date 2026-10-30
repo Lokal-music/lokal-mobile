@@ -15,6 +15,7 @@ import '../../../services/playlist_service.dart';
 import '../../../services/sources/jellyfin_service.dart';
 import '../../../services/sources/network_source_service.dart';
 import '../../../services/sources/tidal_service.dart';
+import '../../../services/sources/webdav_service.dart';
 
 import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
@@ -286,6 +287,33 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
     }
   }
 
+  Future<void> _trustWebdavCertificate() async {
+    if (_selectedProtocol != NetworkProtocol.webdav) return;
+    setState(() {
+      _testing = true;
+      _testError = null;
+    });
+    try {
+      final token = await _resolvePersistedToken();
+      final ok = await WebdavService.instance
+          .trustPresentedCertificate(_draftEntity(token: token));
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testPassed = ok;
+        if (!ok) _testError = WebdavService.instance.lastPingError ??
+            'The certificate was not trusted because the WebDAV check failed.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testPassed = false;
+        _testError = _humanError(e);
+      });
+    }
+  }
+
   Future<void> _save({bool force = false}) async {
     if (!_isValid && !force) return;
     setState(() => _saving = true);
@@ -462,6 +490,36 @@ class _NetworkServerEditScreenState extends State<NetworkServerEditScreen> {
           LokalSettingsBlock(top: 10, child: _buildSignInLinkBanner(context)),
         if (_testPassed == false)
           LokalSettingsBlock(top: 10, child: _buildFailureBanner(context)),
+        if (!_testing &&
+            _testPassed == false &&
+            _selectedProtocol == NetworkProtocol.webdav &&
+            WebdavService.instance.untrustedCertificateFingerprint != null &&
+            WebdavService.instance.untrustedCertificateOrigin ==
+                Uri.tryParse(_urlController.text.trim())?.origin)
+          LokalSettingsBlock(
+            top: 10,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LokalSettingsNotice(
+                  warning: true,
+                  text: 'Self-signed HTTPS certificate on '
+                      '${WebdavService.instance.untrustedCertificateOrigin}. '
+                      'Verify its SHA-256 fingerprint independently before '
+                      'approving it for this NAS only: '
+                      '${WebdavService.instance.untrustedCertificateFingerprint}',
+                ),
+                const SizedBox(height: 10),
+                LokalSettingsActionButton(
+                  label: 'Trust this certificate and retry',
+                  icon: LucideIcons.shieldCheck,
+                  primary: false,
+                  expand: true,
+                  onPressed: _trustWebdavCertificate,
+                ),
+              ],
+            ),
+          ),
         LokalSettingsBlock(
           top: 10,
           child: LokalSettingsActionButton(
