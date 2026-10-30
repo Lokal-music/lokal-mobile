@@ -48,6 +48,14 @@ void main() {
       expect(utf8.decode(base64Decode(token!)), 'secret');
     });
 
+    test('cannot approve an unseen certificate fingerprint', () async {
+      final service = WebdavService.create(
+        client: MockClient((request) async => http.Response(_multistatus, 207)),
+      );
+      expect(await service.trustPresentedCertificate(_server()), isFalse);
+      expect(service.untrustedCertificateFingerprint, isNull);
+    });
+
     test('ordinary HTTP 200 does not pretend to be WebDAV', () async {
       final client = MockClient((request) async =>
           http.Response('<html>Router files</html>', 200));
