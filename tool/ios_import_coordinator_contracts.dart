@@ -153,6 +153,69 @@ class NativeFixture implements IosTransferCoordinatorPort {
     );
   }
 
+  bool historyEligible = false,
+      historyCompacted = false,
+      loseHistoryReply = false;
+  int historyCompactions = 0, historyReads = 0;
+  Completer<void>? historyEntered, historyWait;
+
+  @override
+  Future<IosTransferImportWorkPage> completedHistoryPage({
+    IosTransferWorkCursor? after,
+    int limit = 100,
+  }) async {
+    historyReads++;
+    return IosTransferImportWorkPage.fromJson(
+      {
+        'generation': 1,
+        'entries': [
+          if (after == null &&
+              historyEligible &&
+              phase == 'complete' &&
+              !historyCompacted)
+            {
+              'job': {...fixture.document, 'phase': 'validating'},
+              'songID': songId,
+              'targetRelativePath': target,
+              'publicationRecorded': true,
+              'currentRevision': 1,
+              'currentPhase': 'complete',
+            },
+        ],
+      },
+      limit: limit,
+      after: after,
+    );
+  }
+
+  @override
+  Future<void> compactCompletedImport(
+    IosTransferImportLease lease, {
+    required int songId,
+  }) async {
+    await validateImport(lease, requiresWrite: false);
+    historyEntered?.complete();
+    await historyWait?.future;
+    await validateImport(lease, requiresWrite: false);
+    final receipt = await fixture.db.iosTransferReceiptEntitys
+        .getByOperationKey('${job.id}:1');
+    require(
+      receipt?.state == 'committed' && receipt?.localSongId == songId,
+      'History proof follows actual committed Isar, even after Song deletion',
+    );
+    require(
+      lease.reconcileOnly && phase == 'complete' && cleaned,
+      'Only fully acknowledged fixture history can compact',
+    );
+    historyCompactions++;
+    historyCompacted = true;
+    event();
+    if (loseHistoryReply) {
+      loseHistoryReply = false;
+      throw StateError('Lost history acknowledgement');
+    }
+  }
+
   @override
   Future<IosTransferJob> verify(IosTransferJob job) async =>
       throw StateError('Not a downloaded fixture');
@@ -851,6 +914,102 @@ Future<void> main(List<String> arguments) async {
       } finally {
         await owner.dispose();
       }
+    });
+    for (final lostReply in [false, true]) {
+      await scenario('completed-history-$lostReply', (fixture, native) async {
+        await fixture.prepare();
+        await fixture.publishFixture();
+        await fixture.commit();
+        await fixture.db.writeTxn(() => fixture.db.songEntitys.delete(42));
+        native
+          ..phase = 'complete'
+          ..songId = 42
+          ..published = true
+          ..cleaned = true
+          ..historyEligible = true
+          ..loseHistoryReply = lostReply;
+        final before = await File(fixture.store().absolutePath(fixture.target))
+            .readAsBytes();
+        final owner = coordinator(fixture, native);
+        try {
+          await owner.start();
+          require(
+            owner.enabled &&
+                native.historyCompactions == 1 &&
+                await fixture.db.iosTransferReceiptEntitys.count() == 1 &&
+                await fixture.db.songEntitys.get(42) == null,
+            'Compaction requires durable committed Isar and retains receipt/deleted Song identity',
+          );
+          require(
+            sha256.convert(before).toString() ==
+                sha256
+                    .convert(
+                      await File(fixture.store().absolutePath(fixture.target))
+                          .readAsBytes(),
+                    )
+                    .toString(),
+            'History cleanup preserves actual public audio bytes',
+          );
+          await owner.foreground();
+          require(
+            owner.enabled &&
+                owner.issues.isEmpty &&
+                native.historyCompactions == 1 &&
+                native.publications == 0 &&
+                native.acknowledgements == 0,
+            'Lost compaction reply converges without reimport or repeated native completion',
+          );
+        } finally {
+          await owner.dispose();
+        }
+      });
+    }
+    await scenario('history-missing-receipt', (fixture, native) async {
+      native
+        ..phase = 'complete'
+        ..songId = 42
+        ..published = true
+        ..cleaned = true
+        ..historyEligible = true;
+      final owner = coordinator(fixture, native);
+      try {
+        await owner.start();
+        require(
+          owner.enabled &&
+              owner.issues.containsKey('history') &&
+              native.historyCompactions == 0,
+          'Missing Isar proof refuses history cleanup without disabling copy ownership',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
+    await scenario('history-retired-root', (fixture, native) async {
+      await fixture.prepare();
+      await fixture.publishFixture();
+      await fixture.commit();
+      native
+        ..phase = 'complete'
+        ..songId = 42
+        ..published = true
+        ..cleaned = true
+        ..historyEligible = true
+        ..historyEntered = Completer<void>()
+        ..historyWait = Completer<void>();
+      final owner = coordinator(fixture, native);
+      final starting = owner.start();
+      await native.historyEntered!.future;
+      final pausing = owner.pauseForMutation();
+      await native.released.future;
+      native.historyWait!.complete();
+      await pausing;
+      await starting;
+      require(
+        native.historyCompactions == 0 &&
+            await fixture.db.iosTransferReceiptEntitys.count() == 1,
+        'Retired root cannot compact after the library mutation fence',
+      );
+      await owner.dispose();
     });
     await scenario('complete', (fixture, native) async {
       final owner = coordinator(fixture, native);

@@ -23,6 +23,14 @@ abstract interface class IosTransferCoordinatorPort {
     IosTransferWorkCursor? after,
     int limit = 100,
   });
+  Future<IosTransferImportWorkPage> completedHistoryPage({
+    IosTransferWorkCursor? after,
+    int limit = 100,
+  });
+  Future<void> compactCompletedImport(
+    IosTransferImportLease lease, {
+    required int songId,
+  });
   Future<IosTransferJob> verify(IosTransferJob job);
   Future<IosTransferImportLease> claimImport(
     IosTransferJob job, {

@@ -269,6 +269,14 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     }
   }
 
+  func validateHistory(_ owner: Owner, jobID: String, revision: Int, leaseID: String) throws {
+    try locked {
+      let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
+      guard lease.permission == .reconcileOnly else { throw LokalTransferError.invalidTransition }
+      try lease.cancellation.check()
+    }
+  }
+
   /// Capture the existing writer's cancellation token without opening storage
   /// or entering the file queue. Returning it cannot upgrade a read-only lease.
   func writerCancellation(_ owner: Owner, jobID: String, revision: Int,

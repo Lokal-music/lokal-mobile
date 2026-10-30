@@ -102,6 +102,32 @@ func runImportCustodyContracts(container: URL) throws {
       "v1 migration does not re-encode the original job BLOB")
   }
 
+  // Independent frozen v2 layout, including an existing custody BLOB.
+  let v2root = try root("independent-v2")
+  let v2queued = try legacyCustodyFixture(v2root)
+  let v2disk = custodyDisk(v2root)
+  var v2job = v2queued
+  try v2job.bind(taskID: 1, nowMs: 1010)
+  try v2job.retainDownload(taskID: 1, bytes: 12, sha256: String(repeating: "a", count: 64), nowMs: 1020)
+  try v2job.transition(to: .validating, nowMs: 1030)
+  let v2work = try LokalTransferImportCustody(job: v2job, songID: 42)
+  let v2jobBytes = try JSONEncoder().encode(v2job), v2workBytes = try JSONEncoder().encode(v2work)
+  let jobHex = v2jobBytes.map { String(format: "%02x", $0) }.joined()
+  let workHex = v2workBytes.map { String(format: "%02x", $0) }.joined()
+  try rawExecute(v2disk, """
+    ALTER TABLE metadata ADD COLUMN custody_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE metadata ADD COLUMN custody_bytes INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE import_custody (id TEXT NOT NULL,revision INTEGER NOT NULL,document BLOB NOT NULL,PRIMARY KEY(id,revision));
+    UPDATE jobs SET document=X'\(jobHex)';
+    INSERT INTO import_custody VALUES ('\(v2job.id)',1,X'\(workHex)');
+    UPDATE metadata SET byte_count=\(v2jobBytes.count),custody_count=1,custody_bytes=\(v2workBytes.count);
+    PRAGMA user_version=2;
+    """)
+  let v2 = try LokalTransferJournal(container: v2root).snapshot()
+  try require(v2.generation == 7 && v2.jobs == [v2job] && v2.custodies == [v2work] &&
+    rawDocument(v2disk, id: v2job.id) == v2jobBytes && rawCustody(v2disk, id: v2job.id) == v2workBytes,
+    "schema3 additive migration preserves independent v2 job/custody bytes and generation")
+
   let concurrentMigration = try root("concurrent-migration")
   let legacy = try legacyCustodyFixture(concurrentMigration)
   let migrationChildren = try (0..<6).map { _ in
@@ -179,11 +205,11 @@ func runImportCustodyContracts(container: URL) throws {
 
   let disk = custodyDisk(directory)
   let saved = try rawCustody(disk, id: cancelled.id)
-  try rawExecute(disk, "PRAGMA user_version=3")
+  try rawExecute(disk, "PRAGMA user_version=4")
   try rejects("future schema cannot open existing custody") { _ = try LokalTransferJournal(container: directory) }
   try rejects("future schema blocks custody readers") { _ = try store.importCustody(id: cancelled.id, revision: 1) }
   try rejects("future schema blocks custody retirement") { try store.removeImportCustody(old) }
-  try rawExecute(disk, "PRAGMA user_version=2")
+  try rawExecute(disk, "PRAGMA user_version=3")
   try require(rawCustody(disk, id: cancelled.id) == saved, "future schema leaves frozen copy proof untouched")
   var document = try JSONSerialization.jsonObject(with: saved) as! [String: Any]
   document["headers"] = ["authorization": "synthetic-forbidden"]

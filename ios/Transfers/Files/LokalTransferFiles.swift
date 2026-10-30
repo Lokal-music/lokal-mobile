@@ -370,6 +370,33 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
+  /// Frozen intent fingerprint; no credential, path or temporary file is stored.
+  static func digestIntent(_ data: Data) throws -> String {
+    guard !data.isEmpty, data.count <= LokalTransferJob.maximumJSONBytes else {
+      throw LokalTransferError.invalidRecord
+    }
+    #if canImport(CryptoKit)
+    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    #elseif os(Linux)
+    let process = Process(), input = Pipe(), output = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/sha256sum")
+    process.standardInput = input; process.standardOutput = output
+    try process.run()
+    do { try input.fileHandleForWriting.write(contentsOf: data); try input.fileHandleForWriting.close() }
+    catch { if process.isRunning { process.terminate() }; process.waitUntilExit(); throw error }
+    let bytes = output.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0, let text = String(data: bytes, encoding: .utf8),
+          let result = text.split(separator: " ").first,
+          result.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+      throw LokalTransferError.invalidRecord
+    }
+    return String(result)
+    #else
+    throw LokalTransferError.invalidRecord
+    #endif
+  }
+
   static func digest(_ fd: Int32, checkCancellation: () throws -> Void = {}) throws -> String {
     try checkCancellation()
     #if canImport(CryptoKit)

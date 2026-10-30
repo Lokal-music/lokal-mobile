@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flick/models/ios_transfer_recovery.dart';
+import 'package:flick/models/ios_transfer_import.dart';
 import 'package:flick/services/ios_transfer_transport.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -181,4 +182,78 @@ void main() {
       messenger.setMockMethodCallHandler(channel, null);
     }
   });
+  test(
+    'completed-history protocol is scoped, bounded and refuses unsettled proof',
+    () async {
+      const channel = MethodChannel('test/ios-completed-history');
+      final ready = Completer<String>();
+      var phase = 'complete', accepted = true, compactCalls = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'observe') {
+          ready.complete((request(call) as Map)['clientID'] as String);
+          return null;
+        }
+        if (call.method == 'stopObserving') return null;
+        final client = await ready.future;
+        final payload = request(call) as Map;
+        expect(payload['clientID'], client);
+        if (call.method == 'compactCompletedImport') {
+          compactCalls++;
+          expect(payload['songID'], 42);
+          return encoded(accepted);
+        }
+        expect(call.method, 'completedHistoryPage');
+        expect(payload['limit'], 1);
+        return encoded({
+          'generation': 3,
+          'entries': [work(phase: phase)],
+        });
+      });
+      final native = IosTransferTransport(channel: channel, supported: true);
+      final subscription = native.changes.listen((_) {});
+      try {
+        final client = await ready.future;
+        expect(
+          (await native.completedHistoryPage(limit: 1)).entries.single.songId,
+          42,
+        );
+        phase = 'importing';
+        await expectLater(
+          native.completedHistoryPage(limit: 1),
+          throwsFormatException,
+        );
+        await expectLater(
+          native.completedHistoryPage(limit: 101),
+          throwsFormatException,
+        );
+        final raw = importLease(reconcileOnly: true, clientId: client);
+        final complete = IosTransferImportLease.fromJson({
+          ...raw,
+          'job': {...raw['job'] as Map, 'phase': 'complete'},
+        });
+        await native.compactCompletedImport(complete, songId: 42);
+        accepted = false;
+        await expectLater(
+          native.compactCompletedImport(complete, songId: 42),
+          throwsFormatException,
+        );
+        await expectLater(
+          native.compactCompletedImport(complete, songId: 0),
+          throwsFormatException,
+        );
+        final writer = IosTransferImportLease.fromJson(
+          importLease(clientId: client),
+        );
+        await expectLater(
+          native.compactCompletedImport(writer, songId: 42),
+          throwsFormatException,
+        );
+        expect(compactCalls, 2);
+      } finally {
+        await subscription.cancel();
+        await native.dispose();
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+  );
 }

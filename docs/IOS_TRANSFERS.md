@@ -1313,3 +1313,63 @@ flowchart LR
   P --> R[Remove obsolete ranges]
   R --> T[Commit rows and identity floor together]
 ```
+
+
+### Completed-import history compaction
+
+Schema 3 adds indexed completion records containing only job UUID, completed
+revision, original Song ID and SHA-256 of the frozen user intent. The immutable
+intent hash excludes progress, retry revision and phase. These records do not
+contain a bearer, file path, publication marker or library write permission.
+
+The root asks for bounded keyset pages only after recovery or import completion.
+Native keeps the newest 200 completed imports visible. Older entries qualify
+only with exact publication custody and confirmed private staging retirement.
+For each candidate the root obtains a reconciliation-only lease, reads its
+actual committed Isar receipt, and checks the original Song ID. A deleted Song
+is valid history; compaction must not recreate it.
+
+Native rechecks ownership after the file-worker barrier, refuses any remaining
+OS task for that UUID, and atomically inserts the completion record while
+removing the full job/custody documents and updating their usage counters.
+No public file is opened or changed. Library receipts and the durable recording
+ID floor are retained. A repeated compact request with the same live lease is
+read-only; after process recovery the entry no longer appears as work. A
+replayed frozen enqueue is recognized from its hash and starts no new request;
+reusing its UUID with changed intent is refused. Pairing-revocation pauses are
+never compacted.
+
+Full active jobs/custody keep their existing 10,000-entry/16-MiB budget. The
+fixed-shape, indexed completion record collection has a separate one-million-row
+limit and never evicts duplicate-submission evidence to make room. A capacity
+failure rolls back the complete transaction. Failed, cancelled, uploading and
+unfinished jobs are not candidates for this operation; their retry/dismissal
+semantics belong with the durable queue controls.
+
+The schema migration adds the new table/counter without re-encoding existing
+job/custody BLOBs. Native tests cover an independent v2 database as well as v1
+migration, both compaction commit-exit boundaries, wrong identity/quota rollback,
+recent-history retention, replay after recovery, and missing/edited public files.
+The actual Isar/coordinator contracts cover committed-receipt verification,
+deleted-Song preservation, missing-receipt refusal, lost replies and root
+retirement. Their native port remains a fixture; separate native contracts use
+actual HTTP/files/SQLite. Host tests and DEBUG bridge syntax parsing do not
+establish Apple SDK, installed-app or OS-background qualification. Both product
+capability flags remain false.
+
+```mermaid
+sequenceDiagram
+  participant Root as App coordinator
+  participant Isar as Library database
+  participant Native as Native transfer owner
+  participant Journal as Native SQLite journal
+  Root->>Native: Page older acknowledged completions
+  Root->>Native: Claim reconciliation-only lease
+  Root->>Isar: Read matching committed receipt and original Song ID
+  Root->>Native: Compact under current owner
+  Native->>Native: Drain prior file work and check OS tasks
+  Native->>Journal: Atomically retain intent hash; remove full job/custody
+  Journal-->>Native: Durable completion record
+  Native-->>Root: Acknowledge (safe to retry a lost reply)
+  Note over Root,Journal: Isar receipt, recording-ID floor and public audio remain intact
+```

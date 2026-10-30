@@ -395,6 +395,73 @@ func runTrackedLibraryContracts(container: URL, template: LokalTransferJob) thro
     "portable coordination refusal leaves real public bytes untouched")
   #endif
 
+  for edge in ["none", "beforeCommit", "afterCommit", "wrongSong", "quota"] {
+    let history = try fixture("history-" + edge)
+    _ = try history.install()
+    let work = try history.work()
+    let published = try history.journal.snapshot().jobs.first!
+    try rejects("importing work is never terminal history") {
+      try history.journal.compactCompletedImport(published, songID: 42)
+    }
+    _ = try history.journal.update(id: published.id, revision: 1) { try $0.transition(to: .importing, nowMs: 1500) }
+    let complete = try history.journal.update(id: published.id, revision: 1, acknowledging: work) {
+      try $0.transition(to: .complete, nowMs: 2000)
+    }
+    try rejects("completion without private staging drainage is not compactable") {
+      try history.journal.compactCompletedImport(complete, songID: 42)
+    }
+    try history.files.discard(work.job)
+    _ = try history.journal.recordImportStagingRetired(work)
+    let queued = try LokalTransferJob(id: complete.id, direction: complete.direction,
+      identity: complete.identity, metadata: complete.metadata, nowMs: complete.createdMs,
+      expectedBytes: complete.expectedBytes, expectedSHA256: complete.expectedSHA256)
+    try require(queued.intentFingerprint() == complete.intentFingerprint(),
+      "immutable fingerprint ignores live transfer progress and phases")
+    if edge == "wrongSong" {
+      try rejects("wrong application receipt identity cannot compact") {
+        try history.journal.compactCompletedImport(complete, songID: 43)
+      }
+    } else if edge == "quota" {
+      let disk = history.root.appendingPathComponent(LokalTransferJournal.directoryName)
+        .appendingPathComponent(LokalTransferJournal.databaseName)
+      try rawExecute(disk, "UPDATE metadata SET archived_count=\(LokalTransferJournal.maximumArchivedJobs)")
+      try rejects("archive quota never evicts replay evidence or partial-deletes live history") {
+        try history.journal.compactCompletedImport(complete, songID: 42)
+      }
+      try rawExecute(disk, "UPDATE metadata SET archived_count=0")
+    } else if edge == "none" {
+      try history.journal.compactCompletedImport(complete, songID: 42)
+    } else {
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+      process.arguments = ["--compact-import", history.root.path, edge]
+      try process.run(); process.waitUntilExit()
+      try require(process.terminationStatus == 97, "history process exits at exact commit edge")
+    }
+    let reopened = try LokalTransferJournal(container: history.root)
+    let compacted = ["none", "afterCommit"].contains(edge)
+    try require(reopened.snapshot().jobs.isEmpty == compacted &&
+      reopened.snapshot().custodies.isEmpty == compacted &&
+      reopened.importHistoryWasCompacted(id: complete.id, revision: 1, songID: 42) == compacted,
+      "job/custody removal and compact proof are atomic across rollback and process restart")
+    try require(reopened.archivedSubmissionMatches(queued) == compacted,
+      "replayed frozen intent is recognized after compaction/reopen")
+    if compacted {
+      try rejects("archived intent cannot be recreated as a writable journal job") { try reopened.create([queued]) }
+      let changed = try LokalTransferJob(id: queued.id, direction: queued.direction,
+        identity: queued.identity, metadata: LokalTransferMetadata(title: "Changed intent", artist: "Other", album: nil,
+          fileExtension: "wav"), nowMs: queued.createdMs, expectedBytes: queued.expectedBytes,
+        expectedSHA256: queued.expectedSHA256)
+      try rejects("reusing archived UUID with changed intent is refused") { _ = try reopened.archivedSubmissionMatches(changed) }
+      try rejects("another Song cannot adopt compacted identity") {
+        _ = try reopened.importHistoryWasCompacted(id: queued.id, revision: 1, songID: 43)
+      }
+    }
+    try require(Data(contentsOf: history.target()) == payload,
+      "every history outcome preserves actual public audio bytes")
+  }
+  print("Completed import history passed: acknowledged/staging-drained-only compaction, two process-exit boundaries, atomic quota/identity refusal, durable intent fingerprint and unchanged public bytes.")
+
   let concurrent = try fixture("concurrent")
   let children = try (0..<6).map { _ in try child(concurrent) }
   for process in children { process.waitUntilExit() }

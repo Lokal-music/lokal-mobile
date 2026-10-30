@@ -54,7 +54,7 @@ class IosTransferImportCoordinator {
   Completer<void>? _activeCancellation;
   (String, Future<void>)? _lastRelease;
   bool _disposed = false, _enabled = false, _eligible = false;
-  bool _dirty = false, _needsRecovery = true;
+  bool _dirty = false, _needsRecovery = true, _needsHistoryMaintenance = true;
   bool _mutationPaused = false;
   int _epoch = 0;
 
@@ -186,6 +186,7 @@ class IosTransferImportCoordinator {
           _dirty = false;
           if (_needsRecovery) {
             _needsRecovery = false;
+            _needsHistoryMaintenance = true;
             await _recoverWork(epoch);
           }
           IosTransferWorkCursor? cursor;
@@ -221,6 +222,10 @@ class IosTransferImportCoordinator {
             }
           }
           _pendingReservations.clear();
+          if (_needsHistoryMaintenance) {
+            _needsHistoryMaintenance = false;
+            await _compactHistory(epoch);
+          }
         }
       } catch (_) {
         if (_current(epoch)) {
@@ -604,6 +609,58 @@ class IosTransferImportCoordinator {
     }
   }
 
+  Future<void> _compactHistory(int epoch) async {
+    try {
+      IosTransferWorkCursor? cursor;
+      var pages = 0;
+      do {
+        _check(epoch);
+        final page = await native.completedHistoryPage(after: cursor);
+        _check(epoch);
+        if (++pages > iosTransferMaximumJobs ~/ 100 + 1) {
+          throw const FormatException(
+            'Completed history page budget exceeded.',
+          );
+        }
+        for (final work in page.entries) {
+          _check(epoch);
+          IosTransferImportLease? lease;
+          try {
+            if (!work.isCurrentRevision ||
+                work.currentPhase != IosTransferPhase.complete ||
+                !work.publicationRecorded) {
+              throw const FormatException('Unsettled completed history.');
+            }
+            lease = await native.claimImport(work.job, reconcileOnly: true);
+            _active = lease;
+            _check(epoch);
+            final committed = await _store!.peek(lease.job, lease.target);
+            _check(epoch);
+            if (committed == null ||
+                !committed.committed ||
+                committed.receipt.localSongId != work.songId) {
+              throw const FormatException(
+                'History cleanup needs its committed library receipt.',
+              );
+            }
+            await native.compactCompletedImport(lease, songId: work.songId);
+            _check(epoch);
+            _completed.remove(_key(work.job));
+          } finally {
+            if (lease != null) await _release(lease);
+            if (identical(_active, lease)) _active = null;
+          }
+        }
+        cursor = page.nextCursor;
+      } while (cursor != null);
+      _issues.remove('history');
+    } catch (error) {
+      // Optional bookkeeping must not reimport or invalidate a successful copy.
+      // A foreground recovery retries; the durable native record remains safe.
+      if (_current(epoch)) _issues['history'] = _classify(error);
+    }
+  }
+
   Future<void> _acknowledge(
     IosTransferImportLease lease,
     IosTransferImportResult result,
@@ -620,6 +677,7 @@ class IosTransferImportCoordinator {
     if (completed.phase != IosTransferPhase.complete) {
       throw const FormatException('Incomplete native acknowledgement.');
     }
+    _needsHistoryMaintenance = true;
   }
 
   IosTransferCoordinatorIssue _classify(Object error) {
