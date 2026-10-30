@@ -530,6 +530,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       notify()
     } catch {
       persistenceFailed = true
+      failNetworkRetirements(error)
       notify()
     }
   }
@@ -655,6 +656,7 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       guard !self.shuttingDown else { return }
       self.shuttingDown = true
       self.observer = nil
+      self.failNetworkRetirements(LokalTransferError.invalidTransition)
       self.session.invalidateAndCancel()
     }
   }
@@ -726,6 +728,12 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         reply(.failure(error))
       }
     }
+  }
+
+  private func failNetworkRetirements(_ error: Error) {
+    let waiting = pendingNetworkRetirements
+    pendingNetworkRetirements.removeAll()
+    for item in waiting { item.reply(.failure(error)) }
   }
 
   private func finishNetworkRetirements() {
