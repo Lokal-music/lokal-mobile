@@ -161,7 +161,16 @@ class SmbService implements NetworkSourceService {
           'share name in the URL.';
     }
     if (lower.contains('access_denied') || lower.contains('access denied')) {
-      return 'Access denied. Check that the account can read this share.';
+      if (lower.contains('directory listing')) {
+        return 'SMB login succeeded, but this account cannot list the share '
+            'folder. Check NAS folder read/list permissions.';
+      }
+      if (lower.contains('share access')) {
+        return 'SMB login succeeded, but this account cannot connect to the '
+            'named share. Check the share name and NAS share permissions.';
+      }
+      return 'SMB access denied during authentication or protocol setup. '
+          'Verify credentials, required signing and SMB2/3 compatibility.';
     }
     if (lower.contains('lookup') ||
         lower.contains('resolve') ||
