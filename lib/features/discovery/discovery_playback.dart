@@ -24,12 +24,15 @@ typedef DiscoveryAudioProbe = Future<native.AudioProbeFormat> Function(
   String path,
 );
 
+typedef DiscoverySpatialProbe = Future<bool> Function(String path, String codec);
+
 /// Downloads actual media before engine handoff. Never treats a URL as a File.
 /// The native probe is mandatory; provider file/quality labels are ignored.
 class DiscoveryPlaybackCache {
   DiscoveryPlaybackCache({
     required this.http,
     DiscoveryAudioProbe? probe,
+    DiscoverySpatialProbe? spatialProbe,
     Future<Directory> Function()? directory,
     Set<String> Function()? protectedPaths,
     this.maxFileBytes = 512 * 1024 * 1024,
@@ -39,12 +42,17 @@ class DiscoveryPlaybackCache {
     Future<void> Function(String audio, String cover)? embedCover,
   }) : _embedCover = embedCover ?? _embedCoverInFile,
        _probe = probe ?? ((path) => native.audioProbeFormat(path: path)),
+       _spatialProbe = spatialProbe ?? ((path, codec) =>
+           codec == 'ac4'
+               ? AtmosPlaybackSupport.isAc4File(path)
+               : AtmosPlaybackSupport.isJocFile(path)),
        _directory = directory ?? _defaultDirectory,
        _protectedPaths = protectedPaths ?? (() => {});
 
   final DiscoveryHttp http;
   final Future<void> Function(String audio, String cover) _embedCover;
   final DiscoveryAudioProbe _probe;
+  final DiscoverySpatialProbe _spatialProbe;
   final Future<Directory> Function() _directory;
   final Set<String> Function() _protectedPaths;
   final int maxFileBytes;
@@ -205,9 +213,7 @@ class DiscoveryPlaybackCache {
       ready = await partial.rename(p.setExtension(partial.path, '.$format'));
       partial = null;
       if (requestedSpatialCodec != null) {
-        final encoded = requestedSpatialCodec == 'ac4'
-            ? await AtmosPlaybackSupport.isAc4File(ready.path)
-            : await AtmosPlaybackSupport.isJocFile(ready.path);
+        final encoded = await _spatialProbe(ready.path, requestedSpatialCodec);
         if (!encoded) {
           throw const DiscoveryException(
             'This HTTP add-on did not deliver the selected native spatial '
