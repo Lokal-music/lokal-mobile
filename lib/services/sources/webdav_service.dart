@@ -518,17 +518,25 @@ class WebdavService implements NetworkSourceService {
       if (root.name.local != 'multistatus' || root.namespaceUri != 'DAV:') {
         return false;
       }
-      final responses = root.childElements.toList();
-      if (responses.isEmpty) return false;
-      for (final response in responses) {
-        if (response.name.local != 'response' ||
-            response.namespaceUri != 'DAV:') return false;
-        final hrefs = response.findElements('href', namespaceUri: 'DAV:').toList();
+      var responseCount = 0;
+      var hasDescription = false;
+      for (final child in root.childElements) {
+        if (child.name.local == 'responsedescription' &&
+            child.namespaceUri == 'DAV:' && !hasDescription) {
+          // RFC 4918 permits one optional description after responses.
+          hasDescription = true;
+          continue;
+        }
+        if (child.name.local != 'response' ||
+            child.namespaceUri != 'DAV:' || hasDescription) return false;
+        final hrefs = child.findElements('href', namespaceUri: 'DAV:').toList();
         if (hrefs.length != 1 || hrefs.single.innerText.trim().isEmpty) {
           return false;
         }
+        responseCount++;
       }
-      return true;
+      // PROPFIND for a collection must return at least its own response.
+      return responseCount > 0;
     } catch (_) {
       return false;
     }
