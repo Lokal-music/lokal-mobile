@@ -16,6 +16,7 @@ import 'package:flick/l10n/l10n.dart';
 import 'package:flick/providers/library_scan_preferences_provider.dart';
 import 'package:flick/services/library_scanner_service.dart' show ScanMode;
 import 'package:flick/services/music_folder_service.dart';
+import 'package:flick/widgets/common/ios_transfer_root.dart';
 import 'package:flick/services/permission_service.dart';
 import 'package:flick/services/scan_session_controller.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_kit.dart';
@@ -188,7 +189,12 @@ class _LibrarySettingsScreenState extends ConsumerState<LibrarySettingsScreen>
     );
     if (ok != true || !mounted) return;
     try {
-      await _folderService.removeFolder(folder.uri);
+      // A folder purge deletes all its song rows. Retire any active native
+      // import owner before the first permission/cache/database mutation.
+      await IosTransferRoot.withMutationBarrier(
+        context,
+        () => _folderService.removeFolder(folder.uri),
+      );
       await _loadLibraryData();
     } catch (e) {
       if (mounted) _say('Couldn’t remove the folder ($e).');
