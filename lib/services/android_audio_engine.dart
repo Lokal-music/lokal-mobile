@@ -271,6 +271,7 @@ class AndroidAudioEngine implements AudioEngine {
     double Function()? stemVolumeProvider,
     Future<just_audio.AudioPlayer> Function()? stemPlayerProvider,
     AndroidNextSongProvider? onNextSong,
+    bool Function()? gaplessEnabledProvider,
     AndroidTrackAdvancedCallback? onTrackAdvanced,
     AndroidTrackErrorCallback? onTrackError,
   }) : _playerProvider = playerProvider,
@@ -294,6 +295,7 @@ class AndroidAudioEngine implements AudioEngine {
        _stemVolumeProvider = stemVolumeProvider,
        _stemPlayerProvider = stemPlayerProvider,
        _onNextSong = onNextSong,
+       _gaplessEnabledProvider = gaplessEnabledProvider ?? (() => false),
        _onTrackAdvanced = onTrackAdvanced,
        _onTrackError = onTrackError;
 
@@ -334,6 +336,7 @@ class AndroidAudioEngine implements AudioEngine {
   AutoMixProfile? _currentAutoMixProfile;
   int _autoMixProfileGeneration = 0;
   final AndroidNextSongProvider? _onNextSong;
+  final bool Function() _gaplessEnabledProvider;
   final AndroidTrackAdvancedCallback? _onTrackAdvanced;
   final AndroidTrackErrorCallback? _onTrackError;
 
@@ -532,6 +535,12 @@ class AndroidAudioEngine implements AudioEngine {
   bool _awaitingInitialSeek = false;
   bool _loadedSingleTrackOnly = false;
   bool _sourceFailed = false;
+
+  // A small Media3 queue even when the logical playlist has thousands of
+  // entries. Native indices must map to exact logical occurrences, not IDs.
+  List<({Song song, int playlistIndex})>? _onDemandGaplessSlots;
+  int _onDemandGaplessEpoch = 0;
+  int? _onDemandPreparingEpoch;
 
   // Crossfade state. [_player] is always the currently-audible/active player;
   // [_secondary] is the idle slot reused as the incoming player on each fade.
