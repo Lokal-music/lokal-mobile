@@ -109,9 +109,14 @@ impl MixerHandle {
     fn write(&self, bytes: &[u8]) -> Result<usize, String> {
         let written = with_env(|env| {
             let class = mixer_class(env)?;
-            let payload = env.byte_array_from_slice(bytes)?;
+            // AudioTrack.write(ByteBuffer) copies synchronously; JNI holds no
+            // reference after returning. Avoid allocating a Java byte[] for
+            // every 10 ms PCM chunk.
+            let payload = unsafe {
+                env.new_direct_byte_buffer(bytes.as_ptr() as *mut u8, bytes.len())?
+            };
             env.call_static_method(
-                &class, jni_str!("write"), jni_sig!("(J[B)I"),
+                &class, jni_str!("write"), jni_sig!("(JLjava/nio/ByteBuffer;)I"),
                 &[JValue::Long(self.id), JValue::Object(&payload)],
             )?.i()
         })?;
