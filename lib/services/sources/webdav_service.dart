@@ -362,7 +362,12 @@ class WebdavService implements NetworkSourceService {
     String shareRoot,
   ) {
     final parent = Uri.parse(requestUrl);
-    final resolved = parent.resolve(href);
+    // PROPFIND may target a collection URL without a final slash. Relative
+    // hrefs are children of that collection, not siblings of its path.
+    final collection = parent.path.endsWith('/')
+        ? parent
+        : parent.replace(path: '${parent.path}/');
+    final resolved = collection.resolve(href);
     if (resolved.origin != parent.origin ||
         resolved.scheme != parent.scheme ||
         resolved.userInfo.isNotEmpty ||
@@ -370,7 +375,15 @@ class WebdavService implements NetworkSourceService {
         resolved.hasFragment) {
       throw const FormatException('Cross-origin or malformed WebDAV href');
     }
-    final path = _tryDecode(resolved.path);
+    final segments = resolved.pathSegments;
+    if (segments.any((segment) =>
+        segment.contains('/') || segment.contains('\\') ||
+        segment.contains(String.fromCharCode(0)) ||
+        segment == '.' || segment == '..')) {
+      throw const FormatException('Invalid encoded WebDAV path segment');
+    }
+    final path = '/${segments.join('/')}' +
+        (resolved.path.endsWith('/') ? '/' : '');
     final root = shareRoot.endsWith('/') && shareRoot.length > 1
         ? shareRoot.substring(0, shareRoot.length - 1)
         : shareRoot;
