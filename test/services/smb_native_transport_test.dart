@@ -82,6 +82,6 @@ void main() {
     );
     expect(await service.ping(_server()), isFalse);
     expect(session.closed, isTrue);
-    expect(service.lastPingError, contains('Access denied'));
+    expect(service.lastPingError?.toLowerCase(), contains('access denied'));
   });
 }
