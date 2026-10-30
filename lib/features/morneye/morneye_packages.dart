@@ -12,6 +12,7 @@ import '../player/widgets/player_artwork_quality.dart';
 import '../../services/tidal_atmos_metadata.dart';
 import '../../services/atmos_playback_support.dart';
 import '../../services/atmos_diagnostics.dart';
+import '../../services/playback_source_priority.dart';
 
 import 'morneye_host.dart';
 import 'morneye_network.dart';
@@ -1273,6 +1274,17 @@ class MorneyePackages {
           rethrow;
         }
         if (backup.existsSync()) await backup.delete(recursive: true);
+        // A version update must not reset the user's chosen priority. Only a
+        // newly installed package is promoted above existing sources.
+        if (existing == null) {
+          try {
+            await PlaybackSourcePriority.promoteNewAddon('a-$key');
+          } catch (_) {
+            // Installation is complete; unavailable preferences must not
+            // turn it into a reported package failure.
+            AppLog.instance.add('[Morneye] Could not save new add-on priority');
+          }
+        }
         return _addons[key]!;
       } finally {
         runtime?.close();
