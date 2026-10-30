@@ -403,7 +403,10 @@ class LokalRemoteController extends Notifier<LokalRemoteControllerState>
     if (!state.socketConnected || _linkSync == null || !state.mergeApproved) {
       throw StateError('Connect and merge with your desktop before syncing.');
     }
-    if (_syncInFlight || _linkSync!.busy || state.fileCopyProgress.busy) {
+    if (_syncInFlight ||
+        _statsSyncInFlight ||
+        _linkSync!.busy ||
+        state.fileCopyProgress.busy) {
       throw StateError('A desktop sync or file copy is already running.');
     }
     _syncNotification.begin(deviceName: state.desktopName);
