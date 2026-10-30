@@ -2208,6 +2208,9 @@ class PlayerService {
     final locked =
         switch (currentEngineType) {
           AudioEngineType.usbDacExperimental => true,
+          AudioEngineType.rustOboe =>
+            Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+                _uac2Service.isBitPerfectEnabledSync,
           AudioEngineType.dapInternalHighRes =>
             _uac2Service.isDapBitPerfectEnabledSync,
           _ => false,
