@@ -187,10 +187,25 @@ void main() async {
       final stampedAt = (await isar.networkServerEntitys.get(_serverId))?.lastSyncedAt;
       expect(stampedAt, isNotNull);
 
-      for (final failure in ['forbidden child', 'invalid 207 body', 'network exception']) {
+      for (final failure in [
+        'forbidden child', 'invalid 207 body', 'network exception',
+        'nested HTML multistatus', 'wrong namespace',
+      ]) {
         final client = MockClient((request) async {
           if (failure == 'invalid 207 body') {
             return http.Response('<html>Not a WebDAV collection</html>', 207);
+          }
+          if (failure == 'nested HTML multistatus') {
+            return http.Response(
+              '<html><multistatus><response><href>/music/</href></response></multistatus></html>',
+              207,
+            );
+          }
+          if (failure == 'wrong namespace') {
+            return http.Response(
+              '<multistatus><response><href>/music/</href></response></multistatus>',
+              207,
+            );
           }
           if (request.url.path == '/music') {
             return http.Response(
