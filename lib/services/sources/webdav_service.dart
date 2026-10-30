@@ -542,6 +542,10 @@ class WebdavService implements NetworkSourceService {
     }
   }
 
+  @visibleForTesting
+  static bool isValidMultistatusForTest(String body) =>
+      WebdavService._()._isMultistatusDocument(body);
+
   @override
   Stream<ScanProgress> syncLibrary(NetworkServerEntity server) async* {
     final syncedRemoteIds = <String>{};
