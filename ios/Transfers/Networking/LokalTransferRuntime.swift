@@ -763,7 +763,8 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       do {
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
         guard let job = self.jobs[id], job.direction == .download else { throw LokalTransferError.missingJob }
-        guard job.revision == revision, let authorization = try self.credentials() else {
+        guard job.revision == revision, self.pauses[self.scope(job)] == nil,
+              let authorization = try self.credentials() else {
           throw LokalTransferError.staleRevision
         }
         _ = try authorization.downloadRequest(for: job)
@@ -790,6 +791,11 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
               authorization.pairingID == scope.pairingID,
               try LokalTransferRequest.originKey(authorization.origin) == LokalTransferRequest.originKey(scope.origin) else {
           throw LokalTransferError.invalidRecord
+        }
+        // An explicit pairing retirement is a durable tombstone, not a
+        // transient authentication pause that reconnect can silently lift.
+        guard self.pauses[scope] != .pairingChanged else {
+          throw LokalTransferError.invalidTransition
         }
         try self.journal.clearPause(scope)
         self.generation += 1
