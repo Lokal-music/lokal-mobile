@@ -918,11 +918,10 @@ refused without inventing provenance or leaving submission permanently blocked.
 Three complete portable native rounds pass; a final round also checks the added
 publication flag. All 27 focused Dart transport contracts pass, including four
 cleanup codec/channel checks; fatal-info analysis and workflow lint are clean.
-These native/Dart changes are later than build85 and still need Apple SDK/bridge
-execution. Claims/guards do not yet perform the full root cleanup sequence:
-runtime resolution/finalization, actual Isar cleanup integration, Isar-only
-orphan retirement and clear/unpair/UI barriers remain required. Product native
-import/upload remain false.
+These foundations were subsequently qualified in PR341/build86: both real iOS16
+SDK/bridge checks, 20 Mac Foundation coordination rounds and complete installed
+iOS18.6/26 suites. They do not include the later full root cleanup sequence.
+Product native import/upload remain false.
 
 The cleanup request now has its own strict three-field Swift decoder. A shared
 JSON fixture checks the exact Dart request shape and actual native reply keys;
@@ -932,8 +931,7 @@ pass the shared fixture. The installed-app probe additionally requires a valid
 three-field missing-custody request to reach runtime (`TRANSFER_CHANGED`), then
 checks ordinary missing-job classification. The separate actual HTTP native
 contract proves a fresh writer can be granted after cleanup abort. A malformed
-request must fail decoding instead. Installed acceptance of this new probe is
-pending the next Apple run.
+request must fail decoding instead. Build86 passes this probe on both runtimes.
 
 ### Runtime/root finalization continuation (outside PR341/build86)
 
@@ -950,8 +948,8 @@ The root now resumes known-custody cleanup, preserves committed history (includi
 deleted Songs), and recovers native-resolution or finalization reply loss without
 repeating file handling. Current-revision committed imports use the existing
 receipt-only completion route. Missing Isar reservations and contradictory states
-remain nondestructively blocked. Isar-only orphans without native custody still
-need a separate drained bookkeeping witness; they do not authorize public cleanup.
+remain nondestructively blocked. Isar-only orphans use the separate drained
+bookkeeping witness below; they do not authorize public cleanup.
 
 Foreground recovery is coalesced. Mutation/disposal retire the app epoch and
 active cleanup token, then await old startup/foreground/file work before a caller
@@ -966,5 +964,29 @@ replies across reopen, edited-file preservation, deleted committed history and
 coalesced foreground/mutation retirement. Their native port/file ownership is
 explicitly a fixture. All 28 focused transport checks and fatal-info analysis
 pass. This later driver/root integration has no Apple SDK/installed acceptance
-yet. Native product import/upload remain false; owned uploads/progress, orphan,
+yet. Native product import/upload remain false; owned uploads/progress,
 clear/unpair/CUE and OS lifecycle work remain release gates.
+
+### Older no-custody reservation recovery (outside build86)
+
+An Isar preparation can commit before native custody exists. After cancellation,
+the root now obtains a distinct `orphanCleanup` permission only after native
+publication is fenced, earlier file work and runtime callbacks drain, a newer
+native job revision is found, and the old revision has no custody. A missing
+native job alone is refused. Existing custody must use normal tracked recovery.
+This permission cannot pass writer, reconciliation or file-cleanup guards and
+returns no target/source path, marker or deletion authority. Shared Swift/Dart
+fixtures freeze its four-field request and reply keys.
+
+The actual Isar transaction re-reads the exact receipt ID, operation, Song ID,
+scope, source, relative suffix and declared integrity. It checks the direct
+bookkeeping guard before and after the write, then retires only prepared/retiring
+bookkeeping. A stale pending page cannot retire a committed receipt. No Song or
+public file is changed. Root mutation/disposal also drains this separate lease.
+Actual Isar tests cover late-guard rollback, mismatched source refusal, committed
+history preservation and both process-exit edges; the suite now has fourteen
+receipt/media/retirement commit-exit boundaries. The actual root harness verifies
+reopen recovery and preserves an unrelated file at the target path without
+calling file cleanup. Its native port remains an explicit fixture; portable
+native HTTP/ownership/codec checks are separate evidence, with Apple execution
+still pending for this source.

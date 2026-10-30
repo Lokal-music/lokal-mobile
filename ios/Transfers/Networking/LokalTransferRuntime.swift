@@ -57,6 +57,15 @@ struct LokalTransferResolvedCleanup: Encodable, Equatable, Sendable {
   let resolution: LokalTransferImportResolution
 }
 
+struct LokalTransferOrphanCleanupClaim: Encodable, Sendable {
+  let permission = "orphanCleanup"
+  let id: String
+  let revision: Int
+  let songID: Int64
+  let leaseID, clientID: String
+  let currentJob: LokalTransferJob
+}
+
 struct LokalTransferImportWork: Encodable, Sendable {
   let job: LokalTransferJob
   let songID: Int64
@@ -800,6 +809,45 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
                 leaseID: lease.id, clientID: request.clientID, targetRelativePath: target,
                 currentRevision: current.revision, currentPhase: current.phase,
                 publicationRecorded: work.publication != nil, resolution: work.resolution)))
+            } catch {
+              self.importOwnership.abortCleanup(ticket)
+              reply(.failure(error))
+            }
+          }
+        }
+      } catch {
+        self.importOwnership.abortCleanup(ticket)
+        reply(.failure(error))
+      }
+    }
+  }
+
+  /// Absence is bookkeeping evidence only, after the publication fence and
+  /// file/runtime callback barrier. No missing-job assumption or file deletion.
+  func claimOrphanCleanup(_ request: LokalTransferProtocol.ImportOrphanClaim,
+                          ticket: LokalTransferImportOwnership.Ticket,
+                          reply: @escaping LokalTransferCompletion<LokalTransferOrphanCleanupClaim>) {
+    queue.async {
+      do {
+        guard request.clientID == ticket.owner.clientID, request.songID > 0,
+              request.songID < Int64.max, self.reconciled,
+              !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
+        try self.importOwnership.validateTicket(ticket)
+        self.fileQueue.async {
+          self.queue.async {
+            do {
+              try self.importOwnership.validateTicket(ticket)
+              guard self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+                    let current = self.jobs[request.id], current.revision > request.revision,
+                    current.direction == .download,
+                    current.identity.localSongID == nil || current.identity.localSongID == String(request.songID),
+                    try self.journal.importCustody(id: request.id, revision: request.revision) == nil else {
+                throw LokalTransferError.staleRevision
+              }
+              let lease = try self.importOwnership.claimOrphanCleanup(ticket, current: current,
+                retiringRevision: request.revision)
+              reply(.success(LokalTransferOrphanCleanupClaim(id: request.id, revision: request.revision,
+                songID: request.songID, leaseID: lease.id, clientID: request.clientID, currentJob: current)))
             } catch {
               self.importOwnership.abortCleanup(ticket)
               reply(.failure(error))

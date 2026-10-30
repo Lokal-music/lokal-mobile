@@ -8,6 +8,7 @@ import '../data/entities/network_server_entity.dart';
 import '../data/entities/song_entity.dart';
 import '../models/ios_transfer_import.dart';
 import '../models/ios_transfer_models.dart';
+import '../models/ios_transfer_orphan.dart';
 
 enum IosTransferImportConflict {
   pairingChanged,
@@ -585,6 +586,72 @@ class IosTransferImportStore {
     });
     await _boundary('retiring:afterCommit');
     return result;
+  }
+
+  /// Native has fenced publication, drained its file worker and proved that
+  /// this older revision has no custody. Retire only the exact private row;
+  /// never infer file ownership, remove a file, or change a Song here.
+  Future<void> retireOrphanReservation(
+    IosTransferPendingReservation pending,
+    IosTransferOrphanLease lease, {
+    required bool Function() isCurrent,
+    required Future<void> Function() validateBookkeepingAuthority,
+  }) async {
+    final job = lease.currentJob, identity = lease.currentJob.intent.identity;
+    job.intent.validate(submission: true);
+    if (pending.operationKey != lease.key.value ||
+        pending.songId != lease.songId) {
+      _fail(IosTransferImportConflict.receiptMismatch);
+    }
+    await isar.writeTxn(() async {
+      _current(isCurrent);
+      await validateBookkeepingAuthority();
+      final row = await isar.iosTransferReceiptEntitys.get(pending.id);
+      final path = pending.relativePath;
+      if (row == null ||
+          row.schemaVersion != 1 ||
+          row.operationKey != pending.operationKey ||
+          row.jobId != lease.key.jobId ||
+          row.revision != lease.key.revision ||
+          row.localSongId != pending.songId ||
+          row.relativePath != path ||
+          row.committedAt != null ||
+          !{'prepared', 'retiring', 'retired'}.contains(row.state) ||
+          (pending.retiring && row.state == 'prepared') ||
+          row.serverId != identity.localServerId ||
+          row.desktopId != identity.scope.desktopId ||
+          row.desktopUserId != identity.desktopUserId ||
+          row.pairingId != identity.scope.pairingId ||
+          row.origin != identity.scope.origin ||
+          row.sourceId != identity.sourceId ||
+          row.bytes < 1 ||
+          row.bytes >= 9223372036854775807 ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(row.sha256) ||
+          (job.intent.expectedBytes != null &&
+              row.bytes != job.intent.expectedBytes) ||
+          (job.intent.expectedSha256 != null &&
+              row.sha256 != job.intent.expectedSha256) ||
+          utf8.encode(path).length > 512 ||
+          path.split('/').length != 2 ||
+          !path.startsWith('Desktop Copies/') ||
+          path.split('/').last.startsWith('.') ||
+          path.contains('\\') ||
+          RegExp(r'[\x00-\x1f\x7f-\x9f]').hasMatch(path) ||
+          !path.endsWith(
+            ' - ${row.jobId}-r${row.revision}.${job.intent.metadata.fileExtension}',
+          )) {
+        _fail(IosTransferImportConflict.receiptMismatch);
+      }
+      _current(isCurrent);
+      if (row.state != 'retired') {
+        row.state = 'retired';
+        await isar.iosTransferReceiptEntitys.put(row);
+      }
+      await _boundary('orphan:beforeCommit');
+      await validateBookkeepingAuthority();
+      _current(isCurrent);
+    });
+    await _boundary('orphan:afterCommit');
   }
 
   /// Call after native cancellation/owned-file cleanup has drained. A committed

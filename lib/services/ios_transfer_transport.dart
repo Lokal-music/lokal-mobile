@@ -11,6 +11,7 @@ import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_import.dart';
 import '../models/ios_transfer_recovery.dart';
 import '../models/ios_transfer_cleanup.dart';
+import '../models/ios_transfer_orphan.dart';
 import 'link/link_protocol.dart' show linkUuid;
 import 'ios_transfer_coordinator_port.dart';
 
@@ -260,6 +261,45 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
   Future<void> releaseImportCleanup(IosTransferCleanupLease lease) async {
     if (await _importCall('releaseImport', lease.control) != true) {
       throw const FormatException('Invalid native cleanup release response.');
+    }
+  }
+
+  @override
+  Future<IosTransferOrphanLease> claimOrphanCleanup(
+    IosTransferWorkCursor key, {
+    required int songId,
+  }) async {
+    if (songId < 1 || songId >= 9223372036854775807) {
+      throw const FormatException('Invalid orphan Song identity.');
+    }
+    final lease = IosTransferOrphanLease.fromJson(
+      await _importCall('claimOrphanCleanup', {
+        'id': key.jobId,
+        'revision': key.revision,
+        'songID': songId,
+      }),
+    );
+    if (lease.clientId != _subscription ||
+        lease.key.value != key.value ||
+        lease.songId != songId) {
+      throw StateError(
+        'Orphan recovery belongs to another reservation or client.',
+      );
+    }
+    return lease;
+  }
+
+  @override
+  Future<void> validateOrphanCleanup(IosTransferOrphanLease lease) async {
+    if (await _importCall('validateOrphanCleanup', lease.control) != true) {
+      throw const FormatException('Invalid orphan recovery guard response.');
+    }
+  }
+
+  @override
+  Future<void> releaseOrphanCleanup(IosTransferOrphanLease lease) async {
+    if (await _importCall('releaseImport', lease.control) != true) {
+      throw const FormatException('Invalid orphan recovery release response.');
     }
   }
 

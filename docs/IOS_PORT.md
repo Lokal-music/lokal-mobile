@@ -1,6 +1,6 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
-Status: implementation and hosted native validation, 29 October 2026 (UTC).
+Status: implementation and hosted native validation, 30 October 2026 (Europe/Paris).
 Release scope updated 29 October 2026 (Europe/Paris): **iOS Home Screen widgets
 are excluded at the user's request.** WidgetKit rendering, App Group delivery
 and widget actions are no longer release gates. The archived research workflow
@@ -53,20 +53,31 @@ The unsigned build85 IPA SHA-256 is
 All 2,355 exported source files, 34 arm64 binaries and 26 matching native symbol
 bundles were independently checked against its frozen source tree.
 
-Newer source detects Isar-only orphan reservations, protects durable retiring
-rows, and adds an unexposed Apple-coordinated abandonment helper. Its portable
-and actual Isar contracts pass; its Darwin cleanup contracts remain unexecuted.
-It also ports #336 genre reconciliation and #337 Soundtrack consolidation, with
-55 focused Link/genre checks and clean targeted analysis. These changes are
-outside frozen PR338/build85. Product native import/upload stays disabled.
-The next release work is bundled-media acceptance, integrated cleanup authority,
-clear/unpair/deletion/CUE barriers, owned uploads and persisted progress, followed
-by OS suspension/relaunch acceptance. See
+Frozen [PR341](https://github.com/lokal-music/lokal-mobile/pull/341), tree
+`f60680092e77bd33913a74d1a08f8fc915990636`, is independently qualified as
+build86. Both complete installed iOS18.6/26 suites pass on their first attempts,
+along with 1,150 Flutter checks. Native run11 passes both real iOS16 SDK/Flutter
+bridge checks and 20 actual Mac Foundation coordinated-abandonment rounds.
+Build86 includes #336 genre reconciliation and #337 Soundtrack consolidation,
+durable retiring receipts, private-part cleanup and separate cleanup claims.
+The installed cleanup probe verifies decoding/runtime refusal classification;
+it does not run the later complete root cleanup driver. All 2,360 exported source
+files, 34 arm64 binaries and 26 matching native symbol bundles were checked.
+The unsigned build86 IPA SHA-256 is
+`398d7b2f4d17de1f143bcb33c92673e379a2bcad669c9b13746b58dd94c7159e`.
+
+Later source connects runtime resolution/finalization to actual root Isar
+retirement and adds bookkeeping-only recovery for older no-custody reservations.
+Its host contracts are separate from build86 acceptance; this continuation still
+needs its own Apple execution. Product native import/upload stays disabled.
+The next release work is queued submission and clear/unpair/deletion/CUE barriers,
+owned uploads and persisted progress, followed by OS suspension/relaunch
+acceptance. See
 [the publication sequence](IOS_TRANSFERS.md#tracked-publication-foundation)
 for the implemented boundary and remaining gates. Home Screen widgets remain
 excluded.
 
-**This source is not a finalized release.** Build85 is the current independently
+**This source is not a finalized release.** Build86 is the current independently
 verified engineering package, described above. Earlier build82 covers #311,
 including native private import
 ownership and metadata-cache acceptance. Both complete iOS 18.6 and 26 suites

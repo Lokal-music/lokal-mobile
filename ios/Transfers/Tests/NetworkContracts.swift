@@ -120,6 +120,7 @@ func runNetworkContracts(origin: String, length: Int64, checksum: String) throws
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
   try runCleanupResolutionContracts(origin: origin, length: length, checksum: checksum)
+  try runOrphanCleanupContracts(origin: origin, length: length, checksum: checksum)
   let manager = FileManager.default
   let root = manager.temporaryDirectory.resolvingSymlinksInPath()
     .appendingPathComponent("lokal-native-network-" + UUID().uuidString)
@@ -440,6 +441,63 @@ private final class PublicationGate: @unchecked Sendable {
 
 /// The actual native runtime, HTTP-retained WAV, ownership registry, serial file
 /// worker and journal. This still does not acknowledge media or an Isar Song.
+private func runOrphanCleanupContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath()
+    .appendingPathComponent("lokal-orphan-cleanup-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? manager.removeItem(at: root) }
+  let ownership = LokalTransferImportOwnership()
+  let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token")
+  let runtime = try LokalTransferRuntime(container: root, importOwnership: ownership, credentials: { authorization })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+  }
+  let job = try LokalTransferJob(direction: .download,
+    identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: "import-fixture", localSongID: "42", origin: origin),
+    metadata: LokalTransferMetadata(title: "Orphan", artist: "Native fixture", album: nil, fileExtension: "wav"),
+    nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  let _: LokalTransferSummary = try native { runtime.enqueue([job], reply: $0) }
+  _ = try awaitJob(runtime, id: job.id, phase: [.downloaded])
+  let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+  let request = LokalTransferProtocol.ImportOrphanClaim(id: job.id, revision: 1, songID: 42, clientID: owner.clientID)
+  func claim(_ request: LokalTransferProtocol.ImportOrphanClaim) throws -> LokalTransferOrphanCleanupClaim {
+    let ticket = try ownership.beginCleanup(ownership.capture(owner))
+    return try native { runtime.claimOrphanCleanup(request, ticket: ticket, reply: $0) }
+  }
+  try rejects("current ready job is not an orphan") { _ = try claim(request) }
+  let cancelled: LokalTransferJob = try native { runtime.cancel(id: job.id, revision: 1, reply: $0) }
+  let journal = try LokalTransferJournal(container: root)
+  let before = try journal.snapshot()
+  let lease = try claim(request)
+  try require(lease.currentJob == cancelled && lease.revision == 1 && lease.songID == 42,
+    "actual native no-custody barrier binds an older revision to the live cancelled job")
+  try ownership.validateOrphanCleanup(owner, jobID: job.id, revision: 1, leaseID: lease.leaseID)
+  try rejects("orphan runtime reply cannot authorize tracked file resolution") {
+    _ = try ownership.cleanupCancellation(owner, jobID: job.id, revision: 1, leaseID: lease.leaseID)
+  }
+  let fixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
+    URL(fileURLWithPath: "test/fixtures/ios_transfer_orphan_v1.json"))) as! [String: Any]
+  let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(lease)) as! [String: Any]
+  try require(Set(encoded.keys) == Set(fixture["replyKeys"] as! [String]) &&
+    encoded["permission"] as? String == fixture["permission"] as? String,
+    "runtime orphan reply matches shared codec without paths or file provenance")
+  try require(journal.snapshot().generation == before.generation && journal.snapshot().custodies.isEmpty,
+    "orphan claim writes no journal history or file custody")
+  let control = LokalTransferProtocol.ImportLease(id: job.id, revision: 1,
+    leaseID: lease.leaseID, clientID: owner.clientID)
+  try ownership.cancel(owner, jobID: job.id, revision: 1, leaseID: lease.leaseID)
+  let _: Bool = try native { runtime.releaseImport(control, owner: owner, reply: $0) }
+  try rejects("a missing native job is not proof of safe orphan retirement") {
+    _ = try claim(LokalTransferProtocol.ImportOrphanClaim(id: UUID().uuidString.lowercased(), revision: 1,
+      songID: 42, clientID: owner.clientID))
+  }
+  print("Native orphan bookkeeping contracts passed: actual cancelled job, drained no-custody claim, current/missing-job refusal, separate guard and shared codec. No file cleanup or Isar claim.")
+}
+
 private func runCleanupResolutionContracts(origin: String, length: Int64, checksum: String) throws {
   let manager = FileManager.default
   for mode in [LokalTransferImportResolution.Mode.committed, .abandoned] {
@@ -484,6 +542,16 @@ private func runCleanupResolutionContracts(origin: String, length: Int64, checks
       let _: LokalTransferPublishedImport = try native { runtime.publishImport(request, owner: owner, reply: $0) }
     }
     let target = music.appendingPathComponent(writer.targetRelativePath)
+    if mode == .committed {
+      let orphanTicket = try ownership.beginCleanup(ownership.capture(owner))
+      let orphanRequest = LokalTransferProtocol.ImportOrphanClaim(id: job.id, revision: 1,
+        songID: 42, clientID: owner.clientID)
+      try rejects("cancelled job with actual frozen custody cannot claim bookkeeping-only absence") {
+        let _: LokalTransferOrphanCleanupClaim = try native {
+          runtime.claimOrphanCleanup(orphanRequest, ticket: orphanTicket, reply: $0)
+        }
+      }
+    }
     let ticket = try ownership.beginCleanup(ownership.capture(owner))
     let request = LokalTransferProtocol.ImportCleanupClaim(id: job.id, revision: 1, clientID: owner.clientID)
     let cleanup: LokalTransferImportCleanupClaim = try native { runtime.claimImportCleanup(request, ticket: ticket, reply: $0) }

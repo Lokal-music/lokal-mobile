@@ -221,7 +221,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["drainImports", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -266,6 +266,14 @@ final class LokalTransferBridge {
           host.withRuntime({ runtime in runtime.importCandidatesPage(request, ticket: ticket) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
         }
+      } else if call.method == "claimOrphanCleanup" {
+        let request = try LokalTransferProtocol.importOrphanClaim(data.data)
+        guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
+        guard request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ownership = host.importOwnership
+        let ticket = try ownership.beginCleanup(ownership.capture(owner))
+        host.withRuntime({ runtime in runtime.claimOrphanCleanup(request, ticket: ticket) { reply.encode($0) } },
+                         unavailable: { ownership.abortCleanup(ticket); reply.failure($0) })
       } else if call.method == "claimImportCleanup" {
         let request = try LokalTransferProtocol.importCleanupClaim(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
@@ -320,6 +328,10 @@ final class LokalTransferBridge {
             revision: request.revision, leaseID: request.leaseID)
           host.withRuntime({ runtime in runtime.releaseImport(request, owner: owner) { reply.encode($0) } },
                            unavailable: { reply.failure($0) })
+        } else if call.method == "validateOrphanCleanup" {
+          try host.importOwnership.validateOrphanCleanup(owner, jobID: request.id,
+            revision: request.revision, leaseID: request.leaseID)
+          reply.encode(.success(true))
         } else if call.method == "validateImportCleanup" {
           try host.importOwnership.validateCleanup(owner, jobID: request.id,
             revision: request.revision, leaseID: request.leaseID)

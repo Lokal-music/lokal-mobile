@@ -111,6 +111,17 @@ Future<void> probeIosTransferTransport(
       'revision': 1,
       'reconcileOnly': false,
     }, 'TRANSFER_MISSING');
+    await rejectedControl('claimOrphanCleanup', {
+      'id': missingJobId,
+      'revision': 1,
+      'songID': 42,
+      'targetRelativePath': '/caller/injected.wav',
+    }, 'INVALID_TRANSFER_REQUEST');
+    await rejectedControl('claimOrphanCleanup', {
+      'id': missingJobId,
+      'revision': 1,
+      'songID': 42,
+    }, 'TRANSFER_CHANGED');
     await rejectedControl('claimImport', {
       'id': missingJobId,
       'revision': 1,
@@ -137,6 +148,7 @@ Future<void> probeIosTransferTransport(
       'validateImport',
       'validateImportReconciliation',
       'validateImportCleanup',
+      'validateOrphanCleanup',
       'releaseImport',
     ]) {
       await rejectedControl(method, {
@@ -174,6 +186,8 @@ Future<void> probeIosTransferTransport(
       'cleanup_claim_three_field_codec_reaches_runtime': true,
       'cleanup_claim_injection_rejected': true,
       'ordinary_claim_reaches_missing_job_after_cleanup_refusal': true,
+      'orphan_claim_four_field_codec_reaches_runtime': true,
+      'orphan_claim_path_injection_rejected': true,
       'background_daemon_or_library_import_acceptance': false,
     };
   } finally {

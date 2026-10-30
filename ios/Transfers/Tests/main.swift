@@ -263,6 +263,24 @@ do {
     }
   }
   let recoveryRequest: [String: Any] = ["limit": 2, "clientID": contractClient]
+  let orphanFixture = try JSONSerialization.jsonObject(with: Data(contentsOf:
+    URL(fileURLWithPath: "test/fixtures/ios_transfer_orphan_v1.json"))) as! [String: Any]
+  let orphanClaim = orphanFixture["claim"] as! [String: Any]
+  let decodedOrphan = try LokalTransferProtocol.importOrphanClaim(JSONSerialization.data(withJSONObject: orphanClaim))
+  try require(decodedOrphan.revision == 1 && decodedOrphan.songID == 42 &&
+    decodedOrphan.clientID == contractClient, "Swift decodes the shared four-field bookkeeping claim")
+  for field in ["sourcePath", "targetRelativePath", "copyNonce", "headers", "permission"] {
+    var row = orphanClaim; row[field] = "caller"
+    try rejects("orphan claim accepts no file authority") {
+      _ = try LokalTransferProtocol.importOrphanClaim(JSONSerialization.data(withJSONObject: row))
+    }
+  }
+  for value: Any in [false, 0, -1, 1.5, "42", Int64.max] {
+    var row = orphanClaim; row["songID"] = value
+    try rejects("orphan Song identity must be a bounded positive integer") {
+      _ = try LokalTransferProtocol.importOrphanClaim(JSONSerialization.data(withJSONObject: row))
+    }
+  }
   try require(LokalTransferProtocol.importWorkPage(JSONSerialization.data(withJSONObject: recoveryRequest)).limit == 2,
     "bounded client-bound recovery request accepted")
   for invalid: Any in [false, 0, 101, "2", 1.5] {

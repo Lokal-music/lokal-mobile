@@ -42,6 +42,12 @@ enum LokalTransferProtocol {
     let revision: Int
     let clientID: String
   }
+  struct ImportOrphanClaim: Decodable, Sendable {
+    let id: String
+    let revision: Int
+    let songID: Int64
+    let clientID: String
+  }
   struct ImportPublication: Decodable, Sendable {
     let id: String
     let revision: Int
@@ -110,6 +116,16 @@ enum LokalTransferProtocol {
     let value = try object(ImportWorkPage.self, data, keys: ["after", "limit", "clientID"])
     guard (1...100).contains(value.limit),
           value.after == nil || LokalTransferTaskBinding(value.after!) != nil,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
+      throw LokalTransferError.invalidRecord
+    }
+    return value
+  }
+
+  static func importOrphanClaim(_ data: Data) throws -> ImportOrphanClaim {
+    let value = try object(ImportOrphanClaim.self, data, keys: ["id", "revision", "songID", "clientID"])
+    guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil,
+          value.songID > 0, value.songID < Int64.max,
           UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else {
       throw LokalTransferError.invalidRecord
     }

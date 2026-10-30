@@ -39,7 +39,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
     let owner: Owner
     fileprivate let barrier: UUID
   }
-  enum Permission: Equatable, Sendable { case write, reconcileOnly, cleanup }
+  enum Permission: Equatable, Sendable { case write, reconcileOnly, cleanup, orphanCleanup }
   struct Lease: Sendable {
     let id: String
     let jobID: String
@@ -142,29 +142,44 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
   func claim(_ ticket: Ticket, job: LokalTransferJob,
              permission: Permission) throws -> Lease {
     try job.validate()
-    guard job.direction == .download,
+    guard permission != .orphanCleanup, job.direction == .download,
           [.validating, .importing].contains(job.phase) ||
             (job.phase == .complete && permission == .reconcileOnly) else {
       throw LokalTransferError.invalidTransition
     }
+    return try grant(ticket, job: job, revision: job.revision, permission: permission)
+  }
+
+  /// Bookkeeping only. Runtime proves that this older revision has no native
+  /// custody after draining file work. Never accepted by file cleanup guards.
+  func claimOrphanCleanup(_ ticket: Ticket, current: LokalTransferJob,
+                          retiringRevision: Int) throws -> Lease {
+    try current.validate()
+    guard current.direction == .download, retiringRevision > 0,
+          current.revision > retiringRevision else { throw LokalTransferError.invalidTransition }
+    return try grant(ticket, job: current, revision: retiringRevision, permission: .orphanCleanup)
+  }
+
+  private func grant(_ ticket: Ticket, job: LokalTransferJob, revision: Int,
+                     permission: Permission) throws -> Lease {
     let scope = try normalized(LokalTransferScope(desktopID: job.identity.desktopID,
       origin: job.identity.origin, pairingID: job.identity.pairingID))
     return try locked {
       guard ticket.barrier == barrier, owner == ticket.owner else {
         throw LokalTransferError.staleRevision
       }
-      guard cleanupPending == (permission == .cleanup) else {
+      guard cleanupPending == (permission == .cleanup || permission == .orphanCleanup) else {
         throw LokalTransferError.invalidTransition
       }
       if let active {
-        guard active.jobID == job.id, active.revision == job.revision,
+        guard active.jobID == job.id, active.revision == revision,
               active.owner == ticket.owner, active.scope == scope,
               active.permission == permission else { throw LokalTransferError.invalidTransition }
         try active.cancellation.check()
         return active
       }
       let lease = Lease(id: UUID().uuidString.lowercased(), jobID: job.id,
-        revision: job.revision, permission: permission,
+        revision: revision, permission: permission,
         cancellation: LokalTransferCopyCancellation(), owner: ticket.owner, scope: scope)
       active = lease
       return lease
@@ -185,7 +200,7 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
                 requiresWrite: Bool) throws {
     try locked {
       let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
-      guard lease.permission != .cleanup,
+      guard [.write, .reconcileOnly].contains(lease.permission),
             !requiresWrite || lease.permission == .write else {
         throw LokalTransferError.invalidTransition
       }
@@ -220,6 +235,16 @@ final class LokalTransferImportOwnership: @unchecked Sendable {
       guard lease.permission == .cleanup else { throw LokalTransferError.invalidTransition }
       try lease.cancellation.check()
       return lease.cancellation
+    }
+  }
+
+  /// Direct Isar guard, deliberately returns no filesystem cancellation token.
+  func validateOrphanCleanup(_ owner: Owner, jobID: String, revision: Int,
+                             leaseID: String) throws {
+    try locked {
+      let lease = try matching(owner, jobID: jobID, revision: revision, leaseID: leaseID)
+      guard lease.permission == .orphanCleanup else { throw LokalTransferError.invalidTransition }
+      try lease.cancellation.check()
     }
   }
 

@@ -155,6 +155,32 @@ func runImportOwnershipContracts(job: LokalTransferJob) throws {
   try rejects("aborted cleanup cannot later claim a lease") {
     _ = try registry.claim(aborted, job: job, permission: .cleanup)
   }
+  var retired = job
+  try retired.cancel(nowMs: retired.updatedMs + 1)
+  let orphanTicket = try registry.beginCleanup(registry.capture(third))
+  try rejects("orphan cannot retire a current revision") {
+    _ = try registry.claimOrphanCleanup(orphanTicket, current: job, retiringRevision: job.revision)
+  }
+  let orphan = try registry.claimOrphanCleanup(orphanTicket, current: retired, retiringRevision: job.revision)
+  try registry.validateOrphanCleanup(third, jobID: job.id, revision: job.revision, leaseID: orphan.id)
+  try require(registry.claimOrphanCleanup(orphanTicket, current: retired,
+    retiringRevision: job.revision).id == orphan.id, "lost orphan claim coalesces")
+  for write in [true, false] {
+    try rejects("bookkeeping authority cannot write or acknowledge a recording") {
+      try registry.validate(third, jobID: job.id, revision: job.revision,
+        leaseID: orphan.id, requiresWrite: write)
+    }
+  }
+  try rejects("bookkeeping authority cannot obtain a file cleanup token") {
+    _ = try registry.cleanupCancellation(third, jobID: job.id, revision: job.revision, leaseID: orphan.id)
+  }
+  try rejects("bookkeeping authority cannot obtain a publication token") {
+    _ = try registry.writerCancellation(third, jobID: job.id, revision: job.revision, leaseID: orphan.id)
+  }
+  registry.revokeAll()
+  try rejects("clear retires an orphan Isar guard immediately") {
+    try registry.validateOrphanCleanup(third, jobID: job.id, revision: job.revision, leaseID: orphan.id)
+  }
   let last = try registry.claim(registry.capture(third), job: job, permission: .write)
   try rejects("a publication writer cannot authorize abandonment") {
     try registry.validateCleanup(third, jobID: job.id, revision: job.revision, leaseID: last.id)

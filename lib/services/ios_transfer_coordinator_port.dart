@@ -3,6 +3,7 @@ import '../models/ios_transfer_cleanup.dart';
 import '../data/entities/ios_transfer_receipt_entity.dart';
 import '../models/ios_transfer_models.dart';
 import '../models/ios_transfer_recovery.dart';
+import '../models/ios_transfer_orphan.dart';
 
 /// Pure app boundary so coordinator acceptance can use the actual Isar core
 /// without replacing it with a Flutter storage mock. Native acceptance and
@@ -51,6 +52,12 @@ abstract interface class IosTransferCoordinatorPort {
     required IosTransferReceiptEntity receipt,
   });
   Future<void> releaseImportCleanup(IosTransferCleanupLease lease);
+  Future<IosTransferOrphanLease> claimOrphanCleanup(
+    IosTransferWorkCursor key, {
+    required int songId,
+  });
+  Future<void> validateOrphanCleanup(IosTransferOrphanLease lease);
+  Future<void> releaseOrphanCleanup(IosTransferOrphanLease lease);
 }
 
 typedef IosTransferMediaReader = Future<IosTransferMediaInfo> Function(
