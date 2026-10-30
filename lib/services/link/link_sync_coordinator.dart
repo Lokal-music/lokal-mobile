@@ -249,7 +249,12 @@ class LinkSyncCoordinator {
       for (final item in accepted) {
         // The journal always retains remote-only plays. Local recent history
         // is updated only for bounded, matching phone songs.
-        final track = item['track'];
+        final rawTrack = item['track'];
+        final track = rawTrack is Map
+            ? rawTrack
+            : item['track_json'] is String
+                ? jsonDecode(item['track_json'] as String)
+                : null;
         if (track is! Map) continue;
         final wire = Map<String, dynamic>.from(track);
         final title = wire['title'] as String? ?? '';
