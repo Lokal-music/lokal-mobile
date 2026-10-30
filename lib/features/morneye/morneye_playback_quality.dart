@@ -100,10 +100,13 @@ String resolveMorneyeRequestQuality({
 String? explicitMorneyePlaybackTier({
   required bool atmosRequested,
   String? provider,
+  String? atmosCodec,
 }) => !atmosRequested
     ? null
     : (provider?.toLowerCase().startsWith('amazon') == true
-          ? 'ac4'
+          // A track explicitly advertised as E-AC-3 JOC must never
+          // accidentally request the unrelated AC-4 presentation.
+          ? (atmosCodec == 'eac3-joc' ? 'eac3' : 'ac4')
           : 'DOLBY_ATMOS');
 
 /// Amazon's search rows usually omit per-track codec and available audio
