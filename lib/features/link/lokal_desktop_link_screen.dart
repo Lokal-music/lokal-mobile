@@ -330,14 +330,22 @@ class _LokalDesktopLinkScreenState
     final origin =
         qr?.origin.toString() ??
         (address.contains('://') ? address : 'http://$address');
-    await ref
-        .read(lokalRemoteControllerProvider.notifier)
-        .pairDesktop(
-          origin: origin,
-          code: qr?.code ?? _code.text,
-          expectedDesktopId: qr?.desktopId,
-          syncTheme: _theme,
-        );
+    final expected = await ref
+        .read(lokalRemoteCredentialsStoreProvider)
+        .read();
+    if (!mounted) return;
+    await IosTransferRoot.withPairingRetirement(
+      context,
+      expected: expected,
+      mutation: () => ref
+          .read(lokalRemoteControllerProvider.notifier)
+          .pairDesktop(
+            origin: origin,
+            code: qr?.code ?? _code.text,
+            expectedDesktopId: qr?.desktopId,
+            syncTheme: _theme,
+          ),
+    );
     _code.clear();
     await _saveOption('send_downloads', _sendDownloads);
   });
