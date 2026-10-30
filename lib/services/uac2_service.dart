@@ -2402,6 +2402,13 @@ Future<void> stopPriorityAnchor() async {
       return false;
     }
 
+    // Native Android USB mixer retains Android's ownership of the interface.
+    // Do not register a libusb session when that transport is selected.
+    if (await _preferencesService.getAudioEnginePreference() ==
+        AudioEnginePreference.androidMixerUsb) {
+      return true; // Native mixer negotiates on the next track.
+    }
+
     if (enabled) {
       final preferredDevice = await _resolvePreferredAndroidActivationDevice(
         null,
