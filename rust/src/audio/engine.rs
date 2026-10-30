@@ -1458,10 +1458,12 @@ pub fn create_audio_engine(
 ) -> Result<AudioEngineHandle, String> {
     let device_profile = current_device_profile();
 
+    // Android 14's framework mixer is separate from the libusb-owned DAC.
+    let android_mixer_requested = crate::audio::android_mixer::requested();
     #[cfg(feature = "uac2")]
     let debug_state = android_direct_debug_state();
     #[cfg(feature = "uac2")]
-    let will_attempt_usb = debug_state.registered;
+    let will_attempt_usb = debug_state.registered && !android_mixer_requested;
     #[cfg(not(feature = "uac2"))]
     let will_attempt_usb = false;
 
@@ -1533,7 +1535,9 @@ pub fn create_audio_engine(
     let usb_dsd_pcm = will_attempt_usb && dsd_rate.is_some()
         && effective_dsd_mode == crate::audio::dsd_engine::dsd::DsdOutputMode::PcmDecimation;
 
-    let desired_strategy = if will_attempt_usb {
+    let desired_strategy = if android_mixer_requested && dsd_rate.is_none() {
+        OutputStrategy::MixerBitPerfect
+    } else if will_attempt_usb {
         let track_info = if usb_dsd_pcm {
             TrackInfo::pcm(requested_sample_rate, ANDROID_DIRECT_CHANNELS)
         } else if let Some(rate) = dsd_rate {
@@ -1763,6 +1767,7 @@ pub fn create_audio_engine(
         // override after conversion must not restore PCM passthrough.
         OutputStrategy::UsbDirect if usb_dsd_pcm => PipelineMode::Dsp,
         OutputStrategy::UsbDirect
+        | OutputStrategy::MixerBitPerfect
         | OutputStrategy::DapNative
         | OutputStrategy::DsdNative
         | OutputStrategy::UsbDsdNative => PipelineMode::Passthrough,
@@ -1811,6 +1816,8 @@ pub fn create_audio_engine(
     #[cfg(target_os = "android")]
     let mut audiotrack_backend = None;
     let mut dap_audiotrack_error: Option<String> = None;
+    let mut android_mixer_backend = None;
+    let mut android_mixer_error: Option<String> = None;
 
     let mut final_sample_rate = requested_sample_rate;
     let mut output_runtime = build_output_runtime_state(
@@ -2007,6 +2014,35 @@ pub fn create_audio_engine(
         }
     }
 
+    // The framework USB mixer has its own AudioTrack, not an Oboe shared
+    // stream: only a verified API 34 mixer, format and USB route can enable
+    // passthrough. Failed negotiation must revert to ordinary managed audio.
+    if desired_strategy == OutputStrategy::MixerBitPerfect {
+        match crate::audio::android_mixer::AndroidMixerBackend::start(
+            Arc::clone(&callback_data_clone),
+            event_tx_clone.clone(),
+            requested_sample_rate,
+            channels,
+        ) {
+            Ok(backend) => {
+                callback_data.set_pipeline_mode(PipelineMode::Passthrough);
+                output_runtime = build_output_runtime_state(
+                    OutputStrategy::MixerBitPerfect,
+                    OutputVerification::verify(requested_sample_rate, requested_sample_rate, true, true),
+                    false,
+                    false,
+                );
+                output_runtime.active_audio_api = Some("android-mixer-api34".to_string());
+                output_signature = format!("android-mixer-bit-perfect:{}", requested_sample_rate);
+                android_mixer_backend = Some(backend);
+            }
+            Err(error) => {
+                log::warn!("[USB-MIXER] {}. Falling back to Android-managed output.", error);
+                android_mixer_error = Some(error);
+            }
+        }
+    }
+
     // DapNative PCM: mixer-bypassing direct paths first, managed fallback last.
     #[cfg(target_os = "android")]
     if desired_strategy == OutputStrategy::DapNative
@@ -2107,7 +2143,8 @@ pub fn create_audio_engine(
     let use_managed_fallback = direct_usb_backend.is_none()
         && dsd_native_backend.is_none()
         && pcm_alsa_backend.is_none()
-        && audiotrack_backend.is_none();
+        && audiotrack_backend.is_none()
+        && android_mixer_backend.is_none();
     #[cfg(feature = "uac2")]
     #[cfg(not(target_os = "android"))]
     let use_managed_fallback = direct_usb_backend.is_none() && dsd_native_backend.is_none();
@@ -2115,7 +2152,8 @@ pub fn create_audio_engine(
     #[cfg(target_os = "android")]
     let use_managed_fallback = dsd_native_backend.is_none()
         && pcm_alsa_backend.is_none()
-        && audiotrack_backend.is_none();
+        && audiotrack_backend.is_none()
+        && android_mixer_backend.is_none();
     #[cfg(not(feature = "uac2"))]
     #[cfg(not(target_os = "android"))]
     let use_managed_fallback = dsd_native_backend.is_none();
@@ -2123,6 +2161,7 @@ pub fn create_audio_engine(
     if use_managed_fallback {
         let desired_shared_strategy = if desired_strategy == OutputStrategy::UsbDirect
             || desired_strategy == OutputStrategy::UsbDsdNative
+            || desired_strategy == OutputStrategy::MixerBitPerfect
         {
             OutputStrategy::ResampledFallback
         } else {
@@ -2170,6 +2209,11 @@ pub fn create_audio_engine(
         output_runtime =
             build_output_runtime_state(desired_shared_strategy, verification, false, false);
         output_runtime.active_audio_api = Some(managed.active_audio_api.to_string());
+        if let Some(error) = android_mixer_error.as_deref() {
+            output_runtime.verification_reason = Some(format!(
+                "Android USB mixer unavailable: {}; standard Android audio active", error
+            ));
+        }
         if desired_shared_strategy == OutputStrategy::DapNative {
             let alsa_note = dap_alsa_error
                 .as_deref()
@@ -2248,6 +2292,7 @@ pub fn create_audio_engine(
             let mut pcm_alsa_backend = pcm_alsa_backend;
             #[cfg(target_os = "android")]
             let mut audiotrack_backend = audiotrack_backend;
+            let mut android_mixer_backend = android_mixer_backend;
             let mut managed_stream = managed_stream;
 
             #[cfg(feature = "uac2")]
@@ -2291,6 +2336,18 @@ pub fn create_audio_engine(
             }
             #[cfg(not(target_os = "android"))]
             let _ = dsd_native_backend;
+
+            #[cfg(target_os = "android")]
+            if android_mixer_backend.is_some() {
+                command_processing_loop(
+                    command_rx, finished_rx, event_tx, callback_data_for_thread,
+                    state_clone, decoders_clone, final_sample_rate, shutdown_clone, None,
+                );
+                if let Some(mut backend) = android_mixer_backend.take() {
+                    backend.stop();
+                }
+                return;
+            }
 
             #[cfg(target_os = "android")]
             if audiotrack_backend.is_some() {
