@@ -1,6 +1,8 @@
+import 'package:flick/data/entities/ios_song_identity_entity.dart';
 import 'package:flick/services/ios_transfer_cue_mapping.dart';
 import 'package:flick/services/ios_transfer_song_identity.dart';
 import 'package:flick/services/ios_library_scan_epoch.dart';
+
 // Actual Isar/libmdbx contracts. The native lease callback and media description
 // are fixture boundaries; this is not installed-app/import/media acceptance.
 import 'dart:async';
@@ -93,6 +95,7 @@ class Fixture {
         PlayEventEntitySchema,
         LibraryOpEntitySchema,
         if (includeReceipts) IosTransferReceiptEntitySchema,
+        if (includeReceipts) IosSongIdentityEntitySchema,
       ],
       directory: root.path,
       name: 'ios_import_contracts',
@@ -357,6 +360,18 @@ Future<void> main(List<String> arguments) async {
               old.validatedMedia == null,
           'Actual old private schema upgrades with identity/history intact and no invented media',
         );
+        require(
+          await legacy.db.iosSongIdentityEntitys.count() == 0,
+          'Opening old receipt schema does not invent an allocated identity',
+        );
+        await legacy.db.writeTxn(
+          () => retainIosImportSongIdentitiesInTransaction(legacy.db, []),
+        );
+        require(
+          (await legacy.db.iosSongIdentityEntitys.get(1))!.lastAllocated == 42,
+          'Old receipt-only database seeds the counter above its historical anchor',
+        );
+
         await legacy.store().recordMediaValidation(
           legacy.job(),
           legacy.target,
@@ -556,70 +571,338 @@ Future<void> main(List<String> arguments) async {
         'Committed deletion never resurrects its recording',
       );
     });
+    await scenario('durable-song-id-watermark', (fixture) async {
+      SongEntity fresh(String path) => SongEntity()
+        ..filePath = path
+        ..title = 'Counter fixture'
+        ..artist = 'Fixture'
+        ..dateAdded = DateTime.utc(2026);
+      await fixture.prepare();
+      final initial = await fixture.db.iosSongIdentityEntitys.get(1);
+      require(
+        initial?.lastAllocated == 42,
+        'Existing native anchor is recorded before preparing its receipt',
+      );
+      final first = fresh('/first.wav'), removed = fresh('/removed.wav');
+      await fixture.db.writeTxn(() async {
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, [
+          first,
+          removed,
+        ]);
+        await fixture.db.songEntitys.putAll([first, removed]);
+      });
+      require(
+        first.id == 43 && removed.id == 44,
+        'Initial distinct allocations',
+      );
+      await fixture.db.writeTxn(
+        () => fixture.db.songEntitys.delete(removed.id),
+      );
+      final next = fresh('/next.wav');
+      await fixture.db.writeTxn(() async {
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, [next]);
+        await fixture.db.songEntitys.put(next);
+      });
+      require(next.id == 45, 'Deleted highest derived ID is never reused');
+      await fixture.db.writeTxn(() async {
+        // Evidence floor is committed with deletion, not after it. Native-job
+        // retirement is a separate protocol fixture, not claimed by this test.
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, []);
+        await fixture.db.songEntitys.clear();
+        await fixture.db.iosTransferReceiptEntitys.clear();
+      });
+      await fixture.close();
+      await fixture.open();
+      final reopened = fresh('/after-empty-reopen.wav');
+      await fixture.db.writeTxn(() async {
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, [
+          reopened,
+        ]);
+        await fixture.db.songEntitys.put(reopened);
+      });
+      require(
+        reopened.id == 46,
+        'Durable counter survives empty Songs and removed receipts',
+      );
+      var refused = false;
+      try {
+        await fixture.db.writeTxn(() async {
+          final stale = fresh('/stale.wav')..id = 44;
+          await retainIosImportSongIdentitiesInTransaction(fixture.db, [stale]);
+          await fixture.db.songEntitys.put(stale);
+        });
+      } on StateError {
+        refused = true;
+      }
+      require(
+        refused && await fixture.db.songEntitys.get(44) == null,
+        'Retired explicit derived ID remains refused after receipt removal',
+      );
+      try {
+        await fixture.db.writeTxn(() async {
+          final aborted = fresh('/aborted.wav');
+          await retainIosImportSongIdentitiesInTransaction(fixture.db, [
+            aborted,
+          ]);
+          await fixture.db.songEntitys.put(aborted);
+          throw StateError('Induced counter/song rollback');
+        });
+      } on StateError {
+        /* Commit must leave neither state half. */
+      }
+      await fixture.close();
+      await fixture.open();
+      require(
+        (await fixture.db.iosSongIdentityEntitys.get(1))!.lastAllocated == 46 &&
+            await fixture.db.songEntitys.count() == 1 &&
+            await fixture.db.songEntitys.get(47) == null,
+        'Counter and song insertion roll back together across reopen',
+      );
+      await fixture.db.writeTxn(() async {
+        final state = (await fixture.db.iosSongIdentityEntitys.get(1))!
+          ..schemaVersion = 2;
+        await fixture.db.iosSongIdentityEntitys.put(state);
+      });
+      refused = false;
+      try {
+        await fixture.db.writeTxn(
+          () => retainIosImportSongIdentitiesInTransaction(fixture.db, [
+            fresh('/future-version.wav'),
+          ]),
+        );
+      } on StateError {
+        refused = true;
+      }
+      require(
+        refused &&
+            (await fixture.db.iosSongIdentityEntitys.get(1))!.schemaVersion ==
+                2 &&
+            await fixture.db.songEntitys.count() == 1,
+        'Unknown counter version is preserved and allocation fails closed',
+      );
+    });
     await scenario('atomic-native-cue-mapping', (fixture) async {
       final path = fixture.store().absolutePath(fixture.target);
       final mapping = IosTransferCueMapping(fixture.db);
       SongEntity track(int start, int end) => SongEntity()
-        ..filePath = path ..title = 'CUE $start' ..artist = 'CUE artist'
-        ..startOffsetMs = start ..endOffsetMs = end ..durationMs = end - start
-        ..fileSize = fixture.copy.bytes ..dateAdded = DateTime.utc(2026);
-      Future<List<SongEntity>> rows() => fixture.db.songEntitys.where()
-          .filePathEqualToAnyStartOffsetMs(path).findAll();
+        ..filePath = path
+        ..title = 'CUE $start'
+        ..artist = 'CUE artist'
+        ..startOffsetMs = start
+        ..endOffsetMs = end
+        ..durationMs = end - start
+        ..fileSize = fixture.copy.bytes
+        ..dateAdded = DateTime.utc(2026);
+      Future<List<SongEntity>> rows() => fixture.db.songEntitys
+          .where()
+          .filePathEqualToAnyStartOffsetMs(path)
+          .findAll();
       Future<void> refuses(Future<Object?> Function() work) async {
         var refused = false;
-        try { await work(); } on StateError { refused = true; }
+        try {
+          await work();
+        } on StateError {
+          refused = true;
+        }
         require(refused, 'Unsafe CUE replacement must refuse');
       }
+
       await fixture.prepare();
-      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
-        mapping.replaceInTransaction(path, [track(0, 2000)], expected: []))));
-      require((await fixture.store().peek(fixture.job(), fixture.target))!.receipt.state == 'prepared',
-        'Preparing import refuses the entire CUE transaction');
+      await refuses(
+        () => IosLibraryScanEpoch.run(
+          () => fixture.db.writeTxn(
+            () => mapping.replaceInTransaction(path, [
+              track(0, 2000),
+            ], expected: []),
+          ),
+        ),
+      );
+      require(
+        (await fixture.store().peek(
+              fixture.job(),
+              fixture.target,
+            ))!.receipt.state ==
+            'prepared',
+        'Preparing import refuses the entire CUE transaction',
+      );
       await fixture.publishFixture();
       await fixture.commit();
       final original = await rows();
       final cue = [track(0, 500), track(500, 2000)];
-      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
-        require(await mapping.replaceInTransaction(path, cue, expected: original),
-          'Native committed file is mapped atomically');
-      }));
-      require(cue[0].id == 42 && cue[1].id == 43 && await fixture.db.songEntitys.count() == 2,
-        'First CUE range retains raw identity; new range gets distinct identity');
-      require(!await fixture.db.writeTxn(() =>
-          IosTransferScanGuard(fixture.db).allowsRemovalInTransaction(43)),
-        'Ordinary scan cleanup cannot partially remove a protected derived range');
-      require(cue[0].dateAdded.isAtSameMomentAs(DateTime.utc(2020)) && cue[0].hasLocalEdits &&
-          cue[0].title == 'Current library title' && cue[0].remoteId == fixture.job().intent.identity.sourceId,
-        'Manual metadata, original date and desktop binding survive conversion');
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(() async {
+          require(
+            await mapping.replaceInTransaction(path, cue, expected: original),
+            'Native committed file is mapped atomically',
+          );
+        }),
+      );
+      require(
+        cue[0].id == 42 &&
+            cue[1].id == 43 &&
+            await fixture.db.songEntitys.count() == 2,
+        'First CUE range retains raw identity; new range gets distinct identity',
+      );
+      require(
+        !await fixture.db.writeTxn(
+          () => IosTransferScanGuard(fixture.db).allowsRemovalInTransaction(43),
+        ),
+        'Ordinary scan cleanup cannot partially remove a protected derived range',
+      );
+      require(
+        cue[0].dateAdded.isAtSameMomentAs(DateTime.utc(2020)) &&
+            cue[0].hasLocalEdits &&
+            cue[0].title == 'Current library title' &&
+            cue[0].remoteId == fixture.job().intent.identity.sourceId,
+        'Manual metadata, original date and desktop binding survive conversion',
+      );
       final beforeExtension = await rows();
       final extended = [track(0, 500), track(500, 1000), track(1000, 2000)];
-      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
-        mapping.replaceInTransaction(path, extended, expected: beforeExtension)));
-      require(extended.map((row) => row.id).join(',') == '42,43,44',
-        'Existing range IDs survive edits and an additional range');
-      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
-        mapping.replaceInTransaction(path, [track(0, 2000)], expected: original))));
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(
+          () => mapping.replaceInTransaction(
+            path,
+            extended,
+            expected: beforeExtension,
+          ),
+        ),
+      );
+      require(
+        extended.map((row) => row.id).join(',') == '42,43,44',
+        'Existing range IDs survive edits and an additional range',
+      );
+      await refuses(
+        () => IosLibraryScanEpoch.run(
+          () => fixture.db.writeTxn(
+            () => mapping.replaceInTransaction(path, [
+              track(0, 2000),
+            ], expected: original),
+          ),
+        ),
+      );
       final snapshot = await rows();
-      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
-        mapping.replaceInTransaction(path, [track(0, 1500), track(1000, 2000)], expected: snapshot))));
-      await refuses(() => IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
-        await mapping.replaceInTransaction(path, [track(500, 1000), track(1000, 2000)], expected: snapshot);
-        throw StateError('Induced post-replacement rollback');
-      })));
+      await refuses(
+        () => IosLibraryScanEpoch.run(
+          () => fixture.db.writeTxn(
+            () => mapping.replaceInTransaction(path, [
+              track(0, 1500),
+              track(1000, 2000),
+            ], expected: snapshot),
+          ),
+        ),
+      );
+      await refuses(
+        () => IosLibraryScanEpoch.run(
+          () => fixture.db.writeTxn(() async {
+            await mapping.replaceInTransaction(path, [
+              track(500, 1000),
+              track(1000, 2000),
+            ], expected: snapshot);
+            throw StateError('Induced post-replacement rollback');
+          }),
+        ),
+      );
       await fixture.close();
       await fixture.open();
-      require(await fixture.db.songEntitys.count() == 3 && await fixture.db.songEntitys.get(42) != null,
-        'Actual rollback/reopen restores original anchor and all three ranges');
+      require(
+        await fixture.db.songEntitys.count() == 3 &&
+            await fixture.db.songEntitys.get(42) != null,
+        'Actual rollback/reopen restores original anchor and all three ranges',
+      );
       final current = await rows();
-      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() =>
-        IosTransferCueMapping(fixture.db).replaceInTransaction(path,
-          [track(500, 1000), track(1000, 2000)], expected: current)));
-      final receipt = (await fixture.store().peek(fixture.job(), fixture.target))!;
-      require(receipt.committed && receipt.removedAfterCommit && receipt.receipt.localSongId == 42 &&
-          await fixture.db.songEntitys.get(43) != null && await fixture.db.songEntitys.get(44) != null,
-        'Removing the anchored CUE range keeps history and other range IDs, never recreates it');
-      require(sha256.convert(await File(path).readAsBytes()).toString() == fixture.copy.sha256,
-        'Metadata mapping never changes public audio bytes');
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(
+          () => IosTransferCueMapping(fixture.db).replaceInTransaction(path, [
+            track(500, 1000),
+            track(1000, 2000),
+          ], expected: current),
+        ),
+      );
+      final receipt = (await fixture.store().peek(
+        fixture.job(),
+        fixture.target,
+      ))!;
+      require(
+        receipt.committed &&
+            receipt.removedAfterCommit &&
+            receipt.receipt.localSongId == 42 &&
+            await fixture.db.songEntitys.get(43) != null &&
+            await fixture.db.songEntitys.get(44) != null,
+        'Removing the anchored CUE range keeps history and other range IDs, never recreates it',
+      );
+      SongEntity whole() => SongEntity()
+        ..filePath = path
+        ..title = 'Actual full-file title'
+        ..artist = 'Actual full-file artist'
+        ..durationMs = 2000
+        ..fileType = 'WAV'
+        ..fileSize = fixture.copy.bytes;
+      final derived = await rows();
+      await refuses(
+        () => IosLibraryScanEpoch.run(
+          () => fixture.db.writeTxn(
+            () => IosTransferCueMapping(fixture.db).replaceInTransaction(path, [
+              whole()..durationMs = 0,
+            ], expected: derived),
+          ),
+        ),
+      );
+      await refuses(
+        () => IosLibraryScanEpoch.run(
+          () => fixture.db.writeTxn(() async {
+            await IosTransferCueMapping(fixture.db)
+                .replaceInTransaction(path, [whole()], expected: derived);
+            throw StateError('Induced whole-file replacement rollback');
+          }),
+        ),
+      );
+      await fixture.close();
+      await fixture.open();
+      require(
+        (await rows()).length == 2 &&
+            await fixture.db.songEntitys.get(42) == null,
+        'Failed CUE removal retains every derived track after rollback/reopen',
+      );
+      final afterReopen = await rows();
+      final raw = whole();
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(
+          () =>
+              IosTransferCueMapping(fixture.db)
+                  .replaceInTransaction(path, [raw], expected: afterReopen),
+        ),
+      );
+      final restored = (await rows()).single;
+      require(
+        restored.id == 43 &&
+            restored.startOffsetMs == null &&
+            restored.endOffsetMs == null &&
+            restored.durationMs == 2000 &&
+            restored.title == 'Actual full-file title' &&
+            await fixture.db.songEntitys.get(44) == null &&
+            (await fixture.store().peek(
+              fixture.job(),
+              fixture.target,
+            ))!.removedAfterCommit,
+        'Full-file restoration retains a live derived ID, uses full duration, and never revives deleted anchor',
+      );
+      final again = [track(0, 500), track(500, 2000)];
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(
+          () =>
+              IosTransferCueMapping(fixture.db)
+                  .replaceInTransaction(path, again, expected: [restored]),
+        ),
+      );
+      require(
+        again[0].id == 43 && again[1].id == 45,
+        'Re-expansion cannot reuse a removed derived identity after whole-file restoration',
+      );
+      require(
+        sha256.convert(await File(path).readAsBytes()).toString() ==
+            fixture.copy.sha256,
+        'Metadata mapping never changes public audio bytes',
+      );
     });
     await scenario('historical-song-id-allocation', (fixture) async {
       await fixture.prepare();
@@ -629,16 +912,27 @@ Future<void> main(List<String> arguments) async {
       await fixture.close();
       await fixture.open();
       SongEntity fresh(String path) => SongEntity()
-        ..filePath = path ..title = 'New recording' ..artist = 'Fixture'
+        ..filePath = path
+        ..title = 'New recording'
+        ..artist = 'Fixture'
         ..dateAdded = DateTime.utc(2026);
       final first = fresh('/new-first.wav'), second = fresh('/new-second.wav');
       await fixture.db.writeTxn(() async {
-        await retainIosImportSongIdentitiesInTransaction(fixture.db, [first, second]);
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, [
+          first,
+          second,
+        ]);
         await fixture.db.songEntitys.putAll([first, second]);
       });
-      require(first.id == 43 && second.id == 44 &&
-          (await fixture.store().peek(fixture.job(), fixture.target))!.removedAfterCommit,
-        'Fresh rows after empty database reopen cannot occupy historical import IDs');
+      require(
+        first.id == 43 &&
+            second.id == 44 &&
+            (await fixture.store().peek(
+              fixture.job(),
+              fixture.target,
+            ))!.removedAfterCommit,
+        'Fresh rows after empty database reopen cannot occupy historical import IDs',
+      );
       var refused = false;
       try {
         await fixture.db.writeTxn(() async {
@@ -646,65 +940,102 @@ Future<void> main(List<String> arguments) async {
           await retainIosImportSongIdentitiesInTransaction(fixture.db, [stale]);
           await fixture.db.songEntitys.put(stale);
         });
-      } on StateError { refused = true; }
-      require(refused && await fixture.db.songEntitys.get(42) == null,
-        'Stale explicit historical ID cannot recreate a removed recording');
+      } on StateError {
+        refused = true;
+      }
+      require(
+        refused && await fixture.db.songEntitys.get(42) == null,
+        'Stale explicit historical ID cannot recreate a removed recording',
+      );
       final current = (await fixture.db.songEntitys.get(first.id))!;
       current.title = 'Current edit';
       await fixture.db.writeTxn(() async {
         await retainIosImportSongIdentitiesInTransaction(fixture.db, [current]);
         await fixture.db.songEntitys.put(current);
       });
-      require((await fixture.db.songEntitys.get(first.id))!.title == 'Current edit',
-        'Existing current IDs retain normal metadata editing');
+      require(
+        (await fixture.db.songEntitys.get(first.id))!.title == 'Current edit',
+        'Existing current IDs retain normal metadata editing',
+      );
       try {
         await fixture.db.writeTxn(() async {
-          final receipt = (await fixture.db.iosTransferReceiptEntitys.getByOperationKey(
-            fixture.store().keyFor(fixture.job())))!;
+          final receipt = (await fixture.db.iosTransferReceiptEntitys
+              .getByOperationKey(fixture.store().keyFor(fixture.job())))!;
           receipt.localSongId = 9223372036854775806;
           await fixture.db.iosTransferReceiptEntitys.put(receipt);
-          await retainIosImportSongIdentitiesInTransaction(fixture.db,
-            [fresh('/overflow-a.wav'), fresh('/overflow-b.wav')]);
+          await retainIosImportSongIdentitiesInTransaction(fixture.db, [
+            fresh('/overflow-a.wav'),
+            fresh('/overflow-b.wav'),
+          ]);
         });
         throw Exception('Identity overflow was accepted');
-      } on StateError { /* Actual Isar writer rolls the receipt back. */ }
+      } on StateError {
+        /* Actual Isar writer rolls the receipt back. */
+      }
       await fixture.close();
       await fixture.open();
-      final receipt = (await fixture.db.iosTransferReceiptEntitys.getByOperationKey(
-        fixture.store().keyFor(fixture.job())))!;
-      require(receipt.localSongId == 42 && receipt.state == 'committed' &&
-          await fixture.db.songEntitys.count() == 2,
-        'Overflow refuses atomically and preserves historical proof across reopen');
+      final receipt = (await fixture.db.iosTransferReceiptEntitys
+          .getByOperationKey(fixture.store().keyFor(fixture.job())))!;
+      require(
+        receipt.localSongId == 42 &&
+            receipt.state == 'committed' &&
+            await fixture.db.songEntitys.count() == 2,
+        'Overflow refuses atomically and preserves historical proof across reopen',
+      );
       final rescanned = fresh(fixture.store().absolutePath(fixture.target));
       final guard = IosTransferScanGuard(fixture.db);
-      require(!await fixture.db.writeTxn(() => guard.allowsUpsertInTransaction(rescanned)),
-        'Unwitnessed scan cannot recreate deleted completed import metadata');
-      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
-        require(await guard.allowsUpsertInTransaction(rescanned),
-          'New scan may index retained canonical public bytes');
-        await retainIosImportSongIdentitiesInTransaction(fixture.db, [rescanned]);
-        await fixture.db.songEntitys.put(rescanned);
-      }));
-      require(rescanned.id == 45 &&
-          (await fixture.db.songEntitys.get(43))!.title == 'Current edit' &&
-          (await fixture.db.songEntitys.get(44))!.filePath == '/new-second.wav' &&
-          (await fixture.store().peek(fixture.job(), fixture.target))!.removedAfterCommit,
-        'Fresh rescan gets a separate ID without changing historical import deletion: id=${rescanned.id}, original=${(await fixture.store().peek(fixture.job(), fixture.target))!.song?.id}');
-      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
-        require(await guard.allowsUpsertInTransaction(rescanned),
-          'Later fresh scans can refresh the separately rescanned row');
-      }));
+      require(
+        !await fixture.db.writeTxn(
+          () => guard.allowsUpsertInTransaction(rescanned),
+        ),
+        'Unwitnessed scan cannot recreate deleted completed import metadata',
+      );
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(() async {
+          require(
+            await guard.allowsUpsertInTransaction(rescanned),
+            'New scan may index retained canonical public bytes',
+          );
+          await retainIosImportSongIdentitiesInTransaction(fixture.db, [
+            rescanned,
+          ]);
+          await fixture.db.songEntitys.put(rescanned);
+        }),
+      );
+      require(
+        rescanned.id == 45 &&
+            (await fixture.db.songEntitys.get(43))!.title == 'Current edit' &&
+            (await fixture.db.songEntitys.get(44))!.filePath ==
+                '/new-second.wav' &&
+            (await fixture.store().peek(
+              fixture.job(),
+              fixture.target,
+            ))!.removedAfterCommit,
+        'Fresh rescan gets a separate ID without changing historical import deletion: id=${rescanned.id}, original=${(await fixture.store().peek(fixture.job(), fixture.target))!.song?.id}',
+      );
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(() async {
+          require(
+            await guard.allowsUpsertInTransaction(rescanned),
+            'Later fresh scans can refresh the separately rescanned row',
+          );
+        }),
+      );
       final entered = Completer<void>(), release = Completer<void>();
       final staleScan = IosLibraryScanEpoch.run(() async {
         entered.complete();
         await release.future;
-        return fixture.db.writeTxn(() => guard.allowsUpsertInTransaction(rescanned));
+        return fixture.db.writeTxn(
+          () => guard.allowsUpsertInTransaction(rescanned),
+        );
       });
       await entered.future;
       await IosLibraryScanEpoch.withMutation(() async {});
       release.complete();
-      require(!await staleScan,
-        'Old scan witness remains invalid after a later mutation releases');
+      require(
+        !await staleScan,
+        'Old scan witness remains invalid after a later mutation releases',
+      );
     });
     await scenario('scanner-mutation-generation', (fixture) async {
       final entered = Completer<void>(), release = Completer<void>();
@@ -713,26 +1044,45 @@ Future<void> main(List<String> arguments) async {
         await release.future;
       });
       await entered.future;
-      final stale = IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
-        IosLibraryScanEpoch.requireCurrent();
-        await fixture.db.songEntitys.put(SongEntity()
-          ..filePath = '/stale.wav' ..title = 'Stale scan' ..artist = 'Fixture' ..dateAdded = DateTime.utc(2026));
-      }));
+      final stale = IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(() async {
+          IosLibraryScanEpoch.requireCurrent();
+          await fixture.db.songEntitys.put(
+            SongEntity()
+              ..filePath = '/stale.wav'
+              ..title = 'Stale scan'
+              ..artist = 'Fixture'
+              ..dateAdded = DateTime.utc(2026),
+          );
+        }),
+      );
       final refused = stale.then((_) => false, onError: (_) => true);
-      final clear = IosLibraryScanEpoch.withMutation(() => fixture.db.writeTxn(
-        () => fixture.db.songEntitys.clear()));
+      final clear = IosLibraryScanEpoch.withMutation(
+        () => fixture.db.writeTxn(() => fixture.db.songEntitys.clear()),
+      );
       release.complete();
       await blocking;
       await clear;
-      require(await refused && await fixture.db.songEntitys.count() == 0,
-        'Actual queued scanner writer cannot repopulate after mutation retirement');
-      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
-        IosLibraryScanEpoch.requireCurrent();
-        await fixture.db.songEntitys.put(SongEntity()
-          ..filePath = '/fresh.wav' ..title = 'Fresh scan' ..artist = 'Fixture' ..dateAdded = DateTime.utc(2026));
-      }));
-      require(await fixture.db.songEntitys.count() == 1,
-        'Fresh post-mutation scan is admitted in the actual writer');
+      require(
+        await refused && await fixture.db.songEntitys.count() == 0,
+        'Actual queued scanner writer cannot repopulate after mutation retirement',
+      );
+      await IosLibraryScanEpoch.run(
+        () => fixture.db.writeTxn(() async {
+          IosLibraryScanEpoch.requireCurrent();
+          await fixture.db.songEntitys.put(
+            SongEntity()
+              ..filePath = '/fresh.wav'
+              ..title = 'Fresh scan'
+              ..artist = 'Fixture'
+              ..dateAdded = DateTime.utc(2026),
+          );
+        }),
+      );
+      require(
+        await fixture.db.songEntitys.count() == 1,
+        'Fresh post-mutation scan is admitted in the actual writer',
+      );
     });
     await scenario('scanner-serialization', (fixture) async {
       final guard = IosTransferScanGuard(fixture.db);
@@ -1413,8 +1763,9 @@ Future<void> main(List<String> arguments) async {
       );
     }, existing: false);
     stdout.writeln(
-      options['--scenario'] != null ? 'Actual Isar scenario passed: ${options['--scenario']}' :
-      'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, bounded reservation keyset pages, retiring/retired/orphan guards, fourteen receipt/media/retirement commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
+      options['--scenario'] != null
+          ? 'Actual Isar scenario passed: ${options['--scenario']}'
+          : 'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, bounded reservation keyset pages, retiring/retired/orphan guards, fourteen receipt/media/retirement commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
     );
   } catch (error, stack) {
     stderr.writeln('Isar import contracts failed at $stage: $error\n$stack');

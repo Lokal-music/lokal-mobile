@@ -592,6 +592,9 @@ class SongRepository {
   /// Delete all songs.
   Future<void> deleteAllSongs() async {
     await _isar.writeTxn(() async {
+      if (Platform.isIOS) {
+        await retainIosImportSongIdentitiesInTransaction(_isar, []);
+      }
       await _isar.songEntitys.clear();
     });
   }

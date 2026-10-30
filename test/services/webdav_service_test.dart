@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _multistatus = '<?xml version="1.0"?>'
     '<D:multistatus xmlns:D="DAV:">'
@@ -37,6 +38,8 @@ NetworkServerEntity _server({String? token}) {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   group('auth', () {
     test('resolveToken stores base64(password)', () async {
       final client = MockClient((request) async => http.Response('', 200));
@@ -46,6 +49,141 @@ void main() {
 
       expect(token, base64Encode(utf8.encode('secret')));
       expect(utf8.decode(base64Decode(token!)), 'secret');
+    });
+
+    test('cannot approve an unseen certificate fingerprint', () async {
+      final service = WebdavService.create(
+        client: MockClient((request) async => http.Response(_multistatus, 207)),
+      );
+      expect(await service.trustPresentedCertificate(_server(), approvedFingerprint: 'a' * 64), isFalse);
+      expect(service.untrustedCertificateFingerprint, isNull);
+    });
+
+    test('certificate approval persists only after successful PROPFIND', () async {
+      final server = _server(token: base64Encode(utf8.encode('secret')));
+      final origin = Uri.parse(server.baseUrl).origin;
+      const fingerprint = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      var requests = 0;
+      final service = WebdavService.create(
+        client: MockClient((request) async {
+          requests++;
+          expect(request.method, 'PROPFIND');
+          return http.Response(_multistatus, 207);
+        }),
+      );
+      service.recordRejectedCertificateForTest(origin, fingerprint);
+      expect(
+        await service.trustPresentedCertificate(
+          server, approvedFingerprint: fingerprint,
+        ),
+        isTrue,
+      );
+      expect(requests, 1);
+      final independentlyLoaded = WebdavService.create(
+        client: MockClient((_) async => http.Response('', 500)),
+      );
+      expect(await independentlyLoaded.hasTrustedCertificate(server), isTrue);
+    });
+
+    test('certificate approval is not persisted on failed PROPFIND', () async {
+      final server = _server();
+      const fingerprint = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+      var requests = 0;
+      final service = WebdavService.create(
+        client: MockClient((_) async {
+          requests++;
+          return http.Response('Forbidden', 403);
+        }),
+      );
+      service.recordRejectedCertificateForTest(
+        Uri.parse(server.baseUrl).origin, fingerprint,
+      );
+      expect(
+        await service.trustPresentedCertificate(
+          server, approvedFingerprint: fingerprint,
+        ),
+        isFalse,
+      );
+      expect(requests, 1);
+      final other = WebdavService.create(
+        client: MockClient((_) async => http.Response('', 500)),
+      );
+      expect(await other.hasTrustedCertificate(server), isFalse);
+    });
+
+    test('certificate approval rejects a swapped fingerprint before credentials',
+        () async {
+      final server = _server();
+      const seen = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
+      const swapped = 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd';
+      final service = WebdavService.create(
+        client: MockClient((_) async {
+          fail('No authorization request is allowed for a swapped certificate');
+        }),
+      );
+      service.recordRejectedCertificateForTest(
+        Uri.parse(server.baseUrl).origin, swapped,
+      );
+      expect(
+        await service.trustPresentedCertificate(
+          server, approvedFingerprint: seen,
+        ),
+        isFalse,
+      );
+    });
+
+    test('follows only same-origin trailing slash WebDAV redirects', () async {
+      final visited = <Uri>[];
+      final client = MockClient((request) async {
+        visited.add(request.url);
+        expect(request.followRedirects, isFalse);
+        if (visited.length == 1) {
+          return http.Response('', 301, headers: {
+            'location': '/music/',
+          });
+        }
+        return http.Response(_multistatus, 207);
+      });
+      final service = WebdavService.create(client: client);
+      expect(await service.ping(_server()), isTrue);
+      expect(visited.map((uri) => uri.path), ['/music', '/music/']);
+    });
+
+    test('never sends authentication on a cross-origin PROPFIND redirect', () async {
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        return http.Response('', 302, headers: {
+          'location': 'https://attacker.example/steal',
+        });
+      });
+      final service = WebdavService.create(client: client);
+      expect(await service.ping(_server()), isFalse);
+      expect(service.lastPingError, contains('redirected outside'));
+      expect(requests, 1);
+    });
+
+    test('ordinary HTTP 200 does not pretend to be WebDAV', () async {
+      final client = MockClient((request) async =>
+          http.Response('<html>Router files</html>', 200));
+      final service = WebdavService.create(client: client);
+      expect(await service.ping(_server()), isFalse);
+      expect(service.lastPingError, contains('no WebDAV multistatus'));
+    });
+
+    test('HTTP authentication, missing folders and unsupported methods explain failures', () async {
+      for (final (code, expected) in [
+        (401, 'username or password'),
+        (403, 'cannot access'),
+        (404, 'not found'),
+        (405, 'does not offer WebDAV'),
+      ]) {
+        final service = WebdavService.create(
+          client: MockClient((_) async => http.Response('', code)),
+        );
+        expect(await service.ping(_server()), isFalse);
+        expect(service.lastPingError, contains(expected));
+      }
     });
 
     test('ping sends HTTP Basic over PROPFIND and accepts 207', () async {
@@ -71,6 +209,31 @@ void main() {
         capturedAuth,
         'Basic ${base64Encode(utf8.encode('alice:secret'))}',
       );
+    });
+  });
+
+  group('multistatus schema', () {
+    test('allows one RFC 4918 top-level DAV responsedescription after responses', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>/music/</D:href></D:response>'
+          '<D:responsedescription>Directory listing</D:responsedescription>'
+          '</D:multistatus>';
+      expect(WebdavService.isValidMultistatusForTest(body), isTrue);
+    });
+
+    test('rejects nested, unnamespaced or wrongly ordered responses', () {
+      expect(WebdavService.isValidMultistatusForTest(
+        '<html><multistatus><response><href>/music/</href></response></multistatus></html>',
+      ), isFalse);
+      expect(WebdavService.isValidMultistatusForTest(
+        '<multistatus><response><href>/music/</href></response></multistatus>',
+      ), isFalse);
+      expect(WebdavService.isValidMultistatusForTest(
+        '<D:multistatus xmlns:D="DAV:">'
+        '<D:responsedescription>First</D:responsedescription>'
+        '<D:response><D:href>/music/</D:href></D:response>'
+        '</D:multistatus>',
+      ), isFalse);
     });
   });
 
@@ -158,6 +321,37 @@ void main() {
 
   group('request URLs', () {
     NetworkServerEntity server() => _server();
+
+    test('direct playback requests local-network access before returning URL',
+        () async {
+      final requests = <Uri>[];
+      final service = WebdavService.create(
+        client: MockClient((request) async => http.Response('', 200)),
+        ensureLocalAccess: (uri) async {
+          requests.add(uri);
+        },
+      );
+      final descriptor = await service.streamDescriptor(
+        server(), Uri.encodeComponent('/music/song.flac'),
+      );
+      expect(requests, hasLength(1));
+      expect(requests.single.host, 'dav.example.com');
+      expect(descriptor?.url, contains('/music/song.flac'));
+    });
+
+    test('direct playback does not return credentials if LAN access is denied',
+        () async {
+      final service = WebdavService.create(
+        client: MockClient((request) async => http.Response('', 200)),
+        ensureLocalAccess: (uri) async => throw StateError('LAN permission denied'),
+      );
+      await expectLater(
+        service.streamDescriptor(
+          server(), Uri.encodeComponent('/music/song.flac'),
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
 
     test('streamDescriptor re-encodes without fragment/query corruption',
         () async {

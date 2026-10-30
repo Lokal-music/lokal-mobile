@@ -10,14 +10,19 @@ checkpoint, separate from the finished native-engine target.
 | Milestone | Completion evidence |
 | --- | --- |
 | 1. Integrated import | Installed coordinator + actual native transport/lease/file writer + actual Isar + bundled media reader complete a verified import and reconcile without duplicates. The isolated probe is now in source; Apple execution is pending. |
-| 2. Library identity and retirement | Atomic CUE expansion/update now has actual rollback/reopen coverage. Whole-CUE removal back to a full-file row, remaining mutation coverage and bounded history cleanup still need completion while retaining identity evidence. |
+| 2. Library identity and retirement | Atomic CUE expansion/update and a private durable recording-ID counter have actual rollback/reopen coverage. The counter survives deleted derived tracks, library clearing and receipt pruning. Whole-CUE removal now reads full-file metadata and atomically restores a surviving identity; rollback/reopen and re-expansion are covered. Remaining mutation coverage and bounded history cleanup still need completion. |
 | 3. Native uploads and queue | Owned uploads, ambiguity-safe/idempotent retry, durable progress/cancel/retry and pairing retirement work together. Real protocol tests cover the desktop contract; unavailable features are not advertised. |
 | 4. Lifecycle and final IPA | Storage-failure cancellation and actual OS suspension/relaunch pass. Enable the engine only after its gates pass, then qualify the exact release/AOT IPA, simulator app and independent package/source/symbol audit. |
 
-Keep the implemented iOS16+ app and relevant Android parity through merged PR350:
+Keep the implemented iOS16+ app and relevant Android parity through merged PR362:
 ordinary imports/CUE, library/playlists, lyrics/artwork, local/online playback,
 add-ons/downloads, desktop link, network libraries, share/export and supported
-casting/output adapters. Background audio remains required. Home Screen widgets
+casting/output adapters. PR361's live settings-search and bounded gapless queue
+changes retain the iPhone retirement guards; PR362's SMB diagnostics, WebDAV
+certificate approval and failed-sync preservation are included. Android's LAN
+permission prompt remains Android-only; iOS uses its existing local-network
+permission declaration. Host tests do not establish NAS interoperability or
+measured gapless latency on an iPhone. Background audio remains required. Home Screen widgets
 and impractical Android-specific direct audio remain excluded.
 
 Keep PR356–357 data-safety and historical-ID fixes. Native `libraryImport` and

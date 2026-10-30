@@ -140,12 +140,12 @@ class _LokalSettingsPageState extends ConsumerState<LokalSettingsPage> {
     super.dispose();
   }
 
-  List<Widget> _results(BuildContext context) {
+  List<Widget> _results(BuildContext context, WidgetRef activeRef) {
     final results = <Widget>[];
     for (final group in LokalSettingsGroup.values) {
       if (group == LokalSettingsGroup.themeAccent) continue;
       final build = widget.sectionsBuilder ?? lokalSettingsSections;
-      for (final section in build(group, context, ref)) {
+      for (final section in build(group, context, activeRef)) {
         final heading = section.title == group.label
             ? group.label
             : '${group.label} · ${section.title}';
@@ -172,7 +172,6 @@ class _LokalSettingsPageState extends ConsumerState<LokalSettingsPage> {
   Widget build(BuildContext context) {
     final t = context.lokal;
     final searching = _query.trim().isNotEmpty;
-    final results = searching ? _results(context) : const <Widget>[];
     return Scaffold(
       backgroundColor: t.bg,
       body: SafeArea(
@@ -182,41 +181,51 @@ class _LokalSettingsPageState extends ConsumerState<LokalSettingsPage> {
           listenable: searching && widget.sectionsBuilder == null
               ? lokalSettingsListenable(ref)
               : const _Never(),
-          builder: (context, _) => ListView(
-            key: const PageStorageKey('lokal-settings'),
-            padding: EdgeInsets.only(
-              bottom: 32 + MediaQuery.paddingOf(context).bottom,
-            ),
-            children: [
-              LokalSettingsHeader(title: lokalText('Settings')),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: LokalSettingsSearchField(
-                  controller: _search,
-                  onChanged: (value) => setState(() => _query = value),
+          builder: (context, _) => Consumer(
+            // The filtered sections watch Riverpod providers. Build them inside
+            // a Consumer rather than from a notifier listener's callback so
+            // WidgetRef.watch always runs in an active provider build.
+            builder: (context, liveRef, _) {
+              final results = searching
+                  ? _results(context, liveRef)
+                  : const <Widget>[];
+              return ListView(
+                key: const PageStorageKey('lokal-settings'),
+                padding: EdgeInsets.only(
+                  bottom: 32 + MediaQuery.paddingOf(context).bottom,
                 ),
-              ),
-              if (!searching)
-                LokalSettingsSection(
-                  title: lokalText('Settings'),
-                  heading: 'Groups',
-                  children: [
-                    for (final group in LokalSettingsGroup.listed)
-                      _GroupLink(group: group),
-                  ],
-                )
-              else if (results.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
-                  child: Text(
-                    lokalText('No settings match your search.'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: t.muted),
+                children: [
+                  LokalSettingsHeader(title: lokalText('Settings')),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: LokalSettingsSearchField(
+                      controller: _search,
+                      onChanged: (value) => setState(() => _query = value),
+                    ),
                   ),
-                )
-              else
-                ...results,
-            ],
+                  if (!searching)
+                    LokalSettingsSection(
+                      title: lokalText('Settings'),
+                      heading: 'Groups',
+                      children: [
+                        for (final group in LokalSettingsGroup.listed)
+                          _GroupLink(group: group),
+                      ],
+                    )
+                  else if (results.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
+                      child: Text(
+                        lokalText('No settings match your search.'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: t.muted),
+                      ),
+                    )
+                  else
+                    ...results,
+                ],
+              );
+            },
           ),
         ),
       ),
