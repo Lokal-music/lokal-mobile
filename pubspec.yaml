@@ -32,6 +32,8 @@ dependencies:
   archive: ^4.0.9
   audio_session: ^0.2.4
   crypto: ^3.0.3
+  # Mornye's native SMB2/3 transport: required for NAS signing/encryption.
+  dart_smb2: 0.1.3
   connectivity_plus: ^7.0.0
   cupertino_icons: ^2.0.0
   fading_marquee_widget: ^1.2.1
