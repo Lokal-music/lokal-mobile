@@ -246,6 +246,8 @@ class LinkSyncCoordinator {
       final accepted = await journal.mergeHistory(incoming);
       final songs = SongRepository();
       final candidatesByTitle = <String, List<Song>>{};
+      final projected =
+          <({String songId, String eventId, DateTime playedAt, int listenedMs})>[];
       for (final item in accepted) {
         // The journal always retains remote-only plays. Local recent history
         // is updated only for bounded, matching phone songs.
@@ -264,15 +266,14 @@ class LinkSyncCoordinator {
         if (candidates.isEmpty) continue;
         final song = await journal.match(wire, candidates: candidates);
         if (song == null) continue;
-        await RecentlyPlayedRepository().recordPlay(
-          song.id,
+        projected.add((
+          songId: song.id,
           eventId: item['event_id'] as String,
-          playedAt: DateTime.fromMillisecondsSinceEpoch(
-            item['played_at'] as int,
-          ),
+          playedAt: DateTime.fromMillisecondsSinceEpoch(item['played_at'] as int),
           listenedMs: item['ms_played'] as int,
-        );
+        ));
       }
+      await RecentlyPlayedRepository().recordLinkPlays(projected);
       MilestoneService.changes.add(null);
     }
     // Only advance after journal and any matching local-history projections
