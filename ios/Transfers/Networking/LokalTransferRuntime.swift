@@ -129,6 +129,11 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
   private var backgroundReplies: [BackgroundReply] = []
   private var backgroundEventsFinished = false
   private var shuttingDown = false
+  private struct PendingNetworkRetirement {
+    var taskIDs: Set<Int>
+    let reply: LokalTransferCompletion<LokalTransferSummary>
+  }
+  private var pendingNetworkRetirements: [PendingNetworkRetirement] = []
   private var verifications: [String: [LokalTransferCompletion<LokalTransferJob>]] = [:]
   private var cleanupResolutions: [String: (mode: LokalTransferImportResolution.Mode,
     replies: [LokalTransferCompletion<LokalTransferResolvedCleanup>])] = [:]
@@ -512,6 +517,13 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       }
       reconciled = true
       persistenceFailed = false
+      // A second recovery can observe tasks that disappeared after cancel,
+      // even if the old delegate callback was lost across an engine reset.
+      let actualIDs = Set(actual.map(\.taskIdentifier))
+      for index in pendingNetworkRetirements.indices {
+        pendingNetworkRetirements[index].taskIDs.formIntersection(actualIDs)
+      }
+      finishNetworkRetirements()
       pump()
       flushBackgroundReplies()
       notify()
@@ -579,6 +591,10 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
       else { failed(task, reason: .network, retryable: true) }
     }
     tasks.removeValue(forKey: task.taskIdentifier)
+    for index in pendingNetworkRetirements.indices {
+      pendingNetworkRetirements[index].taskIDs.remove(task.taskIdentifier)
+    }
+    finishNetworkRetirements()
     if let binding = LokalTransferTaskBinding(task.taskDescription),
        progress[binding.id]?.revision == binding.revision { progress.removeValue(forKey: binding.id) }
     pump()
@@ -668,6 +684,66 @@ final class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @uncheck
         self.fileQueue.async { try? self.files.discard(job) }
         reply(.success(cancelled))
       } catch { reply(.failure(error)) }
+    }
+  }
+
+  /// All durable revisions for one exact pairing are retired as one SQLite
+  /// transaction *before* any matching URLSession task is cancelled. Await
+  /// delegate completion and the native file-worker barrier before telling
+  /// the app it may discard that pairing. The frozen Isar custody remains for
+  /// later cleanup; an importing row refuses this operation atomically.
+  func retireNetworkScope(_ scope: LokalTransferScope,
+                          reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
+    queue.async {
+      do {
+        guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
+          throw LokalTransferError.invalidTransition
+        }
+        let changes = try self.journal.retireNetworkScope(scope, nowMs: Self.now())
+        for change in changes {
+          self.importOwnership.revoke(jobID: change.previous.id, revision: change.previous.revision)
+          self.jobs[change.retired.id] = change.retired
+          if self.progress[change.previous.id]?.revision == change.previous.revision {
+            self.progress.removeValue(forKey: change.previous.id)
+          }
+        }
+        self.generation += 1
+        self.pauses[scope] = .pairingChanged
+        let pending = Set(changes.compactMap { change -> Int? in
+          guard let taskID = change.previous.taskID, self.tasks[taskID] != nil else { return nil }
+          return taskID
+        })
+        self.pendingNetworkRetirements.append(PendingNetworkRetirement(
+          taskIDs: pending, reply: reply))
+        for id in pending { self.tasks[id]?.cancel() }
+        self.finishNetworkRetirements()
+        self.notify()
+      } catch {
+        // A failed journal write must not be mistaken for a safe unlink.
+        reply(.failure(error))
+      }
+    }
+  }
+
+  private func finishNetworkRetirements() {
+    guard !pendingNetworkRetirements.isEmpty else { return }
+    var waiting: [PendingNetworkRetirement] = []
+    var finished: [PendingNetworkRetirement] = []
+    for item in pendingNetworkRetirements {
+      if item.taskIDs.isEmpty { finished.append(item) }
+      else { waiting.append(item) }
+    }
+    pendingNetworkRetirements = waiting
+    for item in finished {
+      fileQueue.async {
+        self.queue.async {
+          guard self.reconciled, !self.shuttingDown, !self.persistenceFailed else {
+            item.reply(.failure(LokalTransferError.invalidTransition))
+            return
+          }
+          item.reply(.success(self.summaryValue()))
+        }
+      }
     }
   }
 
