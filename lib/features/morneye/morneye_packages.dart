@@ -1524,14 +1524,35 @@ class MorneyePackages {
     } else {
       tracks = const [];
     }
-    final songs = [
-      for (final t in tracks)
-        if (t is Map &&
-            t['id'] != null &&
-            (t['name'] ?? t['title']) != null &&
-            (t['item_type'] == null || t['item_type'] == 'track'))
-          t,
-    ];
+    // Multiple Amazon widgets can repeat one ASIN; preserve its first
+    // playable identity while retaining later explicit Atmos evidence.
+    final amazon = addon.name.toLowerCase().startsWith('amazon');
+    final amazonIndex = <String, int>{};
+    final songs = <Map>[];
+    for (final entry in tracks) {
+      if (entry is! Map ||
+          entry['id'] == null ||
+          (entry['name'] ?? entry['title']) == null ||
+          (entry['item_type'] != null && entry['item_type'] != 'track')) {
+        continue;
+      }
+      if (amazon) {
+        final id = '${entry['id']}';
+        final previous = amazonIndex[id];
+        if (previous != null) {
+          if (tidalAtmosAvailable(entry) &&
+              !tidalAtmosAvailable(songs[previous])) {
+            songs[previous] = {
+              ...songs[previous],
+              'audio_modes': morneyeExplicitAtmosMode(entry),
+            };
+          }
+          continue;
+        }
+        amazonIndex[id] = songs.length;
+      }
+      songs.add(entry);
+    }
     _remember(key, songs);
     return [for (final t in songs.take(limit)) MorneyeTrack.of(t, 'a-$key')];
   }
