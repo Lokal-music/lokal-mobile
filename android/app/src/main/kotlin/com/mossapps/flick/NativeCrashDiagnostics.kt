@@ -100,7 +100,7 @@ internal object NativeTombstoneSummary {
         value.replace(Regex("[\\r\\n\\t]"), " ").take(120)
 
     fun decode(bytes: ByteArray): String? {
-        if (bytes.isEmpty) return null
+        if (bytes.isEmpty()) return null
         return try {
             val top = fields(bytes)
             if (top.isEmpty()) return null
