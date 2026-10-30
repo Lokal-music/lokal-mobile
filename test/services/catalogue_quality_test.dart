@@ -122,6 +122,23 @@ void main() {
     expect(badge.label, isNot(contains('AC-4')));
   });
 
+  test('confirmed Amazon JOC codec survives selection, artwork and Atmos request', () {
+    const track = DiscoveryTrack(
+      id: 'joc', title: 'Song', artist: 'Artist',
+      source: DiscoverySource.morneye, addonId: 'amazon-new',
+      atmosAvailable: true, atmosRequestable: true,
+      atmosCodec: 'eac3-joc',
+    );
+    expect(track.requestAtmos().atmosCodec, 'eac3-joc');
+    expect(track.withArtwork('https://example.com/cover.jpg').atmosCodec,
+        'eac3-joc');
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: track.requestAtmos().atmosRequested,
+      provider: 'amazon-new',
+      atmosCodec: track.requestAtmos().atmosCodec,
+    ), 'eac3');
+  });
+
   test('WEBM/M4A containers are never treated as playback quality codecs', () {
     expect(verifiedAudioCodec('m4a'), isNull);
     expect(verifiedAudioCodec('webm'), isNull);
