@@ -1034,3 +1034,26 @@ success refusal and pending-reply drainage. Native Isar attestation/root RPC
 fixtures remain explicit. The UI's app-wide clear/unpair ownership, OS-task
 cancellation, journal/WAL handle retirement and installed acceptance are still
 required; these foundations do not enable product native import/upload.
+
+### App lifetime ownership continuation (outside frozen PR345/build87)
+
+Later source moves the single transport/coordinator into a non-auto-disposed
+app provider. Lifecycle widgets borrow the same session; removing/replacing a
+widget stops its lifecycle observation without retiring the app's transfer
+client. Only ProviderContainer disposal drains the coordinator and closes the
+transport, including the native close attempt if coordinator disposal fails.
+The constructor rejects mismatched coordinator/transport owners. Mutation
+callers can now reach that same session; clear/unpair hooks remain pending the
+durable preserve-public policy and OS-task barrier described in the next-work
+design. No native product capability is activated.
+
+Two widget/provider lifetime checks pass: reuse across detach/remount with one
+factory/client, no detached lifecycle callbacks, one container disposal, and an
+unsupported-platform no-op preserving the child. The source factory performs
+the same actual Isar/media setup as the earlier private widget owner.
+
+Submission authority still captures synchronously at the bridge, but later
+source decodes large envelopes on the host utility queue after an early ticket
+check. Native rechecks before journal persistence. A missing owner allows only
+protocol refusal, never enqueue. This bridge change is outside build87 and
+still needs its own actual Apple SDK/installed acceptance.

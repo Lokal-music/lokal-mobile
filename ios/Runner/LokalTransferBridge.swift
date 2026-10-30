@@ -252,11 +252,21 @@ final class LokalTransferBridge {
     }
     if operation == .enqueue {
       do {
-        let request = try LokalTransferProtocol.submission(bytes!)
-        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
-        let ticket = try host.importOwnership.captureSubmission(owner)
-        host.withRuntime({ runtime in runtime.enqueue(request.jobs, submission: ticket) { reply.encode($0) } },
-                         unavailable: { reply.failure($0) })
+        // Capture authority before dispatch; decode a potentially library-sized
+        // envelope on the host's utility queue rather than blocking UIKit.
+        // A missing owner permits protocol refusal only, never native enqueue.
+        let ownership = host.importOwnership
+        let ticket = try importOwner.map { try ownership.captureSubmission($0) }
+        host.withRuntime({ runtime in
+          do {
+            if let ticket { try ownership.validateSubmission(ticket) }
+            let request = try LokalTransferProtocol.submission(bytes!)
+            guard let ticket, request.clientID == ticket.owner.clientID else {
+              throw LokalTransferError.staleRevision
+            }
+            runtime.enqueue(request.jobs, submission: ticket) { reply.encode($0) }
+          } catch { reply.failure(error) }
+        }, unavailable: { reply.failure($0) })
       } catch { reply.failure(error) }
       return
     }
