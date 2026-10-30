@@ -1518,7 +1518,7 @@ Future<List<OnlineSource>> _playbackSources(
           final audio = await registry.resolve(
             found, cancel: cancel, forDownload: forDownload,
           );
-          final selectedSpatial = httpAddonRequestedSpatialCodec(addon.settings);
+          final selectedSpatial = await addon.requestedSpatialCodec();
           if (selectedSpatial != null) {
             // HTTP add-ons use a separate protocol from Mornye packages.
             // A configured Atmos tier must pass through the native verifier,
