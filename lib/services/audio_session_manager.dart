@@ -422,6 +422,13 @@ class AudioSessionManager {
         );
       }
 
+    if (audioEnginePreference == AudioEnginePreference.androidMixerUsb) {
+        // Android retains DAC ownership. The JNI AudioTrack backend checks
+        // mixer attributes, format and USB routing when a stream opens.
+        _debugLog('[Session] Android 14 USB mixer selected; native verification required');
+        return AudioEngineType.rustOboe;
+      }
+
     if (audioEnginePreference == AudioEnginePreference.rustOboe) {
         _debugLog(
           '[Session] Selected RUST_OBOE because an external USB DAC is '
