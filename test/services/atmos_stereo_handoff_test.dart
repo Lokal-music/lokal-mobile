@@ -71,7 +71,7 @@ void main() {
       {'id': 'HI_RES_LOSSLESS', 'kind': 'lossless'},
     ];
 
-    test('Amazon AC-4 and E-AC-3 cannot become implicit playback tiers', () {
+    test('selected Amazon AC-4 or E-AC-3 is the requested playback tier', () {
       const amazon = <dynamic>[
         {'id': 'ac4', 'kind': 'spatial', 'label': 'Dolby Atmos (AC-4)'},
         {'id': 'eac3', 'kind': 'spatial', 'label': 'Dolby Digital Plus'},
@@ -87,7 +87,7 @@ void main() {
         expect(chooseMorneyeDownloadQuality(
           requested: null, configured: configured,
           options: amazon, provider: 'amazon',
-        ), 'best');
+        ), configured);
       }
       expect(chooseMorneyeDownloadQuality(
         requested: 'ac4', configured: 'best',
@@ -99,18 +99,18 @@ void main() {
       ), 'ac4', reason: 'Explicit addon download setting is preserved');
     });
 
-    test('normal Tidal streams cannot inherit an Atmos default', () {
+    test('selected Tidal Atmos is requested without creating a catalogue badge', () {
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'DOLBY_ATMOS',
         options: options, provider: 'tidal',
-      ), 'HI_RES_LOSSLESS');
+      ), 'DOLBY_ATMOS');
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'ATMOS',
         options: [], provider: 'tidal-web',
       ), 'HI_RES_LOSSLESS');
     });
 
-    test('Amazon E-AC-3 stays opt-in with incomplete manifest metadata', () {
+    test('Amazon E-AC-3 selection follows the installed manifest', () {
       const incomplete = <dynamic>[
         {'id': 'eac3', 'label': 'Dolby Digital Plus'},
         {'id': 'best', 'kind': 'lossless'},
@@ -120,7 +120,7 @@ void main() {
           expect(chooseMorneyeDownloadQuality(
             requested: null, configured: configured,
             options: incomplete, provider: provider,
-          ), 'best');
+          ), configured == 'eac3' ? 'eac3' : 'best');
         }
         expect(chooseMorneyeDownloadQuality(
           requested: null, configured: 'eac3', options: [], provider: provider,
@@ -134,7 +134,7 @@ void main() {
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'eac3',
         options: incomplete, provider: 'other',
-      ), 'eac3', reason: 'The E-AC-3 exclusion is Amazon-specific');
+      ), 'eac3');
     });
 
     test('only explicit Atmos requests choose JOC', () {
@@ -163,7 +163,7 @@ void main() {
       ), 'LOSSLESS');
     });
 
-    test('download settings stay intact while playback excludes Atmos', () {
+    test('add-on quality settings control playback and downloads', () {
       expect(resolveMorneyeRequestQuality(
         forPlayback: false, requested: null, configured: 'DOLBY_ATMOS',
         options: options, provider: 'tidal',
@@ -171,22 +171,22 @@ void main() {
       expect(resolveMorneyeRequestQuality(
         forPlayback: true, requested: null, configured: 'DOLBY_ATMOS',
         options: options, provider: 'tidal',
-      ), 'HI_RES_LOSSLESS');
+      ), 'DOLBY_ATMOS');
       expect(resolveMorneyeRequestQuality(
         forPlayback: true, requested: 'DOLBY_ATMOS',
         configured: 'LOSSLESS', options: options, provider: 'tidal',
       ), 'DOLBY_ATMOS');
     });
 
-    test('no implicit Atmos for providers with Atmos-only quality lists', () {
+    test('manifest-selected Atmos works without non-spatial options', () {
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'DOLBY_ATMOS',
         options: [{'id': 'DOLBY_ATMOS'}], provider: 'tidal',
-      ), 'HI_RES_LOSSLESS');
+      ), 'DOLBY_ATMOS');
       expect(chooseMorneyeDownloadQuality(
         requested: null, configured: 'DOLBY_ATMOS',
         options: [{'id': 'DOLBY_ATMOS'}], provider: 'qobuz',
-      ), 'default');
+      ), 'DOLBY_ATMOS');
     });
   });
 }
