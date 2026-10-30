@@ -223,8 +223,9 @@ void main() {
       );
       expect(requested, [configured],
           reason: 'Saved add-on quality must be passed to download()');
-      expect(probes, configured == 'ac4' ? ['inspectAc4'] : isEmpty);
-      expect(result.atmosEncoded, configured == 'ac4');
+      expect(probes, configured == 'ac4' ? ['inspectAc4'] :
+          configured == 'eac3' ? ['inspect'] : isEmpty);
+      expect(result.atmosEncoded, configured == 'ac4' || configured == 'eac3');
       await result.cleanup();
     });
   }
