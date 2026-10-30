@@ -239,6 +239,161 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
+  /// Desktop originals currently have a 1 GiB upload limit. The body is a
+  /// private snapshot, never a URLSession reference to a mutable Music file.
+  static let maximumUploadBytes: Int64 = 1024 * 1024 * 1024
+
+  private func openUpload(_ job: LokalTransferJob) throws -> Int32 {
+    try checkRoot()
+    try job.validate()
+    guard job.direction == .upload, let expected = job.expectedBytes,
+          expected <= Self.maximumUploadBytes else { throw LokalTransferError.invalidRecord }
+    let fd = openat(directory, job.uploadName, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+    guard fd >= 0 else { throw LokalTransferError.posix("open_upload", errno) }
+    var info = stat()
+    guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+          info.st_nlink == 1, info.st_size == expected else {
+      close(fd)
+      throw LokalTransferError.unsafeFile
+    }
+    return fd
+  }
+
+  private func checkUploadBinding(_ job: LokalTransferJob, descriptor: Int32) throws {
+    try checkRoot()
+    var held = stat(), visible = stat()
+    guard let expected = job.expectedBytes, fstat(descriptor, &held) == 0,
+          fstatat(directory, job.uploadName, &visible, AT_SYMLINK_NOFOLLOW) == 0,
+          held.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+          visible.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+          held.st_nlink == 1, held.st_size == expected,
+          held.st_dev == visible.st_dev, held.st_ino == visible.st_ino else {
+      throw LokalTransferError.unsafeFile
+    }
+  }
+
+  private func inspectUpload(_ job: LokalTransferJob,
+                             checkCancellation: () throws -> Void) throws -> LokalTransferFileReceipt {
+    guard let expected = job.expectedBytes else { throw LokalTransferError.invalidRecord }
+    let fd = try openUpload(job)
+    defer { close(fd) }
+    let hash = try Self.digest(fd, checkCancellation: checkCancellation)
+    guard hash == job.expectedSHA256 else { throw LokalTransferError.checksumMismatch }
+    try checkUploadBinding(job, descriptor: fd)
+    try checkCancellation()
+    return LokalTransferFileReceipt(bytes: expected, sha256: hash)
+  }
+
+  /// The caller must already hold authorized source access and the submission
+  /// lease. The borrowed descriptor is neither closed nor repositioned here.
+  /// Prepare before persisting runnable intent; crashes may leave an unaccepted
+  /// partial, which is refused on replay rather than sent or silently replaced.
+  func stageUpload(from source: Int32, for job: LokalTransferJob,
+                   checkCancellation: () throws -> Void = {}) throws -> LokalTransferFileReceipt {
+    try locked {
+      try checkRoot()
+      try job.validate()
+      guard job.direction == .upload, [.queued, .waiting].contains(job.phase),
+            let expected = job.expectedBytes, expected <= Self.maximumUploadBytes else {
+        throw LokalTransferError.invalidTransition
+      }
+      try checkCancellation()
+      let output = openat(directory, job.uploadName,
+        O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+      if output < 0 {
+        guard errno == EEXIST else { throw LokalTransferError.posix("create_upload", errno) }
+        // A lost preparation reply is idempotent only for the exact frozen body.
+        return try inspectUpload(job, checkCancellation: checkCancellation)
+      }
+      var accepted = false
+      defer {
+        if !accepted {
+          // Clean up only the same descriptor we created. Never follow a
+          // replaced name or remove a substitute file after a root change.
+          var held = stat(), visible = stat()
+          if (try? checkRoot()) != nil, fstat(output, &held) == 0,
+             fstatat(directory, job.uploadName, &visible, AT_SYMLINK_NOFOLLOW) == 0,
+             held.st_ino == visible.st_ino, held.st_dev == visible.st_dev {
+            _ = unlinkat(directory, job.uploadName, 0)
+            _ = fsync(directory)
+          }
+        }
+        close(output)
+      }
+      var before = stat()
+      guard fstat(source, &before) == 0, before.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+            before.st_nlink == 1, before.st_size == expected else { throw LokalTransferError.unsafeFile }
+      #if os(iOS) && !targetEnvironment(simulator)
+      try FileManager.default.setAttributes(
+        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+        ofItemAtPath: root.appendingPathComponent(job.uploadName).path)
+      #endif
+      var buffer = [UInt8](repeating: 0, count: 256 * 1024)
+      var total: Int64 = 0
+      while total < expected {
+        try checkCancellation()
+        let count = buffer.withUnsafeMutableBytes {
+          pread(source, $0.baseAddress, Int(min(Int64($0.count), expected - total)), off_t(total))
+        }
+        if count < 0 {
+          if errno == EINTR { continue }
+          throw LokalTransferError.posix("read_upload_source", errno)
+        }
+        guard count > 0 else { throw LokalTransferError.checksumMismatch }
+        try buffer.withUnsafeBytes { bytes in
+          var offset = 0
+          while offset < count {
+            try checkCancellation()
+            let written = write(output, bytes.baseAddress!.advanced(by: offset), count - offset)
+            if written < 0 && errno == EINTR { continue }
+            guard written > 0 else { throw LokalTransferError.posix("write_upload_body", errno) }
+            offset += written
+          }
+        }
+        total += Int64(count)
+      }
+      var after = stat()
+      guard fstat(source, &after) == 0, before.st_dev == after.st_dev,
+            before.st_ino == after.st_ino, before.st_size == after.st_size,
+            before.st_nlink == after.st_nlink else {
+        throw LokalTransferError.unsafeFile
+      }
+      #if canImport(Darwin)
+      guard before.st_mtimespec.tv_sec == after.st_mtimespec.tv_sec,
+            before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec,
+            before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec,
+            before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else { throw LokalTransferError.unsafeFile }
+      #else
+      guard before.st_mtim.tv_sec == after.st_mtim.tv_sec, before.st_mtim.tv_nsec == after.st_mtim.tv_nsec,
+            before.st_ctim.tv_sec == after.st_ctim.tv_sec, before.st_ctim.tv_nsec == after.st_ctim.tv_nsec else {
+        throw LokalTransferError.unsafeFile
+      }
+      #endif
+      guard fsync(output) == 0, lseek(output, 0, SEEK_SET) == 0 else {
+        throw LokalTransferError.posix("sync_upload_body", errno)
+      }
+      let hash = try Self.digest(output, checkCancellation: checkCancellation)
+      guard hash == job.expectedSHA256 else { throw LokalTransferError.checksumMismatch }
+      try checkCancellation()
+      try checkUploadBinding(job, descriptor: output)
+      guard fsync(directory) == 0 else { throw LokalTransferError.posix("sync_upload_directory", errno) }
+      accepted = true
+      return LokalTransferFileReceipt(bytes: total, sha256: hash)
+    }
+  }
+
+  /// Resolve the current sandbox only after checking the exact private body.
+  /// Runtime task creation/reconciliation still needs its own pairing/lease
+  /// fence; this helper alone does not enable native uploads or retry POSTs.
+  func uploadURL(_ job: LokalTransferJob,
+                 checkCancellation: () throws -> Void = {}) throws -> URL {
+    try locked {
+      _ = try inspectUpload(job, checkCancellation: checkCancellation)
+      try checkRoot()
+      return root.appendingPathComponent(job.uploadName)
+    }
+  }
+
   private func libraryPartName(_ job: LokalTransferJob, nonce: String) throws -> String {
     try job.validate()
     guard job.direction == .download,

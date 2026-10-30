@@ -1373,3 +1373,45 @@ sequenceDiagram
   Native-->>Root: Acknowledge (safe to retry a lost reply)
   Note over Root,Journal: Isar receipt, recording-ID floor and public audio remain intact
 ```
+
+## Owned upload snapshot boundary (continuation after PR369)
+
+`LokalTransferFiles.stageUpload` now copies a borrowed, already-authorized file
+descriptor into the private UUID/revision-derived `.upload` file before runnable
+intent can be persisted. It reads with positional, bounded chunks, preserving
+the source descriptor's offset and never moving or modifying the recording.
+It checks the frozen size/SHA-256, source identity/modification state, private
+single-link regular-file binding and current container root, then syncs the
+body and directory. Its 1GiB limit matches the current desktop originals API.
+The app must still supply a current submission lease and authorized source;
+this helper accepts no Flutter path and does not grant source access.
+
+A matching existing body makes a lost preparation reply idempotent. Modified,
+partial, symlinked or substituted bodies fail closed. A new failed/cancelled
+copy removes only the exact private inode it created. Actual process-exit tests
+leave a partial snapshot and prove it cannot be acknowledged or silently sent
+on reopening. Recovery/retirement of these unaccepted parts still needs queue
+integration; they are not treated as completed uploads.
+
+This is the file boundary, not a native upload feature. Runtime enqueue/pump,
+URLSession task/response reconciliation, exact pairing authorization, ambiguous
+POST recovery, terminal cleanup and user queue controls remain to be connected.
+The desktop `server/linkUpload.js` last changed at
+`0bb366877c119c76bfa3be5c5b06d8c4b0728cd5`; its hash lookup alone is not proof
+of a durable, concurrency-safe idempotency contract. Do not blindly retry a POST
+whose response was lost. Native `upload` and `libraryImport` stay false pending
+those integrations and the fixed Apple lifecycle/package gates.
+
+```mermaid
+flowchart LR
+  A[Current pairing + authorized source access] --> B[Private snapshot: size/hash + fsync]
+  B --> C[Persist runnable upload intent]
+  C --> D[URLSession task + bounded response]
+  D --> E{Receipt certain?}
+  E -->|yes| F[Durable desktop original ID]
+  E -->|no| G[Match content or pause; never blind POST retry]
+  F --> H[Drain tasks, then retire private body]
+```
+
+The snapshot box has native host coverage. The surrounding upload admission,
+network, receipt and retirement path remains an integration requirement.
