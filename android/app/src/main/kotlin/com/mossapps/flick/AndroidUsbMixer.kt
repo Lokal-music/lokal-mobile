@@ -25,13 +25,16 @@ object AndroidUsbMixer {
     private const val PREFS = "FlutterSharedPreferences"
     private const val ENGINE_KEY = "flutter.audio_engine_preference"
     private const val BIT_PERFECT_KEY = "flutter.uac2_bit_perfect_enabled"
+    private const val SOURCE_BITS_KEY = "flutter.android_mixer_source_bits"
 
     @JvmStatic
     fun requested(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < 34) return false
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val sourceBits = prefs.getLong(SOURCE_BITS_KEY, 0L)
         return prefs.getString(ENGINE_KEY, null) == "androidMixerUsb" &&
-            prefs.getBoolean(BIT_PERFECT_KEY, false)
+            prefs.getBoolean(BIT_PERFECT_KEY, false) &&
+            sourceBits in 1L..24L
     }
 
     @RequiresApi(34)
