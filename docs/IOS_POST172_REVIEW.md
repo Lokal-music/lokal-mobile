@@ -1372,3 +1372,11 @@ This is source-level parity; neither authenticated live-provider acceptance
 nor iPhone JOC/AC-4 output is claimed. The branch is stacked above #345 and
 requires its **own** iOS 16 SDK, 18.6/26 simulator, independent IPA and
 physical-device gates. Native product transfer import/upload remain off.
+
+## Continuation: merged Android PR350 HTTP quality routing
+
+Ported shared behavior from PR350 head `4ab24776bffe00cab884e3d8c7abb7677de422ab` on top of PR353 `5111678fe192330bafde38d22c186fa2cce940fb`. Configured HTTP quality requests fresh `/stream` data instead of stale inline previews. Explicit spatial IDs and manifest labels request original verified encoded bytes; failed source verification does not substitute stereo. Ordinary progressive playback, opt-in sources, private URL handling and existing manifest download checks are preserved.
+
+iPhone adaptation: AC-4 playback remains unavailable; JOC playback requires native capability. Saving verified encoded bytes does not require a playback decoder. An AC-4 file is labeled AC-4 and never manufactures catalogue Atmos evidence. The same verified codec metadata is retained by staged Morneye saves. Native Android decoder/USB sources are untouched.
+
+This is later source than the existing qualified packages. Local focused contracts are recorded separately; no CI, simulator or physical acceptance is inferred for this continuation. CI waits remain skipped at the user's request. Native product background import/upload remain disabled.

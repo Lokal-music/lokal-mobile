@@ -6,6 +6,7 @@ import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/features/discovery/lastfm_discovery.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_destination.dart';
+import 'package:flick/features/konnekted/discovery_snapshot_cache.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/konnekted/discovery_snapshot_cache.dart';
 import 'package:flick/features/konnekted/konnekted_discovery_view.dart';
@@ -595,11 +596,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Albums For You'), findsOneWidget);
     final semantics = tester.ensureSemantics();
-    final provider = tester.getSemantics(find.bySemanticsLabel('Last.fm'));
-    expect(provider.getSemanticsData().hasAction(SemanticsAction.longPress), isTrue);
-    tester.binding.pipelineOwner.semanticsOwner!.performAction(
-      provider.id, SemanticsAction.longPress,
-    );
+    try {
+      final provider = tester.getSemantics(find.bySemanticsLabel('Last.fm'));
+      expect(provider.getSemanticsData().hasAction(SemanticsAction.longPress), isTrue);
+      tester.binding.pipelineOwner.semanticsOwner!.performAction(
+        provider.id, SemanticsAction.longPress,
+      );
+    } finally {
+      semantics.dispose();
+    }
     await tester.pumpAndSettle();
     expect(find.text('Choose sections to show and drag to reorder.'),
         findsOneWidget);
@@ -608,7 +613,6 @@ void main() {
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     expect(find.text('Albums For You'), findsNothing);
-    semantics.dispose();
     expect(tester.takeException(), isNull);
   });
 
