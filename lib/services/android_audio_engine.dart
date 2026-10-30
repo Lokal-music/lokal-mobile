@@ -346,6 +346,87 @@ class AndroidAudioEngine implements AudioEngine {
   bool get isSingleTrackOnly => _loadedSingleTrackOnly;
   bool get isCrossfadeActive => _crossfadeConfigProvider().enabled;
 
+  /// Preload just one successor in Media3 during playback. When the current
+  /// source ends, native auto-advance joins decoded PCM without a Dart-side
+  /// source reload. Keep a bounded queue by pruning already played slots.
+  void _prepareOnDemandGaplessNext() {
+    final player = _player;
+    final slots = _onDemandGaplessSlots;
+    final epoch = _onDemandGaplessEpoch;
+    if (player == null || slots == null ||
+        _onDemandPreparingEpoch == epoch || _sourceFailed ||
+        !_gaplessEnabledProvider() || isCrossfadeActive ||
+        _restoringFastStartPlaylist || slots.isEmpty) return;
+    final index = player.currentIndex;
+    if (index == null || index < 0 || index != slots.length - 1 ||
+        slots.length != player.sequence.length) return;
+
+    _onDemandPreparingEpoch = epoch;
+    unawaited(() async {
+      try {
+        if (index >= 12) {
+          // Remove old playlist entries behind the active decoder in place,
+          // preserving the current source/position and two older entries.
+          final count = index - 2;
+          _restoringFastStartPlaylist = true;
+          try {
+            await player.removeAudioSourceRange(0, count);
+            if (epoch != _onDemandGaplessEpoch ||
+                !identical(_onDemandGaplessSlots, slots) ||
+                !identical(_player, player)) return;
+            slots.removeRange(0, count);
+          } finally {
+            _restoringFastStartPlaylist = false;
+          }
+        }
+
+        if (epoch != _onDemandGaplessEpoch ||
+            !identical(_onDemandGaplessSlots, slots) ||
+            !identical(_player, player) ||
+            player.currentIndex != slots.length - 1 ||
+            player.processingState == just_audio.ProcessingState.completed) return;
+
+        final next = _onNextSong?.call();
+        if (next == null || next.isPending || next.atmosEncoded) return;
+        final playlist = _playlistProvider();
+        final logicalIndex = slots.last.playlistIndex;
+        if (logicalIndex < 0 || logicalIndex >= playlist.length) return;
+        final nextIndex = logicalIndex + 1 < playlist.length ? logicalIndex + 1 : 0;
+        if (androidAudioSourceIdentity(playlist[nextIndex]) !=
+            androidAudioSourceIdentity(next)) return;
+
+        final source = await _sourceBuilder(next);
+        if (epoch != _onDemandGaplessEpoch ||
+            !identical(_onDemandGaplessSlots, slots) ||
+            !identical(_player, player) || !_gaplessEnabledProvider() ||
+            isCrossfadeActive || _sourceFailed ||
+            player.currentIndex != slots.length - 1 ||
+            player.processingState == just_audio.ProcessingState.completed) return;
+        await player.addAudioSource(source);
+        if (epoch == _onDemandGaplessEpoch &&
+            identical(_onDemandGaplessSlots, slots) &&
+            identical(_player, player)) {
+          slots.add((song: next, playlistIndex: nextIndex));
+        }
+      } catch (error) {
+        // Never stop the current source due to failed speculative preparation.
+        // Manual completion can still load the successor at track end.
+        devLog('[Playback] On-demand gapless preload failed: $error');
+      } finally {
+        if (_onDemandPreparingEpoch == epoch) _onDemandPreparingEpoch = null;
+      }
+    }());
+  }
+
+  void _startOnDemandGaplessWindow(Song song, int logicalIndex) {
+    ++_onDemandGaplessEpoch;
+    _onDemandGaplessSlots = _gaplessEnabledProvider() &&
+            !song.atmosEncoded && !isCrossfadeActive && logicalIndex >= 0
+        ? [(song: song, playlistIndex: logicalIndex)]
+        : null;
+    _prepareOnDemandGaplessNext();
+  }
+
   /// Collapse a previously restored/full native playlist when a network,
   /// pending or 65th entry makes the logical queue on-demand. Retain the
   /// decoder, current source and position: the native sequence must not carry
