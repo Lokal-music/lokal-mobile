@@ -1,3 +1,4 @@
+import 'ios_transfer_song_identity.dart';
 import 'dart:convert';
 
 import 'package:isar_community/isar.dart';
@@ -369,6 +370,7 @@ class IosTransferImportStore {
           ..year = metadata.year
           ..fileType = metadata.fileExtension
           ..dateAdded = _now();
+        await retainIosImportSongIdentitiesInTransaction(isar, [song]);
         await isar.songEntitys.put(song);
       }
       await _boundary('prepare:afterSong');

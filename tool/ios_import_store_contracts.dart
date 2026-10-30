@@ -1,3 +1,4 @@
+import 'package:flick/services/ios_transfer_song_identity.dart';
 import 'package:flick/services/ios_library_scan_epoch.dart';
 // Actual Isar/libmdbx contracts. The native lease callback and media description
 // are fixture boundaries; this is not installed-app/import/media acceptance.
@@ -306,6 +307,7 @@ Future<void> main(List<String> arguments) async {
     Future<void> Function(Fixture) action, {
     bool existing = true,
   }) async {
+    if (options['--scenario'] != null && options['--scenario'] != name) return;
     stage = name;
     final directory = await Directory('${root.path}/$name').create();
     final data = document(existing);
@@ -552,6 +554,91 @@ Future<void> main(List<String> arguments) async {
             await fixture.db.songEntitys.count() == 0,
         'Committed deletion never resurrects its recording',
       );
+    });
+    await scenario('historical-song-id-allocation', (fixture) async {
+      await fixture.prepare();
+      await fixture.publishFixture();
+      await fixture.commit();
+      await fixture.db.writeTxn(() => fixture.db.songEntitys.clear());
+      await fixture.close();
+      await fixture.open();
+      SongEntity fresh(String path) => SongEntity()
+        ..filePath = path ..title = 'New recording' ..artist = 'Fixture'
+        ..dateAdded = DateTime.utc(2026);
+      final first = fresh('/new-first.wav'), second = fresh('/new-second.wav');
+      await fixture.db.writeTxn(() async {
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, [first, second]);
+        await fixture.db.songEntitys.putAll([first, second]);
+      });
+      require(first.id == 43 && second.id == 44 &&
+          (await fixture.store().peek(fixture.job(), fixture.target))!.removedAfterCommit,
+        'Fresh rows after empty database reopen cannot occupy historical import IDs');
+      var refused = false;
+      try {
+        await fixture.db.writeTxn(() async {
+          final stale = fresh('/stale-anchor.wav')..id = 42;
+          await retainIosImportSongIdentitiesInTransaction(fixture.db, [stale]);
+          await fixture.db.songEntitys.put(stale);
+        });
+      } on StateError { refused = true; }
+      require(refused && await fixture.db.songEntitys.get(42) == null,
+        'Stale explicit historical ID cannot recreate a removed recording');
+      final current = (await fixture.db.songEntitys.get(first.id))!;
+      current.title = 'Current edit';
+      await fixture.db.writeTxn(() async {
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, [current]);
+        await fixture.db.songEntitys.put(current);
+      });
+      require((await fixture.db.songEntitys.get(first.id))!.title == 'Current edit',
+        'Existing current IDs retain normal metadata editing');
+      try {
+        await fixture.db.writeTxn(() async {
+          final receipt = (await fixture.db.iosTransferReceiptEntitys.getByOperationKey(
+            fixture.store().keyFor(fixture.job())))!;
+          receipt.localSongId = 9223372036854775806;
+          await fixture.db.iosTransferReceiptEntitys.put(receipt);
+          await retainIosImportSongIdentitiesInTransaction(fixture.db,
+            [fresh('/overflow-a.wav'), fresh('/overflow-b.wav')]);
+        });
+        throw Exception('Identity overflow was accepted');
+      } on StateError { /* Actual Isar writer rolls the receipt back. */ }
+      await fixture.close();
+      await fixture.open();
+      final receipt = (await fixture.db.iosTransferReceiptEntitys.getByOperationKey(
+        fixture.store().keyFor(fixture.job())))!;
+      require(receipt.localSongId == 42 && receipt.state == 'committed' &&
+          await fixture.db.songEntitys.count() == 2,
+        'Overflow refuses atomically and preserves historical proof across reopen');
+      final rescanned = fresh(fixture.store().absolutePath(fixture.target));
+      final guard = IosTransferScanGuard(fixture.db);
+      require(!await fixture.db.writeTxn(() => guard.allowsUpsertInTransaction(rescanned)),
+        'Unwitnessed scan cannot recreate deleted completed import metadata');
+      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
+        require(await guard.allowsUpsertInTransaction(rescanned),
+          'New scan may index retained canonical public bytes');
+        await retainIosImportSongIdentitiesInTransaction(fixture.db, [rescanned]);
+        await fixture.db.songEntitys.put(rescanned);
+      }));
+      require(rescanned.id == 45 &&
+          (await fixture.db.songEntitys.get(43))!.title == 'Current edit' &&
+          (await fixture.db.songEntitys.get(44))!.filePath == '/new-second.wav' &&
+          (await fixture.store().peek(fixture.job(), fixture.target))!.removedAfterCommit,
+        'Fresh rescan gets a separate ID without changing historical import deletion: id=${rescanned.id}, original=${(await fixture.store().peek(fixture.job(), fixture.target))!.song?.id}');
+      await IosLibraryScanEpoch.run(() => fixture.db.writeTxn(() async {
+        require(await guard.allowsUpsertInTransaction(rescanned),
+          'Later fresh scans can refresh the separately rescanned row');
+      }));
+      final entered = Completer<void>(), release = Completer<void>();
+      final staleScan = IosLibraryScanEpoch.run(() async {
+        entered.complete();
+        await release.future;
+        return fixture.db.writeTxn(() => guard.allowsUpsertInTransaction(rescanned));
+      });
+      await entered.future;
+      await IosLibraryScanEpoch.withMutation(() async {});
+      release.complete();
+      require(!await staleScan,
+        'Old scan witness remains invalid after a later mutation releases');
     });
     await scenario('scanner-mutation-generation', (fixture) async {
       final entered = Completer<void>(), release = Completer<void>();
@@ -1260,6 +1347,7 @@ Future<void> main(List<String> arguments) async {
       );
     }, existing: false);
     stdout.writeln(
+      options['--scenario'] != null ? 'Actual Isar scenario passed: ${options['--scenario']}' :
       'Actual Isar import contracts passed: eight-collection schema preservation, private sync isolation, identity/metadata/history, deletion, scanner writer/alias/history guards, writer barrier, atomic rollback, old private-schema/media upgrade, bounded reservation keyset pages, retiring/retired/orphan guards, fourteen receipt/media/retirement commit-exit boundaries and six process reservations. Native RPC/media/app integration remain separate.',
     );
   } catch (error, stack) {
