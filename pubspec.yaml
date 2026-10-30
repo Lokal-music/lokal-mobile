@@ -128,6 +128,7 @@ flutter:
     - shaders/cover_cloud_dissolve.frag
 
   assets:
+    - assets/licenses/libsmb2.txt
     - assets/spotify/session_hook.js
     - assets/icons/flicklogo.png
     - assets/icons/flicklogo_svg.svg
