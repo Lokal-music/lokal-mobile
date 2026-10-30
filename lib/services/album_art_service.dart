@@ -228,6 +228,17 @@ class AlbumArtService {
   /// service's cover endpoint using the `<proto>-cover://<marker>` stored in
   /// the entity's albumArtPath. Local songs try embedded art first, then fall
   /// back to a nearby folder cover (`cover.jpg`, `folder.png`, …).
+  /// The cache key contains the original opaque remoteId, not Uri.path:
+  /// Uri decoding would change WebDAV '%2F' to '/' and miss the FLAC cache.
+  @visibleForTesting
+  static String? networkRemoteIdFromAudioPath(String audioPath) {
+    final scheme = audioPath.indexOf('://');
+    if (scheme < 0) return null;
+    final slash = audioPath.indexOf('/', scheme + 3);
+    if (slash < 0 || slash == audioPath.length - 1) return null;
+    return audioPath.substring(slash + 1);
+  }
+
   Future<Uint8List?> _loadArtworkBytes(
     String audioSourcePath, {
     String? existingPath,
@@ -260,9 +271,8 @@ class AlbumArtService {
       // embedded artwork without another NAS read or full-file download.
       // Preserve the opaque percent-encoded remoteId (critical for WebDAV).
       if (uri.scheme == 'smb' || uri.scheme == 'webdav') {
-        final raw = audioSourcePath.substring(
-          audioSourcePath.indexOf('/', audioSourcePath.indexOf('://') + 3) + 1,
-        );
+        final raw = networkRemoteIdFromAudioPath(audioSourcePath);
+        if (raw == null) return null;
         final local = await NetworkCacheService().getPath(serverId, raw);
         if (local != null) return _loadEmbeddedArtworkBytes(local);
       }
