@@ -783,8 +783,17 @@ class MorneyePackages {
         }
       }
     }
+    // Remove only the update feed that earlier builds injected automatically.
+    // Keep an already installed Amazon (New) addon and every user-added repo.
+    const legacyAmazonNewFeed =
+        'https://raw.githubusercontent.com/CHEYCKIT/Mornye-Extension/refs/heads/feature/amazon-new-release-20261029/amazon-new-registry.json';
+    final oldCount = _repos.length;
+    _repos.removeWhere((r) =>
+        r.url == legacyAmazonNewFeed && r.name == 'Amazon (New) updates');
+    final removedBundledFeed = oldCount != _repos.length;
     _loaded = true;
-    if (oldDefaultId != null || migratedAddonRepositoryIds || currentDefaultId == null) _save();
+    if (oldDefaultId != null || migratedAddonRepositoryIds ||
+        removedBundledFeed) _save();
   }
 
   void _save() => morneyeAtomicWrite(
