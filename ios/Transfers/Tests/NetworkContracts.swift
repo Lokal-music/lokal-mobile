@@ -125,6 +125,14 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
   defer { try? manager.removeItem(at: root) }
 
   let scope = LokalTransferScope(desktopID: "fixture-pc", origin: origin)
+  let clientID = UUID().uuidString.lowercased()
+  let envelope: [String: Any] = ["scope": [
+    "desktopID": scope.desktopID, "origin": scope.origin,
+    "headers": ["Authorization": "forbidden"],
+  ], "clientID": clientID]
+  try rejects("retirement rejects unknown nested credential fields") {
+    _ = try LokalTransferProtocol.scopeRetirement(JSONSerialization.data(withJSONObject: envelope))
+  }
   func request(_ source: String, desktop: String = "fixture-pc") throws -> LokalTransferJob {
     try LokalTransferJob(direction: .download,
       identity: LokalTransferIdentity(desktopID: desktop, sourceID: source,
