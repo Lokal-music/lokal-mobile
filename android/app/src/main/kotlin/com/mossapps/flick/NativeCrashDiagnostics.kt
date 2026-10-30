@@ -13,17 +13,26 @@ import java.util.ArrayDeque
  */
 internal class NativeCrashBreadcrumbs(private val context: Context) {
     private val checkpoints = ArrayDeque<String>()
+    private var lastPublished = ""
 
     fun record(stage: String): Boolean {
         if (!Regex("^[a-z0-9:_-]{1,64}$").matches(stage)) return false
-        if (checkpoints.size >= 12) checkpoints.removeFirst()
-        checkpoints.addLast("${System.currentTimeMillis()}:$stage")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        // Android allows at most 128 bytes in setProcessStateSummary. Bound the
+        // actual encoded byte count, not merely the number of events.
+        checkpoints.addLast("${android.os.SystemClock.elapsedRealtime() / 1000}:$stage")
+        while (checkpoints.size > 1 &&
+            checkpoints.joinToString("\n").toByteArray(StandardCharsets.UTF_8).size > 120
+        ) {
+            checkpoints.removeFirst()
+        }
+        val summary = checkpoints.joinToString("\n").takeLast(120)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && summary != lastPublished) {
             try {
                 val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-                manager?.setProcessStateSummary(checkpoints.joinToString("\n").toByteArray(StandardCharsets.UTF_8))
+                manager?.setProcessStateSummary(summary.toByteArray(StandardCharsets.UTF_8))
+                lastPublished = summary
             } catch (_: Exception) {
-                // Diagnostics may never interrupt playback or navigation.
+                // Android may throttle repeated updates. Never interrupt audio.
             }
         }
         return true
