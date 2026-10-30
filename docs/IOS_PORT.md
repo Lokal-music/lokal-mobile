@@ -1,5 +1,11 @@
 # Lokal Mobile for iPhone: architecture and release plan
 
+The current, bounded release plan is [First iPhone sideload release](IOS_FIRST_RELEASE.md).
+The replacement native background-transfer engine is deferred; its CUE mapping,
+queue/upload/history and OS-daemon work do not block the first foreground-copy IPA.
+Keep the completed data-safety fixes and background audio playback. The historical
+build ledgers below do not override that scope decision.
+
 Status: implementation and hosted native validation, 30 October 2026 (Europe/Paris).
 Release scope updated 29 October 2026 (Europe/Paris): **iOS Home Screen widgets
 are excluded at the user's request.** WidgetKit rendering, App Group delivery
@@ -118,15 +124,17 @@ It also adapts #339–340 catalogue metadata and ordinary stereo quality isolati
 Android AC-4 decoder/actions remain excluded.
 Its host contracts are separate from build86 acceptance; this continuation still
 needs its own Apple execution. Product native import/upload stays disabled.
-The next release work is app-wide clear/unpair/deletion/CUE integration and OS-task barriers,
-owned uploads and persisted progress, followed by OS suspension/relaunch
-acceptance. See
+The later native-engine activation work includes CUE integration, owned uploads,
+persisted progress and OS suspension/relaunch acceptance. These are follow-up
+engine gates under the current first-release scope, not prerequisites for the
+foreground-copy IPA. See
 [the publication sequence](IOS_TRANSFERS.md#tracked-publication-foundation)
 for the implemented boundary and remaining gates. Home Screen widgets remain
 excluded.
 
-**This source is not a finalized release.** Build86 is the current independently
-verified engineering package, described above. Earlier build82 covers #311,
+**This historical continuation was not a finalized release.** Build86 was its
+independently verified engineering package, described above. Current engineering
+baselines and the first-release scope are linked at the top of this document. Earlier build82 covers #311,
 including native private import
 ownership and metadata-cache acceptance. Both complete iOS 18.6 and 26 suites
 pass. The first iOS 26 attempt failed before installation during simulator boot;
@@ -260,7 +268,8 @@ establish iOS parity.
 ## Product brief
 
 Deliver a sideloadable iPhone version with the Android product's features wherever
-iOS reasonably supports them. Time is not a constraint. Preserve Lokal's visual
+iOS reasonably supports them. The first release uses the bounded scope above;
+replacement background-transfer infrastructure is a later milestone. Preserve Lokal's visual
 identity, local-first library, optional online services, and existing Android
 behavior. Do not trade away online sources, add-ons, or desktop integration to
 reach an early release date.
@@ -273,8 +282,8 @@ DSD **file decoding to PCM** is distinct from native DSD output.
 
 The maintainer uses Windows and currently has no Mac, iPhone, or paid Apple
 Developer membership. Build using hosted macOS/Xcode. Sign on the installer's
-Windows machine using their own Apple account. Recruit an iPhone tester before
-calling any build release-ready. Keep account credentials out of CI and chat.
+Windows machine using their own Apple account. The user will handle physical
+iPhone testing before the app is called release-ready. Keep account credentials out of CI and chat.
 
 ## Recommended architecture
 
