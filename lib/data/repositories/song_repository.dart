@@ -55,8 +55,8 @@ class SongRepository {
   /// the entire library (important for opt-in desktop download transfers).
   Future<Song?> getSongByFilePath(String filePath) async {
     final entity = await _isar.songEntitys
-        .filter()
-        .filePathEqualTo(filePath)
+        .where()
+        .filePathEqualToAnyStartOffsetMs(filePath)
         .findFirst();
     return entity == null ? null : _entityToSong(entity);
   }
