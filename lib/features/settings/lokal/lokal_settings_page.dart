@@ -190,40 +190,40 @@ class _LokalSettingsPageState extends ConsumerState<LokalSettingsPage> {
                   ? _results(context, liveRef)
                   : const <Widget>[];
               return ListView(
-            key: const PageStorageKey('lokal-settings'),
-            padding: EdgeInsets.only(
-              bottom: 32 + MediaQuery.paddingOf(context).bottom,
-            ),
-            children: [
-              LokalSettingsHeader(title: lokalText('Settings')),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: LokalSettingsSearchField(
-                  controller: _search,
-                  onChanged: (value) => setState(() => _query = value),
+                key: const PageStorageKey('lokal-settings'),
+                padding: EdgeInsets.only(
+                  bottom: 32 + MediaQuery.paddingOf(context).bottom,
                 ),
-              ),
-              if (!searching)
-                LokalSettingsSection(
-                  title: lokalText('Settings'),
-                  heading: 'Groups',
-                  children: [
-                    for (final group in LokalSettingsGroup.listed)
-                      _GroupLink(group: group),
-                  ],
-                )
-              else if (results.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
-                  child: Text(
-                    lokalText('No settings match your search.'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: t.muted),
+                children: [
+                  LokalSettingsHeader(title: lokalText('Settings')),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: LokalSettingsSearchField(
+                      controller: _search,
+                      onChanged: (value) => setState(() => _query = value),
+                    ),
                   ),
-                )
-              else
-                ...results,
-            ],
+                  if (!searching)
+                    LokalSettingsSection(
+                      title: lokalText('Settings'),
+                      heading: 'Groups',
+                      children: [
+                        for (final group in LokalSettingsGroup.listed)
+                          _GroupLink(group: group),
+                      ],
+                    )
+                  else if (results.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
+                      child: Text(
+                        lokalText('No settings match your search.'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: t.muted),
+                      ),
+                    )
+                  else
+                    ...results,
+                ],
               );
             },
           ),
