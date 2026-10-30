@@ -321,6 +321,7 @@ class MorneyeTrack {
     this.bitDepth,
     this.sampleRate,
     this.atmosAvailable = false,
+    this.atmosCodec,
   });
 
   /// `a-<package key>`.
@@ -340,6 +341,8 @@ class MorneyeTrack {
   final int? bitDepth;
   final int? sampleRate;
   final bool atmosAvailable;
+  /// Only explicit per-track catalogue evidence determines this codec.
+  final String? atmosCodec;
   String get key => provider.substring(2);
 
   static int? _positiveInt(Object? value) {
@@ -527,6 +530,7 @@ class MorneyeTrack {
       bitDepth: _bitDepth(track),
       sampleRate: _sampleRate(track),
       atmosAvailable: tidalAtmosAvailable(track),
+      atmosCodec: morneyeAmazonAtmosCodec(track),
     );
   }
 }
