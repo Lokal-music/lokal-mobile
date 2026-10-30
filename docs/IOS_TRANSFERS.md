@@ -56,14 +56,35 @@ Frozen import custody and verified staging are **not** deleted by this
 network-only operation: separate app-attested Isar retirement and public-file
 cleanup still own them.
 
-This bridge is **not yet invoked by the product Forget/Clear actions** while
-`libraryImport=false` and `upload=false`. Doing so now would require
-installing an app-owned transfer client/explicit pairing mapping before any
-credential removal and proving native cancellation for all task identities,
-including stale background daemon tasks. The new isolated native and Dart
-regression cases are source-level coverage, **not CI or device acceptance** at
-this checkpoint. iOS background suspension/relaunch, signing, physical device
-and true import/upload recovery remain outstanding.
+### App pairing lifecycle (stacked on the scoped native foundation)
+
+Desktop Link **Forget** and **Pair**, and Remote Control **Forget** and
+**Save**, now enter the app-root pairing mutation barrier before changing the
+atomic Keychain authority. Even while `libraryImport=false`, the root briefly
+acquires a native observation client, recovers the URLSession journal, drains
+native file work, reads the native public Keychain pairing and compares its
+desktop ID, origin and pairing UUID with the credentials captured from Flutter
+secure storage. A match must receive an acknowledged durable
+`pairingChanged` retirement before the app can overwrite or clear credentials.
+The root holds that observer until the mutation completes; failures block the
+mutation rather than silently orphaning network tasks. Android is unchanged.
+
+Legacy/manual remote credentials have no background-transfer authorization:
+they may be cleared/replaced only if the native pairing is absent **and** the
+recovered journal is empty. Native journal data combined with a missing,
+different or unprovable pairing fails closed. The credentials store's serialized
+`clearIfMatching` prevents an older confirmed Forget from clearing credentials
+written by a later Pair/Save request; the controller also invalidates older
+configuration revisions. Neither the native transfer protocol nor the journal
+receives bearer tokens.
+
+**Not a product background-transfer launch.** Only the pairing credential
+lifecycle is connected. Generic Library Clear still has its own writer fence;
+frozen Isar import custody, user files, and public-file cleanup remain separate
+app-attested operations. Native `libraryImport=false` and `upload=false`
+remain unchanged, and OS daemon suspension/force-quit, real-device signing,
+upgrade behavior and source/account acceptance still require qualification.
+The new contracts are committed but not CI- or device-verified at this stage.
 
 ## Existing paths and the suspension gap
 
