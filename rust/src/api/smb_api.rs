@@ -38,7 +38,11 @@ pub async fn smb_ping(
     pass: String,
 ) -> anyhow::Result<()> {
     let mut client = smb2::connect(&addr(&host, port), &user, &pass).await?;
-    let _tree = client.connect_share(&share).await?;
+    let mut tree = client.connect_share(&share).await?;
+    // TREE_CONNECT alone is insufficient: the server can allow the session
+    // yet deny listing. Test the first folder access that a library sync
+    // needs, without recursively crawling the share during connection test.
+    let _entries = client.list_directory(&mut tree, "").await?;
     Ok(())
 }
 
