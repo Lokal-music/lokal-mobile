@@ -86,6 +86,14 @@ class WebdavService implements NetworkSourceService {
   String? get untrustedCertificateFingerprint => _untrustedFingerprint;
   String? get untrustedCertificateOrigin => _untrustedOrigin;
 
+  /// Deterministic seam for tests of the certificate approval/persistence
+  /// workflow without a physical self-signed NAS or test TLS private key.
+  @visibleForTesting
+  void recordRejectedCertificateForTest(String origin, String fingerprint) {
+    _untrustedOrigin = origin;
+    _untrustedFingerprint = fingerprint;
+  }
+
   static String _fingerprint(X509Certificate certificate) =>
       sha256.convert(certificate.der).toString();
 
