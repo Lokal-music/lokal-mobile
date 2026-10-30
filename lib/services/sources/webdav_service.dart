@@ -13,6 +13,7 @@ import '../../data/repositories/song_repository.dart';
 import '../library_scanner_service.dart' show ScanProgress;
 import '../network_cache_service.dart';
 import 'network_source_service.dart';
+import 'local_network_access.dart';
 
 /// WebDAV client. Recursive PROPFIND walk of the share, HTTP Basic auth.
 ///
@@ -72,8 +73,39 @@ class WebdavService implements NetworkSourceService {
   @override
   String get coverScheme => _coverMarkerScheme;
 
+  String? _lastPingError;
+
   @override
-  String? get lastPingError => null;
+  String? get lastPingError => _lastPingError;
+
+  static String describePingFailure(Object error) {
+    final raw = error.toString().toLowerCase();
+    if (error is NetworkAccessDenied) return error.message;
+    if (raw.contains('certificate_verify_failed') ||
+        raw.contains('handshakeexception') ||
+        raw.contains('certificate verify failed')) {
+      return 'HTTPS certificate validation failed. This NAS may use a '
+          'self-signed certificate. Use a trusted certificate, or the '
+          'server’s verified HTTP/WebDAV address on your private LAN.';
+    }
+    if (raw.contains('connection refused')) {
+      return 'Connection refused. Check the protocol (HTTP vs HTTPS), '
+          'port and server WebDAV setting.';
+    }
+    if (raw.contains('timed out')) {
+      return 'Server timed out. Check that the phone and NAS share a network.';
+    }
+    return 'Could not connect to the WebDAV service: $error';
+  }
+
+  static String describeStatus(int status) => switch (status) {
+    401 => 'The WebDAV server rejected the username or password (HTTP 401).',
+    403 => 'This account cannot access the requested WebDAV folder (HTTP 403).',
+    404 => 'WebDAV folder not found (HTTP 404). Check the full share path.',
+    405 || 501 => 'This URL does not offer WebDAV PROPFIND (HTTP $status). '
+        'An ordinary HTTPS file server is not necessarily WebDAV.',
+    _ => 'WebDAV server returned HTTP $status.',
+  };
 
   // --- Auth ---------------------------------------------------------------
 
@@ -144,6 +176,7 @@ class WebdavService implements NetworkSourceService {
     String url, {
     int depth = 1,
   }) async {
+    await NetworkLocalAccess.ensure(Uri.parse(url));
     final request = http.Request('PROPFIND', Uri.parse(url))
       ..headers['Depth'] = '$depth'
       ..headers['Content-Type'] = 'application/xml; charset=utf-8'
@@ -228,10 +261,20 @@ class WebdavService implements NetworkSourceService {
 
   @override
   Future<bool> ping(NetworkServerEntity server) async {
+    _lastPingError = null;
     try {
       final response = await _propfind(server, server.baseUrl, depth: 0);
-      return response.statusCode == 207 || response.statusCode == 200;
+      // PROPFIND normally returns 207, including the target folder.
+      // A plain HTML 200 response is not evidence of a WebDAV server.
+      if (response.statusCode == 207 &&
+          response.body.contains('multistatus')) return true;
+      _lastPingError = response.statusCode == 200
+          ? 'The server answered with HTTP 200 but no WebDAV multistatus. '
+              'Use the WebDAV endpoint, not an ordinary HTTP page.'
+          : describeStatus(response.statusCode);
+      return false;
     } catch (e) {
+      _lastPingError = describePingFailure(e);
       AppLog.instance.add('WebDAV ping failed: $e');
       return false;
     }
@@ -246,6 +289,7 @@ class WebdavService implements NetworkSourceService {
   ) async {
     final href = utf8.decode(base64Decode(marker));
     final uri = _requestUri(server, href);
+    await NetworkLocalAccess.ensure(uri);
     final response = await _client.get(
       uri,
       headers: {'Authorization': _basicAuth(server)},
@@ -271,6 +315,7 @@ class WebdavService implements NetworkSourceService {
     // decode once, then re-encode at the request boundary.
     final href = _tryDecode(remoteId);
     final uri = _requestUri(server, href);
+    await NetworkLocalAccess.ensure(uri);
     final request = http.Request('GET', uri)
       ..headers['Authorization'] = _basicAuth(server);
     final response =
