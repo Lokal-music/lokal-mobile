@@ -126,20 +126,13 @@ class LinkJournal {
   }) async {
     if (!Database.isInitialized || msPlayed < 30000) return;
     await _serial(() async {
+      // All persisted phone songs have numeric Isar IDs. Non-numeric online
+      // placeholders cannot be found by scanning the entire local catalog.
       final numericId = int.tryParse(songId);
-      final entity = numericId == null
-          ? null
-          : await Database.instance.songEntitys.get(numericId);
-      // Normal library IDs use the Isar primary key. A missing numeric ID
-      // cannot be rescued by scanning every track during playback.
-      final song = entity != null
-          ? SongRepository().songFromEntity(entity)
-          : numericId == null
-              ? (await SongRepository().getAllSongs())
-                    .where((song) => song.id == songId)
-                    .firstOrNull
-              : null;
-      if (song == null) return;
+      if (numericId == null) return;
+      final entity = await Database.instance.songEntitys.get(numericId);
+      if (entity == null) return;
+      final song = SongRepository().songFromEntity(entity);
       final event = PlayEventEntity()
         ..eventId = eventId
         ..deviceId = await deviceId()
