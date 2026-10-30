@@ -73,6 +73,7 @@ class DiscoveryPlaybackCache {
     Future<void>? cancel,
     void Function(int bytes)? onProgress,
     String? requestedSpatialCodec,
+    bool requireNativeOutput = true,
   }) async {
     if (_busy) {
       throw const DiscoveryException('Another recording is being prepared.');
@@ -87,7 +88,7 @@ class DiscoveryPlaybackCache {
     var cancelled = false;
     if (cancel != null) unawaited(cancel.then((_) => cancelled = true));
     try {
-      if (requestedSpatialCodec != null &&
+      if (requestedSpatialCodec != null && requireNativeOutput &&
           !await AtmosPlaybackSupport.availableFor(requestedSpatialCodec)) {
         throw const DiscoveryException(
           'The device cannot decode the selected native spatial audio tier. '
