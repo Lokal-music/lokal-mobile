@@ -10,7 +10,7 @@ checkpoint, separate from the finished native-engine target.
 | Milestone | Completion evidence |
 | --- | --- |
 | 1. Integrated import | Installed coordinator + actual native transport/lease/file writer + actual Isar + bundled media reader complete a verified import and reconcile without duplicates. The isolated probe is now in source; Apple execution is pending. |
-| 2. Library identity and retirement | Atomic CUE mapping preserves import history and user identities; all relevant mutations retire writers; bounded history cleanup retains identity evidence. Actual rollback/reopen tests cover the boundaries. |
+| 2. Library identity and retirement | Atomic CUE expansion/update now has actual rollback/reopen coverage. Whole-CUE removal back to a full-file row, remaining mutation coverage and bounded history cleanup still need completion while retaining identity evidence. |
 | 3. Native uploads and queue | Owned uploads, ambiguity-safe/idempotent retry, durable progress/cancel/retry and pairing retirement work together. Real protocol tests cover the desktop contract; unavailable features are not advertised. |
 | 4. Lifecycle and final IPA | Storage-failure cancellation and actual OS suspension/relaunch pass. Enable the engine only after its gates pass, then qualify the exact release/AOT IPA, simulator app and independent package/source/symbol audit. |
 

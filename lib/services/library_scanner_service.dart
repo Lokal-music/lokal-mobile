@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'ios_library_scan_epoch.dart';
+import 'ios_transfer_scan_guard.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -2203,7 +2204,8 @@ class LibraryScannerService {
               // Skip if audio file unchanged since last scan and CUE tracks
               // already exist in DB — avoids redundant re-parsing.
               final cachedTs = cachedFingerprints?[audioPath];
-              if (cachedTs != null) {
+              if (cachedTs != null &&
+                  !(Platform.isIOS && iosTransferOperationKeyForPath(audioPath) != null)) {
                 final existingCueCount = existingSongsAfterScan
                     .where(
                       (s) => s.filePath == audioPath && s.startOffsetMs != null,
@@ -2261,11 +2263,10 @@ class LibraryScannerService {
                     )
                   : null;
 
-              // Delete raw entity if present
-              if (rawEntity != null) {
+              // Preserve the existing Android scanner's deletion ordering.
+              if (!Platform.isIOS && rawEntity != null) {
                 await _songRepository.deleteScannedSongsByIds([rawEntity.id]);
               }
-
               final ripLog = logMap[audioPath];
               final lastModified =
                   rawEntity?.lastModified ??
@@ -2286,7 +2287,18 @@ class LibraryScannerService {
               );
 
               if (entities.isNotEmpty) {
-                await _songRepository.upsertScannedSongs(entities);
+                final mapped = await _songRepository.replaceImportedCueTracks(
+                  audioPath,
+                  entities,
+                  expected: existingSongsAfterScan
+                      .where((row) => row.filePath == audioPath).toList(),
+                );
+                if (!mapped) {
+                  if (Platform.isIOS && rawEntity != null) {
+                    await _songRepository.deleteScannedSongsByIds([rawEntity.id]);
+                  }
+                  await _songRepository.upsertScannedSongs(entities);
+                }
               }
             }
 

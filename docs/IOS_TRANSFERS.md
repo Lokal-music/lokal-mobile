@@ -1255,3 +1255,32 @@ and simulator. Host compilation and Dart analysis do not qualify UIKit/file
 coordination on an installed iPhone app. The installed probe must actually pass
 before closing this milestone; ephemeral networking does not prove suspended
 OS-daemon delivery, relaunch, real-desktop authorization or upload acceptance.
+
+### Atomic CUE expansion and range updates
+
+The iPhone Rust scanner now routes a known native-import file's CUE expansion
+through one actual Isar writer transaction, before removing its raw row. The
+mapper requires the current scan generation, a settled committed/retired receipt,
+a canonical target and an exact structural snapshot of current rows. It rejects
+empty/unbounded, duplicate or overlapping ranges and foreign supplied IDs.
+
+Existing offsets retain their current Song IDs. A raw row can supply the first
+new range's ID when that range has no existing identity; additional ranges use
+the historical-receipt-aware allocator. Reused rows retain date added, desktop
+binding and manual metadata edits. Obsolete ranges are removed only after all
+replacements have been accepted in the same transaction. The receipt and audio
+bytes are unchanged. If a later CUE edit removes the original anchored range,
+its committed receipt stays historical and the removed ID is never recreated;
+other existing range IDs remain stable.
+
+Native-shaped CUE paths are reprocessed even if the audio timestamp is unchanged,
+so a changed sidecar is not skipped by the old audio-only cache. Ordinary scan
+cleanup protects all derived rows while the receipt is live; it cannot leave a
+partially deleted CUE group. Android keeps its existing deletion/upsert path.
+
+Actual Isar tests cover preparation refusal, first expansion, range insertion,
+manual identity preservation, stale-snapshot/overlap refusal, post-replacement
+rollback and reopen, anchored-range removal and unchanged public-file SHA-256.
+This source does not yet implement whole-CUE removal back to a full-file row;
+that restoration and bounded history retirement remain in milestone2. Native
+product capabilities remain disabled until the complete activation gates pass.
