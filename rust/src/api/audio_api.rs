@@ -50,11 +50,6 @@ static PENDING_XF_ENABLED: AtomicU8 = AtomicU8::new(u8::MAX);
 static PENDING_XF_DURATION: AtomicU32 = AtomicU32::new(0xFFFF_FFFF);
 static PENDING_XF_CURVE: AtomicU8 = AtomicU8::new(u8::MAX);
 
-// While crossfade is enabled the output clock stays pinned to the rate of
-// the track that started playback, so mismatched-rate successors can still be
-// queued and faded; explicit plays still renegotiate to the native rate.
-static CROSSFADE_PINS_OUTPUT_RATE: AtomicBool = AtomicBool::new(false);
-
 // ponytail: pending EQ so it survives engine recreation. A USB DAC rebuilds
 // the engine on a sample-rate change between tracks; volume and crossfade are
 // already re-applied on the fresh handle, but EQ was dropped — so it worked
@@ -1499,11 +1494,7 @@ pub fn audio_queue_next(path: String) -> Result<(), String> {
     let (output_sample_rate, output_channels, engine_is_raw) =
         with_audio_engine(|handle| Ok((handle.sample_rate(), handle.channels(), handle.is_dop())))?;
     let plan = plan_track_engine_config(&path)?;
-    match decide_queue_plan(
-        output_sample_rate,
-        engine_is_raw,
-        &plan,
-    ) {
+    match decide_queue_plan(output_sample_rate, engine_is_raw, &plan) {
         QueuePlanDecision::Compatible => {}
         QueuePlanDecision::PinResampleToEngineRate => {
             log_info!(
@@ -1791,10 +1782,6 @@ pub fn audio_clear_ir() -> Result<(), String> {
 /// passthrough guard here was redundant and self-defeating — it blocked the
 /// very `crossfade_forces_dsp` flip that lets crossfade escape passthrough.
 pub fn audio_set_crossfade(enabled: bool, duration_secs: f32) -> Result<(), String> {
-    // While crossfade is on, keep the output clock pinned to the rate of the
-    // track that started playback so mismatched-rate successors can still be
-    // queued and faded; explicit plays still renegotiate to the native rate.
-    CROSSFADE_PINS_OUTPUT_RATE.store(enabled, Ordering::Relaxed);
     set_pending_crossfade(enabled, duration_secs);
     with_audio_engine(|handle| handle.set_crossfade(enabled, duration_secs))
 }
@@ -2067,9 +2054,9 @@ mod tests {
             QueuePlanDecision::Compatible
         );
         assert_eq!(
-            decide_queue_plan(44_100, false, &pcm_96),
+            decide_queue_plan(96_000, false, &pcm_44),
             QueuePlanDecision::PinResampleToEngineRate,
-            "gapless PCM resamples instead of restarting the output at the boundary"
+            "gapless PCM must also bridge a 96 kHz to 44.1 kHz transition"
         );
     }
 
