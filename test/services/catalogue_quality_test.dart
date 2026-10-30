@@ -20,6 +20,15 @@ void main() {
     expect(explicitMorneyePlaybackTier(atmosRequested: true), 'DOLBY_ATMOS');
     expect(explicitMorneyePlaybackTier(atmosRequested: true, provider: 'amazon'), 'ac4');
     expect(explicitMorneyePlaybackTier(atmosRequested: false, provider: 'amazon'), isNull);
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: true, provider: 'amazon-new', atmosCodec: 'eac3-joc',
+    ), 'eac3', reason: 'JOC-only Amazon results must not request AC-4');
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: true, provider: 'amazon-new', atmosCodec: 'ac4',
+    ), 'ac4');
+    expect(explicitMorneyePlaybackTier(
+      atmosRequested: true, provider: 'tidal-web', atmosCodec: 'eac3-joc',
+    ), 'DOLBY_ATMOS');
     for (final quality in ['HIGH', 'LOW', 'LOSSLESS']) {
       expect(resolveMorneyeRequestQuality(
         forPlayback: true,
