@@ -1034,3 +1034,23 @@ success refusal and pending-reply drainage. Native Isar attestation/root RPC
 fixtures remain explicit. The UI's app-wide clear/unpair ownership, OS-task
 cancellation, journal/WAL handle retirement and installed acceptance are still
 required; these foundations do not enable product native import/upload.
+
+
+### App-level destructive UI fences (post-build-87 continuation)
+
+The iPhone app-root now exposes a serial mutation barrier. Confirmed **Clear
+library**, individual library/file deletion and desktop-pairing **Forget**
+operations enter that barrier instead of directly racing the coordinator.
+A healthy eligible coordinator must acknowledge its paused submission epoch,
+release active native leases and drain import callbacks before the mutation.
+A failed eligible-root startup refuses the mutation. Multiple UI writes
+serialize through each pause/mutate/resume cycle; exceptions after a successful
+pause still resume. The unsupported native-release adapter leaves existing
+Android and iPhone foreground copy workflows unchanged.
+
+This is an explicit, incomplete gate: native product import/upload remain
+disabled. Full safe activation still requires journal/URLSession task
+cancellation and storage barriers for *all* database and pairing mutation
+entry points, native CUE/scanner ownership, durable upload/progress and actual
+iOS suspension/relaunch plus real iPhone sideload acceptance. This source is
+newer than the independently accepted build-87 artifact.
