@@ -515,7 +515,6 @@ final class LokalTransferJournal: @unchecked Sendable {
     try scope.validate()
     return try transaction { current in
       let query = try statement("SELECT id,revision,document FROM jobs ORDER BY rowid")
-      var originals: [LokalTransferJob] = []
       var changes: [(previous: LokalTransferJob, retired: LokalTransferJob, data: Data, oldBytes: Int)] = []
       do {
         while true {
@@ -535,7 +534,6 @@ final class LokalTransferJournal: @unchecked Sendable {
           try next.cancel(nowMs: max(nowMs, job.updatedMs))
           let data = try encoded(next)
           changes.append((job, next, data, oldBytes))
-          originals.append(job)
         }
       } catch {
         sqlite3_finalize(query)
