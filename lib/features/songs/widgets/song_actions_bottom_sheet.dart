@@ -24,6 +24,7 @@ import 'package:flick/providers/providers.dart';
 import 'package:flick/services/music_folder_service.dart';
 import 'package:flick/services/player_service.dart';
 import 'package:flick/widgets/lokal/settings/lokal_settings_surfaces.dart';
+import 'package:flick/widgets/common/ios_transfer_root.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -481,8 +482,11 @@ class SongActionsBottomSheet extends ConsumerWidget {
         ],
       ),
     );
-    if (choice == null) return;
-    await _delete(container, deleteFile: choice == 'file');
+    if (choice == null || !rootContext.mounted) return;
+    await IosTransferRoot.withMutationBarrier(
+      rootContext,
+      () => _delete(container, deleteFile: choice == 'file'),
+    );
   }
 
   Future<void> _delete(
