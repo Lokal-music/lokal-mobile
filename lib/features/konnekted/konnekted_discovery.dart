@@ -1990,6 +1990,25 @@ Future<Song?> findDiscoverySong(
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();
+    // Search the next few HTTP add-ons concurrently once automatic fallback
+    // reaches them. Streaming is still selected in user priority order:
+    // slower failed searches no longer add separate multi-second waits.
+    final preparedHttpSearches = <String, Future<DiscoveryTrack?>>{};
+    var preparedHttp = false;
+    void prepareHttpSearches() {
+      if (preparedHttp) return;
+      preparedHttp = true;
+      for (final next in sources.where((candidate) =>
+          candidate.id.startsWith('w-') &&
+          !_autoHttpAddonCooldown.shouldSkip(candidate.id)).take(3)) {
+        preparedHttpSearches[next.id] = findDiscoverySourceMatch(
+          source: next,
+          candidate: candidate,
+          queries: queries,
+          checkCancelled: check,
+        ).then((match) => match, onError: (Object error) => null);
+      }
+    }
     for (final source in sources) {
       check();
       // Do not skip the only configured provider, and never apply cooldown
@@ -2069,14 +2088,16 @@ Future<Song?> findDiscoverySong(
         }
       }
       check();
+      if (source.id.startsWith('w-')) prepareHttpSearches();
       DiscoveryTrack? found;
       Future<Song?> attempt() async {
-        found = await findDiscoverySourceMatch(
-          source: source,
-          candidate: candidate,
-          queries: queries,
-          checkCancelled: check,
-        );
+        found = await (preparedHttpSearches[source.id] ??
+            findDiscoverySourceMatch(
+              source: source,
+              candidate: candidate,
+              queries: queries,
+              checkCancelled: check,
+            ));
         if (found == null) return null;
         check();
         // A source abandoned by the automatic deadline must never start
@@ -2087,6 +2108,11 @@ Future<Song?> findDiscoverySong(
         final acquisitionTimer = Stopwatch()..start();
         final resolved = await source.play(selected);
         if (automaticAddonAborts[source.id]?.isCompleted == true) return null;
+        // Stop speculative searches that lost the priority race so they do
+        // not continue hitting other add-on endpoints after playback is ready.
+        for (final entry in automaticAddonAborts.entries) {
+          if (!entry.value.isCompleted) entry.value.complete();
+        }
         _autoHttpAddonCooldown.succeeded(source.id);
         AppLog.instance.add('[OnlineSource] discovery acquired source=${source.id} '
             'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
