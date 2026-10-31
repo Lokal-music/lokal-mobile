@@ -406,9 +406,12 @@ class AlbumArtService {
           if (cached != null && cached.isNotEmpty) return cached;
         }
         final server = await Database.networkServers.get(serverId);
-        if (server != null && service is NetworkEmbeddedArtworkSource) {
+        final embeddedSource = service is NetworkEmbeddedArtworkSource
+            ? service as NetworkEmbeddedArtworkSource
+            : null;
+        if (server != null && embeddedSource != null) {
           try {
-            final bytes = await service.getEmbeddedCoverArt(server, raw);
+            final bytes = await embeddedSource.getEmbeddedCoverArt(server, raw);
             if (bytes.isNotEmpty) return Uint8List.fromList(bytes);
           } catch (error) {
             final errorKey = '${uri.scheme}:$serverId:embedded';
