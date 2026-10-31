@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flick/features/discovery/lastfm_discovery.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
+import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/playlist_links/playlist_link_models.dart';
 import 'package:flick/features/playlist_links/playlist_unmatched_downloader.dart';
 import 'package:flick/models/song.dart';

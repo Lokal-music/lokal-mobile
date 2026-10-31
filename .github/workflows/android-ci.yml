@@ -29,16 +29,29 @@ jobs:
           python3 -B -m unittest discover -s tool -p 'ci_*_test.py' -v
           python3 -B tool/native_test_cargokit_launcher.py
       - uses: ./.github/actions/android-toolchain
-      # Fast preflight: a malformed Spotify API file previously reached the
-      # signed release workflow before the full Flutter build caught it.
-      - name: Analyze Spotify library and playlist cache
+      # Cover every provider playlist screen as well as the API/cache.
+      # A missing type import in provider_playlist_track_browser.dart was
+      # previously missed and surfaced only during the signed release build.
+      - name: Analyze provider playlist Dart sources
         run: |
-          dart analyze --no-fatal-warnings lib/features/spotify/spotify_web_api.dart
-          dart analyze --no-fatal-warnings lib/features/spotify/spotify_playlist_cache.dart
+          set -euo pipefail
+          for source in \
+            lib/features/spotify/spotify_web_api.dart \
+            lib/features/spotify/spotify_playlist_cache.dart \
+            lib/features/spotify/spotify_playlists_screen.dart \
+            lib/features/spotify/provider_playlist_track_browser.dart \
+            lib/features/spotify/provider_playlist_track_tile.dart \
+            lib/features/spotify/provider_playlist_visibility.dart \
+            lib/features/discovery/youtube_music_playlists_screen.dart \
+            lib/features/discovery/youtube_music_playlist_cache.dart; do
+            dart analyze --no-fatal-warnings "$source"
+          done
       - name: Focused suites from docs/BUILD.md, including share and picker
         run: >-
           flutter test --no-pub
           test/spotify test/morneye test/playlist_links test/flow test/discovery test/konnekted
+          test/widgets/provider_playlist_track_browser_test.dart
+          test/widgets/provider_playlist_track_tile_test.dart
           test/l10n test/features/search/search_localization_test.dart
           test/widgets/share_actions_test.dart
           test/features/player/picked_lyrics_file_test.dart
