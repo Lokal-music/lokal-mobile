@@ -43,7 +43,7 @@ class SearchFilterChips extends StatelessWidget {
             segments: [
               ButtonSegment(
                 value: SearchScope.all,
-                label: Text(lokalText('All')),
+                label: Text(l10n.all),
               ),
               ButtonSegment(
                 value: SearchScope.library,
