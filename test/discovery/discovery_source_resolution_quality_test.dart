@@ -115,6 +115,38 @@ void main() {
     expect(audio.codec, isNull);
   });
 
+  test('automatic HTTP budget aborts an unfinished search and stream attempt', () async {
+    final pending = Completer<int>();
+    var aborted = false;
+    await expectLater(
+      boundedAutomaticAddonAttempt<int>(
+        () => pending.future,
+        abort: () => aborted = true,
+        budget: const Duration(milliseconds: 10),
+      ),
+      throwsA(isA<DiscoveryException>().having(
+        (error) => error.message, 'message', contains('timed out'),
+      )),
+    );
+    expect(aborted, isTrue);
+    pending.complete(1);
+  });
+
+  test('first genuine timeout cools unhealthy provider temporarily', () {
+    final guard = OnlineAddonCooldown();
+    final start = DateTime.utc(2026, 10, 31);
+    guard.failed(
+      'w-unhealthy', const DiscoveryException('Automatic source timed out.'),
+      now: start,
+    );
+    expect(guard.shouldSkip('w-unhealthy', now: start), isTrue);
+    expect(guard.shouldSkip(
+      'w-unhealthy', now: start.add(const Duration(seconds: 46)),
+    ), isFalse);
+    guard.succeeded('w-unhealthy');
+    expect(guard.shouldSkip('w-unhealthy', now: start), isFalse);
+  });
+
   test('automatic HTTP circuit breaker cools down repeated timeouts only', () {
     final guard = OnlineAddonCooldown(
       failureThreshold: 2, cooldown: const Duration(minutes: 2),
