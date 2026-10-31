@@ -51,6 +51,36 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('NAS href interoperability', () {
+    test('legacy absolute NAS cover and audio paths never duplicate the origin', () {
+      final cover = WebdavService.requestUriForTest(
+        'https://192.168.8.1:6008/disk1_part1',
+        'https://192.168.8.1:6008/disk1_part1/Album%20One/cover.jpg',
+      );
+      expect(
+        cover.toString(),
+        'https://192.168.8.1:6008/disk1_part1/Album%20One/cover.jpg',
+      );
+      final song = WebdavService.requestUriForTest(
+        'https://192.168.8.1:6008/disk1_part1',
+        '/disk1_part1/100% Real.flac',
+      );
+      expect(song.toString(), contains('100%25%20Real.flac'));
+    });
+
+    test('legacy WebDAV paths may not escape the share or switch origins', () {
+      const root = 'https://192.168.8.1:6008/disk1_part1';
+      for (final invalid in [
+        'https://evil.example/disk1_part1/cover.jpg',
+        'https://192.168.8.1:6009/disk1_part1/cover.jpg',
+        'https://admin:secret@192.168.8.1:6008/disk1_part1/cover.jpg',
+        '/other_share/cover.jpg',
+        '/disk1_part1/../private/cover.jpg',
+      ]) {
+        expect(() => WebdavService.requestUriForTest(root, invalid),
+            throwsA(isA<FormatException>()));
+      }
+    });
+
     test('absolute same-origin WebDAV hrefs resolve as share-relative paths', () {
       const body = '<D:multistatus xmlns:D="DAV:">'
           '<D:response><D:href>https://192.168.8.1:6008/disk1_part1/</D:href>'

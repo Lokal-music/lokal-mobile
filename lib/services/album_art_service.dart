@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -39,6 +40,80 @@ class AlbumArtService {
   final Map<String, Future<String?>> _inFlightResolutions = {};
   final Map<String, String> _resolvedPaths = {};
 
+  // SMB and WebDAV each expose the same folder cover to every track in an
+  // album. Bound outstanding NAS image operations and share one request per
+  // cover marker, rather than creating a connection per visible list tile.
+  final List<Future<void>> _networkArtworkSlots = [
+    Future<void>.value(),
+    Future<void>.value(),
+  ];
+  int _nextNetworkArtworkSlot = 0;
+
+  String? _networkArtworkKey(String sourcePath, String? marker) {
+    final uri = Uri.tryParse(sourcePath);
+    if (uri == null || (uri.scheme != 'smb' && uri.scheme != 'webdav')) {
+      return null;
+    }
+    final prefix = '${uri.scheme}-cover://';
+    return marker != null && marker.startsWith(prefix)
+        ? '${uri.scheme}://${uri.host}/$marker'
+        : sourcePath;
+  }
+
+  Future<File> _networkIndexFile(String key) async {
+    final art = await _ensureArtworkDir();
+    return File('${art.path}/network-index/'
+        '${sha256.convert(utf8.encode(key))}.ref');
+  }
+
+  Future<String?> _cachedNetworkArtwork(String key) async {
+    try {
+      final ref = await _networkIndexFile(key);
+      final name = (await ref.readAsString()).trim();
+      // Never use a filename or path controlled by a remote NAS response.
+      if (!RegExp(r'^embedded-artwork:[a-f0-9]{32}$').hasMatch(name)) {
+        return null;
+      }
+      final art = await _ensureArtworkDir();
+      final path = '${art.path}/$name';
+      if (await _isUsableImagePath(path) && await File(path).length() > 0) {
+        return path;
+      }
+    } catch (_) {
+      // An evicted/corrupt index must cause a fresh NAS request, not hide art.
+    }
+    return null;
+  }
+
+  Future<void> _rememberNetworkArtwork(String key, String cacheKey) async {
+    try {
+      final ref = await _networkIndexFile(key);
+      await ref.parent.create(recursive: true);
+      await ref.writeAsString(cacheKey, flush: true);
+    } catch (_) {
+      // Durable index is optional; an available image must still be rendered.
+    }
+  }
+
+  Future<Uint8List?> _loadArtworkWithNetworkLimit(
+    String sourcePath, {
+    String? existingPath,
+  }) async {
+    if (_networkArtworkKey(sourcePath, existingPath) == null) {
+      return _loadArtworkBytes(sourcePath, existingPath: existingPath);
+    }
+    final slot = _nextNetworkArtworkSlot++ % _networkArtworkSlots.length;
+    final previous = _networkArtworkSlots[slot];
+    final released = Completer<void>();
+    _networkArtworkSlots[slot] = released.future;
+    await previous;
+    try {
+      return await _loadArtworkBytes(sourcePath, existingPath: existingPath);
+    } finally {
+      released.complete();
+    }
+  }
+
   /// New/reordered cover cards can paint the already resolved desktop art on
   /// their first frame, instead of flashing a marker-scheme placeholder.
   String? cachedArtworkPathFor(String? audioSourcePath) {
@@ -56,18 +131,21 @@ class AlbumArtService {
     String? existingPath,
     required String audioSourcePath,
   }) async {
-    if (audioSourcePath.isEmpty) {
-      return null;
-    }
+    if (audioSourcePath.isEmpty) return null;
+    if (await _isUsableImagePath(existingPath)) return existingPath;
 
-    if (await _isUsableImagePath(existingPath)) {
-      return existingPath;
-    }
     final resolved = cachedArtworkPathFor(audioSourcePath);
     if (resolved != null) return resolved;
 
-    final future = _inFlightResolutions.putIfAbsent(audioSourcePath, () async {
-      final raw = await _loadArtworkBytes(
+    final networkKey = _networkArtworkKey(audioSourcePath, existingPath);
+    final resolutionKey = networkKey ?? audioSourcePath;
+    final future = _inFlightResolutions.putIfAbsent(resolutionKey, () async {
+      if (networkKey != null) {
+        final persisted = await _cachedNetworkArtwork(networkKey);
+        if (persisted != null) return persisted;
+      }
+
+      final raw = await _loadArtworkWithNetworkLimit(
         audioSourcePath,
         existingPath: existingPath,
       );
@@ -76,22 +154,20 @@ class AlbumArtService {
         return null;
       }
 
-      // Extension is irrelevant: Flutter's image decoder sniffs magic bytes,
-      // so keying the file on the content hash alone keeps lookup O(1) with
-      // no glob and no raw-vs-normalized format mismatch.
+      // A content-addressed image stays shared by different tracks. A tiny
+      // durable reference per cover marker survives app restart while the
+      // DB keeps the remote marker for recovery after cache eviction.
       final cacheKey = _cacheKey(raw);
       final dir = await _ensureArtworkDir();
       final cachedFile = File('${dir.path}/$cacheKey');
-      if (await _isUsableImagePath(cachedFile.path)) {
-        _resolvedPaths[audioSourcePath] = cachedFile.path;
-        unawaited(_persistArtworkPath(audioSourcePath, cachedFile.path));
-        unawaited(_pruneIfNeeded(dir));
-        return cachedFile.path;
+      if (!await _isUsableImagePath(cachedFile.path) ||
+          await cachedFile.length() == 0) {
+        final bytes = await _normalizeArtworkBytes(raw);
+        await cachedFile.writeAsBytes(bytes, flush: true);
       }
-
-      final bytes = await _normalizeArtworkBytes(raw);
-      await cachedFile.writeAsBytes(bytes, flush: true);
-      _resolvedPaths[audioSourcePath] = cachedFile.path;
+      if (networkKey != null) {
+        await _rememberNetworkArtwork(networkKey, cacheKey);
+      }
 
       await _persistArtworkPath(audioSourcePath, cachedFile.path);
       unawaited(_pruneIfNeeded(dir));
@@ -99,9 +175,15 @@ class AlbumArtService {
     });
 
     try {
-      return await future;
+      final path = await future;
+      if (path != null) _resolvedPaths[audioSourcePath] = path;
+      return path;
     } finally {
-      _inFlightResolutions.remove(audioSourcePath);
+      // Multiple tiles may await the same album cover. Only remove the exact
+      // completed operation, never a newer retry for this marker.
+      if (identical(_inFlightResolutions[resolutionKey], future)) {
+        _inFlightResolutions.remove(resolutionKey);
+      }
     }
   }
 
@@ -187,6 +269,21 @@ class AlbumArtService {
 
     try {
       final referenced = await _songRepository.getReferencedAlbumArtPaths();
+      // Remote-song DB rows retain their server markers, not the local image
+      // path. Honor the durable cover index too: without this, pruning would
+      // evict active NAS artwork as an "orphan" after 500 covers.
+      final indexDirectory = Directory('${dir.path}/network-index');
+      if (await indexDirectory.exists()) {
+        await for (final entity in indexDirectory.list(followLinks: false)) {
+          if (entity is! File) continue;
+          try {
+            final name = (await entity.readAsString()).trim();
+            if (RegExp(r'^embedded-artwork:[a-f0-9]{32}$').hasMatch(name)) {
+              referenced.add('${dir.path}/$name');
+            }
+          } catch (_) {}
+        }
+      }
 
       final files = <({File file, DateTime modified})>[];
       await for (final entity in dir.list(followLinks: false)) {

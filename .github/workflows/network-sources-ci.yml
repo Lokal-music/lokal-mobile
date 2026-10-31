@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'lib/services/album_art_service.dart'
+      - 'lib/widgets/common/cached_image_widget.dart'
       - 'lib/services/remote_source_service.dart'
       - 'lib/services/android_audio_engine.dart'
       - 'lib/services/process_exit_diagnostics_service.dart'
@@ -40,17 +41,22 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/android-toolchain
       - name: Analyze network implementations and settings
-        run: >-
-          dart analyze --no-fatal-infos --no-fatal-warnings
-          lib/services/album_art_service.dart
-          lib/services/remote_source_service.dart
-          lib/services/android_audio_engine.dart
-          lib/services/process_exit_diagnostics_service.dart
-          lib/services/sources/local_network_access.dart
-          lib/services/sources/smb_service.dart
-          lib/services/sources/native_smb_transport.dart
-          lib/services/sources/webdav_service.dart
-          lib/features/settings/screens/network_server_edit_screen.dart
+        # dart analyze accepts only one file or directory per invocation.
+        run: |
+          set -e
+          for source in \
+            lib/services/album_art_service.dart \
+            lib/services/remote_source_service.dart \
+            lib/services/android_audio_engine.dart \
+            lib/services/process_exit_diagnostics_service.dart \
+            lib/services/sources/local_network_access.dart \
+            lib/services/sources/smb_service.dart \
+            lib/services/sources/native_smb_transport.dart \
+            lib/services/sources/webdav_service.dart \
+            lib/features/settings/screens/network_server_edit_screen.dart \
+            lib/widgets/common/cached_image_widget.dart; do
+            dart analyze --no-fatal-infos --no-fatal-warnings "$source"
+          done
       - name: Run SMB, WebDAV and Android LAN permission regressions
         run: >-
           flutter test --no-pub

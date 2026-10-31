@@ -231,6 +231,15 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
             }
         }
 
+        // startForegroundService() has an Android deadline. Promote the
+        // service before decoding NAS cover art, updating MediaSession
+        // metadata or doing any audio-focus work on the main thread.
+        // This startup notification deliberately performs no disk or network I/O.
+        if (!isForegroundServiceStarted) {
+            startForeground(NOTIFICATION_ID, buildStartupNotification())
+            isForegroundServiceStarted = true
+        }
+
         if (floatingOverlay?.shown == true) {
             floatingOverlay?.update(
                 currentTitle, currentArtist, getAlbumArtBitmap(), isPlaying,
@@ -241,16 +250,10 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
         syncAudioFocusState()
         syncCastRouting()
 
+        // The expensive artwork-backed notification replaces the lightweight
+        // foreground notification only after the service has been promoted.
         val notification = buildNotification()
-
-        if (!isForegroundServiceStarted) {
-            android.util.Log.d("MusicNotification", "Starting foreground service: isPlaying=$isPlaying")
-            startForeground(NOTIFICATION_ID, notification)
-            isForegroundServiceStarted = true
-        } else {
-            android.util.Log.d("MusicNotification", "Updating notification: isPlaying=$isPlaying, position=$currentPosition, duration=$currentDuration")
-            notificationManager.notify(NOTIFICATION_ID, notification)
-        }
+        notificationManager.notify(NOTIFICATION_ID, notification)
 
         updateWakeLock()
 
@@ -848,6 +851,18 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
         mediaSession.setPlaybackToLocal(AudioManager.STREAM_MUSIC)
         castVolumeProvider = null
         android.util.Log.d("MusicNotification", "[Cast] MediaSession → local volume")
+    }
+
+    private fun buildStartupNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(currentTitle)
+            .setContentText(currentArtist)
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
     }
 
     private fun buildNotification(): Notification {
