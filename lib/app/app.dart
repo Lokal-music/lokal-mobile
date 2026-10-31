@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flick/core/theme/app_colors.dart';
 import 'package:flick/core/theme/lokal_appearance.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/theme/lokal_interaction.dart';
 import 'package:flick/core/navigation/root_navigator.dart';
 import 'package:flick/core/utils/app_haptics.dart';
 import 'package:flick/core/constants/app_constants.dart';
@@ -81,6 +82,7 @@ class FlickPlayerApp extends StatelessWidget {
     LokalAppearance appearance,
   ) {
     return MaterialApp(
+      scrollBehavior: const LokalScrollBehavior(),
       onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       theme: LokalTheme.build(appearance.tokens),

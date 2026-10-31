@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:flick/core/theme/lokal_tokens.dart';
+import 'package:flick/core/theme/lokal_interaction.dart';
 import 'package:flick/data/database.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/features/albums/widgets/identify_album_sheet.dart';
@@ -36,6 +37,7 @@ import 'package:flick/widgets/lokal/lokal_status_snack.dart';
 import 'package:flick/features/link/lokal_ghost_availability.dart';
 
 import 'artist_follow_store.dart';
+import 'lokal_detail_header.dart';
 import 'lokal_library_groups.dart';
 import 'lokal_library_kit.dart';
 import 'lokal_online_catalogue.dart';
@@ -472,305 +474,222 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
         )
         .toList();
     final pageColor = Color.lerp(t.bg, _dominant ?? t.bg, .2)!;
-    final heroHeight = (MediaQuery.sizeOf(context).height * .64).clamp(
-      340.0,
-      680.0,
-    );
     final show = widget.isArtist && !_allSongs ? rows.take(5).toList() : rows;
     final liked = ref.watch(favoritesProvider).value;
-    final allLiked =
-        local.isNotEmpty &&
+    final allLiked = local.isNotEmpty &&
         local.every((song) => liked?.isFavorite(song.id) == true);
+
+    // The existing image-resolution chain is retained for online albums,
+    // network/NAS artwork, cached artist portraits and local fallback art.
+    final Widget heroArtwork;
+    if (_online && !widget.isArtist && _page != null) {
+      heroArtwork = DiscoveryArtwork(
+        kind: DiscoveryArtworkKind.album,
+        title: widget.title,
+        artist: widget.artist,
+        url: discoveryImageUrl(heroImage),
+        placeholder: localCover?.isNotEmpty == true
+            ? CachedImageWidget(
+                imagePath: localCover,
+                audioSourcePath: localArtworkSong?.filePath,
+                fit: BoxFit.cover,
+                errorWidget: ColoredBox(color: pageColor),
+              )
+            : ColoredBox(color: pageColor),
+      );
+    } else if (heroImage?.isNotEmpty == true) {
+      heroArtwork = CachedImageWidget(
+        imagePath: heroImage,
+        audioSourcePath: widget.isArtist ? null : localArtworkSong?.filePath,
+        fit: BoxFit.cover,
+        placeholder: ColoredBox(color: pageColor),
+        errorWidget: ColoredBox(color: pageColor),
+      );
+    } else if (!widget.isArtist && local.isNotEmpty) {
+      heroArtwork = CachedImageWidget(
+        audioSourcePath: local.first.filePath,
+        fit: BoxFit.cover,
+        placeholder: ColoredBox(color: pageColor),
+        errorWidget: ColoredBox(color: pageColor),
+      );
+    } else {
+      heroArtwork = ColoredBox(
+        color: pageColor,
+        child: Center(
+          child: Icon(
+            widget.isArtist ? Icons.person_rounded : Icons.album_rounded,
+            size: 110,
+            color: t.muted2.withValues(alpha: .4),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: pageColor,
       body: CustomScrollView(
         key: PageStorageKey('detail:$_identity'),
         slivers: [
           SliverToBoxAdapter(
-            child: SizedBox(
-              height: heroHeight,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (_online && !widget.isArtist && _page != null)
-                    DiscoveryArtwork(
-                      kind: DiscoveryArtworkKind.album,
-                      title: widget.title,
-                      artist: widget.artist,
-                      url: discoveryImageUrl(heroImage),
-                      placeholder: localCover?.isNotEmpty == true
-                          ? CachedImageWidget(imagePath: localCover,
-                              audioSourcePath: localArtworkSong?.filePath,
-                              fit: BoxFit.cover,
-                              errorWidget: ColoredBox(color: pageColor))
-                          : ColoredBox(color: pageColor),
-                    )
-                  else if (heroImage?.isNotEmpty == true)
-                    CachedImageWidget(
-                      imagePath: heroImage,
-                      // NAS art is an opaque cover marker, not a file URL.
-                      // The matching source path is needed to fetch it.
-                      audioSourcePath: widget.isArtist
-                          ? null : localArtworkSong?.filePath,
-                      fit: BoxFit.cover,
-                      placeholder: ColoredBox(color: pageColor),
-                      errorWidget: ColoredBox(color: pageColor),
-                    )
-                  else if (!widget.isArtist && local.isNotEmpty)
-                    CachedImageWidget(
-                      audioSourcePath: local.first.filePath,
-                      fit: BoxFit.cover,
-                      placeholder: ColoredBox(color: pageColor),
-                      errorWidget: ColoredBox(color: pageColor),
-                    )
-                  else
-                    ColoredBox(
-                      color: pageColor,
-                      child: Center(
-                        child: Icon(
-                          widget.isArtist
-                              ? Icons.person_rounded
-                              : Icons.album_rounded,
-                          size: 140,
-                          color: t.muted2.withValues(alpha: .4),
-                        ),
-                      ),
-                    ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: const [0, .35, .65, 1],
-                        colors: [
-                          Colors.black.withValues(alpha: .24),
-                          Colors.transparent,
-                          pageColor.withValues(alpha: .35),
-                          pageColor,
-                        ],
-                      ),
-                    ),
+            child: LokalDetailHeader(
+              title: widget.title,
+              artwork: heroArtwork,
+              isArtist: widget.isArtist,
+              background: pageColor,
+              metadata: widget.isArtist
+                  ? (local.isEmpty ? null : lokalSongCount(local.length))
+                  : [
+                      if (local.firstOrNull?.year != null)
+                        '${local.first.year}',
+                      lokalSongCount(rows.length),
+                      if (local.isNotEmpty) lokalRunningTime(local),
+                    ].join('  ·  '),
+              onBack: () => Navigator.of(context).maybePop(),
+              onShare: _share,
+              onMore: () => unawaited(_showMenu(rows, local, allLiked)),
+              artistCredit: widget.isArtist ? null : ArtistCreditLinks(
+                credit: widget.artist,
+                style: TextStyle(fontSize: 17, color: t.accent),
+                onArtistTap: (artist) => pushLokal(
+                  context,
+                  LokalMusicDetailPage.artist(
+                    name: artist,
+                    localSongs: KonnektedLibraryIndex.of(library).artist(artist),
+                    initialOnline: _online,
                   ),
-                  Positioned(
-                    left: 20,
-                    right: 20,
-                    top: 0,
-                    child: SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Row(
-                          children: [
-                            _heroButton(
-                              Icons.arrow_back_rounded,
-                              l10n.back,
-                              () => Navigator.of(context).maybePop(),
-                            ),
-                            const Spacer(),
-                            _heroButton(
-                              Icons.ios_share_rounded,
-                              l10n.share,
-                              _share,
-                            ),
-                            const SizedBox(width: 10),
-                            IconButton(
-                              tooltip: lokalText('More'),
-                              icon: Icon(Icons.more_horiz_rounded, color: t.text),
-                              onPressed: () => unawaited(
-                                _showMenu(rows, local, allLiked),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: 10,
-                    child: Column(
-                      crossAxisAlignment: widget.isArtist
-                          ? CrossAxisAlignment.center
-                          : CrossAxisAlignment.start,
-                      children: [
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            widget.title,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: widget.isArtist
-                                ? TextAlign.center
-                                : TextAlign.start,
-                            style: TextStyle(
-                              fontSize: widget.isArtist ? 48 : 36,
-                              height: 1.02,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.5,
-                              color: t.text,
-                            ),
-                          ),
-                        ),
-                        if (!widget.isArtist) ...[
-                          const SizedBox(height: 8),
-                          ArtistCreditLinks(
-                            credit: widget.artist,
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: t.accent,
-                            ),
-                            onArtistTap: (artist) => pushLokal(
-                              context,
-                              LokalMusicDetailPage.artist(
-                                name: artist,
-                                localSongs: KonnektedLibraryIndex.of(library)
-                                    .artist(artist),
-                                initialOnline: _online,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
               child: Column(
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _control(
-                        Icons.shuffle_rounded,
-                        l10n.shuffle,
-                        rows.isEmpty || _busy
-                            ? null
-                            : () => _play(rows, shuffle: true),
-                      ),
-                      const SizedBox(width: 22),
-                      Semantics(
-                        button: true,
-                        label: l10n.play,
-                        child: FilledButton(
-                          onPressed: rows.isEmpty || _busy
-                              ? null
-                              : () => _play(rows),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: rows.isEmpty || _busy ? null : () => _play(rows),
+                          icon: _busy
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.play_arrow_rounded, size: 27),
+                          label: Text(
+                            l10n.play,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
                           style: FilledButton.styleFrom(
                             backgroundColor: t.accent,
                             foregroundColor: t.onAccent,
-                            shape: const CircleBorder(),
-                            padding: const EdgeInsets.all(22),
+                            minimumSize: const Size(0, 56),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(19),
+                            ),
                           ),
-                          child: _busy
-                              ? const SizedBox.square(
-                                  dimension: 36,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.play_arrow_rounded, size: 42),
                         ),
                       ),
-                      const SizedBox(width: 22),
+                      const SizedBox(width: 12),
+                      _control(
+                        Icons.shuffle_rounded,
+                        l10n.shuffle,
+                        rows.isEmpty || _busy ? null : () => _play(rows, shuffle: true),
+                      ),
+                      const SizedBox(width: 12),
                       _control(
                         widget.isArtist
-                            ? (_followed
-                                  ? Icons.star_rounded
-                                  : Icons.star_border_rounded)
-                            : (allLiked
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded),
+                            ? (_followed ? Icons.star_rounded : Icons.star_border_rounded)
+                            : (allLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded),
                         widget.isArtist
-                            ? (_followed
-                                  ? lokalText('Unfollow artist')
-                                  : lokalText('Follow artist'))
+                            ? (_followed ? lokalText('Unfollow artist') : lokalText('Follow artist'))
                             : lokalText('Like all'),
                         !widget.isArtist && local.isEmpty
-                            ? null
-                            : () => widget.isArtist
-                                  ? _follow()
-                                  : _like(local, !allLiked),
+                            ? null : () => widget.isArtist
+                                ? _follow() : _like(local, !allLiked),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _online
-                              ? lokalText('Online')
-                              : lokalText('In library'),
-                          style: TextStyle(
-                            color: t.text,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (_online)
-                        IconButton(
-                          tooltip: lokalText('Refresh'),
-                          onPressed: _loading
-                              ? null
-                              : () => _load(refresh: true),
-                          icon: Icon(Icons.refresh_rounded, color: t.muted),
-                        ),
-                      Switch.adaptive(
-                        value: _online,
-                        onChanged: _busy ? null : _setOnline,
-                        activeTrackColor: t.accent,
-                      ),
-                    ],
-                  ),
-                  if (_online) ...[
-                    if (_loading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: LinearProgressIndicator(),
-                      ),
-                    if (!_loading && (_page?.tracks.isEmpty ?? true))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          _error ??
-                              lokalText(
-                                'No online tracks found. Your library is still available.',
-                              ),
-                          style: TextStyle(color: t.muted),
-                        ),
-                      ),
-                    if (_page?.tracks.isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Text(
-                          widget.isArtist || _page!.completeAlbum
-                              ? lokalText(
-                                  'Catalogue: {source}',
-                                  args: {'source': _page!.label},
-                                )
-                              : lokalText(
-                                  'Search results from {source}; the full album could not be verified.',
-                                  args: {'source': _page!.label},
+                  const SizedBox(height: 16),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: t.surface.withValues(alpha: .8),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: t.border2.withValues(alpha: .65)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  lokalText('Online catalogue'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: t.text,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                          style: TextStyle(color: t.muted, fontSize: 12),
-                        ),
+                              ),
+                              if (_online)
+                                IconButton(
+                                  tooltip: lokalText('Refresh'),
+                                  onPressed: _loading ? null : () => _load(refresh: true),
+                                  icon: Icon(Icons.refresh_rounded, color: t.muted),
+                                ),
+                              Switch.adaptive(
+                                value: _online,
+                                onChanged: _busy ? null : _setOnline,
+                                activeTrackColor: t.accent,
+                              ),
+                            ],
+                          ),
+                          if (_online) ...[
+                            if (_loading)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: LinearProgressIndicator(),
+                              ),
+                            if (!_loading && (_page?.tracks.isEmpty ?? true))
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                child: Text(
+                                  _error ?? lokalText(
+                                    'No online tracks found. Your library is still available.'),
+                                  style: TextStyle(color: t.muted, fontSize: 13),
+                                ),
+                              ),
+                            if (_page?.tracks.isNotEmpty == true)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8, bottom: 6),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    widget.isArtist || _page!.completeAlbum
+                                        ? lokalText('Catalogue: {source}',
+                                            args: {'source': _page!.label})
+                                        : lokalText(
+                                            'Search results from {source}; the full album could not be verified.',
+                                            args: {'source': _page!.label}),
+                                    style: TextStyle(color: t.muted, fontSize: 12),
+                                  ),
+                                ),
+                              ),
+                            if (rows.any((row) => row.owned == null))
+                              TextButton.icon(
+                                onPressed: _busy ? null : () => _download(rows),
+                                icon: const Icon(Icons.download_rounded, size: 18),
+                                label: Text(lokalText('Download missing songs')),
+                              ),
+                          ],
+                        ],
                       ),
-                    if (rows.any((row) => row.owned == null))
-                      Align(
-                        alignment: Alignment.center,
-                        child: TextButton.icon(
-                          onPressed: _busy ? null : () => _download(rows),
-                          icon: const Icon(Icons.download_rounded, size: 18),
-                          label: Text(lokalText('Download missing songs')),
-                        ),
-                      ),
-                  ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -900,16 +819,6 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
       ),
     );
   }
-
-  Widget _heroButton(IconData icon, String label, VoidCallback onTap) =>
-      Tooltip(
-        message: label,
-        child: LokalGlassButton(
-          semanticLabel: label,
-          onPressed: onTap,
-          child: Icon(icon, color: Colors.white, size: 24),
-        ),
-      );
 
   Widget _control(IconData icon, String label, VoidCallback? onTap) => Tooltip(
     message: label,
@@ -1202,8 +1111,9 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
     List<Song> library,
   ) {
     final songs = _albumSongs(album, groups), t = context.lokal;
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
+    return LokalPressable(
+      radius: 16,
+      semanticLabel: album.title,
       onTap: () => _openAlbum(album, groups),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

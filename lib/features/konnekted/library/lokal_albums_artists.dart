@@ -12,6 +12,7 @@ import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/features/library_jobs/library_jobs.dart';
 import 'package:flick/features/library_jobs/library_job_control.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
+import 'package:flick/core/theme/lokal_interaction.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_home.dart';
@@ -452,20 +453,30 @@ class _ArtistRow extends ConsumerWidget {
       ),
     );
     final fallback = artist.songs.isEmpty
-        ? CircleAvatar(radius: 26,
+        ? CircleAvatar(radius: 34,
             backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
             child: Icon(Icons.person_rounded, color: context.lokal.muted))
         : KonnektedArtwork(
-            song: artist.songs.first, size: 52, radius: 26);
-    return InkWell(
+            song: artist.songs.first, size: 68, radius: 34);
+    return LokalPressable(
+      radius: 18,
+      semanticLabel: artist.name,
       onTap: () => pushLokal(
         context,
         LokalArtistPage(name: artist.name, songs: artist.songs,
           initialOnline: artist.songs.isEmpty),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.lokal.surface.withValues(alpha: .7),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: context.lokal.border.withValues(alpha: .6)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
           children: [
             portrait == null
                 ? fallback
@@ -479,7 +490,7 @@ class _ArtistRow extends ConsumerWidget {
                       errorBuilder: (_, _, _) => fallback,
                     ),
                   ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -488,7 +499,7 @@ class _ArtistRow extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w500)),
+                      fontSize: 17, fontWeight: FontWeight.w700)),
                   Text(artist.songs.isEmpty
                       ? 'Not in library' : lokalSongCount(artist.songs.length),
                     maxLines: 1,
@@ -519,6 +530,8 @@ class _ArtistRow extends ConsumerWidget {
             ),
 
           ],
+            ),
+          ),
         ),
       ),
     );

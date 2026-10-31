@@ -1,4 +1,8 @@
 import 'package:flick/l10n/l10n.dart';
+import 'package:flick/core/theme/lokal_genre_palette.dart';
+import 'package:flick/core/theme/lokal_interaction.dart';
+import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/theme/app_theme.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
@@ -321,36 +325,155 @@ class _LokalGenresPageState extends ConsumerState<LokalGenresPage> {
             ),
           )
         else
-          LokalCardGrid(
-            itemCount: count,
-            itemBuilder: (context, index) {
-              if (index == shown.length) {
-                return LokalCoverCard(
-                  art: ColoredBox(
-                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                    child: const Center(child: Icon(Icons.category_rounded, size: 34)),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverLayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.crossAxisExtent;
+                final columns = width >= 850 ? 4 : (width >= 560 ? 3 : 2);
+                final cell = (width - (columns - 1) * 14) / columns;
+                final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5);
+                return SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 14,
+                    mainAxisExtent: (cell * .91).clamp(150.0, 222.0) * scale,
                   ),
-                  title: noGenreLabel,
-                  subtitle: lokalSongCount(summary.noGenre.length),
-                  onTap: () => pushLokal(
-                    context,
-                    LokalGenrePage(
-                      genre: LokalGenre(noGenreLabel, summary.noGenre),
-                      isUnclassified: true,
-                    ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index == shown.length) {
+                        return _LokalGenreCard(
+                          name: noGenreLabel,
+                          count: summary.noGenre.length,
+                          onTap: () => pushLokal(
+                            context,
+                            LokalGenrePage(
+                              genre: LokalGenre(noGenreLabel, summary.noGenre),
+                              isUnclassified: true,
+                            ),
+                          ),
+                        );
+                      }
+                      final genre = shown[index];
+                      return _LokalGenreCard(
+                        name: genre.name,
+                        count: genre.songs.length,
+                        onTap: () => pushLokal(context, LokalGenrePage(genre: genre)),
+                      );
+                    },
+                    childCount: count,
                   ),
                 );
-              }
-              final genre = shown[index];
-              return LokalCoverCard(
-                art: LokalCollage(songs: genre.songs),
-                title: genre.name,
-                subtitle: lokalSongCount(genre.songs.length),
-                onTap: () => pushLokal(context, LokalGenrePage(genre: genre)),
-              );
-            },
+              },
+            ),
           ),
       ],
+    );
+  }
+}
+
+/// Colour is semantic and stable, independent of scroll order or artwork.
+class _LokalGenreCard extends StatelessWidget {
+  const _LokalGenreCard({
+    required this.name,
+    required this.count,
+    required this.onTap,
+  });
+
+  final String name;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = LokalGenrePalette.of(name);
+    return LokalPressable(
+      radius: 24,
+      semanticLabel: '$name, ${lokalSongCount(count)}',
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [tone.highlight, tone.base, tone.base],
+                stops: const [0, .45, 1],
+              ),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned(
+                  right: -25,
+                  bottom: -31,
+                  child: Transform.rotate(
+                    angle: -.18,
+                    child: Icon(
+                      tone.icon,
+                      size: 126,
+                      color: Colors.white.withValues(alpha: .19),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 1, left: 1, right: 1,
+                  child: Container(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: .21),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 12, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: LokalTheme.sans,
+                          fontSize: 22,
+                          height: 1.06,
+                          letterSpacing: -.65,
+                          fontStyle: tone.italic ? FontStyle.italic : FontStyle.normal,
+                          fontWeight: FontWeight.w800,
+                          color: LokalGenrePalette.foreground,
+                        ),
+                      ),
+                      const Spacer(),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .13),
+                          border: Border.all(color: Colors.white.withValues(alpha: .22)),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          child: Text(
+                            lokalSongCount(count),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: LokalGenrePalette.foreground,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
