@@ -223,6 +223,7 @@ class _SpotifyPlaylistsScreenState
                             MaterialPageRoute<void>(
                               builder: (_) => _SpotifyPlaylistDetail(
                                 playlist: playlist, onPlay: widget.onPlay,
+                                accountId: _account,
                               ),
                             ),
                           ),
@@ -267,9 +268,11 @@ class _SpotifyPlaylistDetail extends ConsumerStatefulWidget {
   const _SpotifyPlaylistDetail({
     required this.playlist,
     required this.onPlay,
+    required this.accountId,
   });
 
   final SpotifyPlaylist playlist;
+  final String accountId;
   final void Function(Song song, List<Song> queue) onPlay;
 
   @override
@@ -415,6 +418,7 @@ class _SpotifyPlaylistDetailState
                     tracks: _tracks,
                     source: PlaylistLinkSource.spotify,
                     playlistId: widget.playlist.id,
+                    accountId: widget.accountId,
                     artworkBuilder: (track) => _SpotifyCover(url: track.artworkUrl),
                     onPlay: _playOrdered,
                     onSongActions: _songActions,
