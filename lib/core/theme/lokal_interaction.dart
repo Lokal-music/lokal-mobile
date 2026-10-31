@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/core/utils/app_haptics.dart';
+import 'package:flick/core/constants/app_constants.dart';
 
 /// Motion tokens shared by catalogue surfaces and ordinary navigation.
 abstract final class LokalMotion {
@@ -84,7 +85,8 @@ class LokalScrollBehavior extends MaterialScrollBehavior {
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (MediaQuery.disableAnimationsOf(context) ||
+        AppConstants.animationNormal == Duration.zero) {
       return const ClampingScrollPhysics();
     }
     final platform = getPlatform(context);
