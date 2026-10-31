@@ -387,7 +387,6 @@ class _LokalGenreCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tone = LokalGenrePalette.of(name);
-    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
     return LokalPressable(
       radius: 24,
       semanticLabel: '$name, ${lokalSongCount(count)}',
@@ -437,7 +436,7 @@ class _LokalGenreCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: LokalTheme.sans,
-                          fontSize: 23 / textScale,
+                          fontSize: 22,
                           height: 1.06,
                           letterSpacing: -.65,
                           fontStyle: tone.italic ? FontStyle.italic : FontStyle.normal,
