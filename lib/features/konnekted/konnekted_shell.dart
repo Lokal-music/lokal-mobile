@@ -14,6 +14,7 @@ import 'package:flick/core/utils/navigation_helper.dart';
 import 'package:flick/features/flow/flow_screen.dart';
 import 'package:flick/features/folders/screens/folders_screen.dart';
 import 'package:flick/features/playlist_links/linked_playlists_screen.dart';
+import 'package:flick/features/spotify/spotify_playlists_screen.dart';
 import 'package:flick/features/recap/screens/listening_recap_screen.dart';
 import 'package:flick/features/search/screens/search_screen.dart';
 import 'package:flick/features/settings/lokal/lokal_settings_page.dart';
@@ -199,6 +200,7 @@ class _KonnektedShellState extends ConsumerState<KonnektedShell>
         'folders' => const FoldersScreen(),
         'recap' => const ListeningRecapScreen(),
         'linkedPlaylists' => const LinkedPlaylistsScreen(),
+        'spotifyPlaylists' => SpotifyPlaylistsScreen(onPlay: _play),
         'settings' => lokalSettingsPage(
           group: destination.settingsGroup,
           section: destination.settingsSection,
