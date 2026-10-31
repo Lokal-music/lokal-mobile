@@ -244,6 +244,16 @@ class Uac2Service {
 
   static const _channel = MethodChannel('com.mossapps.flick/uac2');
 
+  /// Fail closed if the platform cannot report its SDK level.
+  Future<bool> supportsAndroidUsbMixer() async {
+    try {
+      final sdk = await _channel.invokeMethod<int>('getAndroidSdkInt');
+      return sdk != null && sdk >= 34;
+    } catch (_) {
+      return false;
+    }
+  }
+
   final _preferencesService = Uac2PreferencesService();
   final ValueNotifier<bool> bitPerfectEnabledNotifier = ValueNotifier(false);
   final ValueNotifier<bool> dapBitPerfectEnabledNotifier = ValueNotifier(true);
@@ -367,7 +377,10 @@ class Uac2Service {
     }
 
     if (Platform.isAndroid) {
-      if (!bitPerfectEnabled) {
+      if (!bitPerfectEnabled ||
+          await _preferencesService.getAudioEnginePreference() ==
+              AudioEnginePreference.androidMixerUsb) {
+        // Framework mixer output must leave USB interface ownership with Android.
         return;
       }
       final matchingDevice = await _resolvePreferredAndroidActivationDevice(
@@ -2129,6 +2142,7 @@ Future<void> stopPriorityAnchor() async {
   }
 
   bool _shouldActivateAndroidDirectUsb(Uac2DeviceInfo preferredDevice) {
+    if (Uac2PreferencesService.isAndroidMixerUsbSelectedSync) return false;
     // Status refreshes must not re-claim an interface already in use by Rust.
     if (_lastDirectUsbPlaybackActive == true &&
         _hasFrozenAndroidDirectUsbSession()) {
@@ -2400,6 +2414,13 @@ Future<void> stopPriorityAnchor() async {
 
     if (!Platform.isAndroid) {
       return false;
+    }
+
+    // Native Android USB mixer retains Android's ownership of the interface.
+    // Do not register a libusb session when that transport is selected.
+    if (await _preferencesService.getAudioEnginePreference() ==
+        AudioEnginePreference.androidMixerUsb) {
+      return true; // Native mixer negotiates on the next track.
     }
 
     if (enabled) {

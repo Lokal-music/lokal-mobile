@@ -139,6 +139,9 @@ class _UsbBitPerfectPromptState extends ConsumerState<UsbBitPerfectPrompt> {
     if (_handledDevices.contains(promptKey)) return;
 
     final engine = await preferences.getAudioEnginePreference();
+    // Explicitly choosing Android's bit-perfect mixer must not be overridden
+    // by the libusb auto-engage prompt when a DAC is connected.
+    if (engine == AudioEnginePreference.androidMixerUsb) return;
     final bitPerfect = ref.read(uac2ServiceProvider).isBitPerfectEnabledSync;
     final declined = (await preferences.getDeclinedUsbDevices()).contains(
       promptKey,

@@ -4,6 +4,7 @@ import 'package:flick/models/audio_engine_type.dart';
 enum AudioPathManagement {
   androidManagedShared,
   androidManagedLowLatency,
+  androidMixerBitPerfect,
   directUsbExperimental,
   alsaDirectDap,
   managedDirectExclusive,

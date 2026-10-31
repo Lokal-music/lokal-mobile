@@ -1012,6 +1012,7 @@ class MainActivity: FlutterActivity() {
         uac2Channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UAC2_CHANNEL)
         uac2Channel?.setMethodCallHandler { call, result ->
             when (call.method) {
+                "getAndroidSdkInt" -> result.success(Build.VERSION.SDK_INT)
                 "listDevices" -> {
                     val refresh = call.argument<Boolean>("refresh") ?: false
                     val devices = listUac2Devices(refresh)

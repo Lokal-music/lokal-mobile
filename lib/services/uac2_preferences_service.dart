@@ -7,7 +7,7 @@ import 'package:flick/src/rust/audio/engine.dart' show AudioApiPreference;
 
 enum Uac2FormatPreference { highestQuality, compatibility, custom }
 
-enum AudioEnginePreference { exoPlayer, rustOboe, isochronousUsb }
+enum AudioEnginePreference { exoPlayer, rustOboe, isochronousUsb, androidMixerUsb }
 
 /// PCM sample format for Android's Rust/Oboe managed output stream.
 /// Direct USB, DSD passthrough, Atmos and ExoPlayer negotiate separately.
@@ -27,6 +27,12 @@ enum DsdWireVariant { auto, beMsb, leMsb, beLsb, leLsb }
 enum DsdWireGrouping { auto, u32, u16, u8 }
 
 class Uac2PreferencesService {
+  // Synchronous mirror used when locking DSP/volume on the selected mixer route.
+  static final ValueNotifier<AudioEnginePreference> selectedAudioEngineNotifier =
+      ValueNotifier(AudioEnginePreference.exoPlayer);
+  static bool get isAndroidMixerUsbSelectedSync =>
+      selectedAudioEngineNotifier.value == AudioEnginePreference.androidMixerUsb;
+
   static final ValueNotifier<bool> developerModeNotifier = ValueNotifier(false);
   static final ValueNotifier<bool> killIsochronousUsbOnQuitNotifier = ValueNotifier(true);
   static final ValueNotifier<DsdOutputMode> dsdOutputModeNotifier = ValueNotifier(DsdOutputMode.auto);
@@ -253,12 +259,23 @@ class Uac2PreferencesService {
     return getBitPerfectEnabled();
   }
 
+  // Source-precision gate: the current Rust float callback is lossless for
+  // 16/24-bit integer PCM, but cannot preserve arbitrary 32-bit samples.
+  Future<void> setAndroidMixerSourceBitDepth(int? depth) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      'android_mixer_source_bits',
+      depth != null && depth > 0 && depth <= 24 ? depth : 0,
+    );
+  }
+
   Future<void> setAudioEnginePreference(
     AudioEnginePreference preference,
   ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyAudioEnginePreference, preference.name);
+      selectedAudioEngineNotifier.value = preference;
     } catch (e) {
       devLog('Failed to save audio engine preference: $e');
     }
@@ -268,12 +285,16 @@ class Uac2PreferencesService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final value = prefs.getString(_keyAudioEnginePreference);
-      if (value == null) return AudioEnginePreference.exoPlayer;
-
-      return AudioEnginePreference.values.firstWhere(
+      if (value == null) {
+        selectedAudioEngineNotifier.value = AudioEnginePreference.exoPlayer;
+        return AudioEnginePreference.exoPlayer;
+      }
+      final preference = AudioEnginePreference.values.firstWhere(
         (engine) => engine.name == value,
         orElse: () => AudioEnginePreference.exoPlayer,
       );
+      selectedAudioEngineNotifier.value = preference;
+      return preference;
     } catch (e) {
       devLog('Failed to load audio engine preference: $e');
       return AudioEnginePreference.exoPlayer;
@@ -834,6 +855,8 @@ class Uac2PreferencesService {
       await prefs.remove(_key432HzTuningEnabled);
       await prefs.remove(_keyExclusiveDacModeEnabled);
 await prefs.remove(_keyAudioEnginePreference);
+    await prefs.remove('android_mixer_source_bits');
+    selectedAudioEngineNotifier.value = AudioEnginePreference.exoPlayer;
     await prefs.remove(_keyAndroidAudioApi);
     await prefs.remove(_keyOutputPrecision);
     await prefs.remove(_keyDeveloperModeEnabled);

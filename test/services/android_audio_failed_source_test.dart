@@ -610,9 +610,8 @@ void main() {
     expect(outgoing.currentPlaying, isTrue);
   });
 
-  testWidgets('failed sources and stalled seeks cannot poison later playback', (
-    tester,
-  ) async {
+  // Use the real clock so retirement futures and their timeout can finish.
+  test('failed sources and stalled seeks cannot poison later playback', () async {
     final player = _Player();
     final song = Song(
       id: 'song',
@@ -655,13 +654,10 @@ void main() {
     await engine.load(song);
     expect(player.loads, 5);
     player.hungSeek = Completer<void>();
-    final timedOut = expectLater(
+    await expectLater(
       engine.seek(const Duration(seconds: 20)),
       throwsA(isA<TimeoutException>()),
     );
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 16));
-    await timedOut;
     player.hungSeek!.complete();
     player.hungSeek = null;
     await engine.load(song);
@@ -735,13 +731,11 @@ void main() {
     // Crossfade has made the internally created fade player the active
     // player, while PlayerService still owns the original in _secondary.
     stalledFade.hungLoad = Completer<Duration?>();
-    final timeout = expectLater(
+    // Let the source timeout and retirement complete on the real clock.
+    await tester.runAsync(() => expectLater(
       engine.load(second),
       throwsA(isA<TimeoutException>()),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 34));
-    await timeout;
+    ));
     expect(retired, [same(stalledFade)]);
 
     // The surviving provider player is reused as the sole active player,
@@ -756,6 +750,7 @@ void main() {
     }
     expect(fadeCreations, 2);
     expect(nextFade.loads, 1);
+    await engine.stop();
   });
 
   testWidgets('pausing during early preparation cannot start the fade', (tester) async {
@@ -810,6 +805,7 @@ void main() {
     outgoing.positions.add(const Duration(minutes: 2, seconds: 58));
     await tester.pump(const Duration(milliseconds: 180));
     expect(incoming.playCalls, 1, reason: 'mix commits only in the fade window');
+    await engine.stop();
   });
 
   testWidgets('cached lead-in is used for a prepared local crossfade', (tester) async {
@@ -860,6 +856,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     expect(incoming.playCalls, 1);
     expect(incoming.currentPosition, const Duration(seconds: 2));
+    await engine.stop();
   });
 
   testWidgets('paired offline cues begin a prepared fade at the model overlap', (tester) async {
@@ -920,6 +917,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(incoming.playCalls, 1);
     expect(incoming.currentPosition, const Duration(seconds: 6));
+    await engine.stop();
   });
 
   testWidgets('verified offline stem uses third decoder then resumes next track', (tester) async {
@@ -1026,10 +1024,9 @@ void main() {
       await stale.errors.close();
       await healthy.errors.close();
     });
-    final first = expectLater(engine.load(song), throwsA(isA<TimeoutException>()));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 34));
-    await first;
+    await tester.runAsync(
+      () => expectLater(engine.load(song), throwsA(isA<TimeoutException>())),
+    );
     expect(retired, [same(stale)]);
     await engine.load(song);
     expect(healthy.loads, 1);
@@ -1092,11 +1089,12 @@ void main() {
     expect(engine.isSingleTrackOnly, isTrue);
   });
 
-  testWidgets('asynchronous source error retires decoder for next selection', (tester) async {
+  test('asynchronous source error retires decoder for next selection', () async {
     final firstNative = _Player();
     final replacement = _Player();
     var created = 0;
     final retired = <ja.AudioPlayer>[];
+    final retirement = Completer<void>();
     final tracks = [
       Song(id: 'bad', title: 'Bad remote', artist: 'Artist',
           duration: const Duration(minutes: 2), fileType: 'FLAC',
@@ -1114,7 +1112,10 @@ void main() {
       playlistProvider: () => tracks,
       configurePlayer: (_) async {},
       disposeEngine: () async {},
-      retireStalledPlayer: (player) async => retired.add(player),
+      retireStalledPlayer: (player) async {
+        retired.add(player);
+        retirement.complete();
+      },
       shouldSuppressTrackSync: () => false,
       shouldIgnoreTrack: (_) => false,
       shouldFastStartCurrentTrackOnly: () => false,
@@ -1128,8 +1129,8 @@ void main() {
     });
     await engine.load(tracks.first);
     firstNative.errors.add(ja.PlayerException(0, 'Source error', 0));
-    await tester.pump();
     await engine.load(tracks.last);
+    await retirement.future;
     expect(created, 2);
     expect(retired, [same(firstNative)]);
     expect(replacement.loads, 1);

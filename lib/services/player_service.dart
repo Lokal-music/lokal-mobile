@@ -362,7 +362,8 @@ bool shouldSuppressMotionArt({
 }) {
   if (!bitPerfectEnabled || allowDuringBitPerfect) return false;
   return engine == AudioEngineType.usbDacExperimental ||
-      engine == AudioEngineType.dapInternalHighRes;
+      engine == AudioEngineType.dapInternalHighRes ||
+      engine == AudioEngineType.rustOboe;
 }
 
 /// The Rust engine and its direct backends emit these markers when the output
@@ -1204,6 +1205,9 @@ class PlayerService {
       unawaited(_handleBitPerfectPreferenceChanged());
     });
     selectedPlaybackModeNotifier.addListener(_updateBitPerfectProcessingLocked);
+    Uac2PreferencesService.selectedAudioEngineNotifier.addListener(
+      _updateBitPerfectProcessingLocked,
+    );
     initializedPlaybackModeNotifier.addListener(
       _updateBitPerfectProcessingLocked,
     );
@@ -2191,6 +2195,9 @@ class PlayerService {
   bool get isBitPerfectModeEnabled =>
       (currentEngineType == AudioEngineType.usbDacExperimental &&
           _uac2Service.isBitPerfectEnabledSync) ||
+      (currentEngineType == AudioEngineType.rustOboe &&
+          Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+          _uac2Service.isBitPerfectEnabledSync) ||
       (currentEngineType == AudioEngineType.dapInternalHighRes &&
           _uac2Service.isDapBitPerfectEnabledSync);
   bool get isBitPerfectProcessingLocked =>
@@ -2205,6 +2212,9 @@ class PlayerService {
     final locked =
         switch (currentEngineType) {
           AudioEngineType.usbDacExperimental => true,
+          AudioEngineType.rustOboe =>
+            Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+                _uac2Service.isBitPerfectEnabledSync,
           AudioEngineType.dapInternalHighRes =>
             _uac2Service.isDapBitPerfectEnabledSync,
           _ => false,
@@ -3086,7 +3096,9 @@ class PlayerService {
   bool get _isAnchorEligiblePath =>
       Platform.isAndroid &&
       currentEngineType.usesRustBackend &&
-      currentEngineType != AudioEngineType.dapInternalHighRes;
+      currentEngineType != AudioEngineType.dapInternalHighRes &&
+      !(Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+          _uac2Service.isBitPerfectEnabledSync);
 
   void _updatePriorityAnchor() {
     final shouldAnchor =
@@ -3158,11 +3170,19 @@ class PlayerService {
     return true;
   }
 
-  /// Bit-perfect volume path: direct USB DAC or DAP internal hi-res engine.
+  bool get _isAndroidMixerBitPerfectPath =>
+      currentEngineType == AudioEngineType.rustOboe &&
+      Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+      _uac2Service.isBitPerfectEnabledSync;
+
+  /// True while the selected active engine intends a hardware-protected route.
+  /// On the framework mixer the Android volume slider cannot control the
+  /// output; unlike libusb there is no UAC2 Feature Unit volume ownership.
   bool get _isBitPerfectVolumePath =>
       isBitPerfectModeEnabled &&
       (currentEngineType == AudioEngineType.usbDacExperimental ||
-          currentEngineType == AudioEngineType.dapInternalHighRes);
+          currentEngineType == AudioEngineType.dapInternalHighRes ||
+          _isAndroidMixerBitPerfectPath);
 
   String? get _currentUsbDsdMode =>
       _activeUsbDsdSongId == currentSongNotifier.value?.id
@@ -3245,9 +3265,14 @@ class PlayerService {
 
   VolumeTier _determineCurrentTier() => determineVolumeTier(
     isBitPerfectVolumePath: _isBitPerfectVolumePath,
-    volumeMode: _uac2Service.currentDeviceStatus?.volumeMode,
-    volumeControlWritable:
-        _uac2Service.currentDeviceStatus?.volumeControlWritable ?? false,
+    // Android's bit-perfect USB mixer does not expose hardware Feature
+    // Unit control through our libusb driver. Never promise app-side volume
+    // adjustment based on USB descriptors from a different transport.
+    volumeMode: _isAndroidMixerBitPerfectPath
+        ? null
+        : _uac2Service.currentDeviceStatus?.volumeMode,
+    volumeControlWritable: !_isAndroidMixerBitPerfectPath &&
+        (_uac2Service.currentDeviceStatus?.volumeControlWritable ?? false),
     hwVolumeFailed: _hwVolumeFailed,
     isDoP: _usbDsdWireActive,
     autoSwitchDsdForVolume: Uac2PreferencesService.autoSwitchDsdForVolumeSync,
@@ -3440,6 +3465,8 @@ class PlayerService {
         ? AudioPathManagement.androidManagedShared
         : directUsbActive
         ? AudioPathManagement.directUsbExperimental
+        : outputSignature?.startsWith('android-mixer-bit-perfect:') == true
+        ? AudioPathManagement.androidMixerBitPerfect
         : outputSignature?.startsWith('android-alsa:') == true
         ? AudioPathManagement.alsaDirectDap
         : outputSignature?.startsWith('android-direct:') == true
@@ -3448,6 +3475,7 @@ class PlayerService {
 
     final isMixerManaged =
         pathManagement != AudioPathManagement.directUsbExperimental &&
+        pathManagement != AudioPathManagement.androidMixerBitPerfect &&
         pathManagement != AudioPathManagement.alsaDirectDap &&
         pathManagement != AudioPathManagement.managedDirectExclusive;
     final requestedOutputSampleRate =
@@ -5300,8 +5328,11 @@ class PlayerService {
     await _rustAudioService.setCrossfeed(
       isBitPerfectProcessingLocked ? 0 : crossfeedLevel,
     );
+    // The final policy pass must not restore a stored pitch value after the
+    // earlier bit-perfect branch zeroed it; pitch forces the Rust callback
+    // out of passthrough and invalidates the bit-perfect claim.
     await _rustAudioService.setPitchShiftSemitones(
-      pitchSemitonesNotifier.value,
+      isBitPerfectProcessingLocked ? 0.0 : pitchSemitonesNotifier.value,
     );
     _updatePriorityAnchor();
   }
@@ -5634,6 +5665,25 @@ class PlayerService {
     }
 
     final engineForSong = _routeEngineForSong(normalizedEngine, song);
+
+    if (Uac2PreferencesService.isAndroidMixerUsbSelectedSync) {
+      // Never present a truncated 32-bit or unknown-precision source as
+      // bit-perfect. Probe local files if metadata is incomplete; otherwise
+      // the Android USB mixer will decline and the Rust fallback will play.
+      int? measuredBits = song.bitDepth;
+      if (measuredBits == null || measuredBits <= 0) {
+        final path = await _resolveRustPath(song);
+        if (path != null && path.isNotEmpty) {
+          try {
+            final probed = await rust_audio.audioProbeFormat(path: path);
+            measuredBits = probed.bitsPerSample;
+          } catch (error) {
+            _debugLog('[USB-MIXER] Unable to verify source precision: $error');
+          }
+        }
+      }
+      await _preferencesService.setAndroidMixerSourceBitDepth(measuredBits);
+    }
 
     switch (engineForSong) {
       case AudioEngineType.normalAndroid:
@@ -7544,6 +7594,11 @@ class PlayerService {
   /// Compute the effective ReplayGain (dB) for [song] from the persisted
   /// settings. 0.0 when the mode is off or tags are missing.
   Future<double> _computeReplayGainDbFor(Song song) async {
+    // ReplayGain is a software multiplication and would silently force the
+    // Rust callback out of bit-perfect passthrough. Suppress it before a
+    // source is queued, not only when updating the live track.
+    if (Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+        _uac2Service.isBitPerfectEnabledSync) return 0.0;
     final mode = await _appPreferencesService.getReplayGainMode();
     if (mode == ReplayGainMode.off) return 0.0;
     final preampDb = await _appPreferencesService.getReplayGainPreampDb();
@@ -7576,7 +7631,11 @@ class PlayerService {
     bool pushSpawnDefault = false,
   }) async {
     final mode = await _appPreferencesService.getReplayGainMode();
-    if (mode == ReplayGainMode.off || song == null) {
+    if (mode == ReplayGainMode.off ||
+        song == null ||
+        (currentEngineType == AudioEngineType.rustOboe &&
+            Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+            _uac2Service.isBitPerfectEnabledSync)) {
       _replayGainState = ReplayGainAppliedState.neutral;
     } else {
       final preampDb = await _appPreferencesService.getReplayGainPreampDb();
@@ -8237,6 +8296,9 @@ class PlayerService {
     _playbackStateSubscription?.cancel();
     unawaited(_playbackManager.dispose());
     selectedPlaybackModeNotifier.removeListener(
+      _updateBitPerfectProcessingLocked,
+    );
+    Uac2PreferencesService.selectedAudioEngineNotifier.removeListener(
       _updateBitPerfectProcessingLocked,
     );
     initializedPlaybackModeNotifier.removeListener(
