@@ -251,7 +251,40 @@ class WebdavService implements NetworkSourceService {
       decodedPath.split('/').map(Uri.encodeComponent).join('/');
 
   Uri _requestUri(NetworkServerEntity server, String decodedPath) =>
-      Uri.parse('${_origin(server)}${_encodePath(decodedPath)}');
+      requestUriForTest(server.baseUrl, decodedPath);
+
+  /// Rebuild a request path from a decoded share path. Old syncs sometimes
+  /// saved a complete PROPFIND href as the remote ID; accept that legacy
+  /// same-origin form without turning https://nas into a URL path component.
+  /// Never send Basic credentials to an arbitrary URL from the server.
+  @visibleForTesting
+  static Uri requestUriForTest(String baseUrl, String decodedPath) {
+    final base = Uri.parse(baseUrl);
+    final candidate = Uri.tryParse(decodedPath);
+    if (candidate != null && candidate.hasScheme) {
+      if (candidate.scheme != base.scheme ||
+          candidate.origin != base.origin ||
+          candidate.userInfo.isNotEmpty ||
+          candidate.hasQuery ||
+          candidate.hasFragment ||
+          candidate.pathSegments.any((s) => s.contains('/') || s.contains('\\'))) {
+        throw const FormatException('WebDAV link is outside the configured server');
+      }
+      // Uri.path has already decoded the encoded path exactly once.
+      decodedPath = candidate.path;
+    }
+    final root = base.path.endsWith('/') && base.path.length > 1
+        ? base.path.substring(0, base.path.length - 1)
+        : base.path;
+    if (!decodedPath.startsWith('/') ||
+        decodedPath.split('/').any((part) => part == '.' || part == '..' ||
+            part.contains('\\')) ||
+        (root != '/' && root.isNotEmpty && decodedPath != root &&
+            !decodedPath.startsWith('$root/'))) {
+      throw const FormatException('WebDAV path is outside the configured share');
+    }
+    return Uri.parse('${base.origin}${_encodePath(decodedPath)}');
+  }
 
   // --- PROPFIND -----------------------------------------------------------
 
@@ -644,7 +677,8 @@ class WebdavService implements NetworkSourceService {
 
     String rootPath;
     try {
-      rootPath = _tryDecode(Uri.parse(server.baseUrl).path);
+      // Uri.path is decoded already: decoding again changes literal %2F names.
+      rootPath = Uri.parse(server.baseUrl).path;
     } catch (_) {
       rootPath = '';
     }
