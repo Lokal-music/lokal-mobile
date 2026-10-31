@@ -314,6 +314,11 @@ class _MoreRows extends StatelessWidget {
         onTap: () => onNavigate(KonnektedDestination.spotifyPlaylists),
       ),
       LokalNavRow(
+        icon: Icons.video_library_rounded,
+        label: lokalText('YouTube Music playlists'),
+        onTap: () => onNavigate(KonnektedDestination.youtubeMusicPlaylists),
+      ),
+      LokalNavRow(
         icon: Icons.radio_rounded,
         label: lokalText('Radio'),
         onTap: () => pushLokal(context, const InternetRadioPage()),
