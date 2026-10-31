@@ -19,11 +19,13 @@ class LokalDetailHeader extends StatelessWidget {
     required this.onShare,
     required this.onMore,
     this.artistCredit,
+    this.metadata,
   });
 
   final String title;
   final Widget artwork;
   final Widget? artistCredit;
+  final String? metadata;
   final bool isArtist;
   final Color background;
   final VoidCallback onBack, onShare, onMore;
@@ -38,7 +40,7 @@ class LokalDetailHeader extends StatelessWidget {
         .clamp(184.0, 314.0);
     final heroHeight = isArtist
         ? (size.height * .52 + (scale - 1) * 90).clamp(350.0, 580.0)
-        : artSize + 180 + topInset + (scale - 1) * 92;
+        : artSize + 268 + topInset + (scale - 1) * 230;
 
     return SizedBox(
       height: heroHeight,
@@ -175,6 +177,19 @@ class LokalDetailHeader extends StatelessWidget {
                 if (artistCredit != null) ...[
                   const SizedBox(height: 9),
                   artistCredit!,
+                ],
+                if (metadata?.isNotEmpty == true) ...[
+                  const SizedBox(height: 9),
+                  Text(
+                    metadata!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isArtist ? Colors.white70 : t.muted,
+                    ),
+                  ),
                 ],
               ],
             ),
