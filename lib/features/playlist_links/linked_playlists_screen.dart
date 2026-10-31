@@ -371,6 +371,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
     try {
       await _run(() async {
         var saved = 0;
+        var skipped = 0;
         var failed = 0;
         String? lastError;
         final downloader = PlaylistUnmatchedDownloader();
@@ -409,6 +410,9 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
             if (!mounted) break;
             ref.invalidate(playlistsProvider);
             ref.invalidate(songsProvider);
+          } on PlaylistDownloadSourceUnavailable {
+            if (cancel.isCompleted) break;
+            skipped++;
           } catch (error) {
             if (cancel.isCompleted) break;
             failed++;
@@ -421,6 +425,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
             _downloadStatus = null;
             _downloadNotice = 'Downloaded $saved of ${entries.length} unmatched '
                 'entries${cancel.isCompleted ? ' (cancelled)' : ''}.'
+                '${skipped > 0 ? ' $skipped unavailable and skipped.' : ''}'
                 '${failed > 0 ? ' $failed failed. $lastError' : ''}';
           });
         }
