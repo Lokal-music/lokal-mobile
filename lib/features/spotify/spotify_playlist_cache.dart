@@ -33,6 +33,9 @@ class SpotifyPlaylistCache {
     return sha256.convert(utf8.encode(cookie)).toString();
   }
 
+  /// SHA-256 account identity for view preferences (never the raw cookie).
+  Future<String> accountId() => _fingerprint();
+
   Future<void> _ensure() async {
     final account = await _fingerprint();
     if (account == _account && _state != null) return;
