@@ -226,18 +226,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           query: repoQuery, online: false,
                           onPlayLocal: _playSong,
                         )
-                      : CustomScrollView(
-                          slivers: [
-                            SliverToBoxAdapter(
-                              child: LyricsSearchSection(
-                                key: ValueKey('library-lyrics:$repoQuery'),
-                                query: repoQuery, online: false,
-                                onPlayLocal: _playSong,
-                              ),
-                            ),
+                      : NestedScrollView(
+                          // Local lyrics owns a scroll view. A plain sliver
+                          // wrapper would give it unbounded height on Android.
+                          headerSliverBuilder: (context, innerBoxIsScrolled) => [
                             if (_onlineSection(repoQuery) case final online?) online,
-                            const SliverToBoxAdapter(child: SizedBox(height: 140)),
                           ],
+                          body: LyricsSearchSection(
+                            key: ValueKey('library-lyrics:$repoQuery'),
+                            query: repoQuery, online: false,
+                            onPlayLocal: _playSong,
+                          ),
                         )
                   : scope == SearchScope.online && hasQuery
                   ? CustomScrollView(
