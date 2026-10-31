@@ -1399,10 +1399,18 @@ Song progressiveAddonSong(DiscoveryTrack track, ResolvedDiscoveryAudio audio) {
   final hasRenditionDetails = audio.codec != null ||
       audio.quality != null ||
       audio.bitDepth != null ||
-      audio.sampleRate != null;
+      audio.sampleRate != null ||
+      audio.bitrate != null;
+  final selectedCodec = hasRenditionDetails
+      ? audio.codec : track.catalogueCodec;
+  // Exact selected-stream bitrate can fill the quality tag for a lossy
+  // rendition (for example Tidal HIGH AAC) without copying a different
+  // catalogue tier. A codec or a URL extension alone proves no bitrate.
+  final selectedQuality = audio.quality ??
+      measuredLossyBitrate(codec: audio.codec, bitsPerSecond: audio.bitrate);
   final audioInfo = advertisedOnlineAudio(
-    codec: hasRenditionDetails ? audio.codec : track.catalogueCodec,
-    quality: hasRenditionDetails ? audio.quality : track.catalogueQuality,
+    codec: selectedCodec,
+    quality: hasRenditionDetails ? selectedQuality : track.catalogueQuality,
     bitDepth: hasRenditionDetails ? audio.bitDepth : track.catalogueBitDepth,
     sampleRate: hasRenditionDetails ? audio.sampleRate : track.catalogueSampleRate,
     // A filename suffix is only a container hint; M4A and WebM may hold
@@ -1448,8 +1456,24 @@ Future<List<OnlineSource>> _playbackSources(
   String? selectedSourceId,
   bool respectEnabledDiscoverySources = false,
   bool stopOnExplicitSpatialFailure = false,
+  bool quickAddonFallback = false,
+  Map<String, Completer<void>>? automaticAddonAborts,
+  void Function(String sourceId)? onHttpAddonStreamReady,
 }) async {
-  final registry = DiscoverySourceRegistry(web, settings);
+  // This is a per-request backstop; the entire automatic search + stream
+  // attempt has a shorter shared deadline so three slow requests cannot
+  // accumulate. Manual selection and explicit downloads remain unrestricted.
+  final addonWeb = quickAddonFallback
+      ? DiscoveryHttp(web.client, timeout: const Duration(seconds: 4))
+      : web;
+  Future<void>? addonCancel(String sourceId) {
+    if (automaticAddonAborts == null) return cancel;
+    final local = automaticAddonAborts
+        .putIfAbsent(sourceId, () => Completer<void>()).future;
+    if (cancel == null) return local;
+    return Future.any([local, cancel]);
+  }
+  final registry = DiscoverySourceRegistry(addonWeb, settings);
   final youtube = YoutubeAudio(web);
   // Automatic Discovery should not resurrect native sources behind the
   // listener's back when their only enabled source is an HTTP add-on.
@@ -1530,15 +1554,27 @@ Future<List<OnlineSource>> _playbackSources(
         name: addon.displayName,
         addon: true,
         results: (query) async => [
-          for (final track in await addon.search(query))
+          for (final track in await addon.search(
+            query, cancel: addonCancel('w-${addon.configId}'),
+          ))
             OnlineResult(track, artwork: track.artwork),
         ],
         play: (found) async {
           onStatus?.call('Connecting to ${addon.displayName}…');
+          final sourceCancel = addonCancel('w-${addon.configId}');
           final audio = await registry.resolve(
-            found, cancel: cancel, forDownload: forDownload,
+            found, cancel: sourceCancel, forDownload: forDownload,
           );
-          final selectedSpatial = await addon.requestedSpatialCodec(cancel: cancel);
+          final selectedSpatial = await addon.requestedSpatialCodec(
+            cancel: sourceCancel,
+          );
+          if (automaticAddonAborts?['w-${addon.configId}']?.isCompleted == true) {
+            throw const DiscoveryException('Request cancelled.');
+          }
+          // The HTTP connection and stream descriptor are ready. Full-file
+          // staging for an explicitly chosen spatial rendition may legitimately
+          // take much longer; it must not be killed by the lookup deadline.
+          onHttpAddonStreamReady?.call('w-${addon.configId}');
           if (selectedSpatial != null) {
             // HTTP add-ons use a separate protocol from Mornye packages.
             // A configured Atmos tier must pass through the native verifier,
@@ -1619,6 +1655,86 @@ String _canonicalOnlineSourceId(String sourceId, DiscoveryTrack track) {
   return sourceId == stable || sourceId == legacy ? stable : sourceId;
 }
 
+/// A temporary, in-memory circuit breaker for demonstrably slow HTTP
+/// add-ons. Only automatic Discovery skips cooled-down sources: explicit
+/// Search playback and manual retries always remain available.
+class OnlineAddonCooldown {
+  OnlineAddonCooldown({
+    this.failureThreshold = 1,
+    this.cooldown = const Duration(seconds: 45),
+  });
+
+  final int failureThreshold;
+  final Duration cooldown;
+  final Map<String, ({int failures, DateTime until})> _failures = {};
+
+  bool shouldSkip(String sourceId, {DateTime? now}) {
+    final state = _failures[sourceId];
+    if (state == null || state.failures < failureThreshold) return false;
+    if (!(now ?? DateTime.now()).isBefore(state.until)) {
+      _failures.remove(sourceId);
+      return false;
+    }
+    return true;
+  }
+
+  void failed(String sourceId, Object error, {DateTime? now}) {
+    if (!sourceId.startsWith('w-')) return;
+    final reason = _onlineFailureKind(error);
+    if (reason != 'timeout' && reason != 'network' &&
+        !{'http_502', 'http_503', 'http_504'}.contains(reason)) {
+      // Auth/verification and other non-transport errors are not part of a
+      // consecutive outage: clear an older failure record.
+      _failures.remove(sourceId);
+      return;
+    }
+    final time = now ?? DateTime.now();
+    final previous = _failures[sourceId];
+    final consecutive = previous != null && time.isBefore(previous.until)
+        ? previous.failures + 1 : 1;
+    _failures[sourceId] = (
+      failures: consecutive,
+      until: time.add(cooldown),
+    );
+  }
+
+  void succeeded(String sourceId) => _failures.remove(sourceId);
+}
+
+final _autoHttpAddonCooldown = OnlineAddonCooldown();
+
+/// One deadline for the entire automatic add-on attempt (search, alternate
+/// searches, and stream selection). Per-request timeouts alone compound across
+/// multiple endpoints. Cancel the active source when the budget expires.
+Future<T> boundedAutomaticAddonAttempt<T>(
+  Future<T> Function() acquire, {
+  required void Function() abort,
+  Future<void>? streamReady,
+  Duration budget = const Duration(seconds: 3),
+}) async {
+  final expired = Completer<T>();
+  final timer = Timer(budget, () {
+    abort();
+    if (!expired.isCompleted) {
+      expired.completeError(
+        const DiscoveryException('Automatic source timed out.'),
+      );
+    }
+  });
+  // If the add-on supplied a stream descriptor, the remaining wait may be a
+  // real download/native spatial verification, not an unresponsive endpoint.
+  // Cancellation still propagates through the caller's normal user signal.
+  if (streamReady != null) {
+    unawaited(streamReady.then((_) => timer.cancel(),
+        onError: (Object _, StackTrace __) => timer.cancel()));
+  }
+  try {
+    return await Future.any([acquire(), expired.future]);
+  } finally {
+    timer.cancel();
+  }
+}
+
 /// Classify without logging signed audio URLs or provider credentials.
 String _onlineFailureKind(Object error) {
   final message = error.toString().toLowerCase();
@@ -1691,6 +1807,7 @@ Future<Song> playOnlineTrack(
       );
     }
     final resolved = await source.play(track);
+    _autoHttpAddonCooldown.succeeded(canonicalId);
     AppLog.instance.add('[OnlineSource] acquisition source=$canonicalId '
         'mode=${forDownload ? 'download' : 'playback'} '
         'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
@@ -1706,6 +1823,7 @@ Future<Song> playOnlineTrack(
     }
     return song;
   } catch (error) {
+    _autoHttpAddonCooldown.failed(sourceId, error);
     AppLog.instance.add(
       '[OnlineSource] playback failed source=$sourceId '
       'stage=prepare mode=${forDownload ? 'download' : 'playback'} '
@@ -1758,8 +1876,16 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
   required RecommendationCandidate candidate,
   required List<String> queries,
   void Function()? checkCancelled,
+  void Function(Object error)? onNoMatchError,
   Duration hedgeDelay = const Duration(milliseconds: 600),
 }) async {
+  Object? searchFailure;
+  void reportFailedAttempt() {
+    // Search queries may overlap. Report at most once, and only when none
+    // matched; a late alternate failure must not poison successful playback.
+    if (searchFailure != null) onNoMatchError?.call(searchFailure!);
+  }
+
   Future<DiscoveryTrack?> search(String query) async {
     checkCancelled?.call();
     try {
@@ -1776,9 +1902,10 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
         ),
       );
     } catch (error) {
-      // A failed alternate query is not a source failure. Propagate a
-      // cancellation even if a search completed at the same instant.
       checkCancelled?.call();
+      if (_onlineFailureKind(error) != 'cancelled') {
+        searchFailure ??= error;
+      }
       AppLog.instance.add(
         '[OnlineSource] search failed source=${source.id} '
         'reason=${_onlineFailureKind(error)}',
@@ -1792,12 +1919,16 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
     // Keep serial Morneye calls on one worker and prioritize the original
     // query, without a new timeout or a flood of concurrent guest requests.
     final first = await search(queries.first);
-    if (first != null || queries.length == 1) return first;
+    if (first != null || queries.length == 1) {
+      if (first == null) reportFailedAttempt();
+      return first;
+    }
     final fallbacks = await Future.wait(queries.skip(1).take(2).map(search));
     checkCancelled?.call();
     for (final matched in fallbacks) {
       if (matched != null) return matched;
     }
+    reportFailedAttempt();
     return null;
   }
 
@@ -1845,7 +1976,37 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
   // Launch at most two alternate *metadata* searches, never extra audio
   // downloads or fallback to another selected playback provider.
   unawaited(Future<void>.delayed(hedgeDelay).then((_) => startAlternates()));
-  return completion.future;
+  final matched = await completion.future;
+  if (matched == null) reportFailedAttempt();
+  return matched;
+}
+
+/// Warm only metadata for a few HTTP providers in parallel. The caller
+/// retains priority when deciding which verified match to stream. No network
+/// audio is started speculatively, and a failure is isolated to its source.
+Map<String, Future<DiscoveryTrack?>> prewarmHttpSourceMatches({
+  required Iterable<OnlineSource> sources,
+  required RecommendationCandidate candidate,
+  required List<String> queries,
+  void Function()? checkCancelled,
+  void Function(String sourceId, Object error)? onNoMatchError,
+  int maxConcurrent = 3,
+}) {
+  final warmed = <String, Future<DiscoveryTrack?>>{};
+  for (final source in sources.where((source) =>
+      source.id.startsWith('w-')).take(maxConcurrent)) {
+    warmed[source.id] = findDiscoverySourceMatch(
+      source: source,
+      candidate: candidate,
+      queries: queries,
+      checkCancelled: checkCancelled,
+      onNoMatchError: (error) => onNoMatchError?.call(source.id, error),
+    ).then(
+      (match) => match,
+      onError: (Object error, StackTrace stackTrace) => null,
+    );
+  }
+  return warmed;
 }
 
 /// Finds [track] somewhere to play it and downloads it, as desktop does for
@@ -1882,6 +2043,8 @@ Future<Song?> findDiscoverySong(
     DiscoveryException? failure;
     DiscoveryPlaybackCache cache() =>
         _playbackCache(web, additionalProtectedPaths);
+    final automaticAddonAborts = <String, Completer<void>>{};
+    final streamLookupReady = <String, Completer<void>>{};
     final sources = await _playbackSources(
       web,
       settings,
@@ -1891,11 +2054,57 @@ Future<Song?> findDiscoverySong(
       cancel: cancel,
       respectEnabledDiscoverySources: true,
       stopOnExplicitSpatialFailure: true,
+      quickAddonFallback:
+          settings.activeAddons.length > 1 || settings.youtubeEnabled,
+      automaticAddonAborts: automaticAddonAborts,
+      onHttpAddonStreamReady: (sourceId) {
+        final ready = streamLookupReady.putIfAbsent(
+          sourceId, () => Completer<void>(),
+        );
+        if (!ready.isCompleted) ready.complete();
+      },
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();
+    final hasUnblockedSource = sources.any(
+      (source) => !_autoHttpAddonCooldown.shouldSkip(source.id),
+    );
+    var attemptedCooledSource = false;
+    // Search the next few HTTP add-ons concurrently once automatic fallback
+    // reaches them. Streaming is still selected in user priority order:
+    // slower failed searches no longer add separate multi-second waits.
+    final preparedHttpSearches = <String, Future<DiscoveryTrack?>>{};
+    var preparedHttp = false;
+    void prepareHttpSearches() {
+      if (preparedHttp) return;
+      preparedHttp = true;
+      preparedHttpSearches.addAll(prewarmHttpSourceMatches(
+        sources: sources.where(
+          (source) => !_autoHttpAddonCooldown.shouldSkip(source.id),
+        ),
+        candidate: candidate,
+        queries: queries,
+        checkCancelled: check,
+        onNoMatchError: (sourceId, error) {
+          _autoHttpAddonCooldown.failed(sourceId, error);
+        },
+      ));
+    }
     for (final source in sources) {
       check();
+      // Never skip every configured source. If all HTTP add-ons are cooling
+      // down, probe the first one for recovery rather than leaving the queue
+      // silent; avoid wasting more time on the remaining cooled-down sources.
+      if (_autoHttpAddonCooldown.shouldSkip(source.id)) {
+        if (hasUnblockedSource || attemptedCooledSource) {
+          AppLog.instance.add(
+            '[OnlineSource] automatic fallback skipped temporarily unhealthy '
+            'source=${source.id}',
+          );
+          continue;
+        }
+        attemptedCooledSource = true;
+      }
       if (source.needsVerification?.call() == true) {
         // Preloads must not open an auth popup over an unrelated screen.
         // Once current, await user verification instead of skipping the Mix.
@@ -1963,19 +2172,35 @@ Future<Song?> findDiscoverySong(
         }
       }
       check();
-      final found = await findDiscoverySourceMatch(
-        source: source,
-        candidate: candidate,
-        queries: queries,
-        checkCancelled: check,
-      );
-      if (found == null) continue;
-      check();
-      onStatus?.call('Getting ${track.title} from ${source.name}…');
-      try {
-        final selected = found.withArtwork(_artworkOf(track));
+      if (source.id.startsWith('w-')) prepareHttpSearches();
+      DiscoveryTrack? found;
+      Future<Song?> attempt() async {
+        found = await (preparedHttpSearches[source.id] ??
+            findDiscoverySourceMatch(
+              source: source,
+              candidate: candidate,
+              queries: queries,
+              checkCancelled: check,
+              onNoMatchError: (error) {
+                _autoHttpAddonCooldown.failed(source.id, error);
+              },
+            ));
+        if (found == null) return null;
+        check();
+        // A source abandoned by the automatic deadline must never start
+        // playback later when an old network request eventually completes.
+        if (automaticAddonAborts[source.id]?.isCompleted == true) return null;
+        onStatus?.call('Getting ${track.title} from ${source.name}…');
+        final selected = found!.withArtwork(_artworkOf(track));
         final acquisitionTimer = Stopwatch()..start();
         final resolved = await source.play(selected);
+        if (automaticAddonAborts[source.id]?.isCompleted == true) return null;
+        // Stop speculative searches that lost the priority race so they do
+        // not continue hitting other add-on endpoints after playback is ready.
+        for (final entry in automaticAddonAborts.entries) {
+          if (!entry.value.isCompleted) entry.value.complete();
+        }
+        _autoHttpAddonCooldown.succeeded(source.id);
         AppLog.instance.add('[OnlineSource] discovery acquired source=${source.id} '
             'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
         final song = resolved.copyWith(sourceDisplayName: source.name);
@@ -1987,8 +2212,30 @@ Future<Song?> findDiscoverySong(
           () => playOnlineTrack(source.id, selected, forDownload: true),
         );
         return song;
+      }
+
+      try {
+        // Prefer a working alternative instead of letting several failing
+        // add-ons each consume a full search + stream timeout. A listener
+        // with only one available source retains its normal connection time.
+        final song = source.id.startsWith('w-') && sources.length > 1
+            ? await boundedAutomaticAddonAttempt<Song?>(
+                attempt,
+                streamReady: streamLookupReady.putIfAbsent(
+                  source.id, () => Completer<void>(),
+                ).future,
+                abort: () {
+                  final pending = automaticAddonAborts.putIfAbsent(
+                    source.id, () => Completer<void>(),
+                  );
+                  if (!pending.isCompleted) pending.complete();
+                },
+              )
+            : await attempt();
+        if (song != null) return song;
       } catch (error) {
         check();
+        _autoHttpAddonCooldown.failed(source.id, error);
         AppLog.instance.add(
           '[OnlineSource] source playback failed source=${source.id} '
           'reason=${_onlineFailureKind(error)}',
@@ -1997,7 +2244,7 @@ Future<Song?> findDiscoverySong(
           Error.throwWithStackTrace(error.cause, error.stackTrace);
         }
         // An Atmos server timeout must not silently switch to stereo.
-        if (found.atmosAvailable &&
+        if (found?.atmosAvailable == true &&
             error is DiscoveryException &&
             error.message.startsWith('Tidal Atmos server')) {
           onStatus?.call(error.message);

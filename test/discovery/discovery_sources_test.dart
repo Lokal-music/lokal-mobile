@@ -697,6 +697,36 @@ void main() {
       );
     });
 
+    test('automatic fallback cancellation interrupts addon search', () async {
+      final started = Completer<void>();
+      final response = Completer<http.Response>();
+      final cancel = Completer<void>();
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        expect(request.url.path, '/search');
+        started.complete();
+        return response.future;
+      });
+      addTearDown(client.close);
+      final addon = DiscoveryAddon(
+        DiscoveryHttp(client), endpoint: 'https://addon.example',
+      );
+      final pending = addon.search('Artist song', cancel: cancel.future);
+      final assertion = expectLater(
+        pending,
+        throwsA(isA<DiscoveryException>().having(
+          (error) => error.message, 'message', 'Request cancelled.',
+        )),
+      );
+      await started.future;
+      cancel.complete();
+      await assertion;
+      response.complete(jsonResponse({'tracks': []}));
+      await Future<void>.delayed(Duration.zero);
+      expect(requests, 1);
+    });
+
     test('cancelling a Qobuz stream lookup aborts the one direct stream request', () async {
       final started = Completer<void>();
       final response = Completer<http.Response>();

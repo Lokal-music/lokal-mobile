@@ -668,13 +668,20 @@ class DiscoveryAddon {
     );
   }
 
-  Future<List<DiscoveryTrack>> search(String query) async {
+  Future<List<DiscoveryTrack>> search(
+    String query, {
+    Future<void>? cancel,
+  }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
     if (trimmed.length > 200) {
       throw const DiscoveryException('Search is limited to 200 characters.');
     }
-    final json = await _get(['search'], query: {...settings, 'q': trimmed});
+    final json = await _get(
+      ['search'],
+      query: {...settings, 'q': trimmed},
+      cancel: cancel,
+    );
     final rows = json['tracks'];
     if (rows is! List) {
       throw const DiscoveryException(
@@ -888,18 +895,51 @@ class DiscoveryAddon {
         );
       }
     }
+    // Some Tidal/Qobuz HTTP add-ons return their selected rendition inside
+    // audio/metadata rather than at the outer stream-response level. Read
+    // only explicit metadata from this exact /stream reply: never import a
+    // catalogue maximum or the user's selected quality as a verified tier.
+    final details = <String, dynamic>{
+      // Sparse audio objects must not obscure bitrate/quality fields in a
+      // sibling metadata object. More specific audio fields win, followed
+      // by explicit non-null fields on the outer stream response.
+      for (final key in const [
+        'metadata', 'audio_metadata', 'audioMetadata', 'audio',
+      ])
+        if (json[key] is Map)
+          for (final entry in (json[key] as Map).entries)
+            if (entry.key is String && entry.value != null)
+              entry.key as String: entry.value,
+      for (final entry in json.entries)
+        if (entry.value != null) entry.key: entry.value,
+    };
+    final rawBitrate = details['bitrate'] ?? details['audioBitrate'] ??
+        details['audio_bitrate'] ?? details['bit_rate'];
+    final parsedBitrate = rawBitrate is num
+        ? rawBitrate.toDouble()
+        : double.tryParse(rawBitrate?.toString() ?? '');
+    // Providers report both bits/second (320000) and kbps (320). Do not
+    // infer any compressed quality from a missing or nonsensical value.
+    final bitrate = parsedBitrate == null || !parsedBitrate.isFinite
+        ? null
+        : (parsedBitrate <= 2000
+            ? parsedBitrate * 1000 : parsedBitrate).round();
     return ResolvedDiscoveryAudio(
       uri,
-      codec: providerAudioCodec(json),
+      codec: providerAudioCodec(details),
       quality: discoveryText(
-        json['audioQuality'] ?? json['audio_quality'] ?? json['quality'],
+        details['audioQuality'] ?? details['audio_quality'] ??
+            details['streamQuality'] ?? details['stream_quality'] ??
+            details['quality'],
         maxLength: 80,
       ),
+      bitrate: bitrate != null && bitrate >= 16000 && bitrate <= 10000000
+          ? bitrate : null,
       bitDepth: providerAudioInteger(
-        json, const ['bitDepth', 'bit_depth', 'bitsPerSample', 'bits_per_sample'],
+        details, const ['bitDepth', 'bit_depth', 'bitsPerSample', 'bits_per_sample'],
         min: 8, max: 64,
       ),
-      sampleRate: providerAudioSampleRate(json),
+      sampleRate: providerAudioSampleRate(details),
     );
   }
 }
