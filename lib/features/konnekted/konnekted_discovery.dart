@@ -1851,8 +1851,16 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
   required RecommendationCandidate candidate,
   required List<String> queries,
   void Function()? checkCancelled,
+  void Function(Object error)? onNoMatchError,
   Duration hedgeDelay = const Duration(milliseconds: 600),
 }) async {
+  Object? searchFailure;
+  void reportFailedAttempt() {
+    // Search queries may overlap. Report at most once, and only when none
+    // matched; a late alternate failure must not poison successful playback.
+    if (searchFailure != null) onNoMatchError?.call(searchFailure!);
+  }
+
   Future<DiscoveryTrack?> search(String query) async {
     checkCancelled?.call();
     try {
@@ -1869,11 +1877,10 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
         ),
       );
     } catch (error) {
-      // A failed alternate query is not a recording miss. Track repeated
-      // network failures across automatic attempts so fallback can skip a
-      // provider that has been timing out, without hiding manual retries.
       checkCancelled?.call();
-      _autoHttpAddonCooldown.failed(source.id, error);
+      if (_onlineFailureKind(error) != 'cancelled') {
+        searchFailure ??= error;
+      }
       AppLog.instance.add(
         '[OnlineSource] search failed source=${source.id} '
         'reason=${_onlineFailureKind(error)}',
@@ -1887,12 +1894,16 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
     // Keep serial Morneye calls on one worker and prioritize the original
     // query, without a new timeout or a flood of concurrent guest requests.
     final first = await search(queries.first);
-    if (first != null || queries.length == 1) return first;
+    if (first != null || queries.length == 1) {
+      if (first == null) reportFailedAttempt();
+      return first;
+    }
     final fallbacks = await Future.wait(queries.skip(1).take(2).map(search));
     checkCancelled?.call();
     for (final matched in fallbacks) {
       if (matched != null) return matched;
     }
+    reportFailedAttempt();
     return null;
   }
 
@@ -1940,7 +1951,9 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
   // Launch at most two alternate *metadata* searches, never extra audio
   // downloads or fallback to another selected playback provider.
   unawaited(Future<void>.delayed(hedgeDelay).then((_) => startAlternates()));
-  return completion.future;
+  final matched = await completion.future;
+  if (matched == null) reportFailedAttempt();
+  return matched;
 }
 
 /// Warm only metadata for a few HTTP providers in parallel. The caller
@@ -1951,6 +1964,7 @@ Map<String, Future<DiscoveryTrack?>> prewarmHttpSourceMatches({
   required RecommendationCandidate candidate,
   required List<String> queries,
   void Function()? checkCancelled,
+  void Function(String sourceId, Object error)? onNoMatchError,
   int maxConcurrent = 3,
 }) {
   final warmed = <String, Future<DiscoveryTrack?>>{};
@@ -1961,6 +1975,7 @@ Map<String, Future<DiscoveryTrack?>> prewarmHttpSourceMatches({
       candidate: candidate,
       queries: queries,
       checkCancelled: checkCancelled,
+      onNoMatchError: (error) => onNoMatchError?.call(source.id, error),
     ).then(
       (match) => match,
       onError: (Object error, StackTrace stackTrace) => null,
@@ -2038,6 +2053,9 @@ Future<Song?> findDiscoverySong(
         candidate: candidate,
         queries: queries,
         checkCancelled: check,
+        onNoMatchError: (sourceId, error) {
+          _autoHttpAddonCooldown.failed(sourceId, error);
+        },
       ));
     }
     for (final source in sources) {
@@ -2131,6 +2149,9 @@ Future<Song?> findDiscoverySong(
               candidate: candidate,
               queries: queries,
               checkCancelled: check,
+              onNoMatchError: (error) {
+                _autoHttpAddonCooldown.failed(source.id, error);
+              },
             ));
         if (found == null) return null;
         check();
