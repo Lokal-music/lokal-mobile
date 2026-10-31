@@ -55,7 +55,7 @@ jobs:
             lib/services/sources/webdav_service.dart \
             lib/features/settings/screens/network_server_edit_screen.dart \
             lib/widgets/common/cached_image_widget.dart; do
-            dart analyze --no-fatal-infos --no-fatal-warnings "$source"
+            dart analyze --no-fatal-warnings "$source"
           done
       - name: Run SMB, WebDAV and Android LAN permission regressions
         run: >-
