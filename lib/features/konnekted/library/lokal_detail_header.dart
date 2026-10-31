@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 import 'package:flick/widgets/lokal/lokal_glass.dart';
 
@@ -111,21 +112,21 @@ class LokalDetailHeader extends StatelessWidget {
                     _headerButton(
                       context,
                       Icons.arrow_back_rounded,
-                      'Back',
+                      l10n.back,
                       onBack,
                     ),
                     const Spacer(),
                     _headerButton(
                       context,
                       Icons.ios_share_rounded,
-                      'Share',
+                      l10n.share,
                       onShare,
                     ),
                     const SizedBox(width: 10),
                     _headerButton(
                       context,
                       Icons.more_horiz_rounded,
-                      'More',
+                      lokalText('More'),
                       onMore,
                     ),
                   ],
@@ -192,6 +193,6 @@ class LokalDetailHeader extends StatelessWidget {
     semanticLabel: label,
     onPressed: onTap,
     tint: Colors.black.withValues(alpha: .16),
-    child: Icon(icon, color: Colors.white, size: 23),
+    child: Icon(icon, color: isArtist ? Colors.white : context.lokal.text, size: 23),
   );
 }
