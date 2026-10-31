@@ -453,11 +453,11 @@ class _ArtistRow extends ConsumerWidget {
       ),
     );
     final fallback = artist.songs.isEmpty
-        ? CircleAvatar(radius: 26,
+        ? CircleAvatar(radius: 34,
             backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
             child: Icon(Icons.person_rounded, color: context.lokal.muted))
         : KonnektedArtwork(
-            song: artist.songs.first, size: 52, radius: 26);
+            song: artist.songs.first, size: 68, radius: 34);
     return LokalPressable(
       radius: 18,
       semanticLabel: artist.name,
@@ -467,8 +467,16 @@ class _ArtistRow extends ConsumerWidget {
           initialOnline: artist.songs.isEmpty),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.lokal.surface.withValues(alpha: .7),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: context.lokal.border.withValues(alpha: .6)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
           children: [
             portrait == null
                 ? fallback
@@ -491,7 +499,7 @@ class _ArtistRow extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w500)),
+                      fontSize: 17, fontWeight: FontWeight.w700)),
                   Text(artist.songs.isEmpty
                       ? 'Not in library' : lokalSongCount(artist.songs.length),
                     maxLines: 1,
@@ -522,6 +530,8 @@ class _ArtistRow extends ConsumerWidget {
             ),
 
           ],
+            ),
+          ),
         ),
       ),
     );
