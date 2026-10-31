@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flick/models/playlist.dart';
 import 'package:flick/models/song.dart';
 
@@ -49,6 +51,12 @@ class RemotePlaylistEntry {
     this.duration,
     this.remoteId,
   });
+
+  // IDs are scoped to the linked provider. Entries without IDs use their
+  // complete metadata so unrelated recordings cannot share a saved match.
+  String get identity => remoteId != null && remoteId!.isNotEmpty
+      ? jsonEncode([remoteId])
+      : jsonEncode([title, artist, album, duration?.inMilliseconds]);
 
   Map<String, dynamic> toJson() => {
     'title': title,
@@ -130,6 +138,9 @@ class PlaylistLinkRecord {
   final String? thumbnailUrl;
   final List<String> managedSongIds;
   final List<RemotePlaylistEntry> unmatchedEntries;
+  final Map<String, String> downloadedSongIds;
+  final List<RemotePlaylistEntry> remoteOrder;
+  final Map<String, String> orderedSongIds;
   final int remoteEntryCount;
   final int fetchedEntryCount;
   final int duplicateMatches;
@@ -149,6 +160,9 @@ class PlaylistLinkRecord {
     this.thumbnailUrl,
     this.managedSongIds = const [],
     this.unmatchedEntries = const [],
+    this.downloadedSongIds = const {},
+    this.remoteOrder = const [],
+    this.orderedSongIds = const {},
     required this.remoteEntryCount,
     required this.fetchedEntryCount,
     required this.duplicateMatches,
@@ -171,6 +185,9 @@ class PlaylistLinkRecord {
     'thumbnailUrl': thumbnailUrl,
     'managedSongIds': managedSongIds,
     'unmatchedEntries': unmatchedEntries.map((e) => e.toJson()).toList(),
+    'downloadedSongIds': downloadedSongIds,
+    'remoteOrder': remoteOrder.map((e) => e.toJson()).toList(),
+    'orderedSongIds': orderedSongIds,
     'remoteEntryCount': remoteEntryCount,
     'fetchedEntryCount': fetchedEntryCount,
     'duplicateMatches': duplicateMatches,
@@ -212,6 +229,12 @@ class PlaylistLinkRecord {
                 )
                 .toList()
           : const [],
+      downloadedSongIds: _stringMap(json['downloadedSongIds']),
+      orderedSongIds: _stringMap(json['orderedSongIds']),
+      remoteOrder: (json['remoteOrder'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => RemotePlaylistEntry.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
       remoteEntryCount: (json['remoteEntryCount'] as num?)?.toInt() ?? 0,
       fetchedEntryCount: (json['fetchedEntryCount'] as num?)?.toInt() ?? 0,
       duplicateMatches: (json['duplicateMatches'] as num?)?.toInt() ?? 0,
@@ -230,6 +253,9 @@ class PlaylistLinkRecord {
     String? thumbnailUrl,
     List<String>? managedSongIds,
     List<RemotePlaylistEntry>? unmatchedEntries,
+    Map<String, String>? downloadedSongIds,
+    List<RemotePlaylistEntry>? remoteOrder,
+    Map<String, String>? orderedSongIds,
     int? remoteEntryCount,
     int? fetchedEntryCount,
     int? duplicateMatches,
@@ -249,6 +275,9 @@ class PlaylistLinkRecord {
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       managedSongIds: managedSongIds ?? this.managedSongIds,
       unmatchedEntries: unmatchedEntries ?? this.unmatchedEntries,
+      downloadedSongIds: downloadedSongIds ?? this.downloadedSongIds,
+      remoteOrder: remoteOrder ?? this.remoteOrder,
+      orderedSongIds: orderedSongIds ?? this.orderedSongIds,
       remoteEntryCount: remoteEntryCount ?? this.remoteEntryCount,
       fetchedEntryCount: fetchedEntryCount ?? this.fetchedEntryCount,
       duplicateMatches: duplicateMatches ?? this.duplicateMatches,
@@ -257,6 +286,10 @@ class PlaylistLinkRecord {
       lastSyncMessage: lastSyncMessage ?? this.lastSyncMessage,
     );
   }
+
+  static Map<String, String> _stringMap(Object? value) => value is Map
+      ? {for (final e in value.entries) if (e.key is String && e.value is String) e.key as String: e.value as String}
+      : {};
 
   static DateTime? _parseDate(Object? value) =>
       value is String ? DateTime.tryParse(value) : null;

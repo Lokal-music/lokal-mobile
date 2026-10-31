@@ -6,6 +6,8 @@ import 'package:flick/models/song.dart';
 import 'dart:async';
 
 import 'package:flick/features/search/widgets/online_catalogue_search_section.dart';
+import 'package:flick/features/search/widgets/global_catalogue_search_section.dart';
+import 'package:flick/services/global_catalogue_search.dart';
 import 'package:flick/features/search/providers/search_filter_provider.dart';
 import 'package:flick/features/search/models/search_category.dart';
 import 'package:flick/providers/apple_music_provider.dart';
@@ -54,6 +56,18 @@ class _Api implements AppleMusicMetadataService {
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _Catalogue extends GlobalCatalogueSearchService {
+  final calls = <String>[];
+  @override
+  Future<GlobalCatalogueMatches> search(String query, {
+    String? selected, bool refresh = false, bool songsOnly = false,
+  }) async {
+    calls.add(query);
+    return GlobalCatalogueMatches(catalogue: 'apple',
+      artists: [GlobalCatalogueArtist(name: '$query performer')]);
+  }
 }
 
 void main() {
@@ -121,6 +135,36 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('All search keeps online results mounted when local results arrive', (tester) async {
+    final api = _Catalogue();
+    final local = Completer<GlobalSearchResults>();
+    final c = ProviderContainer(overrides: [
+      globalCatalogueSearchServiceProvider.overrideWithValue(api),
+      globalSearchResultsProvider.overrideWith((ref, query) => local.future),
+    ]);
+    addTearDown(c.dispose);
+    c.read(searchFilterProvider.notifier).select(SearchCategory.artists);
+    c.read(searchScopeProvider.notifier).select(SearchScope.all);
+    await tester.pumpWidget(UncontrolledProviderScope(container: c,
+      child: MaterialApp(theme: LokalTheme.build(LokalTokens.themes[LokalThemeId.dark]!),
+        home: const SearchScreen())));
+    await tester.enterText(find.byType(TextField), 'Dude');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final finder = find.byType(OnlineCatalogueSearchSection);
+    expect(finder, findsOneWidget);
+    final element = tester.element(finder);
+    const song = Song(id: '1', title: 'Track', artist: 'Composer',
+      duration: Duration(minutes: 3), fileType: 'FLAC');
+    local.complete(const GlobalSearchResults(query: 'Dude', artists: [MapEntry('Composer', [song])]));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.element(finder), same(element));
+    expect(api.calls.where((call) => call == 'Dude'), hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('artist and album filters use their own catalogue endpoints', (
     tester,

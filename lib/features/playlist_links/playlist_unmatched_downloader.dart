@@ -58,6 +58,8 @@ class PlaylistUnmatchedDownloader {
       title: entry.title, artist: entry.artist,
       album: entry.album, duration: entry.duration,
     );
+    Object? searchError;
+    StackTrace? searchStack;
     for (final source in sources) {
       if (cancelled?.call() == true) {
         throw const DiscoveryException('Download cancelled.');
@@ -81,11 +83,13 @@ class PlaylistUnmatchedDownloader {
             ),
           );
           if (found != null) return (sourceId: source.id, track: found);
-        } catch (_) {
-          // Another source can still provide the verified recording.
+        } catch (error, stack) {
+          searchError ??= error;
+          searchStack ??= stack;
         }
       }
     }
+    if (searchError != null) Error.throwWithStackTrace(searchError, searchStack!);
     return null;
   }
 

@@ -6,8 +6,9 @@ class PlaylistLinkMatcher {
 
   PlaylistLinkMatchReport match(
     List<RemotePlaylistEntry> entries,
-    List<Song> songs,
-  ) {
+    List<Song> songs, {
+    Map<String, String> downloadedSongIds = const {},
+  }) {
     final byKey = <String, List<Song>>{};
     for (final song in songs) {
       final title = normalize(song.title);
@@ -16,12 +17,22 @@ class PlaylistLinkMatcher {
       byKey.putIfAbsent('$title\u0000$artist', () => []).add(song);
     }
 
+    final songsById = {for (final song in songs) song.id: song};
     final matches = <PlaylistLinkMatch>[];
     final unmatched = <RemotePlaylistEntry>[];
     final usedSongIds = <String>{};
     var duplicateMatches = 0;
 
     for (final entry in entries) {
+      final savedSong = songsById[downloadedSongIds[entry.identity]];
+      if (savedSong != null) {
+        if (usedSongIds.add(savedSong.id)) {
+          matches.add(PlaylistLinkMatch(remoteEntry: entry, song: savedSong));
+        } else {
+          duplicateMatches++;
+        }
+        continue;
+      }
       final key = '${normalize(entry.title)}\u0000${normalize(entry.artist)}';
       final candidates = byKey[key].orEmpty;
       final constrained = candidates.where((song) {

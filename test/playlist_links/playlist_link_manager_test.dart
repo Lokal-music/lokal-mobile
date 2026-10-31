@@ -195,6 +195,69 @@ void main() {
     expect(partial.playlist.songIds, ['1', 'new-file']);
   });
 
+  test('downloaded identities survive reload and refresh without becoming managed', () async {
+    SharedPreferences.setMockInitialValues({});
+    final entry = RemotePlaylistEntry(title: 'Missing', artist: 'Artist',
+        album: 'Remote album', remoteId: 'remote-id');
+    final importer = FakeImporter(_snapshot([entry]));
+    final library = FakeLibrary([]);
+    final backend = FakeBackend();
+    final store = SharedPreferencesPlaylistLinkStore();
+    final manager = PlaylistLinkManager(importer: importer, library: library,
+        playlists: backend, metadataStore: store);
+    final record = await manager.createFromPreview(await manager.preview(_url));
+    // The downloaded file's tags do not satisfy the strict album constraint.
+    library.songs.add(_song('download', 'Missing', 'Artist'));
+    await manager.attachDownloadedEntry(record.linkId, entry,
+        savedPath: '/music/download.flac');
+    final reloaded = (await SharedPreferencesPlaylistLinkStore().load()).single;
+    expect(reloaded.downloadedSongIds[entry.identity], 'download');
+    final preview = await manager.preview(_url);
+    expect(preview.matches.unmatchedEntries, isEmpty);
+    expect(preview.matches.matches.single.song.id, 'download');
+    final refreshed = await manager.refreshFromPreview(preview, removeMissing: true);
+    expect(refreshed.record.managedSongIds, isEmpty);
+    importer.snapshot = _snapshot([_entry('Other', 'Artist')]);
+    final removed = await manager.refreshFromPreview(await manager.preview(_url),
+        removeMissing: true);
+    expect(removed.playlist.songIds, ['download']);
+    library.songs.clear();
+    importer.snapshot = _snapshot([entry]);
+    expect((await manager.preview(_url)).matches.unmatchedEntries, hasLength(1));
+  });
+
+  test('downloads and retries are inserted in remote order and roll back on failure', () async {
+    final first = _entry('First', 'A');
+    final last = _entry('Last', 'C');
+    final backend = FakeBackend();
+    final store = MemoryPlaylistLinkStore();
+    final library = FakeLibrary([_song('middle', 'Middle', 'B')]);
+    final manager = PlaylistLinkManager(
+      importer: FakeImporter(_snapshot([first, _entry('Middle', 'B'), last])),
+      metadataStore: store, playlists: backend, library: library);
+    final record = await manager.createFromPreview(await manager.preview(_url));
+    await backend.addSong(record.playlistId, 'local');
+    library.songs.addAll([_song('first', 'First', 'A'), _song('last', 'Last', 'C')]);
+    await manager.attachDownloadedEntry(record.linkId, last, savedPath: '/music/last.flac');
+    store.failWrites = true;
+    await expectLater(manager.attachDownloadedEntry(record.linkId, first,
+        savedPath: '/music/first.flac'), throwsA(isA<PlaylistLinkStoreException>()));
+    expect((await backend.getPlaylist(record.playlistId))!.songIds, ['middle', 'last', 'local']);
+    store.failWrites = false;
+    await manager.attachDownloadedEntry(record.linkId, first, savedPath: '/music/first.flac');
+    expect((await backend.getPlaylist(record.playlistId))!.songIds, ['first', 'middle', 'last', 'local']);
+  });
+
+  test('all unmatched entries survive creation and refresh', () async {
+    final entries = List.generate(1005, (i) => _entry('Track $i', 'Artist'));
+    final manager = PlaylistLinkManager(importer: FakeImporter(_snapshot(entries)),
+        metadataStore: MemoryPlaylistLinkStore(), playlists: FakeBackend(), library: FakeLibrary([]));
+    final record = await manager.createFromPreview(await manager.preview(_url));
+    expect(record.unmatchedEntries, hasLength(1005));
+    final refreshed = await manager.refreshFromPreview(await manager.preview(_url));
+    expect(refreshed.record.unmatchedEntries, hasLength(1005));
+  });
+
   test('linking a downloaded file fails safely when the file was not indexed', () async {
     final backend = FakeBackend();
     final store = MemoryPlaylistLinkStore();

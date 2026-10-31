@@ -73,6 +73,23 @@ void main() {
     );
   });
 
+  test('search errors are reported only after all sources fail to match', () async {
+    const entry = RemotePlaylistEntry(title: 'Song', artist: 'Artist');
+    final failed = OnlineSource(id: 'failed', name: 'Failed',
+      results: (_) async => throw StateError('search failed'),
+      play: (_) async => throw StateError('not used'));
+    final empty = OnlineSource(id: 'empty', name: 'Empty',
+      results: (_) async => [], play: (_) async => throw StateError('not used'));
+    final good = OnlineSource(id: 'good', name: 'Good',
+      results: (_) async => [OnlineResult(const DiscoveryTrack(
+        id: 'correct', title: 'Song', artist: 'Artist', source: DiscoverySource.youtubeMusic))],
+      play: (_) async => throw StateError('not used'));
+    const downloader = PlaylistUnmatchedDownloader();
+    expect((await downloader.findSource(entry, [failed, good]))?.track.id, 'correct');
+    await expectLater(downloader.findSource(entry, [failed, empty]), throwsStateError);
+    expect(await downloader.findSource(entry, [empty]), isNull);
+  });
+
   test('unmatched entry downloads and saves through the injected source pipeline', () async {
     const entry = RemotePlaylistEntry(
       title: 'Original video', artist: 'Uploader', remoteId: 'abcdefghijk',

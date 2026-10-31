@@ -191,9 +191,12 @@ class PlaylistLinkManager {
       removeMissing = false;
     }
 
+    // Explicit downloads remain local additions even when they match on refresh.
+    final managedMatches = matchedIds.where((id) =>
+        !stored.downloadedSongIds.containsValue(id) || stored.managedSongIds.contains(id));
     final nextManaged = preview.remote.complete && removeMissing
-        ? matchedIds
-        : _uniqueSongIds([...stored.managedSongIds, ...matchedIds]);
+        ? managedMatches.toList()
+        : _uniqueSongIds([...stored.managedSongIds, ...managedMatches]);
     final beforeOrder = List<String>.from(current.songIds);
     final changed = !_sameOrder(beforeOrder, target);
     try {
@@ -206,6 +209,7 @@ class PlaylistLinkManager {
         remote: preview.remote,
         report: preview.matches,
         managedSongIds: nextManaged,
+        downloadedSongIds: stored.downloadedSongIds,
       );
       await metadataStore.save(
         records
@@ -267,24 +271,46 @@ class PlaylistLinkManager {
       throw const PlaylistLinkOperationException('The local playlist is missing.');
     }
     final songId = songs.single.id;
-    final added = !playlist.songIds.contains(songId);
-    if (added && !await playlists.addSong(playlist.id, songId)) {
-      throw const PlaylistLinkOperationException(
-        'The download was saved, but could not be added to the playlist.',
-      );
+    final beforeOrder = List<String>.from(playlist.songIds);
+    final target = List<String>.from(beforeOrder);
+    final position = record.remoteOrder.indexWhere(
+      (candidate) => candidate.identity == entry.identity,
+    );
+    if (!target.contains(songId)) {
+      var insertAt = target.length;
+      if (position >= 0) {
+        // Insert relative to the next resolved remote row, or after the last
+        // preceding one. Existing local songs keep their relative order.
+        for (final next in record.remoteOrder.skip(position + 1)) {
+          final index = target.indexOf(record.orderedSongIds[next.identity] ?? '');
+          if (index >= 0) { insertAt = index; break; }
+        }
+        if (insertAt == target.length) {
+          for (final previous in record.remoteOrder.take(position).toList().reversed) {
+            final index = target.indexOf(record.orderedSongIds[previous.identity] ?? '');
+            if (index >= 0) { insertAt = index + 1; break; }
+          }
+        }
+      }
+      target.insert(insertAt, songId);
     }
     try {
+      await _applyOrder(playlist.id, beforeOrder, target, cancellation);
       cancellation.throwIfCancelled();
-      final unresolved = [...record.unmatchedEntries]..removeAt(matchingIndex);
-      final revised = record.copyWith(unmatchedEntries: unresolved);
+      final unresolved = record.unmatchedEntries
+          .where((candidate) => candidate.identity != entry.identity).toList();
+      final revised = record.copyWith(
+        unmatchedEntries: unresolved,
+        downloadedSongIds: {...record.downloadedSongIds, entry.identity: songId},
+        orderedSongIds: {...record.orderedSongIds, entry.identity: songId},
+      );
       final updated = [...records];
       updated[index] = revised;
       await metadataStore.save(updated);
-      // Explicit downloads are local additions, not removals managed by the
-      // link's remote refresh. A subsequent remote omission cannot delete one.
+      // Downloads remain local additions even when their remote row disappears.
       return songId;
     } catch (_) {
-      if (added) await playlists.removeSong(playlist.id, songId);
+      await _restorePlaylist(playlist.id, beforeOrder);
       rethrow;
     }
   });
@@ -328,9 +354,10 @@ class PlaylistLinkManager {
     cancellation.throwIfCancelled();
     final songs = await library.getSongs();
     cancellation.throwIfCancelled();
-    final report = matcher.match(remote.entries, songs);
     final records = await metadataStore.load();
     final existingLink = _findRecord(records, link.linkId);
+    final report = matcher.match(remote.entries, songs,
+        downloadedSongIds: existingLink?.downloadedSongIds ?? const {});
     final existingPlaylist = existingLink == null
         ? null
         : await playlists.getPlaylist(existingLink.playlistId);
@@ -349,8 +376,8 @@ class PlaylistLinkManager {
     required RemotePlaylistSnapshot remote,
     required PlaylistLinkMatchReport report,
     required List<String> managedSongIds,
+    Map<String, String> downloadedSongIds = const {},
   }) {
-    final unmatched = report.unmatchedEntries.take(1000).toList();
     return PlaylistLinkRecord(
       linkId: link.linkId,
       source: link.source,
@@ -361,7 +388,12 @@ class PlaylistLinkManager {
       description: remote.description,
       thumbnailUrl: remote.thumbnailUrl,
       managedSongIds: managedSongIds,
-      unmatchedEntries: unmatched,
+      unmatchedEntries: report.unmatchedEntries,
+      downloadedSongIds: downloadedSongIds,
+      remoteOrder: remote.entries,
+      orderedSongIds: {
+        for (final match in report.matches) match.remoteEntry.identity: match.song.id,
+      },
       remoteEntryCount: remote.totalEntries ?? remote.entries.length,
       fetchedEntryCount: remote.entries.length,
       duplicateMatches: report.duplicateMatches,
