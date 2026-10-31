@@ -1373,9 +1373,8 @@ class YoutubeMusicAccount {
   /// YouTube Music's own FEmusic_liked_playlists continuation tokens.
   Future<List<LokalDiscoveryMix>> libraryPlaylists() async {
     final first = await browse('FEmusic_liked_playlists');
-    if (!_confirmsSignedIn(first)) {
-      throw const YoutubeMusicSignedOut();
-    }
+    // request() already rejects explicit logged-out responses. Some account
+    // library responses omit login-state flags even for valid sessions.
     final pages = await _pages(
       'FEmusic_liked_playlists', first,
       types: _mixContinuationTypes,
