@@ -352,6 +352,14 @@ class SmbService implements NetworkSourceService {
       await session.close();
     }
 
+    // Avoid excessive library observer notifications while playback runs.
+    final pendingSongs = <SongEntity>[];
+    Future<void> flushSongs() async {
+      if (pendingSongs.isEmpty) return;
+      await _repo.upsertSongs(pendingSongs);
+      pendingSongs.clear();
+      await Future<void>.delayed(Duration.zero);
+    }
     final syncedRemoteIds = <String>{};
     var songsFound = 0;
     for (final dirPath in byDir.keys) {
@@ -379,11 +387,15 @@ class SmbService implements NetworkSourceService {
                 coverPath: coverPath,
               ))
           .toList();
-      await _repo.upsertSongs(entities);
+      for (final entity in entities) {
+        pendingSongs.add(entity);
+        if (pendingSongs.length >= 128) await flushSongs();
+      }
       syncedRemoteIds.addAll(entities.map((e) => e.remoteId!));
       songsFound += entities.length;
     }
 
+    await flushSongs();
     await purgeAndStampNetworkSync(server, syncedRemoteIds);
 
     yield ScanProgress(
