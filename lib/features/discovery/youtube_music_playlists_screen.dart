@@ -7,6 +7,7 @@ import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/features/spotify/provider_playlist_track_browser.dart';
+import 'package:flick/features/playlist_links/playlist_link_models.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -308,6 +309,8 @@ class _YoutubePlaylistDetailState
                 ? const Center(child: Text('No accessible tracks in this playlist.'))
                 : ProviderPlaylistTrackBrowser(
                     tracks: _tracks,
+                    source: PlaylistLinkSource.youtube,
+                    playlistId: widget.playlist.id,
                     artworkBuilder: (track) => _YoutubePlaylistArtwork(url: track.artworkUrl),
                     onPlay: _playOrdered,
                     onSongActions: _songActions,
