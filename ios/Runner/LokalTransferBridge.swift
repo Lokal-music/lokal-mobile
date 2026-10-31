@@ -234,7 +234,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["cancelNetworkScopePreservingFiles", "preserveImportPublicFile", "retireNetworkScope", "drainImports", "completedHistoryPage", "compactCompletedImport", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["matchUploadedOriginal", "cleanupUploadBody", "cancelNetworkScopePreservingFiles", "preserveImportPublicFile", "retireNetworkScope", "drainImports", "completedHistoryPage", "compactCompletedImport", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -270,7 +270,21 @@ final class LokalTransferBridge {
     do {
       guard let data = call.arguments as? FlutterStandardTypedData,
             !data.data.isEmpty, data.data.count <= 8192 else { throw LokalTransferError.invalidRecord }
-      if call.method == "drainImports" {
+      if call.method == "matchUploadedOriginal" || call.method == "cleanupUploadBody" {
+        // Same strict owner-bound job control envelope; no path or credential.
+        let request = try LokalTransferProtocol.importCleanupClaim(data.data)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ticket = try host.importOwnership.captureSubmission(owner)
+        if call.method == "matchUploadedOriginal" {
+          host.withRuntime({ runtime in
+            runtime.matchUploadedOriginal(id: request.id, revision: request.revision, submission: ticket) { reply.encode($0) }
+          }, unavailable: { reply.failure($0) })
+        } else {
+          host.withRuntime({ runtime in
+            runtime.cleanupUploadBody(id: request.id, revision: request.revision) { reply.encode($0) }
+          }, unavailable: { reply.failure($0) })
+        }
+      } else if call.method == "drainImports" {
         let request = try LokalTransferProtocol.client(data.data)
         guard let owner = importOwner else { throw LokalTransferError.invalidTransition }
         guard request.clientID == clientID else { throw LokalTransferError.staleRevision }

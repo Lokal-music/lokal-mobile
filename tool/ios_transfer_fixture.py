@@ -31,8 +31,10 @@ def serve_fixture():
     digest = hashlib.sha256(payload).hexdigest()
     lock = threading.Lock()
     slow_upload_reply = threading.Event()
+    slow_match_reply = threading.Event()
     state = {'requests': {}, 'redirectHits': 0, 'cookiesSeen': False,
-             'uploadRequests': {}, 'uploadHashes': {}, 'uploadMetadataValid': True, 'uploadLeakHits': 0}
+             'uploadRequests': {}, 'uploadHashes': {}, 'uploadMetadataValid': True, 'uploadLeakHits': 0,
+             'matchRequests': 0, 'matchMode': 'positive', 'matchQueryValid': True, 'matchLeakHits': 0}
 
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
@@ -50,6 +52,18 @@ def serve_fixture():
                 self.wfile.write(body)
 
         def do_GET(self):
+            if self.path.startswith('/__match_mode?'):
+                mode = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)['mode'][0]
+                with lock:
+                    state['matchMode'] = mode
+                if mode == 'slow':
+                    slow_match_reply.clear()
+                self.respond(200)
+                return
+            if self.path == '/__release_match':
+                slow_match_reply.set()
+                self.respond(200)
+                return
             if self.path == '/__release_upload':
                 slow_upload_reply.set()
                 self.respond(200)
@@ -110,6 +124,54 @@ def serve_fixture():
                 self.respond(413)
                 return
             body = self.rfile.read(size)
+            if self.path == '/match-leak':
+                with lock:
+                    state['matchLeakHits'] += 1
+                self.respond(200)
+                return
+            if self.path == '/api/remote/files/match':
+                try:
+                    query = json.loads(body)
+                    valid = (query == {'items': [{'size': len(payload), 'sha256': digest}]}
+                             and self.headers.get('Content-Type') == 'application/json'
+                             and self.headers.get('x-link-metadata') is None
+                             and self.headers.get('x-remote-token') == 'transfer-fixture-token')
+                except ValueError:
+                    valid = False
+                with lock:
+                    state['matchRequests'] += 1
+                    state['matchQueryValid'] &= valid
+                    state['cookiesSeen'] |= self.headers.get('Cookie') is not None
+                    mode = state['matchMode']
+                try:
+                    if not valid or mode == 'unauthorized':
+                        self.respond(401, b'{}', Content_Type='application/json')
+                    elif mode == 'redirect':
+                        self.respond(307, b'{}', Location='/match-leak', Content_Type='application/json')
+                    elif mode == 'large':
+                        self.respond(200, b'x' * 20000, Content_Type='application/json')
+                    elif mode == 'chunked-large':
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.send_header('Transfer-Encoding', 'chunked')
+                        self.end_headers()
+                        for _ in range(3):
+                            self.wfile.write(b'2000\r\n' + b'x' * 8192 + b'\r\n')
+                            self.wfile.flush()
+                        self.wfile.write(b'0\r\n\r\n')
+                    elif mode == 'malformed':
+                        self.respond(200, b'{"matches":false}', Content_Type='application/json')
+                    else:
+                        if mode == 'slow':
+                            slow_match_reply.wait(timeout=10)
+                        match = {'index': 1 if mode == 'wrong-index' else 0,
+                                 'trackId': 'https://invalid/?token=x' if mode == 'url-id' else 'matched-original'}
+                        matches = [] if mode == 'none' else [match, match] if mode == 'duplicate' else [match]
+                        self.respond(200, json.dumps({'matches': matches}).encode(), Content_Type='application/json',
+                                     Set_Cookie='match_cookie=unexpected; Path=/')
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
             if self.path == '/upload-leak':
                 with lock:
                     state['uploadLeakHits'] += 1
@@ -179,6 +241,7 @@ def serve_fixture():
         yield f'http://127.0.0.1:{server.server_port}', len(payload), digest
     finally:
         slow_upload_reply.set()
+        slow_match_reply.set()
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)

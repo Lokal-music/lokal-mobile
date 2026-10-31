@@ -132,5 +132,29 @@ func runUploadFileContracts(container: URL) throws {
     _ = try reopened.stageUpload(from: source, for: interrupted)
   }
   try require(try Data(contentsOf: sourcePath) == bytes, "failure/crash never changes original")
+  let disposable = try uploadFileJob(bytes: bytes)
+  _ = try files.stageUpload(from: source, for: disposable)
+  var completed = disposable
+  try completed.bind(taskID: 1234, nowMs: 1001)
+  try completed.acknowledgeUpload(taskID: 1234, originalID: "desktop-proof", nowMs: 1002)
+  try files.discardTerminalUpload(completed)
+  try files.discardTerminalUpload(completed)
+  try rejects("queued body has no terminal cleanup authority") { try files.discardTerminalUpload(disposable) }
+  let guarded = try uploadFileJob(bytes: bytes)
+  _ = try files.stageUpload(from: source, for: guarded)
+  let guardedPath = try files.uploadURL(guarded)
+  var retired = guarded
+  try retired.cancel(nowMs: 1001)
+  try manager.removeItem(at: guardedPath)
+  try manager.createSymbolicLink(at: guardedPath, withDestinationURL: sourcePath)
+  try rejects("terminal cleanup refuses a symlink") { try files.discardTerminalUpload(retired) }
+  try manager.removeItem(at: guardedPath)
+  try manager.linkItem(at: sourcePath, to: guardedPath)
+  try rejects("terminal cleanup refuses a hard-linked original") { try files.discardTerminalUpload(retired) }
+  try manager.removeItem(at: guardedPath)
+  try Data().write(to: guardedPath)
+  try files.discardTerminalUpload(retired)
+  try require(!manager.fileExists(atPath: guardedPath.path) && Data(contentsOf: sourcePath) == bytes,
+    "retired empty preparation is disposable; source remains unchanged")
   print("Owned upload files: bounded exact snapshot, borrowed offset, private permissions, replay/reopen, checksum refusal, cancel cleanup, symlink/directory/size refusal and actual process-exit partial preservation passed. Not native upload integration or Apple lifecycle acceptance.")
 }

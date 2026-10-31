@@ -1377,25 +1377,27 @@ sequenceDiagram
 ## Owned upload snapshot boundary (continuation after PR369)
 
 `LokalTransferFiles.stageUpload` now copies a borrowed, already-authorized file
-descriptor into the private UUID/revision-derived `.upload` file before runnable
-intent can be persisted. It reads with positional, bounded chunks, preserving
+descriptor into the private UUID/revision-derived `.upload` file after durable queued
+intent is recorded (see the recovery continuation below). It reads with positional, bounded chunks, preserving
 the source descriptor's offset and never moving or modifying the recording.
 It checks the frozen size/SHA-256, source identity/modification state, private
 single-link regular-file binding and current container root, then syncs the
 body and directory. Its 1GiB limit matches the current desktop originals API.
-The app must still supply a current submission lease and authorized source;
+The app must still supply current submission consent and an authorized source;
 this helper accepts no Flutter path and does not grant source access.
 
 A matching existing body makes a lost preparation reply idempotent. Modified,
 partial, symlinked or substituted bodies fail closed. A new failed/cancelled
 copy removes only the exact private inode it created. Actual process-exit tests
 leave a partial snapshot and prove it cannot be acknowledged or silently sent
-on reopening. Recovery/retirement of these unaccepted parts still needs queue
-integration; they are not treated as completed uploads.
+on reopening. Runtime preparation now has durable intent first; incomplete private bodies can
+be reset only for never-started intent with a fresh source grant, or retired
+after durable cancellation/drainage. Unknown bodies without a durable job remain
+quarantined and cannot be adopted by a new intent.
 
 This is the file boundary, not a native upload feature. The native-only admission/task/receipt path is implemented in the continuation
-below. App source authorization, ambiguous POST matching, terminal cleanup and
-user queue controls remain to be connected.
+below. App source authorization/upload admission and user queue controls remain to
+be connected. Positive matching and terminal cleanup are implemented below.
 The desktop `server/linkUpload.js` last changed at
 `0bb366877c119c76bfa3be5c5b06d8c4b0728cd5`; its hash lookup alone is not proof
 of a durable, concurrency-safe idempotency contract. Do not blindly retry a POST
@@ -1414,16 +1416,17 @@ flowchart LR
 ```
 
 Snapshot, native admission and network/receipt boxes have portable host coverage.
-App authorization/queue wiring, content matching, private-body retirement and
-Apple background delivery remain integration/qualification requirements.
+App authorization/queue wiring and Apple background delivery remain
+integration/qualification requirements. Positive matching and private-body
+retirement now have native/typed-bridge host coverage.
 
 ## Native upload runtime continuation
 
 The native-only `enqueueUpload` API now duplicates a caller's already-authorized
 source descriptor and requires a current submission ticket. It stages and hashes
 the private snapshot on the file worker, rechecks the exact desktop, account,
-pairing and atomic credential record's origin spelling, then persists both intent
-and task binding before resuming a file-backed URLSession POST. At most two tasks
+pairing and atomic credential record's origin spelling, records queued intent before copying, then persists task binding
+before resuming a file-backed URLSession POST. At most two tasks
 or preparations share the session capacity. No absolute caller path enters the
 journal or request. The app source-selection/Isar adapter is still required;
 this API is not exposed by the Flutter bridge and does not enable product uploads.
@@ -1441,8 +1444,8 @@ bypass existing history for the same local recording, bytes, account and pairing
 If a task or response disappears, the job becomes interrupted and retains its
 verified snapshot. Recovery, ordinary Retry and Reconnect issue no further audio
 POST for it. A never-started queued job requires a fresh submission ticket and
-its existing verified body before starting. Positive content matching and safe
-retry after an ambiguous POST remain work to finish; absence from a query alone
+its existing verified body before starting. Positive content matching is implemented in the continuation below. Safe
+retry after an ambiguous POST remains a peer-contract requirement; absence from a query alone
 must not be treated as permission to resend.
 
 The journal's atomic pairing-retirement transaction now includes uploads and
@@ -1450,7 +1453,8 @@ downloads. A blocked importing download rolls back the entire mixed batch.
 Individual cancellation also records its still-draining task's scope, allowing
 subsequent Forget/Clear to wait for that callback. Cancellation prevents a late
 receipt from completing the retired revision; it cannot undo a remote commit.
-Private upload bodies remain retained until terminal/orphan cleanup is connected.
+Uncertain private bodies remain retained. Drained terminal cleanup and automatic
+scoped retirement are implemented in the continuation below.
 
 Portable tests use real HTTP, files, the native journal and actual delegate
 callbacks. They cover successful/existing receipts, byte/hash/Unicode metadata,
@@ -1468,3 +1472,62 @@ contracts use the base owner. Apple Foundation uses the combined session owner;
 its SDK checks, mixed-direction execution and actual background lifecycle remain
 pending. The test tool can preserve its executable with `--preserve-binary` for
 failure diagnosis. Native `upload` and `libraryImport` remain false.
+
+## Upload recovery and private-body retirement
+
+`matchUploadedOriginal` now queries the exact paired desktop's existing
+`POST /api/remote/files/match` endpoint with one `{size, sha256}` fingerprint.
+It sends no audio. The ephemeral foreground probe bounds declared and streamed
+replies to16KiB, rejects redirects/cookies, and accepts only a single index0
+match with an opaque original ID. It requires active root-client consent before
+starting and again after response/session drainage, including account, token and
+frozen-job checks. Engine recovery, cancellation, shutdown and Forget drain the
+probe before admitting its result. A positive match commits the original ID;
+empty, unavailable or malformed replies leave uncertain intent unchanged.
+
+The typed Dart bridge validates the returned frozen intent, revision, terminal
+state and existing receipt. Observation startup, client replacement and the
+library mutation epoch fence every upload-control RPC, including one waiting
+for observation acknowledgement. These are private coordinator methods; they
+add no upload UI and leave product capabilities disabled.
+
+Upload intent is now recorded before private copying. A new intent cannot adopt
+an existing private filename, and recovery without a source requires an existing
+durable job. Copy/hash failure leaves a never-started waiting row. With a fresh
+authorized source, no live/unattributed OS task and unchanged durable intent,
+preparation can replace an incomplete private snapshot. It cannot reset an
+interrupted audio POST. Unknown legacy bodies without a job remain quarantined.
+
+`cleanupUploadBody` requires a completed or cancelled durable upload and absence
+of matching/unattributed OS tasks. It crosses the file-worker barrier, rereads
+the exact terminal job and removes only its derived private body. Cancellation
+uses the retired revision's filename; repeated cleanup succeeds without a file.
+Symlinks/hardlinks and nonterminal intent are refused. Original Music files,
+receipts and intent history remain untouched. Forget/Clear also retire completed
+upload bodies after drainage. Failures retain their OS scope until final
+callbacks, closing the gap after a response rejects an upload but before the
+system task has finished cancelling.
+
+```mermaid
+flowchart TD
+  I[Persist consented queued intent] --> P[Prepare private snapshot]
+  P -->|copy interrupted| W[Waiting: fresh source grant required]
+  W --> P
+  P --> B[Persist task binding and POST file]
+  B -->|verified receipt| C[Complete with desktop original ID]
+  B -->|response lost| U[Interrupted: preserve snapshot]
+  U --> Q[Query exact size and SHA-256]
+  Q -->|positive match| C
+  Q -->|empty or invalid| U
+  C --> D[Drain OS tasks and file worker]
+  X[Durable cancellation] --> D
+  D --> G[Retire private body; keep source and history]
+```
+
+Host evidence uses real HTTP/tasks, files and SQLite, plus typed-channel tests.
+It covers lost-response matching without another audio POST, negative/malformed/
+large/chunked/redirect replies, stale consent/account/recovery, partial preparation
+retry, unbound-body adoption refusal, idempotent terminal cleanup and Forget.
+This does not establish desktop database durability/idempotency, Apple mixed
+session behavior, suspended execution, or an exact-source AOT IPA. Native upload
+admission/source grants and queue UI remain to be integrated before qualification.

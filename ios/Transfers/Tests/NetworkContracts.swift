@@ -320,6 +320,7 @@ private func runNetworkRetirementContracts(origin: String, length: Int64, checks
 func runNetworkContracts(origin: String, length: Int64, checksum: String) throws {
   try runHostContracts()
   try runUploadRuntimeContracts(origin: origin, length: length, checksum: checksum)
+  try runUploadMatchContracts(origin: origin, length: length, checksum: checksum)
   try runNetworkRetirementContracts(origin: origin, length: length, checksum: checksum)
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
@@ -1409,4 +1410,169 @@ private func runUploadRuntimeContracts(origin: String, length: Int64, checksum: 
   try require(try counts() == afterRetirement && Data(contentsOf: sourcePath) == bytes,
     "retirement preserves original and never issues another POST")
   print("Native upload runtime contracts passed: actual file POST/Unicode/hash, durable original ID, lost-reply idempotence, explicit queued recovery, exact pairing/account/consent refusal, bounded/invalid/redirect/lost responses, no app retry after ambiguity, private body preservation and cancellation/retirement drainage. Not desktop idempotency or Apple daemon qualification.")
+}
+
+
+private func runUploadMatchContracts(origin: String, length: Int64, checksum: String) throws {
+  func get(_ path: String) throws -> Data {
+    try native { reply in
+      URLSession.shared.dataTask(with: URL(string: origin + path)!) { data, _, error in
+        if let error { reply(.failure(error)) } else { reply(.success(data ?? Data())) }
+      }.resume()
+    }
+  }
+  func mode(_ name: String) throws { _ = try get("/__match_mode?mode=" + name) }
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("lokal-upload-match-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: false)
+  defer { try? manager.removeItem(at: root) }
+  let pairing = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  let authorization = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token", pairingID: pairing, desktopUserID: "fixture-account")
+  let credentials = ImportAuthorizationFixture(authorization)
+  let ownership = LokalTransferImportOwnership()
+  let runtime = try PortableNativeUploadRuntime(container: root, importOwnership: ownership,
+    credentials: { try credentials.read() })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+  }
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+  var ticket = try ownership.captureSubmission(owner)
+  let bytes = try get("/__upload_payload")
+  let original = root.appendingPathComponent("original.wav")
+  try bytes.write(to: original)
+  let source = open(original.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+  guard source >= 0 else { throw TestFailure.failed("open match fixture source") }
+  defer { close(source) }
+  let journal = try LokalTransferJournal(container: root)
+  let files = try LokalTransferFiles(container: root)
+  func job(_ title: String, key: String) throws -> LokalTransferJob {
+    try LokalTransferJob(direction: .upload,
+      identity: LokalTransferIdentity(desktopID: "fixture-pc", sourceID: key, localSongID: key,
+        origin: origin, pairingID: pairing, desktopUserID: "fixture-account"),
+      metadata: LokalTransferMetadata(title: title, artist: "Native fixture — Café", album: nil, fileExtension: "wav"),
+      nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  }
+  func posts() throws -> [String: Int] { (try state(origin))["uploadRequests"] as! [String: Int] }
+  let unbound = try job("unbound", key: "unbound-snapshot")
+  _ = try files.stageUpload(from: source, for: unbound)
+  for supplied in [nil, Optional(source)] {
+    try rejects("a new job cannot adopt private bytes without durable ownership") {
+      let _: LokalTransferSummary = try native { runtime.enqueueUpload(unbound, source: supplied, submission: ticket, reply: $0) }
+    }
+  }
+  try require(try journal.currentJob(unbound.id) == nil && Data(contentsOf: files.uploadURL(unbound)) == bytes,
+    "refused orphan adoption preserves its bytes and creates no intent")
+  let lost = try job("upload-lost", key: "match-lost")
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(lost, source: source, submission: ticket, reply: $0) }
+  _ = try awaitJob(runtime, id: lost.id, phase: [.interrupted])
+  try rejects("uncertain upload body cannot be cleaned") {
+    let _: Bool = try native { runtime.cleanupUploadBody(id: lost.id, revision: 1, reply: $0) }
+  }
+  let before = try journal.snapshot(), beforePosts = try posts()
+  for name in ["none", "wrong-index", "url-id", "duplicate", "malformed", "large", "chunked-large", "redirect", "unauthorized"] {
+    try mode(name)
+    if name == "none" {
+      let result: LokalTransferJob? = try native { runtime.matchUploadedOriginal(id: lost.id, revision: 1, submission: ticket, reply: $0) }
+      try require(result == nil, "no content match leaves upload uncertain")
+    } else {
+      try rejects("invalid match receipt cannot complete upload") {
+        let _: LokalTransferJob? = try native { runtime.matchUploadedOriginal(id: lost.id, revision: 1, submission: ticket, reply: $0) }
+      }
+    }
+    try require(try journal.snapshot().generation == before.generation && posts() == beforePosts,
+      "negative/invalid queries change neither durable intent nor audio POST counts")
+    try require(try Data(contentsOf: files.uploadURL(lost)) == bytes, "uncertain file survives rejected query")
+  }
+  try mode("positive")
+  let matched: LokalTransferJob? = try native { runtime.matchUploadedOriginal(id: lost.id, revision: 1, submission: ticket, reply: $0) }
+  try require(matched?.phase == .complete && matched?.resultOriginalID == "matched-original" && matched?.lastFailure == nil,
+    "actual content query recovers the durable peer original without resending audio")
+  let afterMatch = try journal.snapshot(), afterState = try state(origin)
+  let _: LokalTransferJob? = try native { runtime.matchUploadedOriginal(id: lost.id, revision: 1, submission: ticket, reply: $0) }
+  try require(try journal.snapshot().generation == afterMatch.generation &&
+    state(origin)["matchRequests"] as? Int == afterState["matchRequests"] as? Int,
+    "lost positive reply is read-only on replay")
+  let _: Bool = try native { runtime.cleanupUploadBody(id: lost.id, revision: 1, reply: $0) }
+  let _: Bool = try native { runtime.cleanupUploadBody(id: lost.id, revision: 1, reply: $0) }
+  try require(!manager.fileExists(atPath: root.appendingPathComponent(LokalTransferJournal.directoryName)
+    .appendingPathComponent(lost.uploadName).path), "drained matched upload body is retired idempotently")
+
+  // A copy/hash failure is a durable never-started waiting job, not an orphan.
+  let prepare = try job("upload-preparation-retry", key: "source-retry")
+  let wrongPath = root.appendingPathComponent("wrong-source.wav")
+  try Data(repeating: 0, count: bytes.count).write(to: wrongPath)
+  let wrong = open(wrongPath.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+  defer { if wrong >= 0 { close(wrong) } }
+  try rejects("wrong source hash does not send audio") {
+    let _: LokalTransferSummary = try native { runtime.enqueueUpload(prepare, source: wrong, submission: ticket, reply: $0) }
+  }
+  try require(try journal.currentJob(prepare.id)?.phase == .waiting && posts() == beforePosts,
+    "failed preparation retains durable never-started custody")
+  let partial = root.appendingPathComponent(LokalTransferJournal.directoryName).appendingPathComponent(prepare.uploadName)
+  try Data(bytes.prefix(123)).write(to: partial)
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  ticket = try ownership.captureSubmission(owner)
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(prepare, source: source, submission: ticket, reply: $0) }
+  _ = try awaitJob(runtime, id: prepare.id, phase: [.complete])
+  try require(try posts()["upload-preparation-retry"] == 1, "fresh source retries preparation, with only one successful audio POST")
+  let _: Bool = try native { runtime.cleanupUploadBody(id: prepare.id, revision: 1, reply: $0) }
+
+  let completedForForget = try job("upload-complete-forget", key: "complete-forget")
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(completedForForget, source: source, submission: ticket, reply: $0) }
+  _ = try awaitJob(runtime, id: completedForForget.id, phase: [.complete])
+  let held = try job("upload-lost", key: "held-match")
+  let _: LokalTransferSummary = try native { runtime.enqueueUpload(held, source: source, submission: ticket, reply: $0) }
+  _ = try awaitJob(runtime, id: held.id, phase: [.interrupted])
+  func heldQuery() throws -> (NativeResult<LokalTransferJob?>, DispatchSemaphore) {
+    try mode("slow")
+    let initial = (try state(origin))["matchRequests"] as! Int
+    let result = NativeResult<LokalTransferJob?>(), done = DispatchSemaphore(value: 0)
+    runtime.matchUploadedOriginal(id: held.id, revision: 1, submission: ticket) { result.set($0); done.signal() }
+    let deadline = Date().addingTimeInterval(10)
+    while (try state(origin))["matchRequests"] as! Int == initial {
+      guard Date() < deadline else { throw TestFailure.failed("match query did not reach held peer") }
+      Thread.sleep(forTimeInterval: 0.01)
+    }
+    return (result, done)
+  }
+  let (stale, staleDone) = try heldQuery()
+  try ownership.retireSubmissions(owner)
+  _ = try get("/__release_match")
+  try require(staleDone.wait(timeout: .now() + 10) == .success, "stale query drains")
+  try rejects("retired consent cannot acknowledge positive delayed match") { _ = try stale.get() }
+  ticket = try ownership.captureSubmission(owner)
+  let (wrongAccount, wrongDone) = try heldQuery()
+  credentials.set(try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token", pairingID: pairing, desktopUserID: "new-account"))
+  _ = try get("/__release_match")
+  try require(wrongDone.wait(timeout: .now() + 10) == .success, "old-account query drains")
+  try rejects("new account cannot inherit old positive match") { _ = try wrongAccount.get() }
+  credentials.set(authorization)
+  let (recovered, recoverDone) = try heldQuery()
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  try require(recoverDone.wait(timeout: .now() + 10) == .success, "runtime recovery cancels and drains the foreground query")
+  try rejects("recovery cannot accept an older query acknowledgement") { _ = try recovered.get() }
+  _ = try get("/__release_match")
+  ticket = try ownership.captureSubmission(owner)
+  let (cancelled, cancelDone) = try heldQuery()
+  let scope = LokalTransferScope(desktopID: "fixture-pc", origin: origin, pairingID: pairing)
+  let retirement = try ownership.beginScopeRetirement(owner, scope: scope)
+  let _: LokalTransferSummary = try native { runtime.retireNetworkScope(scope, ticket: retirement, reply: $0) }
+  try require(cancelDone.wait(timeout: .now() + 10) == .success, "Forget waits for query cancellation/delegate drainage")
+  try rejects("retired query cannot acknowledge original") { _ = try cancelled.get() }
+  _ = try get("/__release_match")
+  try require(try journal.currentJob(held.id)?.phase == .cancelled && !manager.fileExists(atPath:
+    root.appendingPathComponent(LokalTransferJournal.directoryName).appendingPathComponent(held.uploadName).path),
+    "Forget durably cancels and retires the exact private body")
+  try require(try journal.currentJob(completedForForget.id)?.phase == .complete && !manager.fileExists(atPath:
+    root.appendingPathComponent(LokalTransferJournal.directoryName).appendingPathComponent(completedForForget.uploadName).path),
+    "Forget retires completed private bodies while retaining their durable receipts")
+  let final = try state(origin)
+  try require(final["matchQueryValid"] as? Bool == true && final["matchLeakHits"] as? Int == 0 &&
+    final["cookiesSeen"] as? Bool == false && Data(contentsOf: original) == bytes,
+    "queries send only frozen fingerprint, refuse redirects/cookies and preserve original source")
+  print("Native upload content-match/cleanup contracts passed: positive/negative/bounded query, durable no-resend recovery, reply replay, source-preparation retry, exact terminal cleanup, consent/account fencing and Forget drainage. No desktop exactly-once or Apple lifecycle claim.")
 }
