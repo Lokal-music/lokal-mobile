@@ -131,18 +131,21 @@ class AlbumArtService {
     String? existingPath,
     required String audioSourcePath,
   }) async {
-    if (audioSourcePath.isEmpty) {
-      return null;
-    }
+    if (audioSourcePath.isEmpty) return null;
+    if (await _isUsableImagePath(existingPath)) return existingPath;
 
-    if (await _isUsableImagePath(existingPath)) {
-      return existingPath;
-    }
     final resolved = cachedArtworkPathFor(audioSourcePath);
     if (resolved != null) return resolved;
 
-    final future = _inFlightResolutions.putIfAbsent(audioSourcePath, () async {
-      final raw = await _loadArtworkBytes(
+    final networkKey = _networkArtworkKey(audioSourcePath, existingPath);
+    final resolutionKey = networkKey ?? audioSourcePath;
+    final future = _inFlightResolutions.putIfAbsent(resolutionKey, () async {
+      if (networkKey != null) {
+        final persisted = await _cachedNetworkArtwork(networkKey);
+        if (persisted != null) return persisted;
+      }
+
+      final raw = await _loadArtworkWithNetworkLimit(
         audioSourcePath,
         existingPath: existingPath,
       );
@@ -151,22 +154,20 @@ class AlbumArtService {
         return null;
       }
 
-      // Extension is irrelevant: Flutter's image decoder sniffs magic bytes,
-      // so keying the file on the content hash alone keeps lookup O(1) with
-      // no glob and no raw-vs-normalized format mismatch.
+      // A content-addressed image stays shared by different tracks. A tiny
+      // durable reference per cover marker survives app restart while the
+      // DB keeps the remote marker for recovery after cache eviction.
       final cacheKey = _cacheKey(raw);
       final dir = await _ensureArtworkDir();
       final cachedFile = File('${dir.path}/$cacheKey');
-      if (await _isUsableImagePath(cachedFile.path)) {
-        _resolvedPaths[audioSourcePath] = cachedFile.path;
-        unawaited(_persistArtworkPath(audioSourcePath, cachedFile.path));
-        unawaited(_pruneIfNeeded(dir));
-        return cachedFile.path;
+      if (!await _isUsableImagePath(cachedFile.path) ||
+          await cachedFile.length() == 0) {
+        final bytes = await _normalizeArtworkBytes(raw);
+        await cachedFile.writeAsBytes(bytes, flush: true);
       }
-
-      final bytes = await _normalizeArtworkBytes(raw);
-      await cachedFile.writeAsBytes(bytes, flush: true);
-      _resolvedPaths[audioSourcePath] = cachedFile.path;
+      if (networkKey != null) {
+        await _rememberNetworkArtwork(networkKey, cacheKey);
+      }
 
       await _persistArtworkPath(audioSourcePath, cachedFile.path);
       unawaited(_pruneIfNeeded(dir));
@@ -174,9 +175,15 @@ class AlbumArtService {
     });
 
     try {
-      return await future;
+      final path = await future;
+      if (path != null) _resolvedPaths[audioSourcePath] = path;
+      return path;
     } finally {
-      _inFlightResolutions.remove(audioSourcePath);
+      // Multiple tiles may await the same album cover. Only remove the exact
+      // completed operation, never a newer retry for this marker.
+      if (identical(_inFlightResolutions[resolutionKey], future)) {
+        _inFlightResolutions.remove(resolutionKey);
+      }
     }
   }
 
