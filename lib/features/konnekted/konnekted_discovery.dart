@@ -1692,6 +1692,21 @@ class OnlineAddonCooldown {
 
 final _autoHttpAddonCooldown = OnlineAddonCooldown();
 
+/// One deadline for the entire automatic add-on attempt (search, alternate
+/// searches, and stream selection). Per-request timeouts alone compound across
+/// multiple endpoints. Cancel the active source when the budget expires.
+Future<T> boundedAutomaticAddonAttempt<T>(
+  Future<T> Function() acquire, {
+  required void Function() abort,
+  Duration budget = const Duration(seconds: 3),
+}) => acquire().timeout(
+  budget,
+  onTimeout: () {
+    abort();
+    throw const DiscoveryException('Automatic source timed out.');
+  },
+);
+
 /// Classify without logging signed audio URLs or provider credentials.
 String _onlineFailureKind(Object error) {
   final message = error.toString().toLowerCase();
@@ -1969,7 +1984,8 @@ Future<Song?> findDiscoverySong(
       cancel: cancel,
       respectEnabledDiscoverySources: true,
       stopOnExplicitSpatialFailure: true,
-      quickAddonFallback: true,
+      quickAddonFallback:
+          settings.activeAddons.length > 1 || settings.youtubeEnabled,
       automaticAddonAborts: automaticAddonAborts,
     );
     final candidate = discoveryCandidate(track);
@@ -2053,19 +2069,24 @@ Future<Song?> findDiscoverySong(
         }
       }
       check();
-      final found = await findDiscoverySourceMatch(
-        source: source,
-        candidate: candidate,
-        queries: queries,
-        checkCancelled: check,
-      );
-      if (found == null) continue;
-      check();
-      onStatus?.call('Getting ${track.title} from ${source.name}…');
-      try {
-        final selected = found.withArtwork(_artworkOf(track));
+      DiscoveryTrack? found;
+      Future<Song?> attempt() async {
+        found = await findDiscoverySourceMatch(
+          source: source,
+          candidate: candidate,
+          queries: queries,
+          checkCancelled: check,
+        );
+        if (found == null) return null;
+        check();
+        // A source abandoned by the automatic deadline must never start
+        // playback later when an old network request eventually completes.
+        if (automaticAddonAborts[source.id]?.isCompleted == true) return null;
+        onStatus?.call('Getting ${track.title} from ${source.name}…');
+        final selected = found!.withArtwork(_artworkOf(track));
         final acquisitionTimer = Stopwatch()..start();
         final resolved = await source.play(selected);
+        if (automaticAddonAborts[source.id]?.isCompleted == true) return null;
         _autoHttpAddonCooldown.succeeded(source.id);
         AppLog.instance.add('[OnlineSource] discovery acquired source=${source.id} '
             'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
@@ -2078,6 +2099,24 @@ Future<Song?> findDiscoverySong(
           () => playOnlineTrack(source.id, selected, forDownload: true),
         );
         return song;
+      }
+
+      try {
+        // Prefer a working alternative instead of letting several failing
+        // add-ons each consume a full search + stream timeout. A listener
+        // with only one available source retains its normal connection time.
+        final song = source.id.startsWith('w-') && sources.length > 1
+            ? await boundedAutomaticAddonAttempt<Song?>(
+                attempt,
+                abort: () {
+                  final pending = automaticAddonAborts.putIfAbsent(
+                    source.id, () => Completer<void>(),
+                  );
+                  if (!pending.isCompleted) pending.complete();
+                },
+              )
+            : await attempt();
+        if (song != null) return song;
       } catch (error) {
         check();
         _autoHttpAddonCooldown.failed(source.id, error);
@@ -2089,7 +2128,7 @@ Future<Song?> findDiscoverySong(
           Error.throwWithStackTrace(error.cause, error.stackTrace);
         }
         // An Atmos server timeout must not silently switch to stereo.
-        if (found.atmosAvailable &&
+        if (found?.atmosAvailable == true &&
             error is DiscoveryException &&
             error.message.startsWith('Tidal Atmos server')) {
           onStatus?.call(error.message);
