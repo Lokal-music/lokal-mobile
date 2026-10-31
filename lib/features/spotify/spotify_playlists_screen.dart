@@ -32,6 +32,7 @@ class _SpotifyPlaylistsScreenState
   final SpotifyPlaylistCache _cache = SpotifyPlaylistCache.instance;
   List<SpotifyPlaylist> _playlists = const [];
   bool _loading = true;
+  bool _refreshing = false;
   String? _error;
 
   @override
@@ -73,6 +74,8 @@ class _SpotifyPlaylistsScreenState
   }
 
   Future<void> _refresh({bool silent = false}) async {
+    if (_refreshing) return;
+    _refreshing = true;
     if (!silent) setState(() { _loading = true; _error = null; });
     try {
       final result = await _cache.refreshList(_api);
@@ -91,6 +94,7 @@ class _SpotifyPlaylistsScreenState
         }
       }
     } finally {
+      _refreshing = false;
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -197,6 +201,7 @@ class _SpotifyPlaylistDetailState
   final SpotifyPlaylistCache _cache = SpotifyPlaylistCache.instance;
   List<LokalDiscoveryTrack> _tracks = const [];
   bool _loading = true;
+  bool _refreshing = false;
   String? _error;
 
   @override
@@ -241,6 +246,8 @@ class _SpotifyPlaylistDetailState
   }
 
   Future<void> _refresh({bool silent = false}) async {
+    if (_refreshing) return;
+    _refreshing = true;
     if (!silent) setState(() { _loading = true; _error = null; });
     try {
       final tracks = await _cache.refreshTracks(_api, widget.playlist.id);
@@ -262,6 +269,7 @@ class _SpotifyPlaylistDetailState
         }
       }
     } finally {
+      _refreshing = false;
       if (mounted) setState(() => _loading = false);
     }
   }
