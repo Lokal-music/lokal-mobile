@@ -406,7 +406,7 @@ class AlbumArtService {
           if (cached != null && cached.isNotEmpty) return cached;
         }
         final server = await Database.networkServers.get(serverId);
-        if (server != null) {
+        if (server != null && service is NetworkEmbeddedArtworkSource) {
           try {
             final bytes = await service.getEmbeddedCoverArt(server, raw);
             if (bytes.isNotEmpty) return Uint8List.fromList(bytes);
