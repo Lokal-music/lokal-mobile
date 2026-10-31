@@ -14,7 +14,7 @@ class LokalGenreTone {
 }
 
 abstract final class LokalGenrePalette {
-  static const foreground = Color(0xFFF9F7FF);
+  static const foreground = Color(0xFFFFFFFF);
 
   static const _tones = <LokalGenreTone>[
     LokalGenreTone(Color(0xFF503787), Color(0xFF8260D1), Icons.graphic_eq_rounded, false),
