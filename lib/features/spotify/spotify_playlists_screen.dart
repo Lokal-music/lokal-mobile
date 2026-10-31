@@ -1,0 +1,277 @@
+import 'dart:async';
+
+import 'package:flick/features/discovery/lastfm_discovery.dart';
+import 'package:flick/features/discovery/spotify_discovery.dart';
+import 'package:flick/features/konnekted/konnekted_data.dart';
+import 'package:flick/features/konnekted/konnekted_discovery.dart';
+import 'package:flick/features/spotify/spotify_api.dart';
+import 'package:flick/features/spotify/spotify_models.dart';
+import 'package:flick/features/spotify/spotify_oauth.dart';
+import 'package:flick/features/spotify/spotify_storage.dart';
+import 'package:flick/features/spotify/spotify_web_api.dart';
+import 'package:flick/models/song.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// Read-only library browser using the already-configured Spotify cookie.
+/// No Spotify token or cookie is retained in widget state or logged.
+class SpotifyPlaylistsScreen extends ConsumerStatefulWidget {
+  const SpotifyPlaylistsScreen({super.key, required this.onPlay});
+
+  final void Function(Song song, List<Song> queue) onPlay;
+
+  @override
+  ConsumerState<SpotifyPlaylistsScreen> createState() =>
+      _SpotifyPlaylistsScreenState();
+}
+
+class _SpotifyPlaylistsScreenState
+    extends ConsumerState<SpotifyPlaylistsScreen> {
+  late final SpotifyWebApi _api;
+  List<SpotifyPlaylist> _playlists = const [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final settings = SpotifySettingsStore();
+    _api = SpotifyWebApi(
+      store: settings.tokenStore,
+      oauth: SpotifyOAuthService(tokenStore: settings.tokenStore),
+    );
+    unawaited(_refresh());
+  }
+
+  @override
+  void dispose() {
+    _api.close();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await _api.getLibraryPlaylists();
+      if (mounted) setState(() => _playlists = result);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _playlists = const [];
+          _error = error is SpotifyApiException
+              ? error.message
+              : 'Could not load Spotify playlists. Retry or reconnect Spotify.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Spotify playlists'),
+      actions: [
+        IconButton(
+          tooltip: 'Refresh Spotify playlists',
+          onPressed: _loading ? null : () => unawaited(_refresh()),
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ],
+    ),
+    body: _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+            ? Center(child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  TextButton(onPressed: () => unawaited(_refresh()),
+                      child: const Text('Retry')),
+                ]),
+              ))
+            : _playlists.isEmpty
+                ? const Center(child: Text('No saved Spotify playlists.'))
+                : RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: ListView.builder(
+                      itemCount: _playlists.length,
+                      itemBuilder: (context, index) {
+                        final playlist = _playlists[index];
+                        return ListTile(
+                          leading: _SpotifyCover(url: playlist.imageUrl),
+                          title: Text(playlist.name, maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                          subtitle: playlist.owner?.isNotEmpty == true
+                              ? Text(playlist.owner!, maxLines: 1,
+                                  overflow: TextOverflow.ellipsis)
+                              : null,
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => _SpotifyPlaylistDetail(
+                                playlist: playlist, onPlay: widget.onPlay,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+  );
+}
+
+class _SpotifyCover extends StatelessWidget {
+  const _SpotifyCover({this.url});
+
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = this.url;
+    if (url == null || !url.startsWith('https://')) {
+      return const SizedBox(
+        width: 48, height: 48,
+        child: Icon(Icons.library_music_rounded),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(5),
+      child: Image.network(
+        url, width: 48, height: 48, fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox(
+          width: 48, height: 48,
+          child: Icon(Icons.library_music_rounded),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpotifyPlaylistDetail extends ConsumerStatefulWidget {
+  const _SpotifyPlaylistDetail({
+    required this.playlist,
+    required this.onPlay,
+  });
+
+  final SpotifyPlaylist playlist;
+  final void Function(Song song, List<Song> queue) onPlay;
+
+  @override
+  ConsumerState<_SpotifyPlaylistDetail> createState() =>
+      _SpotifyPlaylistDetailState();
+}
+
+class _SpotifyPlaylistDetailState
+    extends ConsumerState<_SpotifyPlaylistDetail> {
+  late final SpotifyWebApi _api;
+  List<LokalDiscoveryTrack> _tracks = const [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final settings = SpotifySettingsStore();
+    _api = SpotifyWebApi(
+      store: settings.tokenStore,
+      oauth: SpotifyOAuthService(tokenStore: settings.tokenStore),
+    );
+    unawaited(_refresh());
+  }
+
+  @override
+  void dispose() {
+    _api.close();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final tracks = await _api.getPlaylistTracks(widget.playlist.id, max: 1000);
+      if (mounted) setState(() =>
+        _tracks = tracks.map(spotifyDiscoveryTrack).toList(growable: false));
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _tracks = const [];
+          _error = error is SpotifyApiException
+              ? error.message
+              : 'Could not read this playlist.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  List<Song> _queue() {
+    final index = KonnektedLibraryIndex.of(
+      ref.read(konnektedLibraryProvider).value ?? const <Song>[],
+    );
+    // Each remote item remains metadata until Lokal's on-demand resolver
+    // finds a playable source; Spotify cookie auth does not stream audio.
+    return [
+      for (final track in _tracks)
+        index.match(track) ?? discoveryPendingSong(track),
+    ];
+  }
+
+  void _play(int index) {
+    if (index < 0 || index >= _tracks.length) return;
+    final queue = _queue();
+    if (queue.isNotEmpty) widget.onPlay(queue[index], queue);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(widget.playlist.name),
+      actions: [
+        IconButton(
+          tooltip: 'Refresh playlist',
+          icon: const Icon(Icons.refresh_rounded),
+          onPressed: _loading ? null : () => unawaited(_refresh()),
+        ),
+        IconButton(
+          tooltip: 'Play all',
+          icon: const Icon(Icons.play_arrow_rounded),
+          onPressed: _loading || _tracks.isEmpty ? null : () => _play(0),
+        ),
+      ],
+    ),
+    body: _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+            ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(_error!, textAlign: TextAlign.center),
+                ),
+                TextButton(onPressed: () => unawaited(_refresh()),
+                    child: const Text('Retry')),
+              ]))
+            : _tracks.isEmpty
+                ? const Center(child: Text('No playable tracks in this playlist.'))
+                : ListView.builder(
+                    itemCount: _tracks.length,
+                    itemBuilder: (context, index) {
+                      final track = _tracks[index];
+                      return ListTile(
+                        leading: _SpotifyCover(url: track.artworkUrl),
+                        title: Text(track.title, maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        subtitle: Text(track.artist, maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        onTap: () => _play(index),
+                      );
+                    },
+                  ),
+  );
+}
