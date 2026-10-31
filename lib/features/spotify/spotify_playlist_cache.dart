@@ -131,9 +131,10 @@ class SpotifyPlaylistCache {
 
   Future<void> _failed(String? id) async {
     await _ensure();
+    final trackEntries = _state?['tracks'];
     final raw = id == null
         ? _state?['playlists']
-        : (_state?['tracks'] as Map?)?[id];
+        : (trackEntries is Map ? trackEntries[id] : null);
     final entry = _entry(raw);
     if (entry == null) return;
     entry['retryAfter'] = _timestamp + retryInterval.inMilliseconds;
