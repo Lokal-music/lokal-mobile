@@ -1542,7 +1542,10 @@ class AndroidAudioEngine implements AudioEngine {
         AutoMixProfile? upcomingProfile;
         if (_automixProfileLookup case final fetch?) {
           try {
-            upcomingProfile = await fetch(next).timeout(
+            // Widen the future itself: a non-nullable runtime Future rejects
+            // a nullable timeout fallback even when its static type is nullable.
+            upcomingProfile = await fetch(next)
+                .then<AutoMixProfile?>((value) => value).timeout(
               const Duration(milliseconds: 400), onTimeout: () => null,
             );
           } catch (_) {}
@@ -1568,7 +1571,8 @@ class AndroidAudioEngine implements AudioEngine {
             final pending = _stemCandidateIdentity == id
                 ? _stemCandidate
                 : lookup(outgoingTrack, next);
-            preparedStem = await pending?.timeout(
+            preparedStem = await pending
+                ?.then<AutoMixStemClip?>((value) => value).timeout(
               const Duration(milliseconds: 450), onTimeout: () => null,
             );
             if (!valid()) { releaseIfOwned(); return; }

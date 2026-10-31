@@ -1205,6 +1205,9 @@ class PlayerService {
       unawaited(_handleBitPerfectPreferenceChanged());
     });
     selectedPlaybackModeNotifier.addListener(_updateBitPerfectProcessingLocked);
+    Uac2PreferencesService.selectedAudioEngineNotifier.addListener(
+      _updateBitPerfectProcessingLocked,
+    );
     initializedPlaybackModeNotifier.addListener(
       _updateBitPerfectProcessingLocked,
     );
@@ -7630,7 +7633,8 @@ class PlayerService {
     final mode = await _appPreferencesService.getReplayGainMode();
     if (mode == ReplayGainMode.off ||
         song == null ||
-        (Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+        (currentEngineType == AudioEngineType.rustOboe &&
+            Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
             _uac2Service.isBitPerfectEnabledSync)) {
       _replayGainState = ReplayGainAppliedState.neutral;
     } else {
@@ -8292,6 +8296,9 @@ class PlayerService {
     _playbackStateSubscription?.cancel();
     unawaited(_playbackManager.dispose());
     selectedPlaybackModeNotifier.removeListener(
+      _updateBitPerfectProcessingLocked,
+    );
+    Uac2PreferencesService.selectedAudioEngineNotifier.removeListener(
       _updateBitPerfectProcessingLocked,
     );
     initializedPlaybackModeNotifier.removeListener(

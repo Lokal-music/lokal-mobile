@@ -244,6 +244,16 @@ class Uac2Service {
 
   static const _channel = MethodChannel('com.mossapps.flick/uac2');
 
+  /// Fail closed if the platform cannot report its SDK level.
+  Future<bool> supportsAndroidUsbMixer() async {
+    try {
+      final sdk = await _channel.invokeMethod<int>('getAndroidSdkInt');
+      return sdk != null && sdk >= 34;
+    } catch (_) {
+      return false;
+    }
+  }
+
   final _preferencesService = Uac2PreferencesService();
   final ValueNotifier<bool> bitPerfectEnabledNotifier = ValueNotifier(false);
   final ValueNotifier<bool> dapBitPerfectEnabledNotifier = ValueNotifier(true);

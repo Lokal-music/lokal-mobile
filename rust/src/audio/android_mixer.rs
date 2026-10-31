@@ -11,20 +11,18 @@
 use crate::audio::commands::AudioEvent;
 use crate::audio::engine::{audio_callback, AudioCallbackData};
 use crossbeam_channel::Sender;
-use jni::{jni_sig, jni_str, objects::{JClass, JObject, JValue}, strings::JNIString};
-use std::ffi::c_void;
-use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
-use std::sync::Arc;
+use jni::{jni_sig, jni_str, objects::{JClass, JObject, JValue}, refs::Global, strings::JNIString};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 const CLASS: &str = "com/mossapps/flick/AndroidUsbMixer";
-static CLASS_REF: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
+static CLASS_REF: OnceLock<Global<JClass<'static>>> = OnceLock::new();
 
 fn mixer_class<'env>(env: &mut jni::Env<'env>) -> Result<JClass<'env>, jni::errors::Error> {
-    let cached = CLASS_REF.load(Ordering::Acquire);
-    if !cached.is_null() {
-        return Ok(unsafe { JClass::from_raw(env, cached as jni::sys::jclass) });
+    if let Some(cached) = CLASS_REF.get() {
+        return env.new_local_ref(cached);
     }
 
     // Attached Rust threads do not inherit Flutter's application classloader.
@@ -40,11 +38,7 @@ fn mixer_class<'env>(env: &mut jni::Env<'env>) -> Result<JClass<'env>, jni::erro
     )?.l()?;
     let class = unsafe { JClass::from_raw(env, loaded.into_raw()) };
     let global = env.new_global_ref(&class)?;
-    let ptr = global.as_obj().as_raw() as *mut c_void;
-    match CLASS_REF.compare_exchange(std::ptr::null_mut(), ptr, Ordering::AcqRel, Ordering::Acquire) {
-        Ok(_) => std::mem::forget(global),
-        Err(_) => drop(global),
-    }
+    let _ = CLASS_REF.set(global);
     Ok(class)
 }
 

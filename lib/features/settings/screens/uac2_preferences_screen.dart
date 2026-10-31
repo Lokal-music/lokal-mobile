@@ -732,6 +732,9 @@ class _Uac2PreferencesSectionsState
     AudioEnginePreference current, {
     AudioOutputDiagnostics? diagnostics,
   }) async {
+    final supportsAndroidUsbMixer = Platform.isAndroid &&
+        await ref.read(uac2ServiceProvider).supportsAndroidUsbMixer();
+    if (!mounted || !context.mounted) return;
     final dapBothOff =
         diagnostics?.detectedDap == true &&
         !(await service.getBitPerfectEnabled()) &&
@@ -813,7 +816,7 @@ class _Uac2PreferencesSectionsState
             dropBitPerfect: false,
           ),
         ),
-        if (Platform.isAndroid)
+        if (supportsAndroidUsbMixer)
           _Choice(
             label: 'Android 14+ USB bit-perfect mixer',
             description: 'Uses Android’s native AudioTrack and mixer API. '

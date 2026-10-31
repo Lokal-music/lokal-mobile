@@ -65,4 +65,4 @@ jobs:
           test/services/motion_art_suppression_test.dart
           test/services/output_precision_preferences_test.dart
       - name: Compile Flutter Android APK
-        run: flutter build apk --debug --no-pub
+        run: flutter build apk --debug --flavor full --target-platform android-arm64 --no-pub
