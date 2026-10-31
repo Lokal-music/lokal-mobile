@@ -8,6 +8,7 @@ import '../../data/repositories/song_repository.dart';
 import '../library_scanner_service.dart' show ScanProgress;
 import '../network_cache_service.dart';
 import 'native_smb_transport.dart';
+import 'network_embedded_artwork.dart';
 import 'network_source_service.dart';
 import 'local_network_access.dart';
 
@@ -20,7 +21,7 @@ import 'local_network_access.dart';
 /// derived from the filename, album from the parent folder, artist from the
 /// grandparent (or Unknown). Full tag extraction would require downloading each
 /// file, out of scope for the first cut.
-class SmbService implements NetworkSourceService {
+class SmbService implements NetworkSourceService, NetworkEmbeddedArtworkSource {
   SmbService._({
     SongRepository? songRepository,
     NetworkCacheService? networkCache,
@@ -251,6 +252,29 @@ class SmbService implements NetworkSourceService {
   }
 
   @override
+  Future<List<int>> getEmbeddedCoverArt(
+    NetworkServerEntity server,
+    String remoteId,
+  ) async {
+    final lower = remoteId.toLowerCase();
+    if (!lower.endsWith('.flac') && !lower.endsWith('.mp3')) {
+      return const [];
+    }
+    final s = _parseServer(server);
+    await _ensureLanAccess(s);
+    final session = await _connect(s, server);
+    try {
+      final prefix = await session.readPrefix(
+        remoteId,
+        maxBytes: networkArtworkPrefixBytes,
+      );
+      return extractNetworkEmbeddedArtwork(prefix)?.toList() ?? const [];
+    } finally {
+      await session.close();
+    }
+  }
+
+  @override
   Future<String> stream(
     NetworkServerEntity server,
     String remoteId, {
@@ -332,6 +356,14 @@ class SmbService implements NetworkSourceService {
       await session.close();
     }
 
+    // Avoid excessive library observer notifications while playback runs.
+    final pendingSongs = <SongEntity>[];
+    Future<void> flushSongs() async {
+      if (pendingSongs.isEmpty) return;
+      await _repo.upsertSongs(pendingSongs);
+      pendingSongs.clear();
+      await Future<void>.delayed(Duration.zero);
+    }
     final syncedRemoteIds = <String>{};
     var songsFound = 0;
     for (final dirPath in byDir.keys) {
@@ -359,11 +391,15 @@ class SmbService implements NetworkSourceService {
                 coverPath: coverPath,
               ))
           .toList();
-      await _repo.upsertSongs(entities);
+      for (final entity in entities) {
+        pendingSongs.add(entity);
+        if (pendingSongs.length >= 128) await flushSongs();
+      }
       syncedRemoteIds.addAll(entities.map((e) => e.remoteId!));
       songsFound += entities.length;
     }
 
+    await flushSongs();
     await purgeAndStampNetworkSync(server, syncedRemoteIds);
 
     yield ScanProgress(

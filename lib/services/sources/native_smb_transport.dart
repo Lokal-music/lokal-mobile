@@ -126,6 +126,34 @@ class Libsmb2Transport implements NativeSmbSession {
     }
   }
 
+  /// Read at most a small media prefix for embedded album art. Even a
+  /// multi-gigabyte FLAC must never be buffered merely to paint its cover.
+  Future<List<int>> _readPrefixNative(String path, int maxBytes) async {
+    final (handle, size) =
+        await _native.synchronized(() => _pool.openFileWithSize(path));
+    try {
+      if (size < 0) throw const FileSystemException('Invalid NAS file size');
+      final target = size < maxBytes ? size : maxBytes;
+      final result = BytesBuilder(copy: false);
+      var offset = 0;
+      while (offset < target) {
+        final chunk = await _native.synchronized(() => _pool.readFromHandle(
+          handle,
+          offset: offset,
+          length: (target - offset).clamp(1, 256 * 1024).toInt(),
+        ));
+        if (chunk.isEmpty) {
+          throw const FileSystemException('NAS artwork prefix truncated');
+        }
+        result.add(chunk);
+        offset += chunk.length;
+      }
+      return result.takeBytes();
+    } finally {
+      await _native.synchronized(() => _pool.closeHandle(handle));
+    }
+  }
+
   @override
   Future<void> download(
     String path,
@@ -175,5 +203,21 @@ class Libsmb2Transport implements NativeSmbSession {
     if (_closed) return;
     _closed = true;
     await _native.synchronized(() => _pool.disconnect());
+  }
+}
+
+/// Keep the native transport interface compatible with existing SMB fixtures.
+/// The production pool performs a true capped range read; test implementations
+/// can continue to supply an already-small in-memory fixture via read().
+extension NativeSmbPrefixRead on NativeSmbSession {
+  Future<List<int>> readPrefix(String path, {required int maxBytes}) async {
+    if (maxBytes <= 0 || maxBytes > Libsmb2Transport.maxArtworkBytes) {
+      throw ArgumentError.value(maxBytes, 'maxBytes', 'Invalid prefix limit');
+    }
+    if (this is Libsmb2Transport) {
+      return (this as Libsmb2Transport)._readPrefixNative(path, maxBytes);
+    }
+    final bytes = await read(path);
+    return bytes.length <= maxBytes ? bytes : bytes.sublist(0, maxBytes);
   }
 }

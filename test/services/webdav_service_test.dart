@@ -713,5 +713,54 @@ void main() {
       expect(captured.pathSegments.join('/'), 'music/照井順政 - Delirious.flac');
       expect(await File(path).readAsBytes(), [9, 9]);
     });
+    test('embedded FLAC image uses a capped authenticated WebDAV range', () async {
+      final image = [0xff, 0xd8, 0xff, 0xe0, 1, 2, 3];
+      List<int> u32(int x) => [
+        (x >> 24) & 255, (x >> 16) & 255, (x >> 8) & 255, x & 255,
+      ];
+      final mime = utf8.encode('image/jpeg');
+      final picture = [
+        ...u32(3), ...u32(mime.length), ...mime,
+        ...u32(0), ...u32(1), ...u32(1), ...u32(24), ...u32(0),
+        ...u32(image.length), ...image,
+      ];
+      final flac = [
+        ...utf8.encode('fLaC'),
+        0x86, 0, 0, picture.length, ...picture,
+      ];
+      late http.Request request;
+      final service = WebdavService.create(
+        client: MockClient((seen) async {
+          request = seen;
+          return http.Response.bytes(flac, 206, headers: {
+            'content-range': 'bytes 0-${flac.length - 1}/100000000',
+          });
+        }),
+      );
+      final cover = await service.getEmbeddedCoverArt(
+        _server(token: base64Encode(utf8.encode('password'))),
+        Uri.encodeComponent('/music/Album #1/01 Song.flac'),
+      );
+      expect(cover, image);
+      expect(request.headers['range'], 'bytes=0-4194303');
+      expect(request.headers['authorization'], startsWith('Basic '));
+      expect(request.url.pathSegments.last, '01 Song.flac');
+    });
+
+    test('remote prefix declines unsupported audio without network requests',
+        () async {
+      var requests = 0;
+      final service = WebdavService.create(
+        client: MockClient((_) async {
+          requests++;
+          return http.Response('', 200);
+        }),
+      );
+      expect(await service.getEmbeddedCoverArt(
+        _server(), Uri.encodeComponent('/music/Track.wav'),
+      ), isEmpty);
+      expect(requests, 0);
+    });
+
   });
 }

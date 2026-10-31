@@ -17,6 +17,9 @@ on:
       - 'lib/services/sources/local_network_access.dart'
       - 'lib/services/sources/smb_service.dart'
       - 'lib/services/sources/native_smb_transport.dart'
+      - 'lib/services/sources/network_embedded_artwork.dart'
+      - 'android/app/src/main/kotlin/com/mossapps/flick/MusicNotificationService.kt'
+      - 'test/services/network_embedded_artwork_test.dart'
       - 'lib/services/sources/webdav_service.dart'
       - 'pubspec.yaml'
       - 'pubspec.lock'
@@ -40,6 +43,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/android-toolchain
+      - name: Ensure Gradle wrapper is executable for Flutter's Android build
+        run: chmod +x android/gradlew
       - name: Analyze network implementations and settings
         # dart analyze accepts only one file or directory per invocation.
         run: |
@@ -52,6 +57,7 @@ jobs:
             lib/services/sources/local_network_access.dart \
             lib/services/sources/smb_service.dart \
             lib/services/sources/native_smb_transport.dart \
+            lib/services/sources/network_embedded_artwork.dart \
             lib/services/sources/webdav_service.dart \
             lib/features/settings/screens/network_server_edit_screen.dart \
             lib/widgets/common/cached_image_widget.dart; do
@@ -63,12 +69,13 @@ jobs:
           test/services/album_art_service_test.dart
           test/services/smb_service_parse_test.dart
           test/services/smb_native_transport_test.dart
+          test/services/network_embedded_artwork_test.dart
           test/services/webdav_service_test.dart
           test/services/local_network_access_test.dart
       - name: Run Rust SMB transport tests
         run: cargo test --locked --lib --manifest-path rust/Cargo.toml smb_api
       - name: Test Android native crash tombstone decoder
-        run: cd android && ./gradlew :app:testFullDebugUnitTest --no-daemon
+        run: cd android && bash ./gradlew :app:testFullDebugUnitTest --no-daemon
       - name: Compile mobile network code into Android test APK
         run: flutter build apk --debug --flavor full --target-platform android-arm64 --no-pub
       - name: Verify dependency locks

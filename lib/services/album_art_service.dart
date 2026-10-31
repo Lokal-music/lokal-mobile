@@ -59,9 +59,25 @@ class AlbumArtService {
       return null;
     }
     final prefix = '${uri.scheme}-cover://';
-    return marker != null && marker.startsWith(prefix)
-        ? '${uri.scheme}://${uri.host}/$marker'
-        : sourcePath;
+    if (marker != null && marker.startsWith(prefix)) {
+      return '${uri.scheme}://${uri.host}/$marker';
+    }
+    // Albums without a separate cover.jpg still share embedded art across
+    // their tracks. Do not issue the same prefix read once per track in a
+    // 20-song folder; persist one recovered image per NAS album directory.
+    final remoteId = networkRemoteIdFromAudioPath(sourcePath);
+    if (remoteId == null) return sourcePath;
+    try {
+      final remotePath = uri.scheme == 'webdav'
+          ? Uri.decodeComponent(remoteId)
+          : remoteId;
+      final slash = remotePath.lastIndexOf('/');
+      if (slash <= 0) return sourcePath;
+      return '${uri.scheme}://${uri.host}/folder/'
+          '${Uri.encodeComponent(remotePath.substring(0, slash))}';
+    } catch (_) {
+      return sourcePath;
+    }
   }
 
   Future<File> _networkIndexFile(String key) async {
@@ -377,15 +393,36 @@ class AlbumArtService {
         }
       }
 
-      // SMB and WebDAV directory listings cannot expose the APIC/FLAC
-      // PICTURE tag. Once playback has cached the original audio, recover its
-      // embedded artwork without another NAS read or full-file download.
-      // Preserve the opaque percent-encoded remoteId (critical for WebDAV).
+      // A NAS listing cannot expose embedded APIC/FLAC PICTURE tags.
+      // Reuse cached audio when available. Otherwise fetch at most a small
+      // FLAC/MP3 prefix, never the full audio file just to draw a list tile.
+      // Preserve the opaque encoded remoteId (especially WebDAV percent URLs).
       if (uri.scheme == 'smb' || uri.scheme == 'webdav') {
         final raw = networkRemoteIdFromAudioPath(audioSourcePath);
         if (raw == null) return null;
         final local = await NetworkCacheService().getPath(serverId, raw);
-        if (local != null) return _loadEmbeddedArtworkBytes(local);
+        if (local != null) {
+          final cached = await _loadEmbeddedArtworkBytes(local);
+          if (cached != null && cached.isNotEmpty) return cached;
+        }
+        final server = await Database.networkServers.get(serverId);
+        final embeddedSource = service is NetworkEmbeddedArtworkSource
+            ? service as NetworkEmbeddedArtworkSource
+            : null;
+        if (server != null && embeddedSource != null) {
+          try {
+            final bytes = await embeddedSource.getEmbeddedCoverArt(server, raw);
+            if (bytes.isNotEmpty) return Uint8List.fromList(bytes);
+          } catch (error) {
+            final errorKey = '${uri.scheme}:$serverId:embedded';
+            if (_reportedNetworkCoverErrors.add(errorKey)) {
+              AppLog.instance.add(
+                'NAS embedded cover prefix failed (${uri.scheme}, '
+                'server $serverId): $error',
+              );
+            }
+          }
+        }
       }
       return null;
     }
