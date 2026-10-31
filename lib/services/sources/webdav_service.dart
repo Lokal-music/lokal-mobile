@@ -743,6 +743,16 @@ class WebdavService implements NetworkSourceService {
     queue.add(_DavDir(url: server.baseUrl, path: rootPath));
     allDirs.add(rootPath);
 
+    // Batch library notifications; playback and media-service callbacks
+    // must not compete with an Isar write for each individual NAS folder.
+    final pendingSongs = <SongEntity>[];
+    Future<void> flushSongs() async {
+      if (pendingSongs.isEmpty) return;
+      await _repo.upsertSongs(pendingSongs);
+      pendingSongs.clear();
+      await Future<void>.delayed(Duration.zero);
+    }
+
     var filesProcessed = 0;
     var scanIncomplete = false;
     while (queue.isNotEmpty) {
@@ -822,7 +832,10 @@ class WebdavService implements NetworkSourceService {
             coverHref: coverHref,
           );
         }).toList();
-        await _repo.upsertSongs(entities);
+        for (final entity in entities) {
+          pendingSongs.add(entity);
+          if (pendingSongs.length >= 128) await flushSongs();
+        }
         syncedRemoteIds.addAll(entities.map((e) => e.remoteId!));
         songsFound += entities.length;
       }
@@ -831,6 +844,8 @@ class WebdavService implements NetworkSourceService {
       yield _progress(
           server, songsFound, allDirs.length, filesProcessed, dir.path);
     }
+
+    await flushSongs();
 
     // A single failed folder can hide hundreds of previously indexed
     // tracks. Never interpret missing responses as deleted files or advance
