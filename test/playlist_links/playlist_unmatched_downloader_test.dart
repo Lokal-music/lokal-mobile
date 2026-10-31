@@ -63,6 +63,16 @@ void main() {
     expect(chosen?.track.id, 'right123456');
   });
 
+  test('an unresolvable entry can be skipped without failing the batch', () async {
+    const entry = RemotePlaylistEntry(title: 'Unavailable', artist: 'Unknown', remoteId: 'song-id');
+    await expectLater(
+      const PlaylistUnmatchedDownloader().download(
+        _spotify, entry, sources: (_) async => [],
+      ),
+      throwsA(isA<PlaylistDownloadSourceUnavailable>()),
+    );
+  });
+
   test('unmatched entry downloads and saves through the injected source pipeline', () async {
     const entry = RemotePlaylistEntry(
       title: 'Original video', artist: 'Uploader', remoteId: 'abcdefghijk',
