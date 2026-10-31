@@ -35,6 +35,8 @@ class _YoutubeMusicPlaylistsScreenState
   }
 
   Future<void> _load() async {
+    await ref.read(konnektedYoutubeMusicSessionProvider.future);
+    if (!mounted) return;
     final account = ref.read(konnektedYoutubeMusicAccountProvider);
     if (account == null) {
       if (mounted) setState(() {
