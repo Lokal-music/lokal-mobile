@@ -1940,6 +1940,32 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
   return completion.future;
 }
 
+/// Warm only metadata for a few HTTP providers in parallel. The caller
+/// retains priority when deciding which verified match to stream. No network
+/// audio is started speculatively, and a failure is isolated to its source.
+Map<String, Future<DiscoveryTrack?>> prewarmHttpSourceMatches({
+  required Iterable<OnlineSource> sources,
+  required RecommendationCandidate candidate,
+  required List<String> queries,
+  void Function()? checkCancelled,
+  int maxConcurrent = 3,
+}) {
+  final warmed = <String, Future<DiscoveryTrack?>>{};
+  for (final source in sources.where((source) =>
+      source.id.startsWith('w-')).take(maxConcurrent)) {
+    warmed[source.id] = findDiscoverySourceMatch(
+      source: source,
+      candidate: candidate,
+      queries: queries,
+      checkCancelled: checkCancelled,
+    ).then(
+      (match) => match,
+      onError: (Object error, StackTrace stackTrace) => null,
+    );
+  }
+  return warmed;
+}
+
 /// Finds [track] somewhere to play it and downloads it, as desktop does for
 /// songs you don't own: YouTube Music first (desktop's default order), then
 /// your add-ons. Null when none has it. [onStatus] hears what's happening;
@@ -1998,16 +2024,14 @@ Future<Song?> findDiscoverySong(
     void prepareHttpSearches() {
       if (preparedHttp) return;
       preparedHttp = true;
-      for (final next in sources.where((candidate) =>
-          candidate.id.startsWith('w-') &&
-          !_autoHttpAddonCooldown.shouldSkip(candidate.id)).take(3)) {
-        preparedHttpSearches[next.id] = findDiscoverySourceMatch(
-          source: next,
-          candidate: candidate,
-          queries: queries,
-          checkCancelled: check,
-        ).then((match) => match, onError: (Object error) => null);
-      }
+      preparedHttpSearches.addAll(prewarmHttpSourceMatches(
+        sources: sources.where(
+          (source) => !_autoHttpAddonCooldown.shouldSkip(source.id),
+        ),
+        candidate: candidate,
+        queries: queries,
+        checkCancelled: check,
+      ));
     }
     for (final source in sources) {
       check();
