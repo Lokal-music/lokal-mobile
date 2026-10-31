@@ -9,6 +9,7 @@ import 'package:flick/features/spotify/spotify_models.dart';
 import 'package:flick/features/spotify/spotify_oauth.dart';
 import 'package:flick/features/spotify/spotify_playlist_cache.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
+import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/models/song.dart';
@@ -31,10 +32,14 @@ class _SpotifyPlaylistsScreenState
     extends ConsumerState<SpotifyPlaylistsScreen> {
   late final SpotifyWebApi _api;
   final SpotifyPlaylistCache _cache = SpotifyPlaylistCache.instance;
+  final SpotifySettingsStore _settings = SpotifySettingsStore();
   final ProviderPlaylistVisibility _visibility = const ProviderPlaylistVisibility();
   String _account = '';
   Set<String> _hidden = {};
   bool _showHidden = false;
+  bool _autoUpdate = false;
+  bool _autoReady = false;
+  bool _savingAutoUpdate = false;
   List<SpotifyPlaylist> _playlists = const [];
   bool _loading = true;
   bool _refreshing = false;
@@ -62,7 +67,13 @@ class _SpotifyPlaylistsScreenState
       final account = await _cache.accountId();
       final hidden = await _visibility.hidden('spotify', account);
       final cached = await _cache.playlists();
-      if (mounted) setState(() { _account = account; _hidden = hidden; });
+      final autoUpdate = await _settings.loadPlaylistAutoUpdate();
+      if (mounted) setState(() {
+        _account = account;
+        _hidden = hidden;
+        _autoUpdate = autoUpdate;
+        _autoReady = true;
+      });
       if (!mounted) return;
       if (cached == null) {
         await _refresh();
@@ -112,6 +123,30 @@ class _SpotifyPlaylistsScreenState
     if (mounted) setState(() => _hidden = next);
   }
 
+  Future<void> _setAutoUpdate(bool enabled) async {
+    if (_savingAutoUpdate) return;
+    setState(() {
+      _autoUpdate = enabled;
+      _savingAutoUpdate = true;
+    });
+    try {
+      await _settings.savePlaylistAutoUpdate(enabled);
+    } catch (_) {
+      // The previous value remains authoritative if writing preferences fails.
+      try {
+        final saved = await _settings.loadPlaylistAutoUpdate();
+        if (mounted) setState(() => _autoUpdate = saved);
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not save Spotify playlist auto-update setting.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _savingAutoUpdate = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _playlists.where((p) =>
@@ -128,6 +163,14 @@ class _SpotifyPlaylistsScreenState
       ],
     ),
     body: Column(children: [
+      SwitchListTile(
+        dense: true,
+        title: const Text('Auto-update playlists'),
+        subtitle: const Text('Check at most once every 24 hours when opened'),
+        value: _autoUpdate,
+        onChanged: !_autoReady || _savingAutoUpdate
+            ? null : (value) => unawaited(_setAutoUpdate(value)),
+      ),
       if (_hidden.isNotEmpty)
         SwitchListTile(
           dense: true,
@@ -329,6 +372,14 @@ class _SpotifyPlaylistDetailState
     if (queue.isNotEmpty) widget.onPlay(queue[index], queue);
   }
 
+  void _songActions(int index) {
+    if (index < 0 || index >= _tracks.length) return;
+    final queue = _queue();
+    if (queue.isNotEmpty) {
+      unawaited(SongActionsBottomSheet.show(context, queue[index]));
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -370,6 +421,7 @@ class _SpotifyPlaylistDetailState
                         subtitle: Text(track.artist, maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                         onTap: () => _play(index),
+                        onLongPress: () => _songActions(index),
                       );
                     },
                   ),
