@@ -1107,15 +1107,17 @@ class YoutubeMusicAccount {
     String? params,
     Set<String> types = _mixContinuationTypes,
     DateTime? deadline,
+    Duration pageBudget = const Duration(seconds: 10),
+    int maxPages = 20,
   }) async {
     final pages = <Object?>[first];
     final seen = <String>{};
     final pending = _continuations(first, types: types);
-    final pageDeadline = DateTime.now().add(const Duration(seconds: 10));
+    final pageDeadline = DateTime.now().add(pageBudget);
     final stopAt = deadline != null && deadline.isBefore(pageDeadline)
         ? deadline
         : pageDeadline;
-    while (pending.isNotEmpty && seen.length < 20) {
+    while (pending.isNotEmpty && seen.length < maxPages) {
       if (stopAtMixShelf && _hasPersonalMixShelf(pages)) break;
       final token = pending.removeAt(0);
       if (!seen.add(token)) continue;
@@ -1151,7 +1153,7 @@ class YoutubeMusicAccount {
         );
       }
     }
-    if (pending.isNotEmpty && seen.length >= 20) {
+    if (pending.isNotEmpty && seen.length >= maxPages) {
       return (
         pages: pages,
         error: 'YouTube Music returned too many pages. Refresh to retry.',
@@ -1367,6 +1369,60 @@ class YoutubeMusicAccount {
           : null,
       mixError: mixError,
     );
+  }
+
+  /// Account library, not the personal Discovery mix shelf. Pagination uses
+  /// YouTube Music's own FEmusic_liked_playlists continuation tokens.
+  Future<List<LokalDiscoveryMix>> libraryPlaylists() async {
+    final first = await browse('FEmusic_liked_playlists');
+    // request() already rejects explicit logged-out responses. Some account
+    // library responses omit login-state flags even for valid sessions.
+    final pages = await _pages(
+      'FEmusic_liked_playlists', first,
+      types: _mixContinuationTypes,
+      pageBudget: const Duration(seconds: 60), maxPages: 100,
+    );
+    if (pages.error != null) {
+      throw LokalDiscoveryFailure(pages.error!);
+    }
+    final byId = <String, LokalDiscoveryMix>{};
+    for (final page in pages.pages) {
+      for (final playlist in parseYoutubeMusicPlaylists(page, limit: 2000)) {
+        if (!playlist.id.startsWith('RD')) {
+          byId.putIfAbsent(playlist.id, () => playlist);
+        }
+      }
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  /// Read a finite library playlist in order, including available continuation
+  /// pages. This does not affect Discovery's independent in-memory mix cache.
+  Future<List<LokalDiscoveryTrack>> libraryPlaylistTracks(String id) async {
+    if (!RegExp(r'^[A-Za-z0-9_.-]{1,120}$').hasMatch(id) ||
+        id.startsWith('RD')) {
+      throw const LokalDiscoveryFailure('Invalid YouTube Music playlist.');
+    }
+    final first = await browse('VL$id');
+    final pages = await _pages(
+      'VL$id', first, types: {
+        ..._mixContinuationTypes,
+        'musicPlaylistShelfRenderer',
+        'musicPlaylistShelfContinuation',
+      },
+      pageBudget: const Duration(seconds: 60), maxPages: 100,
+    );
+    if (pages.error != null) {
+      throw LokalDiscoveryFailure(pages.error!);
+    }
+    final seen = <String>{};
+    final tracks = <LokalDiscoveryTrack>[];
+    for (final page in pages.pages) {
+      for (final track in parseYoutubeMusicTracks(page, limit: 1000)) {
+        if (seen.add(track.videoId ?? track.key)) tracks.add(track);
+      }
+    }
+    return tracks.take(1000).toList(growable: false);
   }
 
   Future<List<LokalDiscoveryTrack>> playlist(String id) async {

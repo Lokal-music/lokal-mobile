@@ -31,7 +31,7 @@ class SpotifyAccountSettingsTile extends ConsumerStatefulWidget {
 class _SpotifyAccountSettingsTileState
     extends ConsumerState<SpotifyAccountSettingsTile> {
   bool _busy = false;
-  bool _connected = false, _syncLikes = false;
+  bool _connected = false, _syncLikes = false, _playlistAutoUpdate = false;
   @override
   void initState() {
     super.initState();
@@ -48,10 +48,12 @@ class _SpotifyAccountSettingsTileState
   Future<void> _load() async {
     final tokens = await SecureSpotifyTokenStore().readTokens();
     final sync = await SpotifyLikesSyncService.instance.enabled;
+    final auto = await SpotifySettingsStore().loadPlaylistAutoUpdate();
     if (mounted)
       setState(() {
         _connected = tokens?.sessionCookie?.isNotEmpty == true;
         _syncLikes = sync;
+        _playlistAutoUpdate = auto;
       });
   }
 
@@ -152,6 +154,24 @@ class _SpotifyAccountSettingsTileState
               ),
           ],
         ),
+      ),
+      if (widget.showCookie) LokalSettingRow.toggle(
+        label: lokalText('Auto-update Spotify playlists'),
+        description: lokalText(
+          'Saved playlists and their songs load from local cache. When enabled, check for changes at most once every 24 hours while browsing. Manual refresh is always available.',
+        ),
+        value: _playlistAutoUpdate,
+        enabled: _connected && !_busy,
+        onChanged: (value) async {
+          setState(() => _playlistAutoUpdate = value);
+          try {
+            await SpotifySettingsStore().savePlaylistAutoUpdate(value);
+          } catch (_) {
+            await _load();
+            if (mounted) LokalToast.fromSnackBar(context,
+              const SnackBar(content: Text('Could not save playlist update preference.')));
+          }
+        },
       ),
       if (widget.showLikesSync) LokalSettingRow.toggle(
         label: lokalText('Sync Spotify liked songs'),

@@ -169,6 +169,7 @@ class SpotifySettingsStore {
   static const clientIdKey = 'konnekted.spotify.client_id.v1';
   static const metadataKey = 'konnekted.spotify.metadata.v1';
   static const discoveryEnabledKey = 'konnekted.spotify.discovery_enabled.v1';
+  static const playlistAutoUpdateKey = 'konnekted.spotify.playlists_auto_update.v1';
 
   final SpotifyPreferenceStore preferences;
   final SpotifyTokenStore tokenStore;
@@ -184,6 +185,14 @@ class SpotifySettingsStore {
       await preferences.write(clientIdKey, value);
     }
   }
+
+  Future<bool> loadPlaylistAutoUpdate() async =>
+      (await preferences.read(playlistAutoUpdateKey)) == 'true';
+
+  Future<void> savePlaylistAutoUpdate(bool enabled) =>
+      enabled
+          ? preferences.write(playlistAutoUpdateKey, 'true')
+          : preferences.remove(playlistAutoUpdateKey);
 
   Future<bool> loadDiscoveryEnabled() async =>
       (await preferences.read(discoveryEnabledKey)) == 'true';
