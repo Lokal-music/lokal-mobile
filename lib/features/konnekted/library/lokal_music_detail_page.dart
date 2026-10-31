@@ -535,6 +535,14 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
               artwork: heroArtwork,
               isArtist: widget.isArtist,
               background: pageColor,
+              metadata: widget.isArtist
+                  ? (local.isEmpty ? null : lokalSongCount(local.length))
+                  : [
+                      if (local.firstOrNull?.year != null)
+                        '${local.first.year}',
+                      lokalSongCount(rows.length),
+                      if (local.isNotEmpty) lokalRunningTime(local),
+                    ].join('  ·  '),
               onBack: () => Navigator.of(context).maybePop(),
               onShare: _share,
               onMore: () => unawaited(_showMenu(rows, local, allLiked)),
