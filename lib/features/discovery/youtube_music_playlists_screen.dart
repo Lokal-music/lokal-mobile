@@ -5,6 +5,7 @@ import 'package:flick/features/discovery/youtube_music_playlist_cache.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
+import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -254,15 +255,30 @@ class _YoutubePlaylistDetailState
     }
   }
 
-  void _play(int index) {
-    if (index < 0 || index >= _tracks.length) return;
+  // Use the same local-first / pending-online resolution as playback.
+  // Long-press actions must operate on the actual Lokal Song, not on the
+  // YouTube Music metadata card.
+  List<Song> _queue() {
     final library = KonnektedLibraryIndex.of(
         ref.read(konnektedLibraryProvider).value ?? const <Song>[]);
-    final queue = [
+    return [
       for (final track in _tracks)
         library.match(track) ?? discoveryPendingSong(track),
     ];
-    widget.onPlay(queue[index], queue);
+  }
+
+  void _play(int index) {
+    if (index < 0 || index >= _tracks.length) return;
+    final queue = _queue();
+    if (queue.isNotEmpty) widget.onPlay(queue[index], queue);
+  }
+
+  void _songActions(int index) {
+    if (index < 0 || index >= _tracks.length) return;
+    final queue = _queue();
+    if (queue.isNotEmpty) {
+      unawaited(SongActionsBottomSheet.show(context, queue[index]));
+    }
   }
 
   @override
@@ -297,6 +313,7 @@ class _YoutubePlaylistDetailState
                         subtitle: Text(track.artist, maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                         onTap: () => _play(index),
+                        onLongPress: () => _songActions(index),
                       );
                     },
                   ),
