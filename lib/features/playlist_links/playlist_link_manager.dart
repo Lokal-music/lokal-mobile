@@ -191,9 +191,15 @@ class PlaylistLinkManager {
       removeMissing = false;
     }
 
+    // Explicit downloads remain local additions even when a refresh resolves
+    // them, so remote omissions cannot remove them.
+    final downloadedIds = stored.downloadedSongIds.values.toSet();
+    final managedMatches = matchedIds.where(
+      (id) => !downloadedIds.contains(id) || oldManaged.contains(id),
+    );
     final nextManaged = preview.remote.complete && removeMissing
-        ? matchedIds
-        : _uniqueSongIds([...stored.managedSongIds, ...matchedIds]);
+        ? managedMatches.toList()
+        : _uniqueSongIds([...stored.managedSongIds, ...managedMatches]);
     final beforeOrder = List<String>.from(current.songIds);
     final changed = !_sameOrder(beforeOrder, target);
     try {
@@ -206,6 +212,7 @@ class PlaylistLinkManager {
         remote: preview.remote,
         report: preview.matches,
         managedSongIds: nextManaged,
+        downloadedSongIds: stored.downloadedSongIds,
       );
       await metadataStore.save(
         records
@@ -267,35 +274,45 @@ class PlaylistLinkManager {
       throw const PlaylistLinkOperationException('The local playlist is missing.');
     }
     final songId = songs.single.id;
-    final added = !playlist.songIds.contains(songId);
-    if (added && !await playlists.addSong(playlist.id, songId)) {
-      throw const PlaylistLinkOperationException(
-        'The download was saved, but could not be added to the playlist.',
-      );
+    final beforeOrder = List<String>.from(playlist.songIds);
+    final resolved = {...record.resolvedSongIds, entry.identityKey: songId};
+    final target = <String>[];
+    if (!record.isPartial && record.remoteEntries.isNotEmpty) {
+      for (final remote in record.remoteEntries) {
+        final id = resolved[remote.identityKey];
+        if (id != null && (id == songId || beforeOrder.contains(id)) &&
+            !target.contains(id)) {
+          target.add(id);
+        }
+      }
     }
+    for (final id in beforeOrder) {
+      if (!target.contains(id)) target.add(id);
+    }
+    if (!target.contains(songId)) target.add(songId);
     try {
+      await _applyOrder(playlist.id, beforeOrder, target, cancellation);
       cancellation.throwIfCancelled();
-      final unresolved = [...record.unmatchedEntries]..removeAt(matchingIndex);
-      final revised = record.copyWith(unmatchedEntries: unresolved);
+      final unresolved = record.unmatchedEntries
+          .where((candidate) => !_sameRemoteEntry(candidate, entry)).toList();
+      final revised = record.copyWith(
+        unmatchedEntries: unresolved,
+        resolvedSongIds: resolved,
+        downloadedSongIds: {...record.downloadedSongIds, entry.identityKey: songId},
+      );
       final updated = [...records];
       updated[index] = revised;
       await metadataStore.save(updated);
-      // Explicit downloads are local additions, not removals managed by the
-      // link's remote refresh. A subsequent remote omission cannot delete one.
       return songId;
     } catch (_) {
-      if (added) await playlists.removeSong(playlist.id, songId);
+      await _restorePlaylist(playlist.id, beforeOrder);
       rethrow;
     }
   });
 
   static bool _sameRemoteEntry(
     RemotePlaylistEntry a, RemotePlaylistEntry b,
-  ) => a.remoteId != null && b.remoteId != null
-      ? a.remoteId == b.remoteId &&
-          a.title == b.title && a.artist == b.artist
-      : a.title == b.title && a.artist == b.artist &&
-          a.album == b.album;
+  ) => a.identityKey == b.identityKey;
 
   Future<void> unlink(String linkId) => _run((_) async {
     final records = await metadataStore.load();
@@ -328,9 +345,10 @@ class PlaylistLinkManager {
     cancellation.throwIfCancelled();
     final songs = await library.getSongs();
     cancellation.throwIfCancelled();
-    final report = matcher.match(remote.entries, songs);
     final records = await metadataStore.load();
     final existingLink = _findRecord(records, link.linkId);
+    final report = matcher.match(remote.entries, songs,
+        resolvedSongIds: existingLink?.downloadedSongIds ?? const {});
     final existingPlaylist = existingLink == null
         ? null
         : await playlists.getPlaylist(existingLink.playlistId);
@@ -349,8 +367,8 @@ class PlaylistLinkManager {
     required RemotePlaylistSnapshot remote,
     required PlaylistLinkMatchReport report,
     required List<String> managedSongIds,
+    Map<String, String> downloadedSongIds = const {},
   }) {
-    final unmatched = report.unmatchedEntries.take(1000).toList();
     return PlaylistLinkRecord(
       linkId: link.linkId,
       source: link.source,
@@ -361,7 +379,12 @@ class PlaylistLinkManager {
       description: remote.description,
       thumbnailUrl: remote.thumbnailUrl,
       managedSongIds: managedSongIds,
-      unmatchedEntries: unmatched,
+      unmatchedEntries: List.of(report.unmatchedEntries),
+      remoteEntries: List.of(remote.entries),
+      resolvedSongIds: {
+        for (final match in report.matches) match.remoteEntry.identityKey: match.song.id,
+      },
+      downloadedSongIds: downloadedSongIds,
       remoteEntryCount: remote.totalEntries ?? remote.entries.length,
       fetchedEntryCount: remote.entries.length,
       duplicateMatches: report.duplicateMatches,

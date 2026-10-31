@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:flick/features/search/providers/global_search_provider.dart';
+import 'package:flick/features/search/models/global_search_results.dart';
+import 'package:flick/models/song.dart';
 import 'package:flick/features/discovery/discovery_artwork.dart';
 import 'package:flick/features/discovery/discovery_http.dart';
 import 'package:http/http.dart' as http;
@@ -77,6 +82,35 @@ Widget _app(ProviderContainer container, Widget child) =>
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  testWidgets('All keeps online catalogue mounted when local results load', (tester) async {
+    final api = _Catalogue('apple');
+    final local = Completer<GlobalSearchResults>();
+    final c = ProviderContainer(overrides: [
+      ..._quietArtwork,
+      globalCatalogueSearchServiceProvider.overrideWithValue(api),
+      globalSearchResultsProvider.overrideWith((ref, query) => local.future),
+    ]);
+    addTearDown(c.dispose);
+    c.read(searchFilterProvider.notifier).select(SearchCategory.artists);
+    c.read(searchScopeProvider.notifier).select(SearchScope.all);
+    await tester.pumpWidget(_app(c, const SearchScreen()));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Dude');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    final finder = find.byType(OnlineCatalogueSearchSection);
+    expect(finder, findsOneWidget);
+    final element = tester.element(finder);
+    const song = Song(id: '1', title: 'Track', artist: 'Composer',
+        duration: Duration(minutes: 3), fileType: 'FLAC');
+    local.complete(GlobalSearchResults(query: 'Dude', artists: [MapEntry('Composer', [song])]));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.element(finder), same(element));
+    expect(api.calls, [false]);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final catalogue in ['apple', 'spotify']) {
     testWidgets(
       '$catalogue Songs hides albums/artists; All restores them for the same query',

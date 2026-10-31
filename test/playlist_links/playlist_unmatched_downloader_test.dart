@@ -63,6 +63,39 @@ void main() {
     expect(chosen?.track.id, 'right123456');
   });
 
+  test('an unresolvable entry can be skipped without failing the batch', () async {
+    const entry = RemotePlaylistEntry(title: 'Unavailable', artist: 'Unknown', remoteId: 'song-id');
+    await expectLater(
+      const PlaylistUnmatchedDownloader().download(
+        _spotify, entry, sources: (_) async => [],
+      ),
+      throwsA(isA<PlaylistDownloadSourceUnavailable>()),
+    );
+  });
+
+  test('search failures are reported unless a later source matches', () async {
+    const entry = RemotePlaylistEntry(title: 'Track', artist: 'Artist');
+    final failed = OnlineSource(
+      id: 'failed', name: 'Failed',
+      results: (_) async => throw StateError('search failed'),
+      play: (_) async => throw StateError('not used'),
+    );
+    final empty = OnlineSource(
+      id: 'empty', name: 'Empty', results: (_) async => [],
+      play: (_) async => throw StateError('not used'),
+    );
+    final matching = OnlineSource(
+      id: 'matching', name: 'Matching', results: (_) async => [
+        OnlineResult(const DiscoveryTrack(id: 'match', title: 'Track',
+          artist: 'Artist', source: DiscoverySource.youtubeMusic)),
+      ], play: (_) async => throw StateError('not used'),
+    );
+    const downloader = PlaylistUnmatchedDownloader();
+    expect((await downloader.findSource(entry, [failed, matching]))?.track.id, 'match');
+    await expectLater(downloader.findSource(entry, [failed, empty]), throwsStateError);
+    expect(await downloader.findSource(entry, [empty]), isNull);
+  });
+
   test('unmatched entry downloads and saves through the injected source pipeline', () async {
     const entry = RemotePlaylistEntry(
       title: 'Original video', artist: 'Uploader', remoteId: 'abcdefghijk',

@@ -9,6 +9,16 @@ import 'playlist_link_models.dart';
 
 typedef PlaylistDownloadChoice = ({String sourceId, DiscoveryTrack track});
 
+/// A remote playlist row that cannot be resolved is skipped, not treated as a
+/// failed download. Later entries should still be attempted.
+class PlaylistDownloadSourceUnavailable implements Exception {
+  const PlaylistDownloadSourceUnavailable();
+
+  @override
+  String toString() => 'No verified downloadable source matched this entry. '
+      'Check enabled add-ons or search for it manually.';
+}
+
 /// Reuses Online Search's checked sources and the library download pipeline.
 class PlaylistUnmatchedDownloader {
   const PlaylistUnmatchedDownloader();
@@ -48,6 +58,8 @@ class PlaylistUnmatchedDownloader {
       title: entry.title, artist: entry.artist,
       album: entry.album, duration: entry.duration,
     );
+    Object? searchError;
+    StackTrace? searchStack;
     for (final source in sources) {
       if (cancelled?.call() == true) {
         throw const DiscoveryException('Download cancelled.');
@@ -71,11 +83,14 @@ class PlaylistUnmatchedDownloader {
             ),
           );
           if (found != null) return (sourceId: source.id, track: found);
-        } catch (_) {
+        } catch (error, stack) {
           // Another source can still provide the verified recording.
+          searchError ??= error;
+          searchStack ??= stack;
         }
       }
     }
+    if (searchError != null) Error.throwWithStackTrace(searchError, searchStack!);
     return null;
   }
 
@@ -104,10 +119,7 @@ class PlaylistUnmatchedDownloader {
         client.close();
       }
     }
-    if (chosen == null) throw const DiscoveryException(
-      'No verified downloadable source matched this entry. '
-      'Check enabled add-ons or search for it manually.',
-    );
+    if (chosen == null) throw const PlaylistDownloadSourceUnavailable();
     if (cancelled?.call() == true) {
       throw const DiscoveryException('Download cancelled.');
     }

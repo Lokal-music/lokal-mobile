@@ -6,8 +6,10 @@ class PlaylistLinkMatcher {
 
   PlaylistLinkMatchReport match(
     List<RemotePlaylistEntry> entries,
-    List<Song> songs,
-  ) {
+    List<Song> songs, {
+    Map<String, String> resolvedSongIds = const {},
+  }) {
+    final byId = {for (final song in songs) song.id: song};
     final byKey = <String, List<Song>>{};
     for (final song in songs) {
       final title = normalize(song.title);
@@ -42,11 +44,12 @@ class PlaylistLinkMatcher {
 
       // A playlist link may not choose a search result merely because it was
       // first. Duplicate library metadata is ambiguous and stays unmatched.
-      if (constrained.length != 1) {
+      final verified = byId[resolvedSongIds[entry.identityKey]];
+      if (verified == null && constrained.length != 1) {
         unmatched.add(entry);
         continue;
       }
-      final song = constrained.single;
+      final song = verified ?? constrained.single;
       if (!usedSongIds.add(song.id)) {
         duplicateMatches += 1;
         continue;

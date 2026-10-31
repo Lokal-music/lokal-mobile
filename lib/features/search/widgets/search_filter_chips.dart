@@ -42,8 +42,12 @@ class SearchFilterChips extends StatelessWidget {
             ),
             segments: [
               ButtonSegment(
+                value: SearchScope.all,
+                label: Text(l10n.all),
+              ),
+              ButtonSegment(
                 value: SearchScope.library,
-                label: Text(lokalText('Library')),
+                label: Text(lokalText('Local')),
               ),
               ButtonSegment(
                 value: SearchScope.online,
@@ -71,7 +75,7 @@ class SearchFilterChips extends StatelessWidget {
                     enabled.contains(category),
                     () => onToggle(category),
                     count:
-                        scope == SearchScope.library && query.trim().isNotEmpty
+                        scope != SearchScope.online && query.trim().isNotEmpty
                         ? (counts ?? const <SearchCategory, int>{})[category]
                         : null,
                   ),

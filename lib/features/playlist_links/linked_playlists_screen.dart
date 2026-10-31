@@ -37,6 +37,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
   List<PlaylistLinkRecord> _links = const [];
   String? _error;
   bool _loading = false;
+  bool _downloadAfterImport = false;
   String? _downloadStatus;
   String? _downloadNotice;
   Completer<void>? _downloadCancellation;
@@ -113,6 +114,8 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
               busy: _loading,
               onOpenSource: () => _openSource(_preview!.link.canonicalUrl),
               onCreate: _create,
+              downloadAfterImport: _downloadAfterImport,
+              onDownloadAfterImportChanged: (value) => setState(() => _downloadAfterImport = value),
               onRefreshAppend: () => _refresh(removeMissing: false),
               onRefreshRemove: _preview!.isComplete
                   ? _confirmRemoveMissing
@@ -260,16 +263,26 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
   Future<void> _create() async {
     final preview = _preview;
     if (preview == null) return;
-    await _run(
-      () => _manager
-          .createFromPreview(preview, name: _nameController.text)
-          .then((_) async {
-            if (!mounted) return;
-            ref.invalidate(playlistsProvider);
-            setState(() => _preview = null);
-            await _loadLinks();
-          }),
-    );
+    PlaylistLinkRecord? created;
+    final downloadMissing = _downloadAfterImport;
+    await _run(() async {
+      created = await _manager.createFromPreview(
+        preview, name: _nameController.text,
+      );
+      if (!mounted) return;
+      ref.invalidate(playlistsProvider);
+      setState(() {
+        _preview = null;
+        _downloadAfterImport = false;
+      });
+      await _loadLinks();
+    });
+    // Like desktop's optional post-import download: a missing library match
+    // never prevents trying the original source or another verified provider.
+    if (mounted && downloadMissing && created != null &&
+        created!.unmatchedEntries.isNotEmpty) {
+      await _downloadUnmatched(created!);
+    }
   }
 
   Future<void> _refresh({required bool removeMissing}) async {
@@ -358,6 +371,8 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
     try {
       await _run(() async {
         var saved = 0;
+        final resolvedEntries = <String>{};
+        var skipped = 0;
         var failed = 0;
         String? lastError;
         final downloader = PlaylistUnmatchedDownloader();
@@ -369,6 +384,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
         for (var i = 0; i < entries.length; i++) {
           if (cancel.isCompleted || !mounted) break;
           final entry = entries[i];
+          if (resolvedEntries.contains(entry.identityKey)) continue;
           setState(() => _downloadStatus =
               'Downloading ${i + 1}/${entries.length}: ${entry.title}');
           try {
@@ -392,10 +408,14 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
               entry,
               savedPath: result.path,
             );
+            resolvedEntries.add(entry.identityKey);
             saved++;
             if (!mounted) break;
             ref.invalidate(playlistsProvider);
             ref.invalidate(songsProvider);
+          } on PlaylistDownloadSourceUnavailable {
+            if (cancel.isCompleted) break;
+            skipped++;
           } catch (error) {
             if (cancel.isCompleted) break;
             failed++;
@@ -408,6 +428,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
             _downloadStatus = null;
             _downloadNotice = 'Downloaded $saved of ${entries.length} unmatched '
                 'entries${cancel.isCompleted ? ' (cancelled)' : ''}.'
+                '${skipped > 0 ? ' $skipped unavailable and skipped.' : ''}'
                 '${failed > 0 ? ' $failed failed. $lastError' : ''}';
           });
         }
@@ -449,6 +470,8 @@ class _PreviewCard extends StatelessWidget {
   final bool busy;
   final VoidCallback onOpenSource;
   final VoidCallback onCreate;
+  final bool downloadAfterImport;
+  final ValueChanged<bool> onDownloadAfterImportChanged;
   final VoidCallback onRefreshAppend;
   final VoidCallback? onRefreshRemove;
 
@@ -458,6 +481,8 @@ class _PreviewCard extends StatelessWidget {
     required this.busy,
     required this.onOpenSource,
     required this.onCreate,
+    required this.downloadAfterImport,
+    required this.onDownloadAfterImportChanged,
     required this.onRefreshAppend,
     required this.onRefreshRemove,
   });
@@ -558,6 +583,20 @@ class _PreviewCard extends StatelessWidget {
                   labelText: 'Local playlist name',
                 ),
               ),
+              if (preview.matches.unmatchedEntries.isNotEmpty)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: downloadAfterImport,
+                  onChanged: busy
+                      ? null
+                      : (value) => onDownloadAfterImportChanged(value ?? false),
+                  title: const Text('Also download missing tracks'),
+                  subtitle: const Text(
+                    'Try each unmatched track from its original link or a verified source. '
+                    'Unavailable tracks are skipped without blocking the playlist.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
               const SizedBox(height: 10),
               FilledButton.icon(
                 onPressed: busy ? null : onCreate,
