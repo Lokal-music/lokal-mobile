@@ -378,6 +378,38 @@ struct LokalTransferJob: Codable, Equatable, Sendable {
     phase = .complete
   }
 
+  /// Only a current authenticated content-match query may call this. An
+  /// empty/failed query never grants permission to send the audio again.
+  mutating func acknowledgeMatchedUpload(originalID: String, nowMs: Int64) throws {
+    guard direction == .upload, [.interrupted, .failed].contains(phase), taskID == nil,
+          !originalID.isEmpty, originalID.utf8.count <= 512,
+          !originalID.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+      throw LokalTransferError.invalidTransition
+    }
+    try touch(nowMs)
+    lastFailure = nil
+    resultOriginalID = originalID
+    phase = .complete
+  }
+
+  mutating func waitForUploadSource(_ reason: LokalTransferFailure, nowMs: Int64) throws {
+    guard direction == .upload, [.queued, .waiting].contains(phase), taskID == nil else {
+      throw LokalTransferError.invalidTransition
+    }
+    try touch(nowMs)
+    phase = .waiting
+    lastFailure = reason
+  }
+
+  func cancelledUploadForCleanup() throws -> Self {
+    try validate()
+    guard direction == .upload, phase == .cancelled else { throw LokalTransferError.invalidTransition }
+    var body = self
+    if body.revision > 1 { body.revision -= 1 }
+    try body.validate()
+    return body
+  }
+
   mutating func fail(_ reason: LokalTransferFailure, retryable: Bool, nowMs: Int64) throws {
     guard !phase.isTerminal else { throw LokalTransferError.invalidTransition }
     try touch(nowMs)

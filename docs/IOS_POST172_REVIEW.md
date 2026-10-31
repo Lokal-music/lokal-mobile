@@ -1487,3 +1487,9 @@ and bit-perfect audio paths, so it is not ported or advertised in the iPhone UI.
 The iPhone system-player adapter and existing supported output routes remain the
 port's playback path. A future integration of the Android parent must retain
 those platform guards and filter unsupported engine choices on iPhone.
+
+The later PR371 head `bd69e7f2e5b458e3957703b0688e0aa90948e599` was also
+reviewed while open. Its additional direct-buffer JNI writes, PCM16/24 precision
+gates, Android mixer recreation, verified-route diagnostics, volume guidance and
+bit-perfect pitch lock remain specific to that excluded Android USB path. They
+introduce no ordinary iPhone feature to port.

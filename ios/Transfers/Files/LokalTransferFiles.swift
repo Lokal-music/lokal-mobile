@@ -394,6 +394,88 @@ final class LokalTransferFiles: @unchecked Sendable {
     }
   }
 
+  /// Cheap admission check before recording queued intent. Hash/copy stays
+  /// on the file worker; a nil descriptor must refer to an existing snapshot.
+  func canPrepareUpload(_ job: LokalTransferJob, source: Int32, requireAbsent: Bool = false) throws {
+    try locked {
+      try checkRoot()
+      try job.validate()
+      guard job.direction == .upload, let expected = job.expectedBytes,
+            expected <= Self.maximumUploadBytes else { throw LokalTransferError.invalidRecord }
+      if requireAbsent {
+        var visible = stat()
+        if fstatat(directory, job.uploadName, &visible, AT_SYMLINK_NOFOLLOW) == 0 {
+          throw LokalTransferError.duplicateJob
+        }
+        guard errno == ENOENT else { throw LokalTransferError.posix("check_new_upload_name", errno) }
+      }
+      if source < 0 {
+        let fd = try openUpload(job)
+        close(fd)
+      } else {
+        var info = stat()
+        guard fstat(source, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              info.st_nlink == 1, info.st_size == expected else { throw LokalTransferError.unsafeFile }
+      }
+    }
+  }
+
+  /// A durable queued/waiting upload has never resumed an audio POST. Runtime
+  /// also excludes live/unattributed OS tasks before allowing a fresh source
+  /// grant to replace an interrupted private preparation. Keep valid snapshots.
+  func resetUnsentUpload(_ job: LokalTransferJob, checkCancellation: () throws -> Void) throws {
+    try locked {
+      try job.validate()
+      guard job.direction == .upload, [.queued, .waiting].contains(job.phase) else {
+        throw LokalTransferError.invalidTransition
+      }
+      try checkCancellation()
+      do { _ = try inspectUpload(job, checkCancellation: checkCancellation); return }
+      catch LokalTransferError.posix(_, ENOENT) { return }
+      catch { try checkCancellation() }
+      try checkRoot()
+      let fd = openat(directory, job.uploadName, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+      guard fd >= 0 else { throw LokalTransferError.posix("open_unsent_upload", errno) }
+      defer { close(fd) }
+      var held = stat(), visible = stat()
+      guard fstat(fd, &held) == 0, held.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+            held.st_nlink == 1, held.st_size >= 0, held.st_size <= Self.maximumUploadBytes,
+            fstatat(directory, job.uploadName, &visible, AT_SYMLINK_NOFOLLOW) == 0,
+            visible.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+            held.st_dev == visible.st_dev, held.st_ino == visible.st_ino else { throw LokalTransferError.unsafeFile }
+      try checkCancellation()
+      guard unlinkat(directory, job.uploadName, 0) == 0, fsync(directory) == 0 else {
+        throw LokalTransferError.posix("retire_unsent_upload", errno)
+      }
+    }
+  }
+
+  /// Runtime must first prove terminal durable intent and drain every task
+  /// and preparation for this ID. The original source is never selected.
+  func discardTerminalUpload(_ terminal: LokalTransferJob) throws {
+    try locked {
+      try terminal.validate()
+      guard terminal.direction == .upload, [.complete, .cancelled].contains(terminal.phase) else {
+        throw LokalTransferError.invalidTransition
+      }
+      let body = terminal.phase == .cancelled ? try terminal.cancelledUploadForCleanup() : terminal
+      try checkRoot()
+      let fd = openat(directory, body.uploadName, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+      if fd < 0 && errno == ENOENT { return }
+      guard fd >= 0 else { throw LokalTransferError.posix("open_retired_upload", errno) }
+      defer { close(fd) }
+      var held = stat(), visible = stat()
+      guard fstat(fd, &held) == 0, held.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+            held.st_nlink == 1, held.st_size >= 0, held.st_size <= Self.maximumUploadBytes,
+            fstatat(directory, body.uploadName, &visible, AT_SYMLINK_NOFOLLOW) == 0,
+            visible.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+            held.st_dev == visible.st_dev, held.st_ino == visible.st_ino else { throw LokalTransferError.unsafeFile }
+      guard unlinkat(directory, body.uploadName, 0) == 0, fsync(directory) == 0 else {
+        throw LokalTransferError.posix("retire_upload_body", errno)
+      }
+    }
+  }
+
   private func libraryPartName(_ job: LokalTransferJob, nonce: String) throws -> String {
     try job.validate()
     guard job.direction == .download,

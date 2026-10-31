@@ -236,8 +236,9 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
 
   Future<Object?> _importCall(
     String method,
-    Map<String, Object> payload,
-  ) async {
+    Map<String, Object> payload, {
+    void Function()? guard,
+  }) async {
     final client = _subscription;
     final ready = _observationReady;
     if (client == null || ready == null) {
@@ -258,9 +259,53 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     if (payload['clientID'] != null && payload['clientID'] != client) {
       throw StateError('Import lease belongs to a retired transfer client.');
     }
+    guard?.call();
     final result = await _call(method, {...payload, 'clientID': client});
     checkOwner();
+    guard?.call();
     return result;
+  }
+
+  Future<Object?> _uploadControl(String method, IosTransferJob job) async {
+    final epoch = _submissionEpoch;
+    void check() {
+      if (_submissionsPaused || _disposed || epoch != _submissionEpoch) {
+        throw StateError('Upload control was retired by a library mutation.');
+      }
+    }
+    check();
+    return _importCall(method, {'id': job.id, 'revision': job.revision}, guard: check);
+  }
+
+  /// Read-only original-file query for an uncertain upload. A null match never
+  /// grants permission to resend audio. Product upload capability stays gated.
+  Future<IosTransferJob?> matchUploadedOriginal(IosTransferJob job) async {
+    if (job.direction != 'upload' ||
+        !{IosTransferPhase.interrupted, IosTransferPhase.failed, IosTransferPhase.complete}.contains(job.phase)) {
+      throw const FormatException('Only uncertain or completed uploads can be reconciled.');
+    }
+    final raw = await _uploadControl('matchUploadedOriginal', job);
+    if (raw == null) return null;
+    final result = IosTransferJob.fromJson(raw);
+    if (result.direction != 'upload' || result.phase != IosTransferPhase.complete ||
+        result.revision != job.revision || result.updatedMs < job.updatedMs ||
+        jsonEncode(result.intent.toJson()) != jsonEncode(job.intent.toJson()) ||
+        (job.phase == IosTransferPhase.complete && result.resultOriginalId != job.resultOriginalId)) {
+      throw const FormatException('Native upload reconciliation changed its frozen intent.');
+    }
+    return result;
+  }
+
+  /// Deletes only a terminal private snapshot after native OS/worker drainage.
+  /// Never treats failed/interrupted audio as disposable or selects a source.
+  Future<void> cleanupUploadBody(IosTransferJob job) async {
+    if (job.direction != 'upload' ||
+        !{IosTransferPhase.complete, IosTransferPhase.cancelled}.contains(job.phase)) {
+      throw const FormatException('Only terminal upload bodies can be retired.');
+    }
+    if (await _uploadControl('cleanupUploadBody', job) != true) {
+      throw const FormatException('Invalid private upload cleanup acknowledgement.');
+    }
   }
 
   /// Private integration boundary; capability.libraryImport stays false until

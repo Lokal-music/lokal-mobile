@@ -394,6 +394,20 @@ final class LokalTransferJournal: @unchecked Sendable {
     return (job, count)
   }
 
+  /// Targeted read for a drained upload cleanup fence; no history rewrite.
+  func currentJob(_ id: String) throws -> LokalTransferJob? {
+    try locked {
+      try preflight()
+      let query = try statement("SELECT id,revision,document FROM jobs WHERE id=?")
+      defer { sqlite3_finalize(query) }
+      try bind(id, at: 1, to: query)
+      let code = sqlite3_step(query)
+      if code == SQLITE_DONE { return nil }
+      guard code == SQLITE_ROW else { throw LokalTransferError.database(code) }
+      return try decoded(query).0
+    }
+  }
+
   func snapshot() throws -> (generation: Int, jobs: [LokalTransferJob], pauses: [LokalTransferPause], custodies: [LokalTransferImportCustody]) {
     try locked {
       try preflight()

@@ -80,6 +80,18 @@ struct LokalTransferAuthorization: Sendable, CustomStringConvertible, CustomDebu
     return request
   }
 
+  func uploadMatchRequest(for job: LokalTransferJob) throws -> URLRequest {
+    var request = try uploadRequest(for: job)
+    request.url = try LokalTransferRequest.uploadMatchURL(job)
+    request.setValue(nil, forHTTPHeaderField: "x-link-metadata")
+    let body = try JSONSerialization.data(withJSONObject:
+      ["items": [["size": job.expectedBytes!, "sha256": job.expectedSHA256!]]])
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue(String(body.count), forHTTPHeaderField: "Content-Length")
+    request.httpBody = body
+    return request
+  }
+
 }
 
 struct LokalTransferTaskBinding: Equatable, Sendable {
@@ -163,6 +175,28 @@ enum LokalTransferRequest {
     return receipt.trackId
   }
 
+  static func uploadMatchURL(_ job: LokalTransferJob) throws -> URL {
+    let base = try uploadURL(job)
+    return base.appendingPathComponent("match")
+  }
+
+  static func matchedUploadOriginalID(_ data: Data) throws -> String? {
+    struct Page: Decodable {
+      struct Match: Decodable { let index: Int; let trackId: String }
+      let matches: [Match]
+    }
+    guard !data.isEmpty, data.count <= maximumUploadResponseBytes else { throw LokalTransferError.limitExceeded }
+    let page = try JSONDecoder().decode(Page.self, from: data)
+    guard page.matches.count <= 1 else { throw LokalTransferError.invalidRecord }
+    guard let match = page.matches.first else { return nil }
+    guard match.index == 0, !match.trackId.isEmpty, match.trackId.utf8.count <= 512,
+          !match.trackId.contains("://"), !match.trackId.contains("?"), !match.trackId.contains("#"),
+          !match.trackId.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+      throw LokalTransferError.invalidRecord
+    }
+    return match.trackId
+  }
+
   /// Actual retained length is recorded even for a chunked response. Encoded
   /// Content-Length is compared only when the body has no content encoding.
   static func checkResponse(_ response: HTTPURLResponse, job: LokalTransferJob,
@@ -202,5 +236,78 @@ enum LokalTransferRequest {
       guard let bytes = Int64(declared), bytes == declaredBytes else { throw LokalTransferError.checksumMismatch }
     }
     return (fileBytes, hash)
+  }
+}
+
+
+/// Foreground read-only content query, deliberately separate from daemon audio
+/// POSTs. Bound bytes while receiving, refuse redirects/cookies, and acknowledge
+/// cancellation only after the ephemeral session invalidates its delegates.
+final class LokalTransferUploadMatchProbe: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+  private var session: URLSession!
+  private var task: URLSessionDataTask!
+  private var body = Data()
+  private var failure: Error?
+  private var acceptedResponse = false
+  private var result: Result<String?, Error>?
+  private var completion: LokalTransferCompletion<String?>?
+  private let endpoint: URL
+
+  init(request: URLRequest, queue: DispatchQueue, completion: @escaping LokalTransferCompletion<String?>) {
+    endpoint = request.url!
+    self.completion = completion
+    super.init()
+    let config = URLSessionConfiguration.ephemeral
+    config.httpCookieStorage = nil; config.httpShouldSetCookies = false
+    config.urlCredentialStorage = nil; config.urlCache = nil
+    config.allowsCellularAccess = false
+    config.timeoutIntervalForRequest = 30; config.timeoutIntervalForResource = 60
+    #if !os(Linux)
+    config.allowsExpensiveNetworkAccess = false; config.allowsConstrainedNetworkAccess = false
+    #endif
+    let delegates = OperationQueue()
+    delegates.maxConcurrentOperationCount = 1; delegates.underlyingQueue = queue
+    session = URLSession(configuration: config, delegate: self, delegateQueue: delegates)
+    task = session.dataTask(with: request)
+  }
+  func start() { task.resume() }
+  func cancel() { task.cancel() }
+
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                  completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+    guard let http = response as? HTTPURLResponse, http.url == endpoint, http.statusCode == 200,
+          http.value(forHTTPHeaderField: "Content-Type")?.split(separator: ";").first?
+            .trimmingCharacters(in: .whitespaces).lowercased() == "application/json",
+          http.expectedContentLength < 0 || http.expectedContentLength <= Int64(LokalTransferRequest.maximumUploadResponseBytes) else {
+      failure = LokalTransferError.invalidRecord; completionHandler(.cancel); return
+    }
+    acceptedResponse = true
+    completionHandler(.allow)
+  }
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    guard failure == nil else { return }
+    guard acceptedResponse else { failure = LokalTransferError.invalidRecord; dataTask.cancel(); return }
+    guard data.count <= LokalTransferRequest.maximumUploadResponseBytes - body.count else {
+      failure = LokalTransferError.limitExceeded; dataTask.cancel(); return
+    }
+    body.append(data)
+  }
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    result = Result {
+      if let failure { throw failure }
+      if let error { throw error }
+      guard acceptedResponse else { throw LokalTransferError.invalidRecord }
+      return try LokalTransferRequest.matchedUploadOriginalID(body)
+    }
+    session.finishTasksAndInvalidate()
+  }
+  func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
+    let callback = completion
+    completion = nil; task = nil; self.session = nil
+    callback?(result ?? .failure(error ?? LokalTransferError.invalidRecord))
+  }
+  func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                  newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+    completionHandler(nil)
   }
 }
