@@ -191,6 +191,15 @@ fn render(
     let mut samples = vec![0.0f32; frames * channels];
     let mut bytes = vec![0u8; samples.len() * (handle.bits / 8)];
     while !stop.load(Ordering::Acquire) {
+        // A DSP override (EQ, ReplayGain, pitch, 432 Hz tuning, crossfeed,
+        // crossfade) invalidates the requested bit-perfect contract. Do not
+        // silently keep the badge while sending processed samples.
+        if !callback_data.is_passthrough() {
+            let _ = event_tx.try_send(AudioEvent::Error {
+                message: "Audio engine output lost: Android USB mixer passthrough invalidated by DSP".into(),
+            });
+            return;
+        }
         audio_callback(&mut samples, &callback_data, &event_tx);
         for (i, sample) in samples.iter().copied().enumerate() {
             let quantized = ((sample.clamp(-1.0, 1.0) * 8_388_608.0) as i32)
