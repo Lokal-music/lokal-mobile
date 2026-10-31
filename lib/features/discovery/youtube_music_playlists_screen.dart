@@ -6,6 +6,7 @@ import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
+import 'package:flick/features/spotify/provider_playlist_track_tile.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -306,14 +307,11 @@ class _YoutubePlaylistDetailState
                     itemCount: _tracks.length,
                     itemBuilder: (context, index) {
                       final track = _tracks[index];
-                      return ListTile(
+                      return ProviderPlaylistTrackTile(
+                        track: track,
                         leading: _YoutubePlaylistArtwork(url: track.artworkUrl),
-                        title: Text(track.title, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        subtitle: Text(track.artist, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        onTap: () => _play(index),
-                        onLongPress: () => _songActions(index),
+                        onPlay: () => _play(index),
+                        onSongActions: () => _songActions(index),
                       );
                     },
                   ),
