@@ -899,12 +899,17 @@ class DiscoveryAddon {
     // audio/metadata rather than at the outer stream-response level. Read
     // only explicit metadata from this exact /stream reply: never import a
     // catalogue maximum or the user's selected quality as a verified tier.
-    final nested = json['audio'] ?? json['audioMetadata'] ??
-        json['audio_metadata'] ?? json['metadata'];
     final details = <String, dynamic>{
-      if (nested is Map)
-        for (final entry in nested.entries)
-          if (entry.key is String) entry.key as String: entry.value,
+      // Sparse audio objects must not obscure bitrate/quality fields in a
+      // sibling metadata object. More specific audio fields win, followed
+      // by explicit non-null fields on the outer stream response.
+      for (final key in const [
+        'metadata', 'audio_metadata', 'audioMetadata', 'audio',
+      ])
+        if (json[key] is Map)
+          for (final entry in (json[key] as Map).entries)
+            if (entry.key is String && entry.value != null)
+              entry.key as String: entry.value,
       for (final entry in json.entries)
         if (entry.value != null) entry.key: entry.value,
     };
