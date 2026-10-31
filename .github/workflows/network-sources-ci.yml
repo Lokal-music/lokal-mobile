@@ -43,6 +43,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/android-toolchain
+      - name: Ensure Gradle wrapper is executable for Flutter's Android build
+        run: chmod +x android/gradlew
       - name: Analyze network implementations and settings
         # dart analyze accepts only one file or directory per invocation.
         run: |
