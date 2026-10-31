@@ -36,6 +36,7 @@ import 'package:flick/widgets/lokal/lokal_status_snack.dart';
 import 'package:flick/features/link/lokal_ghost_availability.dart';
 
 import 'artist_follow_store.dart';
+import 'lokal_detail_header.dart';
 import 'lokal_library_groups.dart';
 import 'lokal_library_kit.dart';
 import 'lokal_online_catalogue.dart';
@@ -472,169 +473,81 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
         )
         .toList();
     final pageColor = Color.lerp(t.bg, _dominant ?? t.bg, .2)!;
-    final heroHeight = (MediaQuery.sizeOf(context).height * .64).clamp(
-      340.0,
-      680.0,
-    );
     final show = widget.isArtist && !_allSongs ? rows.take(5).toList() : rows;
     final liked = ref.watch(favoritesProvider).value;
-    final allLiked =
-        local.isNotEmpty &&
+    final allLiked = local.isNotEmpty &&
         local.every((song) => liked?.isFavorite(song.id) == true);
+
+    // The existing image-resolution chain is retained for online albums,
+    // network/NAS artwork, cached artist portraits and local fallback art.
+    final Widget heroArtwork;
+    if (_online && !widget.isArtist && _page != null) {
+      heroArtwork = DiscoveryArtwork(
+        kind: DiscoveryArtworkKind.album,
+        title: widget.title,
+        artist: widget.artist,
+        url: discoveryImageUrl(heroImage),
+        placeholder: localCover?.isNotEmpty == true
+            ? CachedImageWidget(
+                imagePath: localCover,
+                audioSourcePath: localArtworkSong?.filePath,
+                fit: BoxFit.cover,
+                errorWidget: ColoredBox(color: pageColor),
+              )
+            : ColoredBox(color: pageColor),
+      );
+    } else if (heroImage?.isNotEmpty == true) {
+      heroArtwork = CachedImageWidget(
+        imagePath: heroImage,
+        audioSourcePath: widget.isArtist ? null : localArtworkSong?.filePath,
+        fit: BoxFit.cover,
+        placeholder: ColoredBox(color: pageColor),
+        errorWidget: ColoredBox(color: pageColor),
+      );
+    } else if (!widget.isArtist && local.isNotEmpty) {
+      heroArtwork = CachedImageWidget(
+        audioSourcePath: local.first.filePath,
+        fit: BoxFit.cover,
+        placeholder: ColoredBox(color: pageColor),
+        errorWidget: ColoredBox(color: pageColor),
+      );
+    } else {
+      heroArtwork = ColoredBox(
+        color: pageColor,
+        child: Center(
+          child: Icon(
+            widget.isArtist ? Icons.person_rounded : Icons.album_rounded,
+            size: 110,
+            color: t.muted2.withValues(alpha: .4),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: pageColor,
       body: CustomScrollView(
         key: PageStorageKey('detail:$_identity'),
         slivers: [
           SliverToBoxAdapter(
-            child: SizedBox(
-              height: heroHeight,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (_online && !widget.isArtist && _page != null)
-                    DiscoveryArtwork(
-                      kind: DiscoveryArtworkKind.album,
-                      title: widget.title,
-                      artist: widget.artist,
-                      url: discoveryImageUrl(heroImage),
-                      placeholder: localCover?.isNotEmpty == true
-                          ? CachedImageWidget(imagePath: localCover,
-                              audioSourcePath: localArtworkSong?.filePath,
-                              fit: BoxFit.cover,
-                              errorWidget: ColoredBox(color: pageColor))
-                          : ColoredBox(color: pageColor),
-                    )
-                  else if (heroImage?.isNotEmpty == true)
-                    CachedImageWidget(
-                      imagePath: heroImage,
-                      // NAS art is an opaque cover marker, not a file URL.
-                      // The matching source path is needed to fetch it.
-                      audioSourcePath: widget.isArtist
-                          ? null : localArtworkSong?.filePath,
-                      fit: BoxFit.cover,
-                      placeholder: ColoredBox(color: pageColor),
-                      errorWidget: ColoredBox(color: pageColor),
-                    )
-                  else if (!widget.isArtist && local.isNotEmpty)
-                    CachedImageWidget(
-                      audioSourcePath: local.first.filePath,
-                      fit: BoxFit.cover,
-                      placeholder: ColoredBox(color: pageColor),
-                      errorWidget: ColoredBox(color: pageColor),
-                    )
-                  else
-                    ColoredBox(
-                      color: pageColor,
-                      child: Center(
-                        child: Icon(
-                          widget.isArtist
-                              ? Icons.person_rounded
-                              : Icons.album_rounded,
-                          size: 140,
-                          color: t.muted2.withValues(alpha: .4),
-                        ),
-                      ),
-                    ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: const [0, .35, .65, 1],
-                        colors: [
-                          Colors.black.withValues(alpha: .24),
-                          Colors.transparent,
-                          pageColor.withValues(alpha: .35),
-                          pageColor,
-                        ],
-                      ),
-                    ),
+            child: LokalDetailHeader(
+              title: widget.title,
+              artwork: heroArtwork,
+              isArtist: widget.isArtist,
+              background: pageColor,
+              onBack: () => Navigator.of(context).maybePop(),
+              onShare: _share,
+              onMore: () => unawaited(_showMenu(rows, local, allLiked)),
+              artistCredit: widget.isArtist ? null : ArtistCreditLinks(
+                credit: widget.artist,
+                style: TextStyle(fontSize: 17, color: t.accent),
+                onArtistTap: (artist) => pushLokal(
+                  context,
+                  LokalMusicDetailPage.artist(
+                    name: artist,
+                    localSongs: KonnektedLibraryIndex.of(library).artist(artist),
+                    initialOnline: _online,
                   ),
-                  Positioned(
-                    left: 20,
-                    right: 20,
-                    top: 0,
-                    child: SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Row(
-                          children: [
-                            _heroButton(
-                              Icons.arrow_back_rounded,
-                              l10n.back,
-                              () => Navigator.of(context).maybePop(),
-                            ),
-                            const Spacer(),
-                            _heroButton(
-                              Icons.ios_share_rounded,
-                              l10n.share,
-                              _share,
-                            ),
-                            const SizedBox(width: 10),
-                            IconButton(
-                              tooltip: lokalText('More'),
-                              icon: Icon(Icons.more_horiz_rounded, color: t.text),
-                              onPressed: () => unawaited(
-                                _showMenu(rows, local, allLiked),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: 10,
-                    child: Column(
-                      crossAxisAlignment: widget.isArtist
-                          ? CrossAxisAlignment.center
-                          : CrossAxisAlignment.start,
-                      children: [
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            widget.title,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: widget.isArtist
-                                ? TextAlign.center
-                                : TextAlign.start,
-                            style: TextStyle(
-                              fontSize: widget.isArtist ? 48 : 36,
-                              height: 1.02,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.5,
-                              color: t.text,
-                            ),
-                          ),
-                        ),
-                        if (!widget.isArtist) ...[
-                          const SizedBox(height: 8),
-                          ArtistCreditLinks(
-                            credit: widget.artist,
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: t.accent,
-                            ),
-                            onArtistTap: (artist) => pushLokal(
-                              context,
-                              LokalMusicDetailPage.artist(
-                                name: artist,
-                                localSongs: KonnektedLibraryIndex.of(library)
-                                    .artist(artist),
-                                initialOnline: _online,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
