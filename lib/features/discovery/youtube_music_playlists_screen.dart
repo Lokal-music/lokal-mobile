@@ -311,6 +311,7 @@ class _YoutubePlaylistDetailState
                     tracks: _tracks,
                     source: PlaylistLinkSource.youtube,
                     playlistId: widget.playlist.id,
+                    accountId: widget.accountId,
                     artworkBuilder: (track) => _YoutubePlaylistArtwork(url: track.artworkUrl),
                     onPlay: _playOrdered,
                     onSongActions: _songActions,
