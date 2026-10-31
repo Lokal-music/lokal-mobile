@@ -17,6 +17,7 @@ import '../../data/repositories/song_repository.dart';
 import '../library_scanner_service.dart' show ScanProgress;
 import '../network_cache_service.dart';
 import 'network_source_service.dart';
+import 'network_embedded_artwork.dart';
 import 'local_network_access.dart';
 
 /// WebDAV client. Recursive PROPFIND walk of the share, HTTP Basic auth.
@@ -545,6 +546,55 @@ class WebdavService implements NetworkSourceService {
       bytes.add(chunk);
     }
     return bytes.takeBytes();
+  }
+
+  @override
+  Future<List<int>> getEmbeddedCoverArt(
+    NetworkServerEntity server,
+    String remoteId,
+  ) async {
+    final href = _tryDecode(remoteId);
+    final lower = href.toLowerCase();
+    if (!lower.endsWith('.flac') && !lower.endsWith('.mp3')) {
+      return const [];
+    }
+    final uri = _requestUri(server, href);
+    await _ensureLocalAccess(uri);
+    await _loadCertificateTrust(uri);
+    // Some WebDAV implementations ignore Range and return 200. In either
+    // case never consume more than the 4 MiB prefix or buffer a whole album.
+    final request = http.Request('GET', uri)
+      ..followRedirects = false
+      ..headers['Range'] = 'bytes=0-${networkArtworkPrefixBytes - 1}'
+      ..headers['Connection'] = 'close'
+      ..headers['Authorization'] = _basicAuth(server);
+    final response =
+        await _client.send(request).timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200 && response.statusCode != 206) {
+      await response.stream.listen(null).cancel();
+      throw WebdavNetworkException(
+        'HTTP ${response.statusCode} for remote embedded art',
+      );
+    }
+    if (response.statusCode == 206 &&
+        !(response.headers['content-range'] ?? '').startsWith('bytes 0-')) {
+      await response.stream.listen(null).cancel();
+      throw WebdavNetworkException('Invalid range for remote embedded art');
+    }
+    final bytes = BytesBuilder(copy: false);
+    var length = 0;
+    await for (final chunk in response.stream.timeout(
+      const Duration(seconds: 20),
+    )) {
+      final remaining = networkArtworkPrefixBytes - length;
+      if (remaining <= 0) break;
+      final count = chunk.length < remaining ? chunk.length : remaining;
+      bytes.add(count == chunk.length ? chunk : chunk.sublist(0, count));
+      length += count;
+      if (length >= networkArtworkPrefixBytes) break;
+    }
+    return extractNetworkEmbeddedArtwork(bytes.takeBytes())?.toList() ??
+        const [];
   }
 
   @override
