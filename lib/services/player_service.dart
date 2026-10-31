@@ -7578,6 +7578,11 @@ class PlayerService {
   /// Compute the effective ReplayGain (dB) for [song] from the persisted
   /// settings. 0.0 when the mode is off or tags are missing.
   Future<double> _computeReplayGainDbFor(Song song) async {
+    // ReplayGain is a software multiplication and would silently force the
+    // Rust callback out of bit-perfect passthrough. Suppress it before a
+    // source is queued, not only when updating the live track.
+    if (Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+        _uac2Service.isBitPerfectEnabledSync) return 0.0;
     final mode = await _appPreferencesService.getReplayGainMode();
     if (mode == ReplayGainMode.off) return 0.0;
     final preampDb = await _appPreferencesService.getReplayGainPreampDb();
@@ -7610,7 +7615,10 @@ class PlayerService {
     bool pushSpawnDefault = false,
   }) async {
     final mode = await _appPreferencesService.getReplayGainMode();
-    if (mode == ReplayGainMode.off || song == null) {
+    if (mode == ReplayGainMode.off ||
+        song == null ||
+        (Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+            _uac2Service.isBitPerfectEnabledSync)) {
       _replayGainState = ReplayGainAppliedState.neutral;
     } else {
       final preampDb = await _appPreferencesService.getReplayGainPreampDb();
