@@ -1448,8 +1448,15 @@ Future<List<OnlineSource>> _playbackSources(
   String? selectedSourceId,
   bool respectEnabledDiscoverySources = false,
   bool stopOnExplicitSpatialFailure = false,
+  bool quickAddonFallback = false,
 }) async {
-  final registry = DiscoverySourceRegistry(web, settings);
+  // Automatic fallback must not serially wait the full 15-second default
+  // for every unhealthy HTTP add-on. Pinned/manual source playback retains
+  // the normal deadline. The shorter timeout still aborts network requests.
+  final addonWeb = quickAddonFallback
+      ? DiscoveryHttp(web.client, timeout: const Duration(seconds: 6))
+      : web;
+  final registry = DiscoverySourceRegistry(addonWeb, settings);
   final youtube = YoutubeAudio(web);
   // Automatic Discovery should not resurrect native sources behind the
   // listener's back when their only enabled source is an HTTP add-on.
@@ -1619,6 +1626,51 @@ String _canonicalOnlineSourceId(String sourceId, DiscoveryTrack track) {
   return sourceId == stable || sourceId == legacy ? stable : sourceId;
 }
 
+/// A temporary, in-memory circuit breaker for demonstrably slow HTTP
+/// add-ons. Only automatic Discovery skips cooled-down sources: explicit
+/// Search playback and manual retries always remain available.
+class OnlineAddonCooldown {
+  OnlineAddonCooldown({
+    this.failureThreshold = 2,
+    this.cooldown = const Duration(minutes: 2),
+  });
+
+  final int failureThreshold;
+  final Duration cooldown;
+  final Map<String, ({int failures, DateTime until})> _failures = {};
+
+  bool shouldSkip(String sourceId, {DateTime? now}) {
+    final state = _failures[sourceId];
+    if (state == null || state.failures < failureThreshold) return false;
+    if (!(now ?? DateTime.now()).isBefore(state.until)) {
+      _failures.remove(sourceId);
+      return false;
+    }
+    return true;
+  }
+
+  void failed(String sourceId, Object error, {DateTime? now}) {
+    if (!sourceId.startsWith('w-')) return;
+    final reason = _onlineFailureKind(error);
+    if (reason != 'timeout' && reason != 'network' &&
+        !{'http_502', 'http_503', 'http_504'}.contains(reason)) {
+      return; // 401/403, invalid settings and explicit tier errors need action.
+    }
+    final time = now ?? DateTime.now();
+    final previous = _failures[sourceId];
+    final consecutive = previous != null && time.isBefore(previous.until)
+        ? previous.failures + 1 : 1;
+    _failures[sourceId] = (
+      failures: consecutive,
+      until: time.add(cooldown),
+    );
+  }
+
+  void succeeded(String sourceId) => _failures.remove(sourceId);
+}
+
+final _autoHttpAddonCooldown = OnlineAddonCooldown();
+
 /// Classify without logging signed audio URLs or provider credentials.
 String _onlineFailureKind(Object error) {
   final message = error.toString().toLowerCase();
@@ -1691,6 +1743,7 @@ Future<Song> playOnlineTrack(
       );
     }
     final resolved = await source.play(track);
+    _autoHttpAddonCooldown.succeeded(canonicalId);
     AppLog.instance.add('[OnlineSource] acquisition source=$canonicalId '
         'mode=${forDownload ? 'download' : 'playback'} '
         'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
@@ -1706,6 +1759,7 @@ Future<Song> playOnlineTrack(
     }
     return song;
   } catch (error) {
+    _autoHttpAddonCooldown.failed(sourceId, error);
     AppLog.instance.add(
       '[OnlineSource] playback failed source=$sourceId '
       'stage=prepare mode=${forDownload ? 'download' : 'playback'} '
@@ -1776,9 +1830,11 @@ Future<DiscoveryTrack?> findDiscoverySourceMatch({
         ),
       );
     } catch (error) {
-      // A failed alternate query is not a source failure. Propagate a
-      // cancellation even if a search completed at the same instant.
+      // A failed alternate query is not a recording miss. Track repeated
+      // network failures across automatic attempts so fallback can skip a
+      // provider that has been timing out, without hiding manual retries.
       checkCancelled?.call();
+      _autoHttpAddonCooldown.failed(source.id, error);
       AppLog.instance.add(
         '[OnlineSource] search failed source=${source.id} '
         'reason=${_onlineFailureKind(error)}',
@@ -1891,11 +1947,22 @@ Future<Song?> findDiscoverySong(
       cancel: cancel,
       respectEnabledDiscoverySources: true,
       stopOnExplicitSpatialFailure: true,
+      quickAddonFallback: true,
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();
     for (final source in sources) {
       check();
+      // Do not skip the only configured provider, and never apply cooldown
+      // to an explicit source selection. Other healthy sources stay usable.
+      if (sources.length > 1 &&
+          _autoHttpAddonCooldown.shouldSkip(source.id)) {
+        AppLog.instance.add(
+          '[OnlineSource] automatic fallback skipped temporarily unhealthy '
+          'source=${source.id}',
+        );
+        continue;
+      }
       if (source.needsVerification?.call() == true) {
         // Preloads must not open an auth popup over an unrelated screen.
         // Once current, await user verification instead of skipping the Mix.
@@ -1976,6 +2043,7 @@ Future<Song?> findDiscoverySong(
         final selected = found.withArtwork(_artworkOf(track));
         final acquisitionTimer = Stopwatch()..start();
         final resolved = await source.play(selected);
+        _autoHttpAddonCooldown.succeeded(source.id);
         AppLog.instance.add('[OnlineSource] discovery acquired source=${source.id} '
             'elapsedMs=${acquisitionTimer.elapsedMilliseconds}');
         final song = resolved.copyWith(sourceDisplayName: source.name);
@@ -1989,6 +2057,7 @@ Future<Song?> findDiscoverySong(
         return song;
       } catch (error) {
         check();
+        _autoHttpAddonCooldown.failed(source.id, error);
         AppLog.instance.add(
           '[OnlineSource] source playback failed source=${source.id} '
           'reason=${_onlineFailureKind(error)}',
