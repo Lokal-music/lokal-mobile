@@ -10,7 +10,7 @@ import 'package:flick/features/spotify/spotify_oauth.dart';
 import 'package:flick/features/spotify/spotify_playlist_cache.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
-import 'package:flick/features/spotify/provider_playlist_track_tile.dart';
+import 'package:flick/features/spotify/provider_playlist_track_browser.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/models/song.dart';
@@ -355,22 +355,22 @@ class _SpotifyPlaylistDetailState
     }
   }
 
-  List<Song> _queue() {
-    final index = KonnektedLibraryIndex.of(
+  void _playOrdered(List<int> sourceIndices, int startIndex) {
+    if (sourceIndices.isEmpty || startIndex < 0 ||
+        startIndex >= sourceIndices.length ||
+        sourceIndices.any((index) => index < 0 || index >= _tracks.length)) {
+      return;
+    }
+    final library = KonnektedLibraryIndex.of(
       ref.read(konnektedLibraryProvider).value ?? const <Song>[],
     );
-    // Each remote item remains metadata until Lokal's on-demand resolver
-    // finds a playable source; Spotify cookie auth does not stream audio.
-    return [
-      for (final track in _tracks)
-        index.match(track) ?? discoveryPendingSong(track),
+    // Keep the source playlist order (including duplicate songs) when playing
+    // normally. Shuffle supplies an independently randomized ordering.
+    final queue = [
+      for (final index in sourceIndices)
+        library.match(_tracks[index]) ?? discoveryPendingSong(_tracks[index]),
     ];
-  }
-
-  void _play(int index) {
-    if (index < 0 || index >= _tracks.length) return;
-    final queue = _queue();
-    if (queue.isNotEmpty) widget.onPlay(queue[index], queue);
+    widget.onPlay(queue[startIndex], queue);
   }
 
   void _songActions(int index) {
@@ -394,11 +394,7 @@ class _SpotifyPlaylistDetailState
           icon: const Icon(Icons.refresh_rounded),
           onPressed: _loading ? null : () => unawaited(_refresh()),
         ),
-        IconButton(
-          tooltip: 'Play all',
-          icon: const Icon(Icons.play_arrow_rounded),
-          onPressed: _loading || _tracks.isEmpty ? null : () => _play(0),
-        ),
+
       ],
     ),
     body: _loading
@@ -414,17 +410,11 @@ class _SpotifyPlaylistDetailState
               ]))
             : _tracks.isEmpty
                 ? const Center(child: Text('No playable tracks in this playlist.'))
-                : ListView.builder(
-                    itemCount: _tracks.length,
-                    itemBuilder: (context, index) {
-                      final track = _tracks[index];
-                      return ProviderPlaylistTrackTile(
-                        track: track,
-                        leading: _SpotifyCover(url: track.artworkUrl),
-                        onPlay: () => _play(index),
-                        onSongActions: () => _songActions(index),
-                      );
-                    },
+                : ProviderPlaylistTrackBrowser(
+                    tracks: _tracks,
+                    artworkBuilder: (track) => _SpotifyCover(url: track.artworkUrl),
+                    onPlay: _playOrdered,
+                    onSongActions: _songActions,
                   ),
   );
 }
