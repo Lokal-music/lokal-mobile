@@ -8,6 +8,7 @@ import '../../data/repositories/song_repository.dart';
 import '../library_scanner_service.dart' show ScanProgress;
 import '../network_cache_service.dart';
 import 'native_smb_transport.dart';
+import 'network_embedded_artwork.dart';
 import 'network_source_service.dart';
 import 'local_network_access.dart';
 
@@ -245,6 +246,25 @@ class SmbService implements NetworkSourceService {
     final session = await _connect(s, server);
     try {
       return await session.read(path);
+    } finally {
+      await session.close();
+    }
+  }
+
+  @override
+  Future<List<int>> getEmbeddedCoverArt(
+    NetworkServerEntity server,
+    String remoteId,
+  ) async {
+    final s = _parseServer(server);
+    await _ensureLanAccess(s);
+    final session = await _connect(s, server);
+    try {
+      final prefix = await session.readPrefix(
+        remoteId,
+        maxBytes: networkArtworkPrefixBytes,
+      );
+      return extractNetworkEmbeddedArtwork(prefix)?.toList() ?? const [];
     } finally {
       await session.close();
     }
