@@ -250,6 +250,11 @@ class WebdavService implements NetworkSourceService {
   static String _encodePath(String decodedPath) =>
       decodedPath.split('/').map(Uri.encodeComponent).join('/');
 
+  // Uri.path is still percent-encoded. All paths stored while scanning, and
+  // those compared to configured share roots, use decoded segments instead.
+  static String _decodedUriPath(Uri uri) =>
+      uri.path.isEmpty ? '' : '/${uri.pathSegments.join('/')}';
+
   Uri _requestUri(NetworkServerEntity server, String decodedPath) =>
       requestUriForTest(server.baseUrl, decodedPath);
 
@@ -270,12 +275,14 @@ class WebdavService implements NetworkSourceService {
           candidate.pathSegments.any((s) => s.contains('/') || s.contains('\\'))) {
         throw const FormatException('WebDAV link is outside the configured server');
       }
-      // Uri.path has already decoded the encoded path exactly once.
-      decodedPath = candidate.path;
+      // URI path segments are decoded once, unlike Uri.path, which retains
+      // escapes. The marker's original percent signs must not become %25.
+      decodedPath = _decodedUriPath(candidate);
     }
-    final root = base.path.endsWith('/') && base.path.length > 1
-        ? base.path.substring(0, base.path.length - 1)
-        : base.path;
+    final basePath = _decodedUriPath(base);
+    final root = basePath.endsWith('/') && basePath.length > 1
+        ? basePath.substring(0, basePath.length - 1)
+        : basePath;
     if (!decodedPath.startsWith('/') ||
         decodedPath.split('/').any((part) => part == '.' || part == '..' ||
             part.contains('\\')) ||
@@ -406,7 +413,7 @@ class WebdavService implements NetworkSourceService {
     // hrefs are children of that collection, not siblings of its path.
     final collection = parent.path.endsWith('/')
         ? parent
-        : parent.replace(path: '${parent.path}/');
+        : parent.replace(pathSegments: [...parent.pathSegments, '']);
     final resolved = collection.resolve(href);
     if (resolved.origin != parent.origin ||
         resolved.scheme != parent.scheme ||
@@ -677,8 +684,9 @@ class WebdavService implements NetworkSourceService {
 
     String rootPath;
     try {
-      // Uri.path is decoded already: decoding again changes literal %2F names.
-      rootPath = Uri.parse(server.baseUrl).path;
+      // WebDAV hrefs are resolved into decoded path segments, so the root
+      // must use the same representation (including spaces, % and Unicode).
+      rootPath = _decodedUriPath(Uri.parse(server.baseUrl));
     } catch (_) {
       rootPath = '';
     }
