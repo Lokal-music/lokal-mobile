@@ -10,6 +10,7 @@ import 'package:flick/features/spotify/spotify_oauth.dart';
 import 'package:flick/features/spotify/spotify_playlist_cache.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
+import 'package:flick/features/spotify/provider_playlist_track_tile.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/models/song.dart';
@@ -414,14 +415,11 @@ class _SpotifyPlaylistDetailState
                     itemCount: _tracks.length,
                     itemBuilder: (context, index) {
                       final track = _tracks[index];
-                      return ListTile(
+                      return ProviderPlaylistTrackTile(
+                        track: track,
                         leading: _SpotifyCover(url: track.artworkUrl),
-                        title: Text(track.title, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        subtitle: Text(track.artist, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        onTap: () => _play(index),
-                        onLongPress: () => _songActions(index),
+                        onPlay: () => _play(index),
+                        onSongActions: () => _songActions(index),
                       );
                     },
                   ),
