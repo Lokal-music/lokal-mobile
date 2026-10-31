@@ -172,6 +172,10 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
   private var persistenceFailed = false {
     didSet { if persistenceFailed { importOwnership.revokeAll() } }
   }
+  private var storageEnumerationPending = false
+  private var storageWorkerPending = false
+  private var recovering = false, recoveryReadStarted = false
+  private var recoveryReplies: [LokalTransferCompletion<LokalTransferSummary>] = []
   private var observer: (id: String, callback: @Sendable () -> Void)?
   private var notificationScheduled = false
   private var shutdownReplies: [@Sendable () -> Void] = []
@@ -247,7 +251,10 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     session = URLSession(configuration: configuration, delegate: self, delegateQueue: delegates)
     queue.async {
       self.session.getAllTasks { tasks in
-        self.queue.async { self.reconcile(tasks) }
+        self.queue.async {
+          if self.persistenceFailed { for task in tasks { task.cancel() } }
+          else { self.reconcile(tasks) }
+        }
       }
     }
   }
@@ -471,7 +478,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
                       work.songID == request.songID, work.matches(job), work.stagingRetired == true,
                       work.publication != nil, work.resolution == nil else { throw LokalTransferError.invalidTransition }
                 do { try self.journal.compactCompletedImport(job, songID: request.songID) }
-                catch { self.persistenceFailed = true; self.notify(); throw error }
+                catch { self.storageFailed(error); self.notify(); throw error }
                 self.jobs.removeValue(forKey: request.id)
                 self.order.removeAll { $0 == request.id }
                 self.progress.removeValue(forKey: request.id)
@@ -490,20 +497,94 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
   func recover(_ reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
     importOwnership.revokeAll()
     queue.async {
-      guard !self.shuttingDown else { reply(.failure(LokalTransferError.invalidTransition)); return }
-      self.reconciled = false
-      self.pruneUploadSources()
-      for read in self.sourceReads.values { read.cancel() }
-      for match in self.uploadMatches.values { match.probe.cancel() }
-      self.session.getAllTasks { actual in
-        self.queue.async {
-          guard !self.shuttingDown else { reply(.failure(LokalTransferError.invalidTransition)); return }
-          self.reconcile(actual)
-          if self.persistenceFailed { reply(.failure(LokalTransferError.invalidRecord)) }
-          else { reply(.success(self.summaryValue())) }
+      guard !self.shuttingDown, self.recoveryReplies.count < 16 else {
+        reply(.failure(LokalTransferError.invalidTransition)); return
+      }
+      self.recoveryReplies.append(reply)
+      if !self.recovering {
+        self.recovering = true
+        self.reconciled = false
+        self.pruneUploadSources()
+        for read in self.sourceReads.values { read.cancel() }
+        for match in self.uploadMatches.values { match.probe.cancel() }
+      }
+      self.performRecoveryWhenReady()
+    }
+  }
+
+  private var storageDrained: Bool {
+    !storageEnumerationPending && !storageWorkerPending && tasks.isEmpty &&
+      preparingUploads.isEmpty && sourceReads.isEmpty && uploadMatches.isEmpty && verifications.isEmpty
+  }
+
+  /// Never keep sending or publishing against a journal whose last durable
+  /// outcome is unknown. Preserve every owned body/receipt and cancel the OS
+  /// work; only an explicit drained recovery may reload durable truth.
+  private func storageFailed(_ error: Error) {
+    guard !persistenceFailed else { notify(); return }
+    persistenceFailed = true
+    sourceGrants.removeAll(); sourceContexts.removeAll(); progress.removeAll()
+    for read in sourceReads.values { read.cancel() }
+    for preparation in uploadPreparationCancellation.values { preparation.cancel() }
+    for match in uploadMatches.values { match.probe.cancel() }
+    failNetworkRetirements(error)
+    for task in tasks.values { task.cancel() }
+    storageEnumerationPending = true
+    storageWorkerPending = true
+    fileQueue.async { self.queue.async {
+      self.storageWorkerPending = false
+      self.finishStorageDrain()
+    } }
+    guard let session else {
+      storageEnumerationPending = false
+      finishStorageDrain(); notify(); return
+    }
+    session.getAllTasks { actual in
+      self.queue.async {
+        for task in actual where task.state != .completed {
+          self.tasks[task.taskIdentifier] = task
+          if let binding = LokalTransferTaskBinding(task.taskDescription), let job = self.jobs[binding.id] {
+            self.staleScopeTasks[task.taskIdentifier] = self.scope(job)
+          } else { self.unknownTasks.insert(task.taskIdentifier) }
+          task.cancel()
         }
+        self.storageEnumerationPending = false
+        self.finishStorageDrain()
       }
     }
+    notify()
+  }
+
+  private func finishStorageDrain() {
+    guard persistenceFailed, storageDrained else { return }
+    flushBackgroundReplies()
+    performRecoveryWhenReady()
+  }
+
+  private func performRecoveryWhenReady() {
+    guard recovering, !recoveryReadStarted, !shuttingDown,
+          !persistenceFailed || storageDrained else { return }
+    recoveryReadStarted = true
+    session.getAllTasks { actual in
+      self.queue.async {
+        guard !self.shuttingDown else {
+          self.finishRecovery(.failure(LokalTransferError.invalidTransition)); return
+        }
+        if self.persistenceFailed && !self.storageDrained {
+          self.recoveryReadStarted = false
+          return // The drain callback starts a fresh OS-task snapshot.
+        }
+        self.reconcile(actual)
+        if self.persistenceFailed { self.finishRecovery(.failure(LokalTransferError.invalidRecord)) }
+        else { self.finishRecovery(.success(self.summaryValue())) }
+      }
+    }
+  }
+
+  private func finishRecovery(_ result: Result<LokalTransferSummary, Error>) {
+    let replies = recoveryReplies
+    recoveryReplies.removeAll(); recovering = false; recoveryReadStarted = false
+    for reply in replies { reply(result) }
   }
 
   private func update(_ job: LokalTransferJob, pause: LokalTransferPause? = nil,
@@ -527,7 +608,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
       if let failure = error as? LokalTransferError {
         switch failure {
         case .database, .posix, .unsafeFile, .invalidRecord, .unsupportedSchema:
-          persistenceFailed = true
+          storageFailed(error)
           notify()
         default: break
         }
@@ -665,6 +746,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
           }
           self.queue.async {
             self.sourceReads.removeValue(forKey: readID)
+            defer { self.finishStorageDrain() }
             do {
               let file = try result.get()
               self.pruneUploadSources()
@@ -746,7 +828,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
         try self.importOwnership.validateSubmission(submission)
         if self.jobs[requested.id] == nil {
           do { try self.journal.create([requested]) }
-          catch { self.persistenceFailed = true; self.notify(); throw error }
+          catch { self.storageFailed(error); self.notify(); throw error }
           self.jobs[requested.id] = requested; self.order.append(requested.id); self.generation += 1
         }
         let cancellation = LokalTransferCopyCancellation()
@@ -778,15 +860,16 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
             defer {
               self.preparingUploads.removeValue(forKey: requested.id)
               self.uploadPreparationCancellation.removeValue(forKey: requested.id)
+              self.finishStorageDrain()
               self.pump()
             }
             if case .failure(let error) = prepared {
               do {
-                if let current = self.jobs[requested.id], [.queued, .waiting].contains(current.phase) {
+                if !self.persistenceFailed, let current = self.jobs[requested.id], [.queued, .waiting].contains(current.phase) {
                   _ = try self.update(current) { try $0.waitForUploadSource(
                     (error as? LokalTransferError) == .checksumMismatch ? .checksum : .storage, nowMs: Self.now()) }
                 }
-              } catch { self.persistenceFailed = true; self.notify() }
+              } catch { self.storageFailed(error); self.notify() }
               reply(.failure(error)); return
             }
             do {
@@ -885,6 +968,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
           } catch { reply(.failure(error)) }
           self.finishNetworkRetirements()
           self.finishShutdownIfReady()
+          self.finishStorageDrain()
         }
         self.uploadMatches[queryID] = UploadMatch(job: job, probe: probe)
         probe.start()
@@ -949,7 +1033,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
         task.resume()
       } catch {
         task.cancel()
-        persistenceFailed = true
+        storageFailed(error)
         notify()
         return
       }
@@ -1007,7 +1091,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
       flushBackgroundReplies()
       notify()
     } catch {
-      persistenceFailed = true
+      storageFailed(error)
       failNetworkRetirements(error)
       notify()
     }
@@ -1062,7 +1146,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
   }
 
   private func current(_ task: URLSessionTask) -> LokalTransferJob? {
-    guard let binding = LokalTransferTaskBinding(task.taskDescription), let job = jobs[binding.id],
+    guard !persistenceFailed, let binding = LokalTransferTaskBinding(task.taskDescription), let job = jobs[binding.id],
           job.revision == binding.revision, job.taskID == task.taskIdentifier, job.phase == .transferring else { return nil }
     return job
   }
@@ -1080,7 +1164,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
           if let active = current(other), scope(active) == scope(job) { other.cancel() }
         }
       }
-    } catch { persistenceFailed = true; notify() }
+    } catch { storageFailed(error); notify() }
   }
 
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
@@ -1120,14 +1204,14 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
         // snapshot and pause. Neither retry() nor pump() may POST it again.
         failed(task, reason: error is URLError ? .network : .invalidResponse, retryable: true)
       }
-    } else if let binding = LokalTransferTaskBinding(task.taskDescription), let job = jobs[binding.id],
+    } else if !persistenceFailed, let binding = LokalTransferTaskBinding(task.taskDescription), let job = jobs[binding.id],
        job.revision == binding.revision, job.taskID == task.taskIdentifier, job.phase == .received {
       do {
         _ = try update(job) {
           if error == nil { try $0.acknowledgeDownload(taskID: task.taskIdentifier, nowMs: Self.now()) }
           else { try $0.fail(.network, retryable: true, nowMs: Self.now()) }
         }
-      } catch { persistenceFailed = true; notify() }
+      } catch { storageFailed(error); notify() }
     } else if current(task) != nil {
       let status = (task.response as? HTTPURLResponse)?.statusCode
       if status == 401 || status == 403 { failed(task, reason: .unauthorized, retryable: false) }
@@ -1142,6 +1226,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
       pendingNetworkRetirements[index].taskIDs.remove(task.taskIdentifier)
     }
     finishNetworkRetirements()
+    finishStorageDrain()
     if let binding = LokalTransferTaskBinding(task.taskDescription),
        progress[binding.id]?.revision == binding.revision { progress.removeValue(forKey: binding.id) }
     pump()
@@ -1188,7 +1273,8 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
   }
 
   private func flushBackgroundReplies() {
-    guard reconciled, backgroundEventsFinished, !persistenceFailed, !backgroundReplies.isEmpty else { return }
+    guard backgroundEventsFinished, !backgroundReplies.isEmpty,
+          persistenceFailed ? storageDrained : reconciled else { return }
     let replies = backgroundReplies
     backgroundReplies.removeAll()
     backgroundEventsFinished = false
@@ -1202,6 +1288,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
       self.shutdownReplies.append(reply)
       guard !self.shuttingDown else { return }
       self.shuttingDown = true
+      self.finishRecovery(.failure(LokalTransferError.invalidTransition))
       self.sourceGrants.removeAll(); self.sourceContexts.removeAll()
       for read in self.sourceReads.values { read.cancel() }
       self.observer = nil
@@ -1214,6 +1301,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
 
   func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
     shuttingDown = true
+    finishRecovery(.failure(LokalTransferError.invalidTransition))
     sourceGrants.removeAll(); sourceContexts.removeAll()
     for read in sourceReads.values { read.cancel() }
     for cancellation in uploadPreparationCancellation.values { cancellation.cancel() }
@@ -1235,10 +1323,16 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     for reply in replies { reply() }
   }
 
-  func cancel(id: String, revision: Int, reply: @escaping LokalTransferCompletion<LokalTransferJob>) {
+  func cancel(id: String, revision: Int,
+              submission: LokalTransferImportOwnership.SubmissionTicket? = nil, reply: @escaping LokalTransferCompletion<LokalTransferJob>) {
+    if let submission {
+      do { try importOwnership.validateSubmission(submission) }
+      catch { reply(.failure(error)); return }
+    }
     importOwnership.revoke(jobID: id, revision: revision)
     queue.async {
       do {
+        if let submission { try self.importOwnership.validateSubmission(submission) }
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
         guard let job = self.jobs[id] else { throw LokalTransferError.missingJob }
         guard job.revision == revision else { throw LokalTransferError.staleRevision }
@@ -1363,9 +1457,11 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     }
   }
 
-  func retry(id: String, revision: Int, reply: @escaping LokalTransferCompletion<LokalTransferJob>) {
+  func retry(id: String, revision: Int,
+             submission: LokalTransferImportOwnership.SubmissionTicket? = nil, reply: @escaping LokalTransferCompletion<LokalTransferJob>) {
     queue.async {
       do {
+        if let submission { try self.importOwnership.validateSubmission(submission) }
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
         guard let job = self.jobs[id], job.direction == .download else { throw LokalTransferError.missingJob }
         guard job.revision == revision, self.pauses[self.scope(job)] == nil,
@@ -1388,9 +1484,11 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
 
   /// This is called only after the application's explicit pairing/reconnect
   /// check. A rejected background credential cannot drain the remaining queue.
-  func resume(scope: LokalTransferScope, reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
+  func resume(scope: LokalTransferScope,
+              submission: LokalTransferImportOwnership.SubmissionTicket? = nil, reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
     queue.async {
       do {
+        if let submission { try self.importOwnership.validateSubmission(submission) }
         guard !self.shuttingDown, !self.persistenceFailed else { throw LokalTransferError.invalidTransition }
         guard let authorization = try self.credentials(), authorization.desktopID == scope.desktopID,
               authorization.pairingID == scope.pairingID,
@@ -1667,6 +1765,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
             } catch { result = .failure(error) }
             let waiting = self.cleanupResolutions.removeValue(forKey: request.leaseID)?.replies ?? []
             for callback in waiting { callback(result) }
+          self.finishStorageDrain()
           }
         }
       } catch { reply(.failure(error)) }
@@ -1844,7 +1943,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
         self.queue.async {
           let result: Result<LokalTransferJob, Error>
           do {
-            guard let current = self.jobs[id], current.revision == revision, current.phase == .downloaded else {
+            guard !self.persistenceFailed, let current = self.jobs[id], current.revision == revision, current.phase == .downloaded else {
               throw LokalTransferError.staleRevision
             }
             let receipt = try inspected.get()
@@ -1853,16 +1952,17 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
             }
             result = .success(verified)
           } catch {
-            if let current = self.jobs[id], current.revision == revision, current.phase == .downloaded {
+            if !self.persistenceFailed, let current = self.jobs[id], current.revision == revision, current.phase == .downloaded {
               do {
                 let reason: LokalTransferFailure = (error as? LokalTransferError) == .checksumMismatch ? .checksum : .storage
                 _ = try self.update(current) { try $0.fail(reason, retryable: false, nowMs: Self.now()) }
-              } catch { self.persistenceFailed = true; self.notify() }
+              } catch { self.storageFailed(error); self.notify() }
             }
             result = .failure(error)
           }
           let waiting = self.verifications.removeValue(forKey: binding) ?? []
           for callback in waiting { callback(result) }
+          self.finishStorageDrain()
         }
       }
     }

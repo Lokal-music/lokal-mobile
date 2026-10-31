@@ -32,6 +32,7 @@ def serve_fixture():
     lock = threading.Lock()
     slow_upload_reply = threading.Event()
     slow_match_reply = threading.Event()
+    storage_reply = threading.Event()
     state = {'requests': {}, 'redirectHits': 0, 'cookiesSeen': False,
              'uploadRequests': {}, 'uploadHashes': {}, 'uploadMetadataValid': True, 'uploadLeakHits': 0,
              'matchRequests': 0, 'matchMode': 'positive', 'matchQueryValid': True, 'matchLeakHits': 0}
@@ -52,6 +53,14 @@ def serve_fixture():
                 self.wfile.write(body)
 
         def do_GET(self):
+            if self.path == '/__hold_storage':
+                storage_reply.clear()
+                self.respond(200)
+                return
+            if self.path == '/__release_storage':
+                storage_reply.set()
+                self.respond(200)
+                return
             if self.path.startswith('/__match_mode?'):
                 mode = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)['mode'][0]
                 with lock:
@@ -102,7 +111,11 @@ def serve_fixture():
             self.send_header('Set-Cookie', 'fixture_cookie=unexpected; Path=/')
             self.end_headers()
             try:
-                if source == 'truncated':
+                if source.startswith('storage-download-'):
+                    storage_reply.wait(timeout=10)
+                    self.wfile.write(payload)
+                    self.wfile.flush()
+                elif source == 'truncated':
                     self.wfile.write(payload[:len(payload) // 2])
                     self.wfile.flush()
                     self.close_connection = True
@@ -224,6 +237,8 @@ def serve_fixture():
                 else:
                     if mode == 'upload-slow':
                         slow_upload_reply.wait(timeout=10)
+                    if mode.startswith('storage-upload-'):
+                        storage_reply.wait(timeout=10)
                     receipt = {'ok': True, 'trackId': 'desktop-' + mode}
                     if mode == 'upload-present':
                         receipt['alreadyPresent'] = True
@@ -242,6 +257,7 @@ def serve_fixture():
     finally:
         slow_upload_reply.set()
         slow_match_reply.set()
+        storage_reply.set()
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)

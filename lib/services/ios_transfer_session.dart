@@ -40,6 +40,8 @@ class IosTransferSession {
     required int songId,
     required IosTransferPairing expectedPairing,
     required void Function(IosTransferIntent intent) prepared,
+    IosTransferIntent? frozenIntent,
+    String? reviewedSourcePath,
   }) async {
     final capability = await native.capability();
     if (_disposed ||
@@ -60,6 +62,8 @@ class IosTransferSession {
       songId: songId,
       expectedPairing: expectedPairing,
       prepared: prepared,
+      frozenIntent: frozenIntent,
+      reviewedSourcePath: reviewedSourcePath,
     );
   }
 

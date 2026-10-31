@@ -322,6 +322,8 @@ func runNetworkContracts(origin: String, length: Int64, checksum: String) throws
   try runUploadRuntimeContracts(origin: origin, length: length, checksum: checksum)
   try runUploadMatchContracts(origin: origin, length: length, checksum: checksum)
   try runUploadSourceContracts(origin: origin, length: length, checksum: checksum)
+  try runOwnedQueueContracts(origin: origin, length: length, checksum: checksum)
+  try runStorageFailureContracts(origin: origin, length: length, checksum: checksum)
   try runNetworkRetirementContracts(origin: origin, length: length, checksum: checksum)
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
@@ -1672,4 +1674,170 @@ private func runUploadSourceContracts(origin: String, length: Int64, checksum: S
   try manager.createDirectory(at: music, withIntermediateDirectories: false)
   try rejects("replaced Music root invalidates all pinned source access") { try reader.validateRoot() }
   print("Native source admission passed: actual Music hash and HTTP POST, Unicode paths, song binding, symlink/hardlink/traversal refusal, same-byte/root replacement, strict envelope and released/retired context refusal. Apple source/lifecycle acceptance pending.")
+}
+
+private func runOwnedQueueContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("lokal-owned-queue-" + UUID().uuidString)
+  try manager.createDirectory(at: root, withIntermediateDirectories: false)
+  defer { try? manager.removeItem(at: root) }
+  let auth = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token", pairingID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+  let scope = LokalTransferScope(desktopID: auth.desktopID, origin: origin, pairingID: auth.pairingID)
+  func job(_ source: String) throws -> LokalTransferJob {
+    try LokalTransferJob(direction: .download,
+      identity: LokalTransferIdentity(desktopID: auth.desktopID, sourceID: source, localSongID: "owned-queue-" + source,
+        origin: origin, pairingID: auth.pairingID),
+      metadata: LokalTransferMetadata(title: "Queue", artist: "Fixture", album: nil, fileExtension: "wav"),
+      nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  }
+  let cancel = try job("owned-cancel")
+  let initialRetry = try job("owned-queue-retry")
+  let journal = try LokalTransferJournal(container: root)
+  try journal.create([cancel, initialRetry])
+  let retry = try journal.update(id: initialRetry.id, revision: 1,
+    pausingScope: LokalTransferPause(scope: scope, reason: .network)) {
+    try $0.fail(.network, retryable: true, nowMs: 1001)
+  }
+  let ownership = LokalTransferImportOwnership()
+  let runtime = try LokalTransferRuntime(container: root, importOwnership: ownership, credentials: { auth })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+  }
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+  let retired = try ownership.captureSubmission(owner)
+  try ownership.retireSubmissions(owner)
+  let before = try journal.snapshot()
+  try rejects("retired queue cancellation cannot change a durable revision") {
+    let _: LokalTransferJob = try native { runtime.cancel(id: cancel.id, revision: 1, submission: retired, reply: $0) }
+  }
+  try rejects("retired queue retry cannot start a download") {
+    let _: LokalTransferJob = try native { runtime.retry(id: retry.id, revision: 1, submission: retired, reply: $0) }
+  }
+  try rejects("retired queue resume cannot clear a connection pause") {
+    let _: LokalTransferSummary = try native { runtime.resume(scope: scope, submission: retired, reply: $0) }
+  }
+  let after = try journal.snapshot()
+  try require(before.generation == after.generation && before.jobs == after.jobs && before.pauses == after.pauses,
+    "all stale queue controls preserve journal and connection pause")
+  let fresh = try ownership.captureSubmission(owner)
+  let cancelled: LokalTransferJob = try native { runtime.cancel(id: cancel.id, revision: 1, submission: fresh, reply: $0) }
+  try require(cancelled.phase == .cancelled && cancelled.revision == 2, "owned cancel advances exact revision")
+  let _: LokalTransferSummary = try native { runtime.resume(scope: scope, submission: fresh, reply: $0) }
+  let retried: LokalTransferJob = try native { runtime.retry(id: retry.id, revision: 1, submission: fresh, reply: $0) }
+  try require(retried.phase == .queued && retried.revision == 2, "owned retry preserves ID and advances revision")
+  _ = try awaitJob(runtime, id: retry.id, phase: [.downloaded])
+  print("Owned queue controls passed: stale cancel/retry/resume preserve actual journal and pause, fresh revision cancellation and explicit HTTP download retry. No automatic upload retry or Apple lifecycle claim.")
+}
+
+private func runStorageFailureContracts(origin: String, length: Int64, checksum: String) throws {
+  func get(_ path: String) throws -> Data {
+    try native { reply in
+      URLSession.shared.dataTask(with: URL(string: origin + path)!) { data, _, error in
+        if let error { reply(.failure(error)) } else { reply(.success(data ?? Data())) }
+      }.resume()
+    }
+  }
+  let manager = FileManager.default
+  for direction in [LokalTransferDirection.download, .upload] {
+    _ = try get("/__hold_storage")
+    let root = manager.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("lokal-storage-failure-" + UUID().uuidString)
+    try manager.createDirectory(at: root, withIntermediateDirectories: false)
+    defer { try? manager.removeItem(at: root) }
+    let auth = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+      token: "transfer-fixture-token", pairingID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", desktopUserID: "fixture-account")
+    let ownership = LokalTransferImportOwnership()
+    let runtime: LokalTransferRuntime
+    if direction == .upload {
+      runtime = try PortableNativeUploadRuntime(container: root, importOwnership: ownership, credentials: { auth })
+    } else {
+      runtime = try LokalTransferRuntime(container: root, importOwnership: ownership, credentials: { auth })
+    }
+    defer {
+      let done = DispatchSemaphore(value: 0)
+      runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+    }
+    let _: LokalTransferSummary = try native { runtime.recover($0) }
+    let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+    let ticket = try ownership.captureSubmission(owner)
+    let payload = try get("/__upload_payload")
+    let original = root.appendingPathComponent("original.wav")
+    try payload.write(to: original)
+    let source = open(original.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    guard source >= 0 else { throw TestFailure.failed("open storage-failure fixture source") }
+    defer { close(source) }
+    let jobs = try [1, 2].map { index in
+      try LokalTransferJob(direction: direction,
+        identity: LokalTransferIdentity(desktopID: auth.desktopID, sourceID: "storage-" + direction.rawValue + "-" + String(index),
+          localSongID: String(900 + index), origin: origin, pairingID: auth.pairingID, desktopUserID: auth.desktopUserID),
+        metadata: LokalTransferMetadata(title: "storage-" + direction.rawValue + "-" + String(index),
+          artist: "Native fixture — Café", album: nil, fileExtension: "wav"),
+        nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+    }
+    if direction == .upload {
+      for job in jobs {
+        let _: LokalTransferSummary = try native { runtime.enqueueUpload(job, source: source, submission: ticket, reply: $0) }
+      }
+    } else {
+      let _: LokalTransferSummary = try native { runtime.enqueue(jobs, submission: ticket, reply: $0) }
+    }
+    let deadline = Date().addingTimeInterval(5)
+    var started = false
+    while Date() < deadline {
+      let current = try state(origin)
+      let key = direction == .upload ? "uploadRequests" : "requests"
+      let counts = current[key] as? [String: Int] ?? [:]
+      if jobs.allSatisfy({ counts[$0.identity.sourceID] == 1 }) { started = true; break }
+      Thread.sleep(forTimeInterval: 0.02)
+    }
+    try require(started, "two actual held URLSession requests start before storage failure")
+    let journal = try LokalTransferJournal(container: root)
+    let before = try journal.snapshot()
+    let directory = root.appendingPathComponent(LokalTransferJournal.directoryName)
+    let displaced = root.appendingPathComponent("preserved-journal")
+    try manager.moveItem(at: directory, to: displaced)
+    try manager.createDirectory(at: directory, withIntermediateDirectories: false)
+    try rejects("actual replaced journal refuses mutation") {
+      let _: LokalTransferJob = try native { runtime.cancel(id: jobs[0].id, revision: 1, submission: ticket, reply: $0) }
+    }
+    let failed: LokalTransferSummary = try native { runtime.summary($0) }
+    try require(failed.persistenceFailed && failed.progress.isEmpty, "storage failure fences all work and stale progress")
+    try rejects("bad storage cannot be declared recovered after cancellation") {
+      let _: LokalTransferSummary = try native { runtime.recover($0) }
+    }
+    try require(try Data(contentsOf: original) == payload, "failed storage preserves original audio")
+    try manager.removeItem(at: directory)
+    try manager.moveItem(at: displaced, to: directory)
+    let preserved = try journal.snapshot()
+    try require(before.generation == preserved.generation && before.jobs == preserved.jobs,
+      "late cancelled-task callbacks never rewrite the failed journal")
+    let recoveries = (0..<8).map { _ in NativeResult<LokalTransferSummary>() }
+    let replies = (0..<8).map { _ in DispatchSemaphore(value: 0) }
+    for index in 0..<8 {
+      let result = recoveries[index], done = replies[index]
+      runtime.recover { result.set($0); done.signal() }
+    }
+    for done in replies { try require(done.wait(timeout: .now() + 10) == .success, "coalesced recovery replies drain") }
+    let recovered = try recoveries[0].get()
+    for result in recoveries {
+      let value = try result.get()
+      try require(!value.persistenceFailed && value.generation == recovered.generation,
+        "concurrent recovery callers share the same durable result")
+    }
+    try require(!recovered.persistenceFailed, "recovery waits for cancellation and reloads the restored journal")
+    let after: [LokalTransferJob] = try native { runtime.page(offset: 0, limit: 100, reply: $0) }
+    try require(after.count == 2 && after.allSatisfy({ $0.phase == .interrupted }),
+      "missing OS tasks become explicit interrupted intent, never success or automatic retry")
+    if direction == .upload {
+      let files = try LokalTransferFiles(container: root)
+      for job in jobs { try require(try Data(contentsOf: files.uploadURL(job)) == payload, "every uncertain private upload body is preserved") }
+    }
+    _ = try get("/__release_storage")
+    let current = try state(origin)
+    let counts = current[direction == .upload ? "uploadRequests" : "requests"] as? [String: Int] ?? [:]
+    try require(jobs.allSatisfy({ counts[$0.identity.sourceID] == 1 }), "storage recovery never resends either held request")
+  }
+  print("Storage-failure contracts passed: two actual held download tasks and two actual upload tasks cancel on replaced journal, failed recovery stays fenced, late callbacks preserve durable truth, restored recovery interrupts without resend, original and private upload bytes preserved. Apple daemon/lifecycle acceptance pending.")
 }
