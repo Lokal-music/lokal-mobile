@@ -18,17 +18,17 @@ void main() {
     first.read(searchScopeProvider);
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(first.read(searchScopeProvider), SearchScope.online);
-    first.read(searchScopeProvider.notifier).select(SearchScope.library);
+    first.read(searchScopeProvider.notifier).select(SearchScope.all);
     await Future<void>.delayed(const Duration(milliseconds: 20));
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('search_selected_scope_v1'), 'library');
+    expect(prefs.getString('search_selected_scope_v1'), 'all');
     first.dispose();
 
     final second = ProviderContainer();
     addTearDown(second.dispose);
     second.read(searchScopeProvider);
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(second.read(searchScopeProvider), SearchScope.library);
+    expect(second.read(searchScopeProvider), SearchScope.all);
   });
 
   test(
@@ -135,7 +135,7 @@ void main() {
       await tester.tap(find.text('Online'));
       await tester.pumpAndSettle();
       expect(c.read(searchScopeProvider), SearchScope.online);
-      expect(find.text('All'), findsNothing);
+      expect(find.text('All'), findsOneWidget);
       expect(find.text('Lyrics'), findsOneWidget);
       expect(find.text('Folders'), findsNothing);
       expect(find.text('Year'), findsNothing);
@@ -145,7 +145,10 @@ void main() {
       await tester.tap(find.text('Lyrics'));
       await tester.pumpAndSettle();
       expect(c.read(searchFilterProvider), {SearchCategory.lyrics});
-      await tester.tap(find.text('Library'));
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+      expect(c.read(searchScopeProvider), SearchScope.all);
+      await tester.tap(find.text('Local'));
       await tester.pumpAndSettle();
       expect(c.read(searchScopeProvider), SearchScope.library);
       expect(c.read(searchFilterProvider), {SearchCategory.lyrics});
