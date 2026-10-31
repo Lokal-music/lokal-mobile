@@ -42,6 +42,104 @@ void main() {
     expect(stream.sampleRate, 44100);
   });
 
+  test('Nebula-style nested Tidal rendition metadata is retained', () {
+    final client = MockClient((_) async => throw StateError('Unexpected request'));
+    addTearDown(client.close);
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(client), endpoint: 'https://tidal.example.com',
+    );
+    final audio = addon.parseStream({
+      'url': 'https://cdn.example.com/track.flac?signature=secret',
+      'audio': {
+        'codec': 'FLAC',
+        'audioQuality': 'HI_RES_LOSSLESS',
+        'bitDepth': 24,
+        'sampleRate': '96 kHz',
+      },
+    });
+    expect(audio.codec, 'FLAC');
+    expect(audio.quality, 'HI_RES_LOSSLESS');
+    expect(audio.bitDepth, 24);
+    expect(audio.sampleRate, 96000);
+    final song = progressiveAddonSong(
+      const DiscoveryTrack(
+        id: 'tidal-test', title: 'Tidal track', artist: 'Artist',
+        source: DiscoverySource.addon,
+      ),
+      audio,
+    );
+    expect(song.fileType, 'FLAC');
+    expect(song.resolution, 'HI_RES_LOSSLESS');
+    expect(song.bitDepth, 24);
+    expect(song.sampleRate, 96000);
+    expect(LokalQualityTier.of(song), LokalQualityTier.hiRes);
+  });
+
+  test('HTTP Tidal lossy bitrate labels come from exact stream, not catalogue', () {
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(MockClient((_) async => throw StateError('no network'))),
+      endpoint: 'https://tidal.example.com',
+    );
+    final audio = addon.parseStream({
+      'url': 'https://cdn.example.com/audio.mp4?token=private',
+      'metadata': {'codec': 'AAC', 'bitrate': 320},
+    });
+    expect(audio.bitrate, 320000);
+    final song = progressiveAddonSong(
+      const DiscoveryTrack(
+        id: 'high', title: 'High', artist: 'Artist',
+        source: DiscoverySource.addon,
+        catalogueQuality: 'HI_RES_LOSSLESS',
+        catalogueBitDepth: 24,
+        catalogueSampleRate: 96000,
+      ),
+      audio,
+    );
+    expect(song.fileType, 'AAC');
+    expect(song.resolution, '320 kbps');
+    expect(song.sampleRate, isNull);
+    expect(song.bitDepth, isNull);
+    expect(LokalQualityTier.of(song), LokalQualityTier.high);
+  });
+
+  test('unreported HTTP rendition is not mislabeled as verified hi-res', () {
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(MockClient((_) async => throw StateError('no network'))),
+      endpoint: 'https://tidal.example.com',
+    );
+    final audio = addon.parseStream({
+      'url': 'https://cdn.example.com/audio.m4a?token=private',
+    });
+    expect(audio.quality, isNull);
+    expect(audio.bitrate, isNull);
+    expect(audio.codec, isNull);
+  });
+
+  test('automatic HTTP circuit breaker cools down repeated timeouts only', () {
+    final guard = OnlineAddonCooldown(
+      failureThreshold: 2, cooldown: const Duration(minutes: 2),
+    );
+    final at = DateTime.utc(2026, 10, 31);
+    const timeout = DiscoveryException('The source timed out. Try again.');
+    guard.failed('w-unhealthy', timeout, now: at);
+    expect(guard.shouldSkip('w-unhealthy', now: at), isFalse);
+    guard.failed('w-unhealthy', timeout, now: at.add(const Duration(seconds: 1)));
+    expect(guard.shouldSkip('w-unhealthy', now: at.add(const Duration(seconds: 2))),
+        isTrue);
+    // Explicit retry succeeds, clearing the breaker immediately.
+    guard.succeeded('w-unhealthy');
+    expect(guard.shouldSkip('w-unhealthy', now: at), isFalse);
+    guard.failed('w-unhealthy', const DiscoveryException('HTTP 403'), now: at);
+    expect(guard.shouldSkip('w-unhealthy', now: at), isFalse);
+    guard.failed('a-morneye', timeout, now: at);
+    guard.failed('a-morneye', timeout, now: at);
+    expect(guard.shouldSkip('a-morneye', now: at), isFalse);
+    guard.failed('w-unhealthy', timeout, now: at);
+    guard.failed('w-unhealthy', timeout, now: at);
+    expect(guard.shouldSkip('w-unhealthy', now: at.add(const Duration(minutes: 3))),
+        isFalse);
+  });
+
   test('16/44.1 metadata stays visible in Search and Full Player', () {
     expect(compactAudioResolution('16/44.1')?.sampleRate, 44100);
     expect(compactAudioResolution('24/96')?.sampleRate, 96000);
