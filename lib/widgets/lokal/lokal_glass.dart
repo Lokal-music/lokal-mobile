@@ -9,6 +9,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:flick/core/utils/app_haptics.dart';
+import 'package:flick/core/theme/lokal_interaction.dart';
 import 'package:flick/core/theme/lokal_appearance.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
 
@@ -645,14 +647,19 @@ class _LokalGlassButtonState extends State<LokalGlassButton> {
       button: true,
       label: widget.semanticLabel,
       child: GestureDetector(
-        onTapDown: (_) => _set(true),
-        onTapUp: (_) => _set(false),
-        onTapCancel: () => _set(false),
-        onTap: widget.onPressed,
+        onTapDown: widget.onPressed == null ? null : (_) => _set(true),
+        onTapUp: widget.onPressed == null ? null : (_) => _set(false),
+        onTapCancel: widget.onPressed == null ? null : () => _set(false),
+        onTap: widget.onPressed == null ? null : () {
+          AppHaptics.tap();
+          widget.onPressed!();
+        },
         child: AnimatedScale(
-          scale: _pressed && !reduceMotion ? 1.06 : 1,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
+          scale: _pressed && !reduceMotion ? LokalMotion.pressedScale : 1,
+          duration: reduceMotion
+              ? Duration.zero
+              : (_pressed ? LokalMotion.press : LokalMotion.release),
+          curve: _pressed ? Curves.easeOutCubic : Curves.easeOutBack,
           child: SizedBox.square(
             dimension: widget.size,
             child: LokalGlass.capsule(
