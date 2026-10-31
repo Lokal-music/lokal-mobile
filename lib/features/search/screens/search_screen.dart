@@ -288,12 +288,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           // Nothing in the library: what's online still shows under it.
           return CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: _buildNoResults(context, results.query),
+              // In All, online results may still be present. Do not claim
+              // the entire search has no results just because local is empty.
+              if (ref.read(searchScopeProvider) == SearchScope.library)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: _buildNoResults(context, results.query),
+                  ),
                 ),
-              ),
               if (_onlineSection(results.query) case final online?) online,
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
@@ -301,12 +304,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
         return _buildGroupedResults(context, results, enabled);
       },
-      loading: () => Center(
-        child: CircularProgressIndicator(
-          color: AppColors.textTertiary,
-          strokeWidth: 2,
-        ),
-      ),
+      loading: () => ref.read(searchScopeProvider) == SearchScope.all
+          ? CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator(
+                      color: AppColors.textTertiary, strokeWidth: 2,
+                    )),
+                  ),
+                ),
+                // Online searches should not wait on the local database.
+                if (_onlineSection(_debouncedQuery) case final online?) online,
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+              ],
+            )
+          : Center(
+              child: CircularProgressIndicator(
+                color: AppColors.textTertiary,
+                strokeWidth: 2,
+              ),
+            ),
       error: (e, st) => CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
