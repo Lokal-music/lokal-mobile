@@ -93,6 +93,126 @@ class _ProviderPlaylistTrackBrowserState
     widget.onPlay(queueIndices, shuffle ? 0 : start);
   }
 
+  void _cancelDownload() {
+    final cancel = _cancellation;
+    if (cancel != null && !cancel.isCompleted) {
+      cancel.complete();
+      if (mounted) setState(() => _downloadStatus = 'Cancelling download…');
+    }
+  }
+
+  Future<void> _downloadPlaylist() async {
+    if (_downloading || widget.tracks.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Download playlist?'),
+        content: Text(
+          'Download ${widget.tracks.length} playlist entries to your '
+          'local library using enabled playback sources? '
+          'Songs already saved on this device will be skipped. '
+          'Unavailable recordings may fail. This can use substantial data '
+          'and storage.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || _downloading) return;
+
+    final cancel = Completer<void>();
+    final downloader = const PlaylistUnmatchedDownloader();
+    final link = ParsedPlaylistLink(
+      source: widget.source,
+      remoteId: widget.playlistId,
+      canonicalUrl: widget.source == PlaylistLinkSource.spotify
+          ? 'https://open.spotify.com/playlist/${widget.playlistId}'
+          : 'https://music.youtube.com/playlist?list=${widget.playlistId}',
+    );
+    final library = KonnektedLibraryIndex.of(
+      ref.read(konnektedLibraryProvider).value ?? const <Song>[],
+    );
+    _cancellation = cancel;
+    setState(() {
+      _downloading = true;
+      _downloadStatus = 'Preparing downloads…';
+    });
+    var saved = 0;
+    var skipped = 0;
+    var failed = 0;
+    String? lastError;
+    final downloaded = <String>{};
+    try {
+      for (var i = 0; i < widget.tracks.length; i++) {
+        if (cancel.isCompleted || !mounted) break;
+        final track = widget.tracks[i];
+        final key = '${track.key}:${track.videoId ?? ''}:${track.duration?.inMilliseconds ?? 0}';
+        final existing = library.match(track);
+        final path = existing?.filePath;
+        if (downloaded.contains(key) ||
+            (existing != null &&
+                !existing.isNetworkSource &&
+                !existing.isPending &&
+                path != null &&
+                path.isNotEmpty &&
+                await File(path).exists())) {
+          skipped++;
+          continue;
+        }
+        if (mounted) {
+          setState(() => _downloadStatus =
+              'Downloading ${i + 1}/${widget.tracks.length}: ${track.title}');
+        }
+        try {
+          await downloader.download(
+            link,
+            providerPlaylistDownloadEntry(track, widget.source),
+            cancel: cancel.future,
+            cancelled: () => cancel.isCompleted,
+            onStatus: (message) {
+              if (mounted && !cancel.isCompleted) {
+                setState(() => _downloadStatus =
+                    '${i + 1}/${widget.tracks.length}: $message');
+              }
+            },
+            verifySource: (source) async {
+              if (!mounted || cancel.isCompleted || source.verify == null) {
+                return false;
+              }
+              return source.verify!(context);
+            },
+          );
+          downloaded.add(key);
+          saved++;
+          if (mounted) ref.invalidate(songsProvider);
+        } catch (error) {
+          if (cancel.isCompleted) break;
+          failed++;
+          lastError = error.toString();
+        }
+      }
+    } finally {
+      if (identical(_cancellation, cancel)) _cancellation = null;
+      if (mounted) {
+        final cancelled = cancel.isCompleted;
+        setState(() {
+          _downloading = false;
+          _downloadStatus = 'Downloaded $saved · Skipped $skipped'
+              ' · Failed $failed${cancelled ? ' · Cancelled' : ''}'
+              '${lastError == null ? '' : '\nLast error: $lastError'}';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = providerPlaylistMatchingIndices(widget.tracks, _query);
