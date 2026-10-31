@@ -8,6 +8,7 @@ import 'package:flick/features/spotify/spotify_api.dart';
 import 'package:flick/features/spotify/spotify_models.dart';
 import 'package:flick/features/spotify/spotify_oauth.dart';
 import 'package:flick/features/spotify/spotify_playlist_cache.dart';
+import 'package:flick/features/spotify/provider_playlist_visibility.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/models/song.dart';
@@ -30,6 +31,10 @@ class _SpotifyPlaylistsScreenState
     extends ConsumerState<SpotifyPlaylistsScreen> {
   late final SpotifyWebApi _api;
   final SpotifyPlaylistCache _cache = SpotifyPlaylistCache.instance;
+  final ProviderPlaylistVisibility _visibility = const ProviderPlaylistVisibility();
+  String _account = '';
+  Set<String> _hidden = {};
+  bool _showHidden = false;
   List<SpotifyPlaylist> _playlists = const [];
   bool _loading = true;
   bool _refreshing = false;
@@ -54,7 +59,10 @@ class _SpotifyPlaylistsScreenState
 
   Future<void> _load() async {
     try {
+      final account = await _cache.accountId();
+      final hidden = await _visibility.hidden('spotify', account);
       final cached = await _cache.playlists();
+      if (mounted) setState(() { _account = account; _hidden = hidden; });
       if (!mounted) return;
       if (cached == null) {
         await _refresh();
@@ -99,8 +107,16 @@ class _SpotifyPlaylistsScreenState
     }
   }
 
+  Future<void> _changeHidden(String id, bool hidden) async {
+    final next = await _visibility.setHidden('spotify', _account, id, hidden);
+    if (mounted) setState(() => _hidden = next);
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    final visible = _playlists.where((p) =>
+        _showHidden || !_hidden.contains(p.id)).toList();
+    return Scaffold(
     appBar: AppBar(
       title: const Text('Spotify playlists'),
       actions: [
@@ -111,7 +127,15 @@ class _SpotifyPlaylistsScreenState
         ),
       ],
     ),
-    body: _loading
+    body: Column(children: [
+      if (_hidden.isNotEmpty)
+        SwitchListTile(
+          dense: true,
+          title: Text('Show hidden playlists (${_hidden.length})'),
+          value: _showHidden,
+          onChanged: (value) => setState(() => _showHidden = value),
+        ),
+      Expanded(child: _loading
         ? const Center(child: CircularProgressIndicator())
         : _error != null
             ? Center(child: Padding(
@@ -123,14 +147,16 @@ class _SpotifyPlaylistsScreenState
                       child: const Text('Retry')),
                 ]),
               ))
-            : _playlists.isEmpty
-                ? const Center(child: Text('No saved Spotify playlists.'))
+            : visible.isEmpty
+                ? Center(child: Text(_hidden.isNotEmpty
+                    ? 'All playlists hidden. Show hidden playlists to restore them.'
+                    : 'No saved Spotify playlists.'))
                 : RefreshIndicator(
                     onRefresh: _refresh,
                     child: ListView.builder(
-                      itemCount: _playlists.length,
+                      itemCount: visible.length,
                       itemBuilder: (context, index) {
-                        final playlist = _playlists[index];
+                        final playlist = visible[index];
                         return ListTile(
                           leading: _SpotifyCover(url: playlist.imageUrl),
                           title: Text(playlist.name, maxLines: 1,
@@ -139,7 +165,15 @@ class _SpotifyPlaylistsScreenState
                               ? Text(playlist.owner!, maxLines: 1,
                                   overflow: TextOverflow.ellipsis)
                               : null,
-                          trailing: const Icon(Icons.chevron_right_rounded),
+                          trailing: IconButton(
+                            tooltip: _hidden.contains(playlist.id)
+                                ? 'Show playlist' : 'Hide playlist',
+                            icon: Icon(_hidden.contains(playlist.id)
+                                ? Icons.visibility_rounded
+                                : Icons.visibility_off_outlined),
+                            onPressed: () => unawaited(_changeHidden(playlist.id,
+                                !_hidden.contains(playlist.id))),
+                          ),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => _SpotifyPlaylistDetail(
@@ -151,7 +185,10 @@ class _SpotifyPlaylistsScreenState
                       },
                     ),
                   ),
+      ),
+    ]),
   );
+  }
 }
 
 class _SpotifyCover extends StatelessWidget {
