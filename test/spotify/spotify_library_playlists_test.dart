@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('saved playlists parser includes nested and collaborative playlists', () {
-    final id = 'A' * 22;
-    final id2 = 'B' * 22;
+    final id = List.filled(22, 'A').join();
+    final id2 = List.filled(22, 'B').join();
     final rows = [
       {
         'item': {
