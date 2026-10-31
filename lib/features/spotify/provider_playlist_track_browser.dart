@@ -9,6 +9,8 @@ import 'package:flick/models/song.dart';
 import 'package:flick/providers/songs_provider.dart';
 import 'package:flick/features/konnekted/library/lokal_library_kit.dart';
 import 'package:flick/features/spotify/provider_playlist_track_tile.dart';
+import 'package:flick/widgets/lokal/lokal_choice_sheet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flick/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +30,89 @@ List<int> providerPlaylistMatchingIndices(
               .contains(needle))
         i,
   ];
+}
+
+enum ProviderPlaylistSort {
+  original('Playlist order'),
+  title('Title'),
+  artist('Artist'),
+  album('Album'),
+  duration('Duration');
+
+  const ProviderPlaylistSort(this.label);
+  final String label;
+}
+
+/// Store only how tracks are displayed: never change the original playlist.
+class ProviderPlaylistOrder {
+  const ProviderPlaylistOrder({
+    this.sort = ProviderPlaylistSort.original,
+    this.descending = false,
+  });
+
+  final ProviderPlaylistSort sort;
+  final bool descending;
+
+  String encode() => '${sort.name}:${descending ? 'desc' : 'asc'}';
+
+  static ProviderPlaylistOrder decode(String? saved) {
+    final parts = saved?.split(':');
+    if (parts == null || parts.length != 2 ||
+        (parts[1] != 'asc' && parts[1] != 'desc')) {
+      return const ProviderPlaylistOrder();
+    }
+    for (final sort in ProviderPlaylistSort.values) {
+      if (sort.name == parts[0]) {
+        return ProviderPlaylistOrder(sort: sort, descending: parts[1] == 'desc');
+      }
+    }
+    return const ProviderPlaylistOrder();
+  }
+}
+
+/// Filter, then sort the source indices. Stable ties retain the provider's
+/// original order (including repeated tracks). Missing metadata sorts last.
+List<int> providerPlaylistVisibleIndices(
+  List<LokalDiscoveryTrack> tracks,
+  String query, {
+  ProviderPlaylistSort sort = ProviderPlaylistSort.original,
+  bool descending = false,
+}) {
+  final indices = providerPlaylistMatchingIndices(tracks, query);
+  if (sort == ProviderPlaylistSort.original) {
+    return descending ? indices.reversed.toList(growable: false) : indices;
+  }
+  int compareText(String a, String b) {
+    final left = a.trim().toLowerCase();
+    final right = b.trim().toLowerCase();
+    if (left.isEmpty) return right.isEmpty ? 0 : 1;
+    if (right.isEmpty) return -1;
+    return left.compareTo(right);
+  }
+  indices.sort((a, b) {
+    final left = tracks[a];
+    final right = tracks[b];
+    int comparison;
+    switch (sort) {
+      case ProviderPlaylistSort.original:
+        comparison = a.compareTo(b);
+      case ProviderPlaylistSort.title:
+        comparison = compareText(left.title, right.title);
+      case ProviderPlaylistSort.artist:
+        comparison = compareText(left.artist, right.artist);
+      case ProviderPlaylistSort.album:
+        comparison = compareText(left.album, right.album);
+      case ProviderPlaylistSort.duration:
+        final l = left.duration?.inMilliseconds;
+        final r = right.duration?.inMilliseconds;
+        if (l == null) return r == null ? a.compareTo(b) : 1;
+        if (r == null) return -1;
+        comparison = l.compareTo(r);
+    }
+    return comparison == 0 ? a.compareTo(b)
+        : descending ? -comparison : comparison;
+  });
+  return indices;
 }
 
 RemotePlaylistEntry providerPlaylistDownloadEntry(
@@ -51,6 +136,7 @@ class ProviderPlaylistTrackBrowser extends ConsumerStatefulWidget {
     required this.artworkBuilder,
     required this.source,
     required this.playlistId,
+    required this.accountId,
     required this.onPlay,
     required this.onSongActions,
   });
@@ -59,6 +145,7 @@ class ProviderPlaylistTrackBrowser extends ConsumerStatefulWidget {
   final Widget Function(LokalDiscoveryTrack track) artworkBuilder;
   final PlaylistLinkSource source;
   final String playlistId;
+  final String accountId;
 
   /// [orderedIndices] are original playlist indices in playback queue order.
   /// [startIndex] addresses that queue, not the unfiltered source playlist.
@@ -77,6 +164,87 @@ class _ProviderPlaylistTrackBrowserState
   Completer<void>? _cancellation;
   String? _downloadStatus;
   bool _downloading = false;
+  ProviderPlaylistSort _sort = ProviderPlaylistSort.original;
+  bool _descending = false;
+  bool _orderModified = false;
+  Future<void> _sortWrites = Future<void>.value();
+
+  String get _orderKey => 'lokal.provider_playlist.'
+      '${widget.source.name}.${widget.accountId}.${widget.playlistId}.order.v1';
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restoreOrder());
+  }
+
+  @override
+  void didUpdateWidget(covariant ProviderPlaylistTrackBrowser oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source == widget.source &&
+        oldWidget.accountId == widget.accountId &&
+        oldWidget.playlistId == widget.playlistId) return;
+    _sort = ProviderPlaylistSort.original;
+    _descending = false;
+    _orderModified = false;
+    _query = '';
+    _search.clear();
+    unawaited(_restoreOrder());
+  }
+
+  Future<void> _restoreOrder() async {
+    final key = _orderKey;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = ProviderPlaylistOrder.decode(prefs.getString(key));
+      if (!mounted || _orderKey != key || _orderModified) return;
+      setState(() {
+        _sort = saved.sort;
+        _descending = saved.descending;
+      });
+    } catch (_) {
+      // Storage failure must not prevent browsing the playlist.
+    }
+  }
+
+  void _updateOrder(VoidCallback change) {
+    _orderModified = true;
+    setState(change);
+    final key = _orderKey;
+    final value = ProviderPlaylistOrder(
+      sort: _sort, descending: _descending,
+    ).encode();
+    // Serialize quick sort/direction changes to keep the last choice.
+    _sortWrites = _sortWrites.then((_) async {
+      try {
+        await (await SharedPreferences.getInstance()).setString(key, value);
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _chooseSort() async {
+    final selected = await showLokalChoiceSheet<ProviderPlaylistSort>(
+      context: context,
+      title: 'Sort by',
+      selected: _sort,
+      choices: [
+        for (final option in ProviderPlaylistSort.values)
+          LokalChoice(
+            value: option,
+            label: option.label,
+            icon: switch (option) {
+              ProviderPlaylistSort.original => Icons.format_list_numbered_rounded,
+              ProviderPlaylistSort.title => Icons.sort_by_alpha_rounded,
+              ProviderPlaylistSort.artist => Icons.person_outline_rounded,
+              ProviderPlaylistSort.album => Icons.album_outlined,
+              ProviderPlaylistSort.duration => Icons.timer_outlined,
+            },
+          ),
+      ],
+    );
+    if (selected == null || !mounted) return;
+    _updateOrder(() => _sort = selected);
+  }
 
   @override
   void dispose() {
@@ -215,15 +383,39 @@ class _ProviderPlaylistTrackBrowserState
 
   @override
   Widget build(BuildContext context) {
-    final visible = providerPlaylistMatchingIndices(widget.tracks, _query);
+    final visible = providerPlaylistVisibleIndices(
+      widget.tracks, _query, sort: _sort, descending: _descending,
+    );
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
-          child: LokalSearchField(
-            controller: _search,
-            hint: lokalText('Search songs'),
-            onChanged: (query) => setState(() => _query = query),
+          padding: const EdgeInsets.fromLTRB(20, 12, 8, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: LokalSearchField(
+                  controller: _search,
+                  hint: lokalText('Search songs'),
+                  onChanged: (query) => setState(() => _query = query),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Sort: ${_sort.label}',
+                icon: const Icon(Icons.sort_rounded),
+                onPressed: () => unawaited(_chooseSort()),
+              ),
+              IconButton(
+                tooltip: _descending
+                    ? 'Descending · switch to ascending'
+                    : 'Ascending · switch to descending',
+                icon: Icon(_descending
+                    ? Icons.arrow_downward_rounded
+                    : Icons.arrow_upward_rounded),
+                onPressed: () => _updateOrder(
+                  () => _descending = !_descending,
+                ),
+              ),
+            ],
           ),
         ),
         Padding(
