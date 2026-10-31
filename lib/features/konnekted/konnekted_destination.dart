@@ -49,6 +49,7 @@ final class KonnektedDestination {
   static const queue = KonnektedDestination._('queue');
   static const linkedPlaylists = KonnektedDestination._('linkedPlaylists');
   static const spotifyPlaylists = KonnektedDestination._('spotifyPlaylists');
+  static const youtubeMusicPlaylists = KonnektedDestination._('youtubeMusicPlaylists');
   static const genres = KonnektedDestination._('genres');
   static const downloads = KonnektedDestination._('downloads');
   static const recap = KonnektedDestination._('recap');
@@ -70,6 +71,7 @@ final class KonnektedDestination {
     queue,
     linkedPlaylists,
     spotifyPlaylists,
+    youtubeMusicPlaylists,
     genres,
     downloads,
     recap,
