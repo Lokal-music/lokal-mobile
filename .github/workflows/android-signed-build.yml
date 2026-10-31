@@ -53,12 +53,24 @@ jobs:
         with:
           cache: 'true'
 
-      # Fail before Rust compilation and signing if the Spotify files have
-      # parser/type errors (the previous two stable release attempts did).
-      - name: Preflight Spotify Dart compilation
+      # Catch newly introduced Dart type/import errors before the expensive
+      # Rust/Gradle release build. PR #381 imported a symbol only in the two
+      # provider detail screens, so the old two-file check missed the failure.
+      - name: Preflight provider playlist Dart compilation
         run: |
-          dart analyze --no-fatal-warnings lib/features/spotify/spotify_web_api.dart
-          dart analyze --no-fatal-warnings lib/features/spotify/spotify_playlist_cache.dart
+          set -euo pipefail
+          for source in \
+            lib/features/spotify/spotify_web_api.dart \
+            lib/features/spotify/spotify_playlist_cache.dart \
+            lib/features/spotify/spotify_playlists_screen.dart \
+            lib/features/spotify/provider_playlist_track_browser.dart \
+            lib/features/spotify/provider_playlist_track_tile.dart \
+            lib/features/spotify/provider_playlist_visibility.dart \
+            lib/features/discovery/youtube_music_playlists_screen.dart \
+            lib/features/discovery/youtube_music_playlist_cache.dart; do
+            echo "Analyzing $source"
+            dart analyze --no-fatal-warnings "$source"
+          done
 
       - name: Generate full-bleed CD launcher assets
         run: |
