@@ -197,10 +197,17 @@ class _CachedImageWidgetState extends State<CachedImageWidget> {
       return;
     }
 
-    final resolvedPath = await AlbumArtService.instance.resolveArtworkPath(
-      existingPath: widget.imagePath,
-      audioSourcePath: audioSourcePath,
-    );
+    String? resolvedPath;
+    try {
+      resolvedPath = await AlbumArtService.instance.resolveArtworkPath(
+        existingPath: widget.imagePath,
+        audioSourcePath: audioSourcePath,
+      );
+    } catch (_) {
+      // A disconnected or unauthenticated NAS cover is not a widget error.
+      // Future image attempts may recover when the connection returns.
+      return;
+    }
 
     if (!mounted || audioSourcePath != widget.audioSourcePath) {
       return;
