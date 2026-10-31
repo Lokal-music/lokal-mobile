@@ -69,10 +69,10 @@ void main() {
     final now = DateTime.utc(2026, 10, 31);
     final cache = YoutubeMusicPlaylistCache(now: () => now);
     expect(await cache.autoUpdate, false);
-    expect(await cache.playlists('a' * 24), null);
+    expect(await cache.playlists(List.filled(24, 'a').join()), null);
     await cache.setAutoUpdate(true);
     expect(await cache.autoUpdate, true);
-    expect(await cache.due('a' * 24, 'library'), false);
+    expect(await cache.due(List.filled(24, 'a').join(), 'library'), false);
     const visibility = ProviderPlaylistVisibility();
     const a = 'aaaaaaaaaaaaaaaaaaaaaaaa';
     const b = 'bbbbbbbbbbbbbbbbbbbbbbbb';
