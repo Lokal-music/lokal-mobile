@@ -11,6 +11,7 @@ import 'package:flick/features/spotify/spotify_playlist_cache.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
 import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
 import 'package:flick/features/spotify/provider_playlist_track_browser.dart';
+import 'package:flick/features/playlist_links/playlist_link_models.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/models/song.dart';
@@ -412,6 +413,8 @@ class _SpotifyPlaylistDetailState
                 ? const Center(child: Text('No playable tracks in this playlist.'))
                 : ProviderPlaylistTrackBrowser(
                     tracks: _tracks,
+                    source: PlaylistLinkSource.spotify,
+                    playlistId: widget.playlist.id,
                     artworkBuilder: (track) => _SpotifyCover(url: track.artworkUrl),
                     onPlay: _playOrdered,
                     onSongActions: _songActions,
