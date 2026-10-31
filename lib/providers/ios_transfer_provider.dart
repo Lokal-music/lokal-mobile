@@ -11,12 +11,19 @@ import '../services/ios_transfer_import_store.dart';
 import '../services/ios_transfer_media_probe.dart';
 import '../services/ios_transfer_session.dart';
 import '../services/ios_transfer_transport.dart';
+import '../services/ios_transfer_upload_admission.dart';
 
 IosTransferSession? _createSession() {
   if (kIsWeb || !Platform.isIOS) return null;
   final native = IosTransferTransport();
   return IosTransferSession(
     native: native,
+    uploadAdmission: () async {
+      if (!Database.isInitialized) {
+        throw StateError('Library is not available.');
+      }
+      return IosTransferUploadAdmission(isar: Database.instance, port: native);
+    },
     coordinator: IosTransferImportCoordinator(
       native: native,
       store: () async {

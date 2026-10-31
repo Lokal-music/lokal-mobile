@@ -1493,3 +1493,12 @@ reviewed while open. Its additional direct-buffer JNI writes, PCM16/24 precision
 gates, Android mixer recreation, verified-route diagnostics, volume guidance and
 bit-perfect pitch lock remain specific to that excluded Android USB path. They
 introduce no ordinary iPhone feature to port.
+
+
+The final merged PR371 head `ec590772a356a7a072143b38af5ca2db10ea2153`
+was reviewed on 31 October 2026 (Europe/Paris). Its additional ReplayGain/volume
+locks, SDK34 capability gate and JNI lifetime correction remain Android USB
+specific. The shared AutoMix nullable-Future timeout correction already has an
+equivalent implementation in this iPhone branch (profile and stem preparation).
+No ordinary iPhone feature delta remains from that final revision. No Android
+mixer choice or hardware-protected volume claim is introduced on iPhone.

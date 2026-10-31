@@ -6,6 +6,61 @@ Build120 is a separate foreground-copy checkpoint. The native replacement stays
 disabled until its integration, mapping, upload and OS recovery gates pass.
 Background audio and existing foreground copies continue independently.
 
+## Authorized upload admission (source continuation, 31 October 2026)
+
+`IosTransferSession.enqueueUploadSong` is the product entry point. It requires
+both the qualified import engine and upload capability, then borrows the root
+coordinator's observation and mutation lifetime. Both native product flags are
+still false. Existing foreground copying remains active; no background upload
+option is advertised by this change. Queue presentation is the next integration
+boundary.
+
+`IosTransferUploadAdmission` reads the actual Isar song before source work and
+rechecks its path, metadata, identity and library generation after asynchronous
+steps. The reviewed desktop scope/account must exactly match the native pairing.
+CUE segments, network placeholders and originals outside the app Music directory
+remain on the foreground path. Native context returns both the system path and
+its canonical root, preserving iOS `/var` alias compatibility without resolving
+away user-created source symlinks.
+
+```mermaid
+flowchart LR
+  Consent[Reviewed song and desktop] --> Row[Current Isar row and generation]
+  Row --> Context[Native Music root and pairing context]
+  Context --> Grant[Confined file descriptor and actual SHA256]
+  Grant --> Freeze[Frozen metadata and immutable upload intent]
+  Freeze --> Recheck[Recheck Isar identity and consent]
+  Recheck --> Journal[Durable queued intent]
+  Journal --> Body[Verified private upload body]
+  Body --> POST[Native file-backed POST]
+```
+
+The private channel accepts a relative path during authorization and an opaque
+one-use grant during admission. It accepts no arbitrary absolute source path,
+headers, credentials or caller-chosen durable phase. Native `openat` pins each
+directory and refuses symlinks, multiply-linked/nonregular files, traversal,
+source replacement and root replacement. Grants bind song ID, actual hash/size,
+exact pairing/account and submission epoch. Hashing and private preparation run
+on the file worker with consent/cancellation checks. At most four contexts and
+four combined pending reads/grants exist; contexts expire after five minutes.
+Release, consent retirement, recovery and shutdown retire authority and drain
+source reads. The copied body remains governed by the durable transfer journal.
+Clear Library now includes upload-only scopes in native task retirement.
+
+The caller receives the frozen intent before dispatch, so an ambiguous channel
+reply can be reconciled using that exact ID rather than a new upload request.
+A failed POST still requires positive original-file matching; a miss is not
+permission to resend audio. The adapter releases source authority in `finally`,
+and native expiry/retirement bounds authority if the channel is lost.
+
+Portable acceptance uses actual files/hash/HTTP POST, strict protocol parsing,
+Unicode names, symlink/hardlink/traversal refusal, same-byte file/root replacement
+and retired/released context refusal. App checks use the real native Isar core
+and change/delete metadata while native hashing is held; they assert no upload
+escapes. Typed channel tests cover owner binding and mutation/reply drainage.
+This does not qualify Apple SDK compilation, mixed-direction URLSession delegate
+behavior, suspension/relaunch, desktop exactly-once semantics or a release IPA.
+
 The following sections retain historical implementation and qualification evidence.
 
 Status: native transport, app owner and typed Flutter bridge accepted through

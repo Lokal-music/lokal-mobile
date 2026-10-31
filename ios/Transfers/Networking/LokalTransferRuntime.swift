@@ -87,6 +87,19 @@ struct LokalTransferImportCandidatePage: Encodable, Sendable {
   let nextCursor: String?
 }
 
+struct LokalTransferUploadSourceContext: Encodable, Sendable {
+  let contextID: String
+  let rootPath: String
+  let canonicalRootPath: String
+  let pairing: LokalTransferPairing
+}
+struct LokalTransferUploadSourceGrant: Encodable, Sendable {
+  let grantID: String
+  let songID: String
+  let bytes: Int64
+  let sha256: String
+}
+
 /// One serial native owner survives Flutter lifecycle changes. Networking can
 /// finish before Flutter starts; native events are committed before the system
 /// background completion is acknowledged. Import remains an application task.
@@ -140,6 +153,20 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     let probe: LokalTransferUploadMatchProbe
   }
   private var uploadMatches: [String: UploadMatch] = [:]
+  private struct SourceContext {
+    let value: LokalTransferUploadSourceContext
+    let reader: LokalTransferUploadSourceReader
+    let ticket: LokalTransferImportOwnership.SubmissionTicket
+    let expires: TimeInterval
+  }
+  private struct SourceGrant {
+    let value: LokalTransferUploadSourceGrant
+    let context: SourceContext
+    let file: LokalTransferUploadSourceFile
+  }
+  private var sourceContexts: [String: SourceContext] = [:]
+  private var sourceGrants: [String: SourceGrant] = [:]
+  private var sourceReads: [String: LokalTransferCopyCancellation] = [:]
   private var networkSessionFinished = false
   private var reconciled = false
   private var persistenceFailed = false {
@@ -465,6 +492,8 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     queue.async {
       guard !self.shuttingDown else { reply(.failure(LokalTransferError.invalidTransition)); return }
       self.reconciled = false
+      self.pruneUploadSources()
+      for read in self.sourceReads.values { read.cancel() }
       for match in self.uploadMatches.values { match.probe.cancel() }
       self.session.getAllTasks { actual in
         self.queue.async {
@@ -570,6 +599,124 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     }
   }
 
+  private func pruneUploadSources() {
+    sourceContexts = sourceContexts.filter {
+      $0.value.expires > ProcessInfo.processInfo.systemUptime &&
+        (try? importOwnership.validateSubmission($0.value.ticket)) != nil
+    }
+    sourceGrants = sourceGrants.filter { sourceContexts[$0.value.context.value.contextID] != nil }
+  }
+
+  /// Called after the bridge retires admission consent. A worker barrier closes
+  /// stale grants/reads before a root mutation can discard its source records.
+  func drainUploadSources(_ reply: @escaping LokalTransferCompletion<Bool>) {
+    queue.async {
+      self.pruneUploadSources()
+      for read in self.sourceReads.values { read.cancel() }
+      self.fileQueue.async { self.queue.async { reply(.success(true)) } }
+    }
+  }
+
+  func uploadSourceContext(submission: LokalTransferImportOwnership.SubmissionTicket,
+                           reply: @escaping LokalTransferCompletion<LokalTransferUploadSourceContext>) {
+    queue.async {
+      do {
+        try self.importOwnership.validateSubmission(submission)
+        self.pruneUploadSources()
+        guard self.reconciled, !self.shuttingDown, !self.persistenceFailed,
+              self.sourceContexts.count < 4, let auth = try self.credentials(), auth.pairingID != nil else {
+          throw LokalTransferError.invalidTransition
+        }
+        let root = try self.library().uploadSourceRoot()
+        let reader = try LokalTransferUploadSourceReader(root: root)
+        try self.importOwnership.validateSubmission(submission)
+        let value = LokalTransferUploadSourceContext(contextID: UUID().uuidString.lowercased(), rootPath: root.path, canonicalRootPath: reader.canonicalPath,
+          pairing: LokalTransferPairing(scope: LokalTransferScope(desktopID: auth.desktopID,
+            origin: auth.origin, pairingID: auth.pairingID), desktopUserID: auth.desktopUserID))
+        self.sourceContexts[value.contextID] = SourceContext(value: value, reader: reader,
+          ticket: submission, expires: ProcessInfo.processInfo.systemUptime + 300)
+        self.queue.asyncAfter(deadline: .now() + 301) { [weak self] in self?.pruneUploadSources() }
+        reply(.success(value))
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  func authorizeUploadSource(contextID: String, relativePath: String, songID: String,
+                     submission: LokalTransferImportOwnership.SubmissionTicket,
+                     reply: @escaping LokalTransferCompletion<LokalTransferUploadSourceGrant>) {
+    queue.async {
+      do {
+        self.pruneUploadSources()
+        try self.importOwnership.validateSubmission(submission)
+        guard !self.shuttingDown, !self.persistenceFailed, let numeric = Int64(songID), numeric > 0,
+              String(numeric) == songID, let context = self.sourceContexts[contextID],
+              self.sourceGrants.count + self.sourceReads.count < 4 else { throw LokalTransferError.invalidRecord }
+        try self.importOwnership.validateSubmission(context.ticket)
+        _ = try LokalTransferUploadSourceReader.components(relativePath)
+        let readID = UUID().uuidString.lowercased(), cancellation = LokalTransferCopyCancellation()
+        self.sourceReads[readID] = cancellation
+        self.fileQueue.async {
+          let result: Result<LokalTransferUploadSourceFile, Error> = Result {
+            try LokalTransferUploadSourceFile(reader: context.reader, relativePath: relativePath) {
+              try cancellation.check()
+              try self.importOwnership.validateSubmission(context.ticket)
+              try self.importOwnership.validateSubmission(submission)
+            }
+          }
+          self.queue.async {
+            self.sourceReads.removeValue(forKey: readID)
+            do {
+              let file = try result.get()
+              self.pruneUploadSources()
+              try self.importOwnership.validateSubmission(submission)
+              try self.importOwnership.validateSubmission(context.ticket)
+              guard self.sourceContexts[contextID] != nil else { throw LokalTransferError.staleRevision }
+              let value = LokalTransferUploadSourceGrant(grantID: UUID().uuidString.lowercased(), songID: songID,
+                bytes: file.receipt.bytes, sha256: file.receipt.sha256)
+              self.sourceGrants[value.grantID] = SourceGrant(value: value, context: context, file: file)
+              reply(.success(value))
+            } catch { reply(.failure(error)) }
+          }
+        }
+      } catch { reply(.failure(error)) }
+    }
+  }
+
+  func releaseUploadSource(_ id: String, reply: @escaping LokalTransferCompletion<Bool>) {
+    queue.async {
+      self.sourceGrants.removeValue(forKey: id); self.sourceContexts.removeValue(forKey: id)
+      self.pruneUploadSources()
+      reply(.success(true))
+    }
+  }
+
+  func enqueueAuthorizedUpload(_ job: LokalTransferJob, grantID: String?,
+                     submission: LokalTransferImportOwnership.SubmissionTicket,
+                     reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
+    queue.async {
+      do {
+        self.pruneUploadSources()
+        try self.importOwnership.validateSubmission(submission)
+        if let grantID {
+          guard let grant = self.sourceGrants[grantID], job.identity.localSongID == grant.value.songID,
+                job.expectedBytes == grant.value.bytes, job.expectedSHA256 == grant.value.sha256,
+                self.scope(job) == grant.context.value.pairing.scope,
+                job.identity.desktopUserID == grant.context.value.pairing.desktopUserID else {
+            throw LokalTransferError.invalidRecord
+          }
+          try self.importOwnership.validateSubmission(grant.context.ticket)
+          try grant.file.validate()
+          self.sourceGrants.removeValue(forKey: grantID)
+          self.enqueueUpload(job, source: grant.file.descriptor, submission: submission,
+            validateSource: { try grant.file.validate() }, reply: reply)
+        } else {
+          // Read-only replay or recovery of an already-owned snapshot only.
+          self.enqueueUpload(job, submission: submission, reply: reply)
+        }
+      } catch { reply(.failure(error)) }
+    }
+  }
+
   /// Native-only admission: caller supplies already-authorized source access
   /// and consent captured before dispatch. A nil source recovers an existing
   /// verified private snapshot; it can never manufacture bytes or consent.
@@ -577,6 +724,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
   /// this path under a new revision or a fresh UUID for the same recording.
   func enqueueUpload(_ requested: LokalTransferJob, source: Int32? = nil,
                      submission: LokalTransferImportOwnership.SubmissionTicket,
+                     validateSource: @escaping @Sendable () throws -> Void = {},
                      reply: @escaping LokalTransferCompletion<LokalTransferSummary>) {
     let owned = source.map { fcntl($0, F_DUPFD_CLOEXEC, 0) } ?? -1
     if source != nil && owned < 0 {
@@ -593,6 +741,7 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
               self.preparingUploads[requested.id] == nil, self.unknownTasks.isEmpty,
               !self.tasks.values.contains(where: { LokalTransferTaskBinding($0.taskDescription)?.id == requested.id }) else { throw LokalTransferError.limitExceeded }
         guard owned >= 0 || self.jobs[requested.id] != nil else { throw LokalTransferError.unsafeFile }
+        try validateSource()
         try self.files.canPrepareUpload(requested, source: owned, requireAbsent: self.jobs[requested.id] == nil)
         try self.importOwnership.validateSubmission(submission)
         if self.jobs[requested.id] == nil {
@@ -617,10 +766,12 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
             _ = try self.files.stageUpload(from: owned, for: requested) {
               try self.importOwnership.validateSubmission(submission)
               try cancellation.check()
+              try validateSource()
             }
             return try self.files.uploadURL(requested) {
               try self.importOwnership.validateSubmission(submission)
               try cancellation.check()
+              try validateSource()
             }
           }
           self.queue.async {
@@ -1051,6 +1202,8 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
       self.shutdownReplies.append(reply)
       guard !self.shuttingDown else { return }
       self.shuttingDown = true
+      self.sourceGrants.removeAll(); self.sourceContexts.removeAll()
+      for read in self.sourceReads.values { read.cancel() }
       self.observer = nil
       self.failNetworkRetirements(LokalTransferError.invalidTransition)
       for cancellation in self.uploadPreparationCancellation.values { cancellation.cancel() }
@@ -1061,6 +1214,8 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
 
   func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
     shuttingDown = true
+    sourceGrants.removeAll(); sourceContexts.removeAll()
+    for read in sourceReads.values { read.cancel() }
     for cancellation in uploadPreparationCancellation.values { cancellation.cancel() }
     for match in uploadMatches.values { match.probe.cancel() }
     self.session = nil
@@ -1116,6 +1271,9 @@ class LokalTransferRuntime: NSObject, URLSessionDownloadDelegate, @unchecked Sen
           throw LokalTransferError.invalidTransition
         }
         try self.importOwnership.validateRetirement(ticket, scope: scope)
+        self.pruneUploadSources()
+        self.sourceGrants = self.sourceGrants.filter { $0.value.context.value.pairing.scope != scope }
+        self.sourceContexts = self.sourceContexts.filter { $0.value.value.pairing.scope != scope }
         let changes = try self.journal.retireNetworkScope(scope, nowMs: Self.now(), retirePairing: retirePairing)
         for change in changes {
           self.importOwnership.revoke(jobID: change.previous.id, revision: change.previous.revision)
