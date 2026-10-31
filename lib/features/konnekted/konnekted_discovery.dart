@@ -1675,7 +1675,10 @@ class OnlineAddonCooldown {
     final reason = _onlineFailureKind(error);
     if (reason != 'timeout' && reason != 'network' &&
         !{'http_502', 'http_503', 'http_504'}.contains(reason)) {
-      return; // 401/403, invalid settings and explicit tier errors need action.
+      // Auth/verification and other non-transport errors are not part of a
+      // consecutive outage: clear an older failure record.
+      _failures.remove(sourceId);
+      return;
     }
     final time = now ?? DateTime.now();
     final previous = _failures[sourceId];
@@ -2016,6 +2019,10 @@ Future<Song?> findDiscoverySong(
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();
+    final hasUnblockedSource = sources.any(
+      (source) => !_autoHttpAddonCooldown.shouldSkip(source.id),
+    );
+    var attemptedCooledSource = false;
     // Search the next few HTTP add-ons concurrently once automatic fallback
     // reaches them. Streaming is still selected in user priority order:
     // slower failed searches no longer add separate multi-second waits.
@@ -2035,15 +2042,18 @@ Future<Song?> findDiscoverySong(
     }
     for (final source in sources) {
       check();
-      // Do not skip the only configured provider, and never apply cooldown
-      // to an explicit source selection. Other healthy sources stay usable.
-      if (sources.length > 1 &&
-          _autoHttpAddonCooldown.shouldSkip(source.id)) {
-        AppLog.instance.add(
-          '[OnlineSource] automatic fallback skipped temporarily unhealthy '
-          'source=${source.id}',
-        );
-        continue;
+      // Never skip every configured source. If all HTTP add-ons are cooling
+      // down, probe the first one for recovery rather than leaving the queue
+      // silent; avoid wasting more time on the remaining cooled-down sources.
+      if (_autoHttpAddonCooldown.shouldSkip(source.id)) {
+        if (hasUnblockedSource || attemptedCooledSource) {
+          AppLog.instance.add(
+            '[OnlineSource] automatic fallback skipped temporarily unhealthy '
+            'source=${source.id}',
+          );
+          continue;
+        }
+        attemptedCooledSource = true;
       }
       if (source.needsVerification?.call() == true) {
         // Preloads must not open an auth popup over an unrelated screen.
