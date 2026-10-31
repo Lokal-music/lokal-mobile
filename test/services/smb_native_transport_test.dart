@@ -6,9 +6,11 @@ import 'package:flick/services/sources/smb_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Session implements NativeSmbSession {
-  _Session({this.error});
+  _Session({this.error, this.readBytes});
   final Object? error;
+  final List<int>? readBytes;
   String? listed;
+  String? readPath;
   bool closed = false;
 
   @override
@@ -21,7 +23,10 @@ class _Session implements NativeSmbSession {
   }
 
   @override
-  Future<List<int>> read(String path) async => [1, 2, 3];
+  Future<List<int>> read(String path) async {
+    readPath = path;
+    return readBytes ?? [1, 2, 3];
+  }
 
   @override
   Future<void> download(
@@ -91,6 +96,61 @@ void main() {
     expect(await service.ping(_server()), isTrue);
     expect(session.listed, 'Music');
     expect(session.closed, isTrue);
+  });
+
+  test('SMB embedded FLAC artwork is read through a closed native session',
+      () async {
+    final image = <int>[0xff, 0xd8, 0xff, 0xe0, 1, 2, 3];
+    List<int> u32(int n) => [
+      (n >> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255,
+    ];
+    final mime = utf8.encode('image/jpeg');
+    final picture = [
+      ...u32(3), ...u32(mime.length), ...mime,
+      ...u32(0), ...u32(400), ...u32(400), ...u32(24), ...u32(0),
+      ...u32(image.length), ...image,
+    ];
+    final data = [
+      ...utf8.encode('fLaC'),
+      0x86, 0, 0, picture.length, ...picture,
+    ];
+    final session = _Session(readBytes: data);
+    final service = SmbService.create(
+      connector: ({
+        required host,
+        required port,
+        required share,
+        required username,
+        required password,
+      }) async => session,
+    );
+
+    final result =
+        await service.getEmbeddedCoverArt(_server(), 'Music/Album/01.flac');
+    expect(result, image);
+    expect(session.readPath, 'Music/Album/01.flac');
+    expect(session.closed, isTrue);
+  });
+
+  test('SMB does not connect for unsupported embedded-cover formats', () async {
+    var connected = false;
+    final service = SmbService.create(
+      connector: ({
+        required host,
+        required port,
+        required share,
+        required username,
+        required password,
+      }) async {
+        connected = true;
+        return _Session();
+      },
+    );
+    expect(
+      await service.getEmbeddedCoverArt(_server(), 'Music/Album/01.wav'),
+      isEmpty,
+    );
+    expect(connected, isFalse);
   });
 
   test('a failed NAS listing closes the SMB native session', () async {
