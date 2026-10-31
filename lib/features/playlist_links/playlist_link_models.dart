@@ -52,9 +52,13 @@ class RemotePlaylistEntry {
     this.remoteId,
   });
 
-  // IDs are scoped to the linked provider. Entries without IDs use their
-  // complete metadata so unrelated recordings cannot share a saved match.
-  String get identity => remoteId != null && remoteId!.isNotEmpty
+  // Retain the same conservative identity used when attaching a download.
+  String get identityKey => jsonEncode(remoteId == null
+      ? [null, title, artist, album]
+      : [remoteId, title, artist]);
+
+  // Read mappings written by the other branch before the merge.
+  String get legacyIdentityKey => remoteId != null && remoteId!.isNotEmpty
       ? jsonEncode([remoteId])
       : jsonEncode([title, artist, album, duration?.inMilliseconds]);
 
@@ -138,9 +142,9 @@ class PlaylistLinkRecord {
   final String? thumbnailUrl;
   final List<String> managedSongIds;
   final List<RemotePlaylistEntry> unmatchedEntries;
+  final List<RemotePlaylistEntry> remoteEntries;
+  final Map<String, String> resolvedSongIds;
   final Map<String, String> downloadedSongIds;
-  final List<RemotePlaylistEntry> remoteOrder;
-  final Map<String, String> orderedSongIds;
   final int remoteEntryCount;
   final int fetchedEntryCount;
   final int duplicateMatches;
@@ -160,9 +164,9 @@ class PlaylistLinkRecord {
     this.thumbnailUrl,
     this.managedSongIds = const [],
     this.unmatchedEntries = const [],
+    this.remoteEntries = const [],
+    this.resolvedSongIds = const {},
     this.downloadedSongIds = const {},
-    this.remoteOrder = const [],
-    this.orderedSongIds = const {},
     required this.remoteEntryCount,
     required this.fetchedEntryCount,
     required this.duplicateMatches,
@@ -185,9 +189,9 @@ class PlaylistLinkRecord {
     'thumbnailUrl': thumbnailUrl,
     'managedSongIds': managedSongIds,
     'unmatchedEntries': unmatchedEntries.map((e) => e.toJson()).toList(),
+    'remoteEntries': remoteEntries.map((e) => e.toJson()).toList(),
+    'resolvedSongIds': resolvedSongIds,
     'downloadedSongIds': downloadedSongIds,
-    'remoteOrder': remoteOrder.map((e) => e.toJson()).toList(),
-    'orderedSongIds': orderedSongIds,
     'remoteEntryCount': remoteEntryCount,
     'fetchedEntryCount': fetchedEntryCount,
     'duplicateMatches': duplicateMatches,
@@ -229,12 +233,9 @@ class PlaylistLinkRecord {
                 )
                 .toList()
           : const [],
-      downloadedSongIds: _stringMap(json['downloadedSongIds']),
-      orderedSongIds: _stringMap(json['orderedSongIds']),
-      remoteOrder: (json['remoteOrder'] as List<dynamic>? ?? const [])
-          .whereType<Map>()
-          .map((item) => RemotePlaylistEntry.fromJson(Map<String, dynamic>.from(item)))
-          .toList(),
+      remoteEntries: _entriesFromJson(json['remoteEntries'] ?? json['remoteOrder']),
+      resolvedSongIds: _idsFromJson(json['resolvedSongIds'] ?? json['orderedSongIds']),
+      downloadedSongIds: _idsFromJson(json['downloadedSongIds']),
       remoteEntryCount: (json['remoteEntryCount'] as num?)?.toInt() ?? 0,
       fetchedEntryCount: (json['fetchedEntryCount'] as num?)?.toInt() ?? 0,
       duplicateMatches: (json['duplicateMatches'] as num?)?.toInt() ?? 0,
@@ -253,9 +254,9 @@ class PlaylistLinkRecord {
     String? thumbnailUrl,
     List<String>? managedSongIds,
     List<RemotePlaylistEntry>? unmatchedEntries,
+    List<RemotePlaylistEntry>? remoteEntries,
+    Map<String, String>? resolvedSongIds,
     Map<String, String>? downloadedSongIds,
-    List<RemotePlaylistEntry>? remoteOrder,
-    Map<String, String>? orderedSongIds,
     int? remoteEntryCount,
     int? fetchedEntryCount,
     int? duplicateMatches,
@@ -275,9 +276,9 @@ class PlaylistLinkRecord {
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       managedSongIds: managedSongIds ?? this.managedSongIds,
       unmatchedEntries: unmatchedEntries ?? this.unmatchedEntries,
+      remoteEntries: remoteEntries ?? this.remoteEntries,
+      resolvedSongIds: resolvedSongIds ?? this.resolvedSongIds,
       downloadedSongIds: downloadedSongIds ?? this.downloadedSongIds,
-      remoteOrder: remoteOrder ?? this.remoteOrder,
-      orderedSongIds: orderedSongIds ?? this.orderedSongIds,
       remoteEntryCount: remoteEntryCount ?? this.remoteEntryCount,
       fetchedEntryCount: fetchedEntryCount ?? this.fetchedEntryCount,
       duplicateMatches: duplicateMatches ?? this.duplicateMatches,
@@ -287,9 +288,16 @@ class PlaylistLinkRecord {
     );
   }
 
-  static Map<String, String> _stringMap(Object? value) => value is Map
-      ? {for (final e in value.entries) if (e.key is String && e.value is String) e.key as String: e.value as String}
-      : {};
+  static List<RemotePlaylistEntry> _entriesFromJson(Object? value) =>
+      value is List
+          ? value.whereType<Map>().map((item) => RemotePlaylistEntry.fromJson(
+              Map<String, dynamic>.from(item))).toList()
+          : const [];
+
+  static Map<String, String> _idsFromJson(Object? value) => value is Map
+      ? Map.fromEntries(value.entries.where((e) => e.key is String && e.value is String)
+          .map((e) => MapEntry(e.key as String, e.value as String)))
+      : const {};
 
   static DateTime? _parseDate(Object? value) =>
       value is String ? DateTime.tryParse(value) : null;

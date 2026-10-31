@@ -371,10 +371,10 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
     try {
       await _run(() async {
         var saved = 0;
+        final resolvedEntries = <String>{};
         var skipped = 0;
         var failed = 0;
         String? lastError;
-        final resolved = <String>{};
         final downloader = PlaylistUnmatchedDownloader();
         final link = ParsedPlaylistLink(
           source: record.source,
@@ -384,7 +384,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
         for (var i = 0; i < entries.length; i++) {
           if (cancel.isCompleted || !mounted) break;
           final entry = entries[i];
-          if (resolved.contains(entry.identity)) continue;
+          if (resolvedEntries.contains(entry.identityKey)) continue;
           setState(() => _downloadStatus =
               'Downloading ${i + 1}/${entries.length}: ${entry.title}');
           try {
@@ -408,7 +408,7 @@ class _LinkedPlaylistsScreenState extends ConsumerState<LinkedPlaylistsScreen> {
               entry,
               savedPath: result.path,
             );
-            resolved.add(entry.identity);
+            resolvedEntries.add(entry.identityKey);
             saved++;
             if (!mounted) break;
             ref.invalidate(playlistsProvider);

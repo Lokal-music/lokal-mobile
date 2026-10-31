@@ -7,8 +7,9 @@ class PlaylistLinkMatcher {
   PlaylistLinkMatchReport match(
     List<RemotePlaylistEntry> entries,
     List<Song> songs, {
-    Map<String, String> downloadedSongIds = const {},
+    Map<String, String> resolvedSongIds = const {},
   }) {
+    final byId = {for (final song in songs) song.id: song};
     final byKey = <String, List<Song>>{};
     for (final song in songs) {
       final title = normalize(song.title);
@@ -17,22 +18,12 @@ class PlaylistLinkMatcher {
       byKey.putIfAbsent('$title\u0000$artist', () => []).add(song);
     }
 
-    final songsById = {for (final song in songs) song.id: song};
     final matches = <PlaylistLinkMatch>[];
     final unmatched = <RemotePlaylistEntry>[];
     final usedSongIds = <String>{};
     var duplicateMatches = 0;
 
     for (final entry in entries) {
-      final savedSong = songsById[downloadedSongIds[entry.identity]];
-      if (savedSong != null) {
-        if (usedSongIds.add(savedSong.id)) {
-          matches.add(PlaylistLinkMatch(remoteEntry: entry, song: savedSong));
-        } else {
-          duplicateMatches++;
-        }
-        continue;
-      }
       final key = '${normalize(entry.title)}\u0000${normalize(entry.artist)}';
       final candidates = byKey[key].orEmpty;
       final constrained = candidates.where((song) {
@@ -53,11 +44,13 @@ class PlaylistLinkMatcher {
 
       // A playlist link may not choose a search result merely because it was
       // first. Duplicate library metadata is ambiguous and stays unmatched.
-      if (constrained.length != 1) {
+      final verified = byId[resolvedSongIds[entry.identityKey] ??
+          resolvedSongIds[entry.legacyIdentityKey]];
+      if (verified == null && constrained.length != 1) {
         unmatched.add(entry);
         continue;
       }
-      final song = constrained.single;
+      final song = verified ?? constrained.single;
       if (!usedSongIds.add(song.id)) {
         duplicateMatches += 1;
         continue;

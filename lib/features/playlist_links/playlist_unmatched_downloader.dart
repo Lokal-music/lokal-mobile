@@ -84,6 +84,7 @@ class PlaylistUnmatchedDownloader {
           );
           if (found != null) return (sourceId: source.id, track: found);
         } catch (error, stack) {
+          // Another source can still provide the verified recording.
           searchError ??= error;
           searchStack ??= stack;
         }
