@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'lokal_interaction.dart';
 import 'lokal_tokens.dart';
 
 /// Builds the app's [ThemeData] from Lokal tokens.
@@ -80,6 +81,33 @@ abstract final class LokalTheme {
         trackColor: WidgetStateProperty.resolveWith(
           (states) =>
               states.contains(WidgetState.selected) ? t.accent : t.surface3,
+        ),
+      ),
+      // Shared control geometry: soft pill actions and tactile overlays, while
+      // individual primary/player controls may override their silhouette.
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 44),
+          foregroundColor: t.text,
+          side: BorderSide(color: t.border2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          highlightColor: t.accent.withValues(alpha: .14),
+          hoverColor: t.accent.withValues(alpha: .08),
         ),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
@@ -189,18 +217,18 @@ class _LokalPageTransitionsBuilder extends PageTransitionsBuilder {
     if (MediaQuery.disableAnimationsOf(context)) return child;
     final progress = CurvedAnimation(
       parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
+      curve: const Cubic(.18, .82, .22, 1),
+      reverseCurve: Curves.easeInOutCubic,
     );
     return FadeTransition(
       opacity: progress,
       child: SlideTransition(
         position: Tween<Offset>(
-          begin: const Offset(0, .018),
+          begin: const Offset(.065, .015),
           end: Offset.zero,
         ).animate(progress),
         child: ScaleTransition(
-          scale: Tween<double>(begin: .985, end: 1).animate(progress),
+          scale: Tween<double>(begin: LokalMotion.enterScale, end: 1).animate(progress),
           child: child,
         ),
       ),
