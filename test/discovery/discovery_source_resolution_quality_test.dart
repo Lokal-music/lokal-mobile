@@ -75,6 +75,22 @@ void main() {
     expect(LokalQualityTier.of(song), LokalQualityTier.hiRes);
   });
 
+  test('sparse nested audio does not mask Tidal metadata bitrate', () {
+    final addon = DiscoveryAddon(
+      DiscoveryHttp(MockClient((_) async => throw StateError('no network'))),
+      endpoint: 'https://tidal.example.com',
+    );
+    final audio = addon.parseStream({
+      'url': 'https://cdn.example.com/opaque?signature=hidden',
+      'audio': {'url': 'https://cdn.example.com/opaque'},
+      'metadata': {'codec': 'AAC', 'bitrate': 320},
+      'audioMetadata': {'sampleRate': 48000},
+    });
+    expect(audio.codec, 'AAC');
+    expect(audio.bitrate, 320000);
+    expect(audio.sampleRate, 48000);
+  });
+
   test('HTTP Tidal lossy bitrate labels come from exact stream, not catalogue', () {
     final addon = DiscoveryAddon(
       DiscoveryHttp(MockClient((_) async => throw StateError('no network'))),
@@ -297,6 +313,26 @@ void main() {
     await Future.wait([prepared['w-0']!, prepared['w-1']!]);
   });
 
+  test('three failed queries count as one unsuccessful source attempt', () async {
+    final failures = <Object>[];
+    final source = OnlineSource(
+      id: 'w-failing', name: 'HTTP failure',
+      results: (_) async => throw const DiscoveryException(
+        'The source timed out. Try again.',
+      ),
+      play: (_) async => throw UnimplementedError(),
+    );
+    final matched = await findDiscoverySourceMatch(
+      source: source,
+      candidate: const RecommendationCandidate(title: 'Song', artist: 'Artist'),
+      queries: ['one', 'two', 'three'],
+      hedgeDelay: Duration.zero,
+      onNoMatchError: failures.add,
+    );
+    expect(matched, isNull);
+    expect(failures, hasLength(1));
+  });
+
   test('Discovery starts two fallback searches concurrently', () async {
     final second = Completer<List<OnlineResult>>();
     final third = Completer<List<OnlineResult>>();
@@ -326,6 +362,33 @@ void main() {
     ))]);
     second.complete(const []);
     expect((await searching)?.id, '3');
+  });
+
+  test('a successful match ignores a late failing alternate', () async {
+    final earlier = Completer<List<OnlineResult>>();
+    final failures = <Object>[];
+    final source = OnlineSource(
+      id: 'w-provider', name: 'HTTP',
+      results: (query) {
+        if (query == 'primary') return earlier.future;
+        return Future.value([const OnlineResult(DiscoveryTrack(
+          id: 'match', title: 'Song', artist: 'Artist',
+          source: DiscoverySource.addon,
+        ))]);
+      },
+      play: (_) async => throw UnimplementedError(),
+    );
+    final future = findDiscoverySourceMatch(
+      source: source,
+      candidate: const RecommendationCandidate(title: 'Song', artist: 'Artist'),
+      queries: ['primary', 'alternate'],
+      hedgeDelay: Duration.zero,
+      onNoMatchError: failures.add,
+    );
+    expect((await future)?.id, 'match');
+    earlier.completeError(const DiscoveryException('The source timed out.'));
+    await Future<void>.delayed(Duration.zero);
+    expect(failures, isEmpty);
   });
 
   test('slow HTTP primary search does not block a matching alternate', () async {
