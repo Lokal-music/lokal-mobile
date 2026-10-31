@@ -37,4 +37,10 @@ class ProviderPlaylistVisibility {
     await prefs.setString(key, jsonEncode(ids.toList()));
     return ids;
   }
+
+  Future<void> clear(String provider, String account) async {
+    final key = _key(provider, account);
+    if (key == null) return;
+    await (await SharedPreferences.getInstance()).remove(key);
+  }
 }

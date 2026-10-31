@@ -1399,144 +1399,17 @@ class YoutubeMusicAccount {
   /// Read a finite library playlist in order, including available continuation
   /// pages. This does not affect Discovery's independent in-memory mix cache.
   Future<List<LokalDiscoveryTrack>> libraryPlaylistTracks(String id) async {
-    if (!RegExp(r'^[A-Za-z0-9_.-]{1,120}
-    final root = id.startsWith('RD')
-        ? await request('next', {
-            'playlistId': id,
-            'enablePersistentPlaylistPanel': true,
-            'isAudioOnly': true,
-            'tunerSettingValue': 'AUTOMIX_SETTING_NORMAL',
-          })
-        : await browse('VL' + id);
-    return parseYoutubeMusicTracks(root, limit: 500);
-  }
-}
-
-String _message(Object error) => switch (error) {
-  YoutubeMusicSignedOut(:final message) => message,
-  LokalDiscoveryFailure(:final message) => message,
-  TimeoutException() => 'YouTube Music took too long to answer.',
-  _ => 'YouTube Music couldn’t be reached. Check your connection.',
-};
-
-class _Cached {
-  const _Cached(this.at, this.data);
-  final DateTime at;
-  final YoutubeMusicAccountData data;
-}
-
-final _cache = <String, _Cached>{};
-final _playlistCache = <String, List<LokalDiscoveryTrack>>{};
-
-void forgetYoutubeMusicAccount() {
-  _cache.clear();
-  _playlistCache.clear();
-}
-
-Future<LokalDiscovery> loadYoutubeMusicDiscovery(
-  YoutubeMusicAccount account, {
-  int page = 0,
-  bool force = false,
-  DateTime? now,
-}) async {
-  final at = now ?? DateTime.now();
-  final key = account.session.accountKey;
-  final cached = _cache[key];
-  final YoutubeMusicAccountData data;
-  if (!force &&
-      cached != null &&
-      !at.isBefore(cached.at) &&
-      at.difference(cached.at) < const Duration(minutes: 5)) {
-    data = cached.data;
-  } else {
-    if (force) _playlistCache.removeWhere((id, _) => id.startsWith('$key:'));
-    data = await account.fetch().timeout(const Duration(seconds: 35));
-    _cache.remove(key);
-    if (data.homeError == null &&
-        data.mixError == null &&
-        data.mixes.isNotEmpty) {
-      _cache[key] = _Cached(at, data);
-    }
-    while (_cache.length > 4) {
-      _cache.remove(_cache.keys.first);
-    }
-  }
-
-  final warnings = <String>[];
-  final picks = <LokalDiscoveryTrack>[];
-  final playlists = data.homePlaylists;
-  if (playlists.isNotEmpty) {
-    final start = (page * 2) % playlists.length;
-    final selected = <LokalDiscoveryMix>{
-      playlists[start],
-      playlists[(start + 1) % playlists.length],
-    };
-    final picked = await Future.wait(
-      selected.map((mix) async {
-        final cacheKey = key + ':' + mix.id;
-        try {
-          return _playlistCache[cacheKey] ??= await account
-              .playlist(mix.id)
-              .timeout(const Duration(seconds: 4));
-        } on YoutubeMusicSignedOut {
-          rethrow;
-        } catch (error) {
-          warnings.add(mix.title + ': ' + _message(error));
-          return <LokalDiscoveryTrack>[];
-        }
-      }),
-    );
-    picks.addAll(picked.expand((tracks) => tracks));
-  }
-  final seen = <String>{};
-  final candidates = [
-    for (final track in [...data.home, ...picks])
-      if (track.title.isNotEmpty &&
-          track.artist.isNotEmpty &&
-          seen.add(track.key))
-        track,
-  ];
-  final artists = <String, LokalDiscoveryArtist>{
-    for (final artist in data.artists) artist.name.toLowerCase(): artist,
-  };
-  for (final track in candidates) {
-    if (artists.length >= 30) break;
-    final name = track.artist.trim();
-    if (name.isNotEmpty) {
-      artists.putIfAbsent(
-        name.toLowerCase(),
-        () => LokalDiscoveryArtist(name: name),
-      );
-    }
-  }
-  if (data.homeError != null) warnings.add(data.homeError!);
-  return LokalDiscovery(
-    account: key,
-    page: page,
-    warnings: warnings,
-    mixes: data.mixes,
-    mixError: data.mixError,
-    categories: data.categories,
-    liked: data.liked?.take(30).toList(),
-    history: data.history,
-    artists: artists.values.take(30).toList(),
-    freshFinds: candidates.take(30).toList(),
-    candidates: candidates,
-  );
-}
-
-Future<List<LokalDiscoveryTrack>> youtubeMusicMix(
-  YoutubeMusicAccount account,
-  String id,
-) async => _playlistCache[account.session.accountKey + ':' + id] ??=
-    await account.playlist(id);
-).hasMatch(id) ||
+    if (!RegExp(r'^[A-Za-z0-9_.-]{1,120}$').hasMatch(id) ||
         id.startsWith('RD')) {
       throw const LokalDiscoveryFailure('Invalid YouTube Music playlist.');
     }
     final first = await browse('VL$id');
     final pages = await _pages(
-      'VL$id', first, types: _mixContinuationTypes,
+      'VL$id', first, types: {
+        ..._mixContinuationTypes,
+        'musicPlaylistShelfRenderer',
+        'musicPlaylistShelfContinuation',
+      },
       pageBudget: const Duration(seconds: 60), maxPages: 100,
     );
     if (pages.error != null) {

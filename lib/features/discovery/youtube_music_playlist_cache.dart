@@ -17,12 +17,21 @@ class YoutubeMusicPlaylistCache {
   static const updateInterval = Duration(hours: 24);
   static const failureRetry = Duration(hours: 1);
   static const autoUpdateKey = 'lokal.youtube.playlists.auto_update.v1';
+  static const _cachePrefix = 'lokal.youtube.playlists.cache.v1.';
   final Future<SharedPreferences> Function() _prefs;
   final DateTime Function() _now;
   final Map<String, Map<String, dynamic>> _memory = {};
 
   String _key(String accountId, String resource) =>
-      'lokal.youtube.playlists.cache.v1.$accountId.$resource';
+      '$_cachePrefix$accountId.$resource';
+
+  Future<void> clearAll() async {
+    _memory.clear();
+    final prefs = await _prefs();
+    for (final key in prefs.getKeys().where((key) => key.startsWith(_cachePrefix))) {
+      await prefs.remove(key);
+    }
+  }
 
   Future<Map<String, dynamic>?> _read(String accountId, String resource) async {
     final key = _key(accountId, resource);

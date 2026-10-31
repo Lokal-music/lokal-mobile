@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flick/features/discovery/lastfm_discovery.dart';
 import 'package:flick/features/discovery/youtube_music_account.dart';
 import 'package:flick/features/discovery/youtube_music_playlist_cache.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
@@ -32,6 +33,7 @@ Map<String, dynamic> answer(Map<String, Object?> data) => {
 };
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test('YouTube Music saved playlist library pages, not the Home mixes', () async {
@@ -82,4 +84,71 @@ void main() {
     expect(await visibility.hidden('spotify', a), isEmpty);
     expect(await visibility.setHidden('youtube', a, 'PLfirst', false), isEmpty);
   });
+
+  test('library tracks reject invalid IDs and paginate valid playlists', () async {
+    final requests = <Map>[];
+    Map<String, Object?> track(String videoId, String title) => {
+      'musicResponsiveListItemRenderer': {
+        'playlistItemData': {'videoId': videoId},
+        'flexColumns': [
+          {'musicResponsiveListItemFlexColumnRenderer': {'text': {'runs': [
+            {'text': title, 'navigationEndpoint': {'watchEndpoint': {'videoId': videoId}}},
+          ]}}},
+          {'musicResponsiveListItemFlexColumnRenderer': {'text': {'runs': [
+            {'text': 'Artist'},
+          ]}}},
+        ],
+      },
+    };
+    final client = MockClient((request) async {
+      final body = jsonDecode(request.body) as Map;
+      requests.add(body);
+      final next = body['continuation'] != null;
+      return http.Response(jsonEncode(answer({
+        'musicPlaylistShelfRenderer': {
+          'contents': next
+              ? [track('abcdefghijk', 'First'), track('lmnopqrstuv', 'Second')]
+              : [track('abcdefghijk', 'First')],
+          if (!next) 'continuations': [
+            {'nextContinuationData': {'continuation': 'next-page'}},
+          ],
+        },
+      })), 200);
+    });
+    addTearDown(client.close);
+    final account = YoutubeMusicAccount(client,
+        const YoutubeMusicSession(cookies: {'SAPISID': 'fake-test-cookie'}));
+    for (final id in ['RDpersonal', '', 'PL/invalid', List.filled(121, 'x').join()]) {
+      await expectLater(account.libraryPlaylistTracks(id), throwsA(isA<LokalDiscoveryFailure>()));
+    }
+    expect(requests, isEmpty);
+    final tracks = await account.libraryPlaylistTracks('PLvalid');
+    expect(tracks.map((track) => track.videoId), ['abcdefghijk', 'lmnopqrstuv']);
+    expect(requests.map((request) => request['browseId']), ['VLPLvalid', 'VLPLvalid']);
+    expect(requests.last['continuation'], 'next-page');
+  });
+
+  test('clearAll removes cached data from memory and disk only', () async {
+    const account = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+    const prefix = 'lokal.youtube.playlists.cache.v1.';
+    final data = jsonEncode({'version': 1, 'items': [
+      {'id': 'PLfirst', 'title': 'First'},
+    ]});
+    SharedPreferences.setMockInitialValues({
+      '${prefix}aaaaaaaaaaaaaaaaaaaaaaaa.library': data,
+      '${prefix}bbbbbbbbbbbbbbbbbbbbbbbb.tracks.PLfirst': data,
+      YoutubeMusicPlaylistCache.autoUpdateKey: true,
+      'unrelated': 'keep',
+    });
+    final cache = YoutubeMusicPlaylistCache();
+    expect((await cache.playlists(account))!.single.id, 'PLfirst');
+    await cache.clearAll();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getKeys().where((key) => key.startsWith(prefix)), isEmpty);
+    expect(await cache.playlists(account), isNull);
+    expect(await YoutubeMusicPlaylistCache().playlists(account), isNull);
+    expect(await cache.autoUpdate, isTrue);
+    expect(prefs.getString('unrelated'), 'keep');
+  });
+
 }

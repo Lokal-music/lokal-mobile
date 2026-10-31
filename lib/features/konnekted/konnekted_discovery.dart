@@ -34,6 +34,7 @@ import 'package:flick/features/morneye/morneye_playback_quality.dart';
 import 'package:flick/features/morneye/morneye_runtime.dart';
 import 'package:flick/features/morneye/morneye_service.dart';
 import 'package:flick/features/spotify/spotify_api.dart';
+import 'package:flick/features/spotify/provider_playlist_visibility.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/features/spotify/spotify_oauth.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
@@ -227,10 +228,22 @@ class KonnektedYoutubeMusicNotifier
   }
 
   Future<void> signOut() async {
+    var session = state.value;
+    if (session == null) {
+      try {
+        session = await ref.read(konnektedYoutubeMusicSessionProvider.future);
+      } catch (_) {
+        // Secure storage can still be cleared if restoring the session failed.
+      }
+    }
+    final accountKey = session?.accountKey;
     await ref.read(konnektedYoutubeMusicStoreProvider).clear();
     forgetYoutubeMusicAccount();
     state = const AsyncData(null);
     ref.read(konnektedDiscoveryProvider.notifier).clearYoutubeMusicAccount();
+    if (accountKey != null) {
+      await const ProviderPlaylistVisibility().clear('youtube', accountKey);
+    }
   }
 }
 
