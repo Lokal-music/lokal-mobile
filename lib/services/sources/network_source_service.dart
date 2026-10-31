@@ -47,6 +47,15 @@ abstract class NetworkSourceService {
   /// [coverScheme] in [SongEntity.albumArtPath]).
   Future<List<int>> getCoverArt(NetworkServerEntity server, String marker);
 
+  /// Read embedded artwork from the beginning of a remote audio file, without
+  /// downloading the entire media item. Only sources with a bounded prefix
+  /// implementation should override this; other protocols remain unchanged.
+  Future<List<int>> getEmbeddedCoverArt(
+    NetworkServerEntity server,
+    String remoteId,
+  ) async => const [];
+
+
   /// Download (or cache-hit) the audio for [remoteId] into the network cache
   /// and return the local file path. [onProgress] reports 0..1 during a miss.
   Future<String> stream(
