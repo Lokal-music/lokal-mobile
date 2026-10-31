@@ -9,6 +9,9 @@ import 'package:flick/features/spotify/spotify_models.dart';
 import 'package:flick/features/spotify/spotify_oauth.dart';
 import 'package:flick/features/spotify/spotify_playlist_cache.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
+import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
+import 'package:flick/features/spotify/provider_playlist_track_browser.dart';
+import 'package:flick/features/playlist_links/playlist_link_models.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/models/song.dart';
@@ -31,10 +34,14 @@ class _SpotifyPlaylistsScreenState
     extends ConsumerState<SpotifyPlaylistsScreen> {
   late final SpotifyWebApi _api;
   final SpotifyPlaylistCache _cache = SpotifyPlaylistCache.instance;
+  final SpotifySettingsStore _settings = SpotifySettingsStore();
   final ProviderPlaylistVisibility _visibility = const ProviderPlaylistVisibility();
   String _account = '';
   Set<String> _hidden = {};
   bool _showHidden = false;
+  bool _autoUpdate = false;
+  bool _autoReady = false;
+  bool _savingAutoUpdate = false;
   List<SpotifyPlaylist> _playlists = const [];
   bool _loading = true;
   bool _refreshing = false;
@@ -62,7 +69,13 @@ class _SpotifyPlaylistsScreenState
       final account = await _cache.accountId();
       final hidden = await _visibility.hidden('spotify', account);
       final cached = await _cache.playlists();
-      if (mounted) setState(() { _account = account; _hidden = hidden; });
+      final autoUpdate = await _settings.loadPlaylistAutoUpdate();
+      if (mounted) setState(() {
+        _account = account;
+        _hidden = hidden;
+        _autoUpdate = autoUpdate;
+        _autoReady = true;
+      });
       if (!mounted) return;
       if (cached == null) {
         await _refresh();
@@ -112,6 +125,30 @@ class _SpotifyPlaylistsScreenState
     if (mounted) setState(() => _hidden = next);
   }
 
+  Future<void> _setAutoUpdate(bool enabled) async {
+    if (_savingAutoUpdate) return;
+    setState(() {
+      _autoUpdate = enabled;
+      _savingAutoUpdate = true;
+    });
+    try {
+      await _settings.savePlaylistAutoUpdate(enabled);
+    } catch (_) {
+      // The previous value remains authoritative if writing preferences fails.
+      try {
+        final saved = await _settings.loadPlaylistAutoUpdate();
+        if (mounted) setState(() => _autoUpdate = saved);
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not save Spotify playlist auto-update setting.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _savingAutoUpdate = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _playlists.where((p) =>
@@ -128,6 +165,14 @@ class _SpotifyPlaylistsScreenState
       ],
     ),
     body: Column(children: [
+      SwitchListTile(
+        dense: true,
+        title: const Text('Auto-update playlists'),
+        subtitle: const Text('Check at most once every 24 hours when opened'),
+        value: _autoUpdate,
+        onChanged: !_autoReady || _savingAutoUpdate
+            ? null : (value) => unawaited(_setAutoUpdate(value)),
+      ),
       if (_hidden.isNotEmpty)
         SwitchListTile(
           dense: true,
@@ -178,6 +223,7 @@ class _SpotifyPlaylistsScreenState
                             MaterialPageRoute<void>(
                               builder: (_) => _SpotifyPlaylistDetail(
                                 playlist: playlist, onPlay: widget.onPlay,
+                                accountId: _account,
                               ),
                             ),
                           ),
@@ -222,9 +268,11 @@ class _SpotifyPlaylistDetail extends ConsumerStatefulWidget {
   const _SpotifyPlaylistDetail({
     required this.playlist,
     required this.onPlay,
+    required this.accountId,
   });
 
   final SpotifyPlaylist playlist;
+  final String accountId;
   final void Function(Song song, List<Song> queue) onPlay;
 
   @override
@@ -311,22 +359,33 @@ class _SpotifyPlaylistDetailState
     }
   }
 
-  List<Song> _queue() {
-    final index = KonnektedLibraryIndex.of(
+  void _playOrdered(List<int> sourceIndices, int startIndex) {
+    if (sourceIndices.isEmpty || startIndex < 0 ||
+        startIndex >= sourceIndices.length ||
+        sourceIndices.any((index) => index < 0 || index >= _tracks.length)) {
+      return;
+    }
+    final library = KonnektedLibraryIndex.of(
       ref.read(konnektedLibraryProvider).value ?? const <Song>[],
     );
-    // Each remote item remains metadata until Lokal's on-demand resolver
-    // finds a playable source; Spotify cookie auth does not stream audio.
-    return [
-      for (final track in _tracks)
-        index.match(track) ?? discoveryPendingSong(track),
+    // Keep the source playlist order (including duplicate songs) when playing
+    // normally. Shuffle supplies an independently randomized ordering.
+    final queue = [
+      for (final index in sourceIndices)
+        library.match(_tracks[index]) ?? discoveryPendingSong(_tracks[index]),
     ];
+    widget.onPlay(queue[startIndex], queue);
   }
 
-  void _play(int index) {
+  void _songActions(int index) {
     if (index < 0 || index >= _tracks.length) return;
-    final queue = _queue();
-    if (queue.isNotEmpty) widget.onPlay(queue[index], queue);
+    // A context menu only needs the selected track, not a 1,000-song queue.
+    final library = KonnektedLibraryIndex.of(
+      ref.read(konnektedLibraryProvider).value ?? const <Song>[],
+    );
+    final track = _tracks[index];
+    final song = library.match(track) ?? discoveryPendingSong(track);
+    unawaited(SongActionsBottomSheet.show(context, song));
   }
 
   @override
@@ -339,11 +398,7 @@ class _SpotifyPlaylistDetailState
           icon: const Icon(Icons.refresh_rounded),
           onPressed: _loading ? null : () => unawaited(_refresh()),
         ),
-        IconButton(
-          tooltip: 'Play all',
-          icon: const Icon(Icons.play_arrow_rounded),
-          onPressed: _loading || _tracks.isEmpty ? null : () => _play(0),
-        ),
+
       ],
     ),
     body: _loading
@@ -359,19 +414,14 @@ class _SpotifyPlaylistDetailState
               ]))
             : _tracks.isEmpty
                 ? const Center(child: Text('No playable tracks in this playlist.'))
-                : ListView.builder(
-                    itemCount: _tracks.length,
-                    itemBuilder: (context, index) {
-                      final track = _tracks[index];
-                      return ListTile(
-                        leading: _SpotifyCover(url: track.artworkUrl),
-                        title: Text(track.title, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        subtitle: Text(track.artist, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        onTap: () => _play(index),
-                      );
-                    },
+                : ProviderPlaylistTrackBrowser(
+                    tracks: _tracks,
+                    source: PlaylistLinkSource.spotify,
+                    playlistId: widget.playlist.id,
+                    accountId: widget.accountId,
+                    artworkBuilder: (track) => _SpotifyCover(url: track.artworkUrl),
+                    onPlay: _playOrdered,
+                    onSongActions: _songActions,
                   ),
   );
 }

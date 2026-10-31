@@ -77,6 +77,19 @@ void main() {
     expect(await cache.tracks('playlistA'), isNull);
   });
 
+  test('Spotify playlist auto-update preference is shared by the playlist screen and account settings', () async {
+    final prefs = _Prefs();
+    final settingsPage = SpotifySettingsStore(preferences: prefs);
+    final playlistsPage = SpotifySettingsStore(preferences: prefs);
+    expect(await playlistsPage.loadPlaylistAutoUpdate(), false);
+
+    await playlistsPage.savePlaylistAutoUpdate(true);
+    expect(await settingsPage.loadPlaylistAutoUpdate(), true);
+
+    await settingsPage.savePlaylistAutoUpdate(false);
+    expect(await playlistsPage.loadPlaylistAutoUpdate(), false);
+  });
+
   test('only successfully cached lists are eligible for auto-update', () async {
     final prefs = _Prefs();
     final tokens = _Tokens()..current = _token('cookie');

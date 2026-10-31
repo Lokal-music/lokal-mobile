@@ -5,6 +5,9 @@ import 'package:flick/features/discovery/youtube_music_playlist_cache.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/spotify/provider_playlist_visibility.dart';
+import 'package:flick/features/songs/widgets/song_actions_bottom_sheet.dart';
+import 'package:flick/features/spotify/provider_playlist_track_browser.dart';
+import 'package:flick/features/playlist_links/playlist_link_models.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -254,15 +257,36 @@ class _YoutubePlaylistDetailState
     }
   }
 
-  void _play(int index) {
-    if (index < 0 || index >= _tracks.length) return;
+  // Use the same local-first / pending-online resolution as playback.
+  // Long-press actions must operate on the actual Lokal Song, not on the
+  // YouTube Music metadata card.
+  void _playOrdered(List<int> sourceIndices, int startIndex) {
+    if (sourceIndices.isEmpty || startIndex < 0 ||
+        startIndex >= sourceIndices.length ||
+        sourceIndices.any((index) => index < 0 || index >= _tracks.length)) {
+      return;
+    }
     final library = KonnektedLibraryIndex.of(
-        ref.read(konnektedLibraryProvider).value ?? const <Song>[]);
+      ref.read(konnektedLibraryProvider).value ?? const <Song>[],
+    );
+    // Keep the source playlist order (including duplicate songs) when playing
+    // normally. Shuffle supplies an independently randomized ordering.
     final queue = [
-      for (final track in _tracks)
-        library.match(track) ?? discoveryPendingSong(track),
+      for (final index in sourceIndices)
+        library.match(_tracks[index]) ?? discoveryPendingSong(_tracks[index]),
     ];
-    widget.onPlay(queue[index], queue);
+    widget.onPlay(queue[startIndex], queue);
+  }
+
+  void _songActions(int index) {
+    if (index < 0 || index >= _tracks.length) return;
+    // A context menu only needs the selected track, not a 1,000-song queue.
+    final library = KonnektedLibraryIndex.of(
+      ref.read(konnektedLibraryProvider).value ?? const <Song>[],
+    );
+    final track = _tracks[index];
+    final song = library.match(track) ?? discoveryPendingSong(track);
+    unawaited(SongActionsBottomSheet.show(context, song));
   }
 
   @override
@@ -274,10 +298,7 @@ class _YoutubePlaylistDetailState
           tooltip: 'Update playlist', onPressed: _updating ? null : () => unawaited(_refresh()),
           icon: const Icon(Icons.refresh_rounded),
         ),
-        IconButton(
-          tooltip: 'Play all', onPressed: _tracks.isEmpty ? null : () => _play(0),
-          icon: const Icon(Icons.play_arrow_rounded),
-        ),
+
       ],
     ),
     body: _loading && _tracks.isEmpty
@@ -286,19 +307,14 @@ class _YoutubePlaylistDetailState
             ? Center(child: Text(_error!))
             : _tracks.isEmpty
                 ? const Center(child: Text('No accessible tracks in this playlist.'))
-                : ListView.builder(
-                    itemCount: _tracks.length,
-                    itemBuilder: (context, index) {
-                      final track = _tracks[index];
-                      return ListTile(
-                        leading: _YoutubePlaylistArtwork(url: track.artworkUrl),
-                        title: Text(track.title, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        subtitle: Text(track.artist, maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        onTap: () => _play(index),
-                      );
-                    },
+                : ProviderPlaylistTrackBrowser(
+                    tracks: _tracks,
+                    source: PlaylistLinkSource.youtube,
+                    playlistId: widget.playlist.id,
+                    accountId: widget.accountId,
+                    artworkBuilder: (track) => _YoutubePlaylistArtwork(url: track.artworkUrl),
+                    onPlay: _playOrdered,
+                    onSongActions: _songActions,
                   ),
   );
 }
