@@ -287,6 +287,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         if (!anyEnabledHasResults) {
           // Nothing in the library: what's online still shows under it.
           return CustomScrollView(
+            key: _resultsScrollKey(enabled),
             slivers: [
               // In All, online results may still be present. Do not claim
               // the entire search has no results just because local is empty.
@@ -306,6 +307,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       },
       loading: () => ref.read(searchScopeProvider) == SearchScope.all
           ? CustomScrollView(
+              key: _resultsScrollKey(enabled),
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
@@ -327,6 +329,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
       error: (e, st) => CustomScrollView(
+        key: _resultsScrollKey(enabled),
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
@@ -690,7 +693,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
 
     return CustomScrollView(
-      key: ValueKey('${enabled.singleOrNull}:${ref.read(searchScopeProvider)}'),
+      key: _resultsScrollKey(enabled),
       slivers: [
         ...slivers,
         if (_onlineSection(results.query) case final online?) online,
@@ -699,12 +702,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
+  Key _resultsScrollKey(Set<SearchCategory> enabled) =>
+      ValueKey('${enabled.singleOrNull}:${ref.read(searchScopeProvider)}');
+
   Widget? _onlineSection(String query) {
     if (ref.read(searchScopeProvider) == SearchScope.library) return null;
     final category = ref.read(searchFilterProvider).singleOrNull;
     if (!supportsOnlineCategory(category)) return null;
     if (category == SearchCategory.lyrics) {
       return SliverToBoxAdapter(
+        key: ValueKey('online-lyrics-sliver:$query'),
         child: LyricsSearchSection(
           key: ValueKey('online-lyrics:$query'),
           query: query, online: true,
@@ -715,6 +722,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (category == SearchCategory.artists ||
         category == SearchCategory.albums) {
       return SliverToBoxAdapter(
+        key: ValueKey('catalogue-sliver:$category:$query'),
         child: OnlineCatalogueSearchSection(
           key: ValueKey('catalogue:$category:$query'),
           query: query,
@@ -735,7 +743,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       key: ValueKey('songs:$query'),
       query: query,
     );
-    return SliverMainAxisGroup(slivers: [global, songs]);
+    return SliverMainAxisGroup(key: ValueKey('online-sliver:$query'), slivers: [global, songs]);
   }
 
   Future<void> _playSong(Song song, List<Song> playlist) async {
