@@ -250,6 +250,33 @@ class _ProviderPlaylistTrackBrowserState
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _downloading
+                  ? _cancelDownload
+                  : () => unawaited(_downloadPlaylist()),
+              icon: Icon(_downloading
+                  ? Icons.cancel_outlined : Icons.download_rounded),
+              label: Text(_downloading
+                  ? 'Cancel playlist download' : 'Download playlist'),
+            ),
+          ),
+        ),
+        if (_downloadStatus != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _downloadStatus!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
         if (_query.trim().isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
