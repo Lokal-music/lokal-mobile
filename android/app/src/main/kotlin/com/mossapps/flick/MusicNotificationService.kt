@@ -23,6 +23,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media.MediaBrowserServiceCompat
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.Executors
 import androidx.media.VolumeProviderCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -83,6 +84,14 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
 
     private var cachedAlbumArt: Bitmap? = null
     private var cachedAlbumArtPath: String? = null
+    // BitmapFactory disk I/O and decoding must never block the media-service
+    // main thread while a NAS scan or metadata job is running.
+    private val albumArtExecutor = Executors.newSingleThreadExecutor()
+    private val albumArtHandler = Handler(Looper.getMainLooper())
+    private var loadingAlbumArtPath: String? = null
+    private var failedAlbumArtPath: String? = null
+    private var albumArtGeneration = 0
+    private var mediaServiceDestroyed = false
 
     private var floatingOverlay: FloatingPlayerOverlay? = null
 
@@ -534,6 +543,9 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
     }
 
     override fun onDestroy() {
+        mediaServiceDestroyed = true
+        albumArtGeneration++
+        albumArtExecutor.shutdownNow()
         super.onDestroy()
         try {
             unregisterReceiver(actionReceiver)
@@ -605,35 +617,52 @@ class MusicNotificationService : MediaBrowserServiceCompat() {
         if (path.isNullOrEmpty()) {
             cachedAlbumArt = null
             cachedAlbumArtPath = null
+            loadingAlbumArtPath = null
+            failedAlbumArtPath = null
+            albumArtGeneration++
             return null
         }
-        if (path == cachedAlbumArtPath && cachedAlbumArt != null) {
-            return cachedAlbumArt
-        }
+        if (path == cachedAlbumArtPath) return cachedAlbumArt
+        if (path == loadingAlbumArtPath || path == failedAlbumArtPath ||
+            mediaServiceDestroyed) return null
+
+        // Preserve media controls immediately; decode on a dedicated worker.
+        // Generation checks discard late results after a track change or stop.
         cachedAlbumArt = null
         cachedAlbumArtPath = null
-        return try {
-            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(path, options)
-            val maxDim = maxOf(options.outWidth, options.outHeight)
-            var sampleSize = 1
-            while (maxDim / sampleSize > 512) {
-                sampleSize *= 2
+        failedAlbumArtPath = null
+        loadingAlbumArtPath = path
+        val generation = ++albumArtGeneration
+        albumArtExecutor.execute {
+            val bitmap = try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(path, bounds)
+                val maxDim = maxOf(bounds.outWidth, bounds.outHeight)
+                var sampleSize = 1
+                while (maxDim / sampleSize > 512) sampleSize *= 2
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                BitmapFactory.decodeFile(path, options)
+            } catch (e: Exception) {
+                android.util.Log.w("MusicNotification", "Failed to decode album art: ${e.message}")
+                null
             }
-            val decodeOptions = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            }
-            val bitmap = BitmapFactory.decodeFile(path, decodeOptions)
-            if (bitmap != null) {
+            albumArtHandler.post {
+                if (mediaServiceDestroyed || generation != albumArtGeneration ||
+                    currentAlbumArtPath != path) return@post
+                loadingAlbumArtPath = null
                 cachedAlbumArt = bitmap
-                cachedAlbumArtPath = path
+                cachedAlbumArtPath = if (bitmap != null) path else null
+                // Do not spin on unreadable files every position update.
+                failedAlbumArtPath = if (bitmap == null) path else null
+                if (isForegroundServiceStarted) {
+                    notificationManager.notify(NOTIFICATION_ID, buildNotification())
+                }
             }
-            bitmap
-        } catch (e: Exception) {
-            android.util.Log.w("MusicNotification", "Failed to decode album art: ${e.message}")
-            getFallbackArt()
         }
+        return null
     }
 
     private fun createNotificationChannel() {
