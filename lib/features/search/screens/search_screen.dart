@@ -218,13 +218,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Expanded(
               child: !hasInput
                   ? _buildEmptyState(context)
-                  : scope == SearchScope.library &&
+                  : scope != SearchScope.online &&
                           enabled.singleOrNull == SearchCategory.lyrics && hasQuery
-                  ? LyricsSearchSection(
-                      key: ValueKey('library-lyrics:$repoQuery'),
-                      query: repoQuery, online: false,
-                      onPlayLocal: _playSong,
-                    )
+                  ? scope == SearchScope.library
+                      ? LyricsSearchSection(
+                          key: ValueKey('library-lyrics:$repoQuery'),
+                          query: repoQuery, online: false,
+                          onPlayLocal: _playSong,
+                        )
+                      : CustomScrollView(
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: LyricsSearchSection(
+                                key: ValueKey('library-lyrics:$repoQuery'),
+                                query: repoQuery, online: false,
+                                onPlayLocal: _playSong,
+                              ),
+                            ),
+                            if (_onlineSection(repoQuery) case final online?) online,
+                            const SliverToBoxAdapter(child: SizedBox(height: 140)),
+                          ],
+                        )
                   : scope == SearchScope.online && hasQuery
                   ? CustomScrollView(
                       slivers: [
