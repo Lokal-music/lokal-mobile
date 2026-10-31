@@ -256,6 +256,10 @@ class SmbService implements NetworkSourceService {
     NetworkServerEntity server,
     String remoteId,
   ) async {
+    final lower = remoteId.toLowerCase();
+    if (!lower.endsWith('.flac') && !lower.endsWith('.mp3')) {
+      return const [];
+    }
     final s = _parseServer(server);
     await _ensureLanAccess(s);
     final session = await _connect(s, server);
