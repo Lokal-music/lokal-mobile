@@ -4,8 +4,11 @@ import 'package:flick/features/spotify/provider_playlist_track_browser.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   const tracks = [
     LokalDiscoveryTrack(title: 'Same song', artist: 'Singer', album: 'Album A'),
     LokalDiscoveryTrack(title: 'Another song', artist: 'Other', album: 'Album B'),
@@ -21,6 +24,7 @@ void main() {
             tracks: tracks,
             source: PlaylistLinkSource.spotify,
             playlistId: 'test-playlist',
+            accountId: 'test-account',
             artworkBuilder: (_) => const Icon(Icons.music_note),
             onPlay: onPlay,
             onSongActions: onActions,
@@ -34,6 +38,96 @@ void main() {
     expect(providerPlaylistMatchingIndices(tracks, 'album b'), [1]);
     expect(providerPlaylistMatchingIndices(tracks, 'singer'), [0, 2]);
     expect(providerPlaylistMatchingIndices(tracks, 'not present'), isEmpty);
+  });
+
+  test('sorting preserves duplicate occurrences, stable ties, and provider order', () {
+    expect(providerPlaylistVisibleIndices(tracks, ''), [0, 1, 2]);
+    expect(providerPlaylistVisibleIndices(tracks, '',
+        descending: true), [2, 1, 0]);
+    expect(providerPlaylistVisibleIndices(tracks, '',
+        sort: ProviderPlaylistSort.title), [1, 0, 2]);
+    expect(providerPlaylistVisibleIndices(tracks, '',
+        sort: ProviderPlaylistSort.title, descending: true), [0, 2, 1]);
+    expect(providerPlaylistVisibleIndices(tracks, 'album a',
+        sort: ProviderPlaylistSort.title, descending: true), [0, 2]);
+    expect(providerPlaylistVisibleIndices(tracks, '',
+        sort: ProviderPlaylistSort.artist), [1, 0, 2]);
+    expect(providerPlaylistVisibleIndices(tracks, '',
+        sort: ProviderPlaylistSort.album, descending: true), [1, 0, 2]);
+    expect(providerPlaylistMatchingIndices(tracks, ''), [0, 1, 2]);
+  });
+
+  test('unknown durations sort last in both directions', () {
+    const songs = [
+      LokalDiscoveryTrack(title: 'Missing', artist: 'A'),
+      LokalDiscoveryTrack(title: 'Long', artist: 'B',
+          duration: Duration(minutes: 5)),
+      LokalDiscoveryTrack(title: 'Short', artist: 'C',
+          duration: Duration(minutes: 2)),
+    ];
+    expect(providerPlaylistVisibleIndices(songs, '',
+        sort: ProviderPlaylistSort.duration), [2, 1, 0]);
+    expect(providerPlaylistVisibleIndices(songs, '',
+        sort: ProviderPlaylistSort.duration, descending: true), [1, 2, 0]);
+  });
+
+  test('saved playlist view order decodes safely', () {
+    expect(ProviderPlaylistOrder.decode(null).sort, ProviderPlaylistSort.original);
+    expect(ProviderPlaylistOrder.decode('malformed').sort, ProviderPlaylistSort.original);
+    expect(ProviderPlaylistOrder.decode('other:desc').sort, ProviderPlaylistSort.original);
+    final saved = const ProviderPlaylistOrder(
+      sort: ProviderPlaylistSort.album, descending: true,
+    );
+    expect(saved.encode(), 'album:desc');
+    final loaded = ProviderPlaylistOrder.decode(saved.encode());
+    expect(loaded.sort, ProviderPlaylistSort.album);
+    expect(loaded.descending, true);
+  });
+
+  testWidgets('sorting changes list and playback queue, but not playlist data',
+      (tester) async {
+    List<int>? selectedQueue;
+    int? selectedStart;
+    await tester.pumpWidget(app(
+      onPlay: (queue, start) {
+        selectedQueue = queue;
+        selectedStart = start;
+      },
+      onActions: (_) {},
+    ));
+    await tester.tap(find.byTooltip('Sort: Playlist order'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Title').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Play'));
+    expect(selectedQueue, [1, 0, 2]);
+    expect(selectedStart, 0);
+
+    await tester.tap(find.byTooltip('Ascending · switch to descending'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Play'));
+    expect(selectedQueue, [0, 2, 1]);
+    await tester.tap(find.text('Another song'));
+    expect(selectedQueue, [0, 2, 1]);
+    expect(selectedStart, 2);
+    expect(providerPlaylistMatchingIndices(tracks, ''), [0, 1, 2]);
+  });
+
+  testWidgets('sort and direction are restored per account playlist',
+      (tester) async {
+    await tester.pumpWidget(app(onPlay: (_, __) {}, onActions: (_) {}));
+    await tester.tap(find.byTooltip('Sort: Playlist order'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Artist').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Ascending · switch to descending'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(app(onPlay: (_, __) {}, onActions: (_) {}));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Sort: Artist'), findsOneWidget);
+    expect(find.byTooltip('Descending · switch to ascending'), findsOneWidget);
   });
 
   test('download entries preserve source identity and metadata', () {
