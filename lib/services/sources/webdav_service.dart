@@ -30,7 +30,7 @@ import 'local_network_access.dart';
 /// derived from the filename, album from the parent folder, artist from the
 /// grandparent (or Unknown). Full tag extraction would require downloading each
 /// file, out of scope for the first cut.
-class WebdavService implements NetworkSourceService {
+class WebdavService implements NetworkSourceService, NetworkEmbeddedArtworkSource {
   WebdavService._({
     http.Client? client,
     SongRepository? songRepository,
