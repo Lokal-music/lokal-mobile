@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:flick/core/constants/app_constants.dart';
+
 import 'app_theme.dart';
 import 'lokal_interaction.dart';
 import 'lokal_tokens.dart';
@@ -214,7 +216,8 @@ class _LokalPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    if (MediaQuery.disableAnimationsOf(context)) return child;
+    if (MediaQuery.disableAnimationsOf(context) ||
+        AppConstants.animationNormal == Duration.zero) return child;
     final progress = CurvedAnimation(
       parent: animation,
       curve: const Cubic(.18, .82, .22, 1),
