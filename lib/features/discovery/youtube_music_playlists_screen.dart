@@ -276,10 +276,13 @@ class _YoutubePlaylistDetailState
 
   void _songActions(int index) {
     if (index < 0 || index >= _tracks.length) return;
-    final queue = _queue();
-    if (queue.isNotEmpty) {
-      unawaited(SongActionsBottomSheet.show(context, queue[index]));
-    }
+    // A context menu only needs the selected track, not a 1,000-song queue.
+    final library = KonnektedLibraryIndex.of(
+      ref.read(konnektedLibraryProvider).value ?? const <Song>[],
+    );
+    final track = _tracks[index];
+    final song = library.match(track) ?? discoveryPendingSong(track);
+    unawaited(SongActionsBottomSheet.show(context, song));
   }
 
   @override
