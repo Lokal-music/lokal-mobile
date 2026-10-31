@@ -1502,3 +1502,17 @@ specific. The shared AutoMix nullable-Future timeout correction already has an
 equivalent implementation in this iPhone branch (profile and stem preparation).
 No ordinary iPhone feature delta remains from that final revision. No Android
 mixer choice or hardware-protected volume claim is introduced on iPhone.
+
+
+## Source-freeze review: open mobile PR375
+
+Reviewed head `e06bce2cb71b33c41ddc665af39a606acfd347e6` on 31 October
+2026 (Europe/Paris). It proposes Spotify/YouTube Music library playlist screens
+and account-scoped caches. This is relevant ordinary parity, but the reviewed
+head is unmerged and its `youtube_music_account.dart` does not parse: a duplicated
+class/file tail appears inside `libraryPlaylistTracks` and leaves a stray
+`).hasMatch(id)` declaration (line1533). A standalone Dart parser check fails.
+It is recorded for review when a valid upstream version is available; this
+unfinished head is not imported or silently claimed as iPhone parity. The
+current merged baseline remains reviewed through PR371, whose USB changes are
+excluded and whose shared timeout correction is already equivalent here.

@@ -23,10 +23,17 @@ class IosTransferUploadAdmission {
     required int songId,
     required IosTransferPairing expectedPairing,
     required void Function(IosTransferIntent intent) prepared,
+    IosTransferIntent? frozenIntent,
+    String? reviewedSourcePath,
   }) => IosLibraryScanEpoch.run(() async {
     IosTransferUploadContext? context;
     IosTransferUploadGrant? grant;
     final song = _current(songId);
+    if (reviewedSourcePath != null && song.filePath != reviewedSourcePath) {
+      throw StateError(
+        'The selected source changed. Review the copy plan again.',
+      );
+    }
     final binding = _binding(song);
     void check() {
       IosLibraryScanEpoch.requireCurrent();
@@ -67,20 +74,28 @@ class IosTransferUploadAdmission {
       if (grant.songId != songId.toString()) {
         throw const FormatException('Upload source identity changed.');
       }
-      final intent = IosTransferIntent(
-        id: linkUuid(),
-        createdMs: DateTime.now().millisecondsSinceEpoch,
+      final candidate = IosTransferIntent(
+        id: frozenIntent?.id ?? linkUuid(),
+        createdMs:
+            frozenIntent?.createdMs ?? DateTime.now().millisecondsSinceEpoch,
         identity: IosTransferIdentity(
           scope: context.pairing.scope,
           desktopUserId: context.pairing.desktopUserId,
-          sourceId: 'phone-song-$songId',
+          sourceId: frozenIntent?.identity.sourceId ?? 'phone-song-$songId',
           localSongId: songId.toString(),
         ),
         metadata: _metadata(song),
         expectedBytes: grant.bytes,
         expectedSha256: grant.sha256,
       );
-      intent.validate();
+      candidate.validate();
+      if (frozenIntent != null &&
+          jsonEncode(candidate.toJson()) != jsonEncode(frozenIntent.toJson())) {
+        throw StateError(
+          'The recording changed. Its original upload cannot be retried.',
+        );
+      }
+      final intent = frozenIntent ?? candidate;
       // The caller retains this exact intent for a lost acknowledgement. It
       // must recover the native journal, never silently mint a replacement.
       prepared(intent);

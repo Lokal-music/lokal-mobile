@@ -6,6 +6,92 @@ Build120 is a separate foreground-copy checkpoint. The native replacement stays
 disabled until its integration, mapping, upload and OS recovery gates pass.
 Background audio and existing foreground copies continue independently.
 
+## Connected copy flow, queue and storage failure handling
+
+Source continuation, 31 October 2026 (Europe/Paris). The complete release list
+is the five-item [completion plan](IOS_FIRST_RELEASE.md); this section documents
+implementation within those items. Native product flags remain false.
+
+The existing desktop copy preview now selects a native adapter only when the
+qualified capabilities and source eligibility allow it. Reviewing the plan
+creates no job. Confirmation submits frozen download intents atomically, then
+source-authorized uploads. An app generation guard survives the review dialog;
+Clear or an account/server change invalidates the old plan even if paths still
+look identical. Existing remote row bindings are checked before submission.
+Lost download replies reuse exact IDs; upload intent is retained before dispatch.
+Once native submission starts, failure leaves admitted jobs in their journal and
+opens File transfers; no automatic foreground fallback or success count is used.
+Preparation displays admitted/total and requires Lokal to stay open until done.
+Optional artwork/lyrics processing follows acknowledged Isar/native completion
+under the existing foreground mutation barrier; its failure leaves audio complete.
+
+The queue borrows the app root's transport. It reads bounded pages bracketed by
+a stable durable generation, refuses actions on stale snapshots/storage failure,
+and renders lazily. Closing the screen releases its observation, never the root
+session. Native cancel, download retry and connection resume capture consent
+before host dispatch and revalidate on the serial runtime queue. Retired pairing
+pauses cannot resume. Upload preparation retries retain ID, timestamp, metadata
+and expected hash/size; changed recordings cannot reuse a frozen intent. An
+uncertain upload offers receipt matching, never a generic download retry. Private
+body cleanup waits for file/OS drainage and retains source files and receipts.
+Dark/light enlarged-text checks cover the receipt and cleanup UI.
+
+On classified journal failure the runtime revokes all ownership epochs, clears
+source grants/progress, cancels preparations/match probes and every known or
+OS-enumerated task, and crosses a file-worker barrier. Late delegate callbacks
+only retire bookkeeping while storage is failed. Recovery is coalesced and waits
+for all task, probe, source read, preparation and verification drainage before
+reloading SQLite. The queue’s explicit **Recover transfers** action uses the root
+coordinator’s recovery path; ordinary Refresh does not silently recover or resend.
+Bad storage stays failed. Restored missing-task bindings become
+interrupted; uncertain uploads keep their verified private bodies and never POST
+again automatically. Shutdown/invalidation fails pending recovery replies. OS
+background completion may be released after failed work is fully drained; this
+acknowledges finished event handling, not a successful transfer.
+
+Portable tests hold two real HTTP downloads, then two real uploads, replace the
+journal directory and induce a real failed mutation. They verify cancelled-task
+drainage, unchanged durable jobs through late callbacks, source/private-body
+preservation, refused bad-storage recovery, eight concurrent recovery results
+and zero extra requests after restored recovery. This is not Apple daemon,
+suspension/relaunch or power-loss qualification.
+
+### Desktop protocol gate remains open
+
+Reviewed desktop main `15c4a5cbac3b2b338e785657fa5efc0b5dcfdfa2`.
+The actual `linkUpload`, `phoneFileMatch` and remote route blobs match the local
+checkout used for its file-integrity/naming/placeholder tests. Content matching
+rehashes current bytes and ignores unavailable originals. Upload parsing checks
+hash/size and inserts the track transactionally, but there is no durable
+per-operation idempotency key. Its two asynchronous content checks can race
+with concurrent requests, and a client cancellation does not prove the server
+will not commit later. Content matching alone cannot authorize audio resend.
+
+Before upload activation, implement and qualify an authenticated, account/device
+scoped operation key with immutable body fingerprint, durable receipt, fenced
+in-progress ownership, and an atomic track/receipt commit after durable file
+preparation. Retries/OS replay of that key must return the original outcome.
+Cancellation/requeue and intentionally restoring a deleted desktop copy need
+explicit terminal-operation handling; neither a fresh UUID nor an empty content
+match is sufficient. Receipt reconciliation must preserve current local song
+identity and refuse changed/retired source bindings. Keep compatibility with
+older desktops through the existing foreground path. These are item 2, not new
+milestones.
+
+```mermaid
+flowchart LR
+  R[Approved app copy plan] --> N[Native journal and verified body]
+  N --> K[Scoped immutable upload operation]
+  K --> P[Desktop durable preparation]
+  P --> T[Atomic track and receipt commit]
+  T --> Q[Stable outcome query or replay]
+  Q --> L[Current local song binding]
+  Q --> C[Drained private-body cleanup]
+```
+
+The operation/receipt portion above is the required desktop contract design;
+it is not implemented by the current content-match endpoint.
+
 ## Authorized upload admission (source continuation, 31 October 2026)
 
 `IosTransferSession.enqueueUploadSong` is the product entry point. It requires

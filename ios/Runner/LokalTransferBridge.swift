@@ -235,7 +235,7 @@ final class LokalTransferBridge {
       } catch { reply.failure(error) }
       return
     }
-    if ["uploadSourceContext", "authorizeUploadSource", "releaseUploadSource", "enqueueUpload", "matchUploadedOriginal", "cleanupUploadBody", "cancelNetworkScopePreservingFiles", "preserveImportPublicFile", "retireNetworkScope", "drainImports", "completedHistoryPage", "compactCompletedImport", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
+    if ["queueResumeScope", "queueCancel", "queueRetryDownload", "uploadSourceContext", "authorizeUploadSource", "releaseUploadSource", "enqueueUpload", "matchUploadedOriginal", "cleanupUploadBody", "cancelNetworkScopePreservingFiles", "preserveImportPublicFile", "retireNetworkScope", "drainImports", "completedHistoryPage", "compactCompletedImport", "importCandidatesPage", "importWorkPage", "claimImport", "claimImportCleanup", "claimOrphanCleanup", "validateOrphanCleanup", "resolveImportCleanup", "finalizeImportCleanup", "publishImport", "acknowledgeImport", "validateImport", "validateImportCleanup", "validateImportReconciliation", "releaseImport"].contains(call.method) {
       handleImport(call, reply: reply)
       return
     }
@@ -271,7 +271,26 @@ final class LokalTransferBridge {
     do {
       guard let data = call.arguments as? FlutterStandardTypedData,
             !data.data.isEmpty, data.data.count <= (call.method == "enqueueUpload" ? 64 * 1024 : 8192) else { throw LokalTransferError.invalidRecord }
-      if call.method == "uploadSourceContext" {
+      if call.method == "queueResumeScope" {
+        let request = try LokalTransferProtocol.scopeRetirement(data.data)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ticket = try host.importOwnership.captureSubmission(owner)
+        host.withRuntime({ runtime in
+          runtime.resume(scope: request.scope, submission: ticket) { reply.encode($0) }
+        }, unavailable: { reply.failure($0) })
+      } else if call.method == "queueCancel" || call.method == "queueRetryDownload" {
+        let request = try LokalTransferProtocol.importCleanupClaim(data.data)
+        guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
+        let ticket = try host.importOwnership.captureSubmission(owner)
+        let cancelling = call.method == "queueCancel"
+        host.withRuntime({ runtime in
+          if cancelling {
+            runtime.cancel(id: request.id, revision: request.revision, submission: ticket) { reply.encode($0) }
+          } else {
+            runtime.retry(id: request.id, revision: request.revision, submission: ticket) { reply.encode($0) }
+          }
+        }, unavailable: { reply.failure($0) })
+      } else if call.method == "uploadSourceContext" {
         let request = try LokalTransferProtocol.client(data.data)
         guard let owner = importOwner, request.clientID == clientID else { throw LokalTransferError.staleRevision }
         let ticket = try host.importOwnership.captureSubmission(owner)

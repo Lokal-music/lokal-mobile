@@ -16,6 +16,8 @@ import 'package:flick/models/ios_transfer_recovery.dart';
 import 'package:flick/models/ios_transfer_orphan.dart';
 import 'package:flick/services/ios_transfer_coordinator_port.dart';
 import 'package:flick/services/ios_transfer_import_coordinator.dart';
+import 'package:flick/services/ios_transfer_import_store.dart'
+    show IosTransferImportResult;
 import 'package:flick/services/ios_transfer_media.dart';
 
 import 'ios_import_store_contracts.dart' show Fixture, require;
@@ -590,12 +592,51 @@ Future<void> main(List<String> arguments) async {
     Fixture fixture,
     NativeFixture native, {
     IosTransferMediaReader? reader,
+    Future<void> Function(IosTransferImportResult, bool Function())?
+    didComplete,
   }) => IosTransferImportCoordinator(
     native: native,
     store: () async => fixture.store(),
     readMedia: reader ?? readMedia,
+    didComplete: didComplete,
   );
   try {
+    await scenario('committed-audio-before-optional-sidecars', (
+      fixture,
+      native,
+    ) async {
+      var completed = 0;
+      final owner = coordinator(
+        fixture,
+        native,
+        didComplete: (result, isCurrent) async {
+          require(
+            result.committed && native.phase == 'complete' && isCurrent(),
+            'Optional sidecars run only after actual Isar commit and native acknowledgement',
+          );
+          final stored = await fixture.db.songEntitys.get(
+            result.receipt.localSongId,
+          );
+          require(
+            stored != null && stored.sourceType == null,
+            'Sidecars receive the committed local recording identity',
+          );
+          completed++;
+          throw StateError('Optional desktop lyrics unavailable');
+        },
+      );
+      try {
+        await owner.start();
+        require(
+          completed == 1 &&
+              owner.issues.isEmpty &&
+              native.acknowledgements == 1,
+          'Unavailable optional sidecars cannot invalidate the completed audio import',
+        );
+      } finally {
+        await owner.dispose();
+      }
+    });
     await scenario('mutation-preserves-published-preparation', (
       fixture,
       native,

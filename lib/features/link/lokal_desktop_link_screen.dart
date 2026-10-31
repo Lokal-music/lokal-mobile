@@ -11,11 +11,13 @@ import '../../core/theme/lokal_tokens.dart';
 import '../../l10n/l10n.dart';
 import '../../models/lokal_remote_state.dart';
 import '../../providers/lokal_remote_provider.dart';
+import '../../providers/ios_transfer_provider.dart';
 import '../../services/link/lokal_link_service.dart';
 import '../../services/lokal_remote_service.dart';
 import '../../widgets/lokal/settings/lokal_settings_kit.dart';
 import '../../widgets/common/ios_transfer_root.dart';
 import '../settings/screens/lokal_remote_settings_screen.dart';
+import 'ios_transfer_queue_screen.dart';
 
 class LokalDesktopLinkScreen extends ConsumerStatefulWidget {
   const LokalDesktopLinkScreen({super.key});
@@ -33,6 +35,8 @@ class _LokalDesktopLinkScreenState
       _theme = false,
       _sendDownloads = false;
   String? _error;
+  int? _preparingTotal;
+  int _queuedFiles = 0;
   @override
   void initState() {
     super.initState();
@@ -117,10 +121,17 @@ class _LokalDesktopLinkScreenState
     try {
       final plan = await controller.prepareFileCopy();
       if (!mounted) return;
+      final adapter = Platform.isIOS ? ref.read(iosTransferCopyAdapterProvider) : null;
+      final credentials = adapter == null ? null : await ref.read(lokalRemoteCredentialsStoreProvider).read();
+      final nativePlan = adapter == null || credentials == null ? null : await adapter.prepare(plan, credentials);
+      if (!mounted) return;
       final confirmed = await showLokalConfirmSheet(
         context: context,
         title: lokalText('Copy missing songs both ways?'),
-        message: lokalText(
+        message: nativePlan != null ? lokalText(
+          '{count} song files will be prepared and queued. Keep Lokal open until preparation finishes, and keep the desktop awake on Wi-Fi. Originals stay on their source device. Follow progress and recovery in File transfers.',
+          args: {'count': nativePlan.total},
+        ) : lokalText(
           '{send} songs to your PC, {receive} new songs to this phone, and {recover} existing private copies to your selected music folder under Lokal Desktop. Recovery uses files already on your phone; no re-download. Existing files are kept. Keep both apps open on Wi-Fi; check again to retry unfinished copies.',
           args: {
             'send': plan.toDesktop.length,
@@ -131,8 +142,27 @@ class _LokalDesktopLinkScreenState
         confirmLabel: lokalText('Copy files'),
       );
       if (!confirmed || !mounted) return;
-      await controller.copyMissingFiles(plan);
+      if (nativePlan != null) {
+        setState(() { _preparingTotal = nativePlan.total; _queuedFiles = 0; });
+        try { await nativePlan.submit(onProgress: (queued, _) {
+          if (mounted) setState(() => _queuedFiles = queued);
+        }); }
+        catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(lokalText(
+              'Some files could not be queued. Review File transfers before trying again. Submitted transfers are kept.'))));
+          }
+        }
+        if (mounted) {
+          setState(() => _preparingTotal = null);
+          final session = ref.read(iosTransferSessionProvider);
+          if (session != null) await showIosTransferQueue(context, session);
+        }
+      } else {
+        await controller.copyMissingFiles(plan);
+      }
     } finally {
+      if (mounted && _preparingTotal != null) setState(() => _preparingTotal = null);
       controller.cancelFileCopyPlan();
     }
   });
@@ -140,6 +170,18 @@ class _LokalDesktopLinkScreenState
   Widget _fileCopyStatus(LokalRemoteControllerState link) {
     final progress = link.fileCopyProgress;
     final t = context.lokal;
+    if (_preparingTotal case final total?) {
+      return LokalSettingsBlock(child: LokalSettingsCard(padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(lokalText('Preparing file transfers'), style: TextStyle(color: t.text, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text(lokalText('{queued} of {total} files queued. Keep Lokal open until preparation finishes.',
+            args: {'queued': _queuedFiles, 'total': total}), style: TextStyle(color: t.muted)),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: total > 0 ? _queuedFiles / total : null),
+        ])));
+    }
+
     final title = switch (progress.phase) {
       LinkCopyPhase.idle => lokalText('Keep song files on both devices'),
       LinkCopyPhase.checking => lokalText('Checking for missing song files…'),
@@ -578,6 +620,7 @@ class _LokalDesktopLinkScreenState
               link.syncProgress.phase != LinkSyncPhase.idle)
             _mergeStatus(link),
           if (link.mergeApproved) _fileCopyStatus(link),
+          if (Platform.isIOS) const IosTransferQueueEntry(),
           if (link.socketConnected && !link.mergeApproved)
             LokalSettingsBlock(
               child: LokalSettingsCard(

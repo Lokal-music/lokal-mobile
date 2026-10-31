@@ -456,6 +456,32 @@ class LokalDesktopSource extends NetworkSourceService {
     }
   }
 
+  Future<void> completeNativeCopySidecars(NetworkServerEntity server, SongEntity song,
+      {required bool Function() stillCurrent}) => _trackLibraryTransfer(() async {
+    if (!stillCurrent() || song.remoteId == null || song.remoteServerId != server.id) return;
+    // Resolve through the existing desktop artwork path. Passing the remote
+    // source keeps its cache writes from asynchronously changing a local row.
+    try {
+      final source = 'lokal://${server.id}/${Uri.encodeComponent(song.remoteId!)}';
+      final artwork = await AlbumArtService.instance.resolveArtworkPath(
+        existingPath: song.albumArtPath, audioSourcePath: source);
+      if (artwork != null && stillCurrent()) {
+        await Database.instance.writeTxn(() async {
+          if (!stillCurrent()) return;
+          final current = await Database.songs.get(song.id);
+          if (current == null || current.filePath != song.filePath ||
+              current.remoteId != song.remoteId || current.remoteServerId != server.id ||
+              current.albumArtPath != song.albumArtPath) {
+            return;
+          }
+          current.albumArtPath = artwork;
+          await Database.songs.put(current);
+        });
+      }
+    } catch (_) { /* Optional artwork cannot invalidate committed audio. */ }
+    if (stillCurrent()) await syncCopiedLyrics(server, copies: [song], stillCurrent: stillCurrent);
+  });
+
   Future<void> syncCopiedLyrics(
     NetworkServerEntity server, {
     List<SongEntity>? copies,

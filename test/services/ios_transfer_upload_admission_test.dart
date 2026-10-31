@@ -16,6 +16,8 @@ class _Port implements IosTransferUploadPort {
   final requests = <String>[];
   final released = <String>[];
   IosTransferIntent? submitted;
+  int enqueues = 0;
+  String hash = List.filled(64, "a").join();
   Future<void> Function()? authorizing;
   @override
   Future<IosTransferUploadContext> uploadSourceContext() async =>
@@ -44,7 +46,7 @@ class _Port implements IosTransferUploadPort {
       id: '22222222-2222-4222-8222-222222222222',
       songId: songId,
       bytes: 4,
-      sha256: List.filled(64, 'a').join(),
+      sha256: hash,
     );
   }
 
@@ -58,6 +60,7 @@ class _Port implements IosTransferUploadPort {
     IosTransferIntent intent, {
     String? grantId,
   }) async {
+    enqueues++;
     submitted = intent;
     throw StateError('Lost native acknowledgement');
   }
@@ -176,6 +179,93 @@ void main() {
       },
     );
   }
+
+  test(
+    'preparation retry preserves exact original intent and identifier',
+    () async {
+      IosTransferIntent? frozen;
+      final pairing = (await port.uploadSourceContext()).pairing;
+      await expectLater(
+        admission.enqueueSong(
+          songId: 42,
+          expectedPairing: pairing,
+          prepared: (intent) => frozen = intent,
+        ),
+        throwsStateError,
+      );
+      await expectLater(
+        admission.enqueueSong(
+          songId: 42,
+          expectedPairing: pairing,
+          frozenIntent: frozen,
+          prepared: (intent) => expect(identical(intent, frozen), true),
+        ),
+        throwsStateError,
+      );
+      expect(port.enqueues, 2);
+      expect(identical(port.submitted, frozen), true);
+    },
+  );
+  for (final change in ['metadata', 'bytes']) {
+    test(
+      'changed $change cannot be submitted under an existing upload intent',
+      () async {
+        IosTransferIntent? frozen;
+        final pairing = (await port.uploadSourceContext()).pairing;
+        await expectLater(
+          admission.enqueueSong(
+            songId: 42,
+            expectedPairing: pairing,
+            prepared: (intent) => frozen = intent,
+          ),
+          throwsStateError,
+        );
+        if (change == 'bytes') {
+          port.hash = List.filled(64, 'b').join();
+        } else {
+          await isar.writeTxn(() async {
+            final song = (await isar.songEntitys.get(42))!;
+            song.title = 'Edited';
+            await isar.songEntitys.put(song);
+          });
+        }
+        await expectLater(
+          admission.enqueueSong(
+            songId: 42,
+            expectedPairing: pairing,
+            frozenIntent: frozen,
+            prepared: (_) => fail('Changed frozen intent escaped'),
+          ),
+          throwsStateError,
+        );
+        expect(port.enqueues, 1);
+        expect(port.released.length, 4);
+      },
+    );
+  }
+
+  test(
+    'a source path changed after preview cannot acquire upload authority',
+    () async {
+      final before = (await isar.songEntitys.get(42))!.filePath;
+      await isar.writeTxn(() async {
+        final row = (await isar.songEntitys.get(42))!;
+        row.filePath = '${root.path}/replacement.wav';
+        await isar.songEntitys.put(row);
+      });
+      await expectLater(
+        admission.enqueueSong(
+          songId: 42,
+          expectedPairing: (await port.uploadSourceContext()).pairing,
+          reviewedSourcePath: before,
+          prepared: (_) => fail('Changed source was admitted'),
+        ),
+        throwsStateError,
+      );
+      expect(port.requests, isEmpty);
+      expect(port.enqueues, 0);
+    },
+  );
 
   test('reviewed desktop consent cannot upload to a newer pairing', () async {
     await expectLater(

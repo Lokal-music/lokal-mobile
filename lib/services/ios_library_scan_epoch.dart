@@ -10,6 +10,20 @@ class IosLibraryScanEpoch {
   static int _epoch = 0, _holds = 0;
   static bool get current => _holds == 0 && Zone.current[_zoneKey] == _epoch;
 
+  /// A reviewed copy plan can outlive its async scan zone. Its authority still
+  /// ends synchronously when a library mutation begins, including a clear that
+  /// happens to leave the selected server or file path looking unchanged.
+  static void Function() consentGuard() {
+    final epoch = _epoch;
+    void check() {
+      if (_holds != 0 || _epoch != epoch) {
+        throw StateError('The library changed. Review the copy plan again.');
+      }
+    }
+    check();
+    return check;
+  }
+
   static void requireCurrent() {
     if (!current) throw StateError('The library changed. Start a new scan.');
   }

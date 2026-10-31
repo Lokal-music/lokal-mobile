@@ -52,7 +52,8 @@ Future<Uint8List> _encodeSubmission(
 /// One application coordinator owns this transport. Native storage/networking
 /// survives Dart/engine replacement; this class owns only typed calls and the
 /// foreground change subscription. No credentials or durable Dart journal.
-class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUploadPort {
+class IosTransferTransport
+    implements IosTransferCoordinatorPort, IosTransferUploadPort {
   IosTransferTransport({
     this.channel = const MethodChannel('lokal/transfers'),
     bool? supported,
@@ -78,6 +79,8 @@ class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUpl
   final _submissions = <Future<IosTransferSummary>>{};
   int _submissionEpoch = 0;
   bool _submissionsPaused = false;
+  bool get acceptingSubmissions =>
+      supported && !_disposed && !_submissionsPaused;
   (BinaryMessenger, String) get _key => (channel.binaryMessenger, channel.name);
   @override
   Stream<void> get changes => _changes.stream;
@@ -91,7 +94,11 @@ class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUpl
       bytes = null;
     } else {
       bytes = Uint8List.fromList(utf8.encode(jsonEncode(payload)));
-      final budget = method == 'enqueue' ? iosTransferMaximumBytes : method == 'enqueueUpload' ? 64 * 1024 : 8192;
+      final budget = method == 'enqueue'
+          ? iosTransferMaximumBytes
+          : method == 'enqueueUpload'
+          ? 64 * 1024
+          : 8192;
       if (bytes.length > budget) {
         throw const FormatException('Transfer request exceeds its byte limit.');
       }
@@ -232,6 +239,43 @@ class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUpl
 
   Future<IosTransferJob> cancel(IosTransferJob job) => _control('cancel', job);
   Future<IosTransferJob> retry(IosTransferJob job) => _control('retry', job);
+
+  Future<IosTransferJob> cancelFromQueue(IosTransferJob job) =>
+      _queueControl('queueCancel', job, IosTransferPhase.cancelled);
+
+  Future<IosTransferJob> retryDownloadFromQueue(IosTransferJob job) =>
+      _queueControl('queueRetryDownload', job, IosTransferPhase.queued);
+
+  Future<IosTransferSummary> resumeFromQueue(IosTransferScope scope) async {
+    scope.validate();
+    return IosTransferSummary.fromJson(
+      await _uploadSourceCall('queueResumeScope', {'scope': scope.toJson()}),
+    );
+  }
+
+  Future<IosTransferJob> _queueControl(
+    String method,
+    IosTransferJob job,
+    IosTransferPhase phase,
+  ) async {
+    if (method == 'queueCancel'
+        ? !job.phase.canCancel
+        : job.direction != 'download' || !job.phase.canRetry) {
+      throw const FormatException('Invalid queue action.');
+    }
+    final result = IosTransferJob.fromJson(
+      await _uploadSourceCall(method, {'id': job.id, 'revision': job.revision}),
+    );
+    if (result.direction != job.direction ||
+        result.revision != job.revision + 1 ||
+        result.phase != phase ||
+        result.updatedMs < job.updatedMs ||
+        jsonEncode(result.intent.toJson()) != jsonEncode(job.intent.toJson())) {
+      throw const FormatException('Queue action returned a changed transfer.');
+    }
+    return result;
+  }
+
   @override
   Future<IosTransferJob> verify(IosTransferJob job) => _control('verify', job);
 
@@ -267,35 +311,58 @@ class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUpl
     return result;
   }
 
-  Future<Object?> _uploadSourceCall(String method, Map<String, Object> payload) {
+  Future<Object?> _uploadSourceCall(
+    String method,
+    Map<String, Object> payload,
+  ) {
     final epoch = _submissionEpoch;
     void check() {
       if (_submissionsPaused || _disposed || epoch != _submissionEpoch) {
         throw StateError('Upload admission was retired by a library mutation.');
       }
     }
+
     check();
     return _importCall(method, payload, guard: check);
   }
 
   @override
   Future<IosTransferUploadContext> uploadSourceContext() async =>
-      IosTransferUploadContext.fromJson(await _uploadSourceCall('uploadSourceContext', {}));
+      IosTransferUploadContext.fromJson(
+        await _uploadSourceCall('uploadSourceContext', {}),
+      );
 
   @override
-  Future<IosTransferUploadGrant> authorizeUploadSource({required String contextId,
-      required String relativePath, required String songId}) async {
+  Future<IosTransferUploadGrant> authorizeUploadSource({
+    required String contextId,
+    required String relativePath,
+    required String songId,
+  }) async {
     uploadSourceId(contextId);
     final parts = relativePath.split('/');
-    if (!validUploadSongId(songId) || relativePath.length > 4096 || parts.length > 64 ||
-        parts.any((part) => part.isEmpty || part == '.' || part == '..' ||
-          part.contains('\\') || part.codeUnits.any((unit) => unit < 32 || unit == 127))) {
+    if (!validUploadSongId(songId) ||
+        relativePath.length > 4096 ||
+        parts.length > 64 ||
+        parts.any(
+          (part) =>
+              part.isEmpty ||
+              part == '.' ||
+              part == '..' ||
+              part.contains('\\') ||
+              part.codeUnits.any((unit) => unit < 32 || unit == 127),
+        )) {
       throw const FormatException('Invalid upload source request.');
     }
-    final grant = IosTransferUploadGrant.fromJson(await _uploadSourceCall('authorizeUploadSource', {
-      'contextID': contextId, 'relativePath': relativePath, 'songID': songId,
-    }));
-    if (grant.songId != songId) throw const FormatException('Upload source identity changed.');
+    final grant = IosTransferUploadGrant.fromJson(
+      await _uploadSourceCall('authorizeUploadSource', {
+        'contextID': contextId,
+        'relativePath': relativePath,
+        'songID': songId,
+      }),
+    );
+    if (grant.songId != songId) {
+      throw const FormatException('Upload source identity changed.');
+    }
     return grant;
   }
 
@@ -309,23 +376,34 @@ class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUpl
   }
 
   @override
-  Future<IosTransferSummary> enqueueUpload(IosTransferIntent intent, {String? grantId}) {
+  Future<IosTransferSummary> enqueueUpload(
+    IosTransferIntent intent, {
+    String? grantId,
+  }) {
     final task = _enqueueUpload(intent, grantId);
     _submissions.add(task);
     return task.whenComplete(() => _submissions.remove(task));
   }
 
-  Future<IosTransferSummary> _enqueueUpload(IosTransferIntent intent, String? grantId) async {
+  Future<IosTransferSummary> _enqueueUpload(
+    IosTransferIntent intent,
+    String? grantId,
+  ) async {
     intent.validate();
     if (!validUploadSongId(intent.identity.localSongId ?? '') ||
-        intent.identity.scope.pairingId == null || intent.expectedBytes == null ||
-        intent.expectedBytes! > 1024 * 1024 * 1024 || intent.expectedSha256 == null) {
+        intent.identity.scope.pairingId == null ||
+        intent.expectedBytes == null ||
+        intent.expectedBytes! > 1024 * 1024 * 1024 ||
+        intent.expectedSha256 == null) {
       throw const FormatException('Invalid upload intent.');
     }
     if (grantId != null) uploadSourceId(grantId);
-    return IosTransferSummary.fromJson(await _uploadSourceCall('enqueueUpload', {
-      'intent': intent.toJson(), 'grantID': ?grantId,
-    }));
+    return IosTransferSummary.fromJson(
+      await _uploadSourceCall('enqueueUpload', {
+        'intent': intent.toJson(),
+        'grantID': ?grantId,
+      }),
+    );
   }
 
   Future<Object?> _uploadControl(String method, IosTransferJob job) async {
@@ -335,25 +413,40 @@ class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUpl
         throw StateError('Upload control was retired by a library mutation.');
       }
     }
+
     check();
-    return _importCall(method, {'id': job.id, 'revision': job.revision}, guard: check);
+    return _importCall(method, {
+      'id': job.id,
+      'revision': job.revision,
+    }, guard: check);
   }
 
   /// Read-only original-file query for an uncertain upload. A null match never
   /// grants permission to resend audio. Product upload capability stays gated.
   Future<IosTransferJob?> matchUploadedOriginal(IosTransferJob job) async {
     if (job.direction != 'upload' ||
-        !{IosTransferPhase.interrupted, IosTransferPhase.failed, IosTransferPhase.complete}.contains(job.phase)) {
-      throw const FormatException('Only uncertain or completed uploads can be reconciled.');
+        !{
+          IosTransferPhase.interrupted,
+          IosTransferPhase.failed,
+          IosTransferPhase.complete,
+        }.contains(job.phase)) {
+      throw const FormatException(
+        'Only uncertain or completed uploads can be reconciled.',
+      );
     }
     final raw = await _uploadControl('matchUploadedOriginal', job);
     if (raw == null) return null;
     final result = IosTransferJob.fromJson(raw);
-    if (result.direction != 'upload' || result.phase != IosTransferPhase.complete ||
-        result.revision != job.revision || result.updatedMs < job.updatedMs ||
+    if (result.direction != 'upload' ||
+        result.phase != IosTransferPhase.complete ||
+        result.revision != job.revision ||
+        result.updatedMs < job.updatedMs ||
         jsonEncode(result.intent.toJson()) != jsonEncode(job.intent.toJson()) ||
-        (job.phase == IosTransferPhase.complete && result.resultOriginalId != job.resultOriginalId)) {
-      throw const FormatException('Native upload reconciliation changed its frozen intent.');
+        (job.phase == IosTransferPhase.complete &&
+            result.resultOriginalId != job.resultOriginalId)) {
+      throw const FormatException(
+        'Native upload reconciliation changed its frozen intent.',
+      );
     }
     return result;
   }
@@ -362,11 +455,18 @@ class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUpl
   /// Never treats failed/interrupted audio as disposable or selects a source.
   Future<void> cleanupUploadBody(IosTransferJob job) async {
     if (job.direction != 'upload' ||
-        !{IosTransferPhase.complete, IosTransferPhase.cancelled}.contains(job.phase)) {
-      throw const FormatException('Only terminal upload bodies can be retired.');
+        !{
+          IosTransferPhase.complete,
+          IosTransferPhase.cancelled,
+        }.contains(job.phase)) {
+      throw const FormatException(
+        'Only terminal upload bodies can be retired.',
+      );
     }
     if (await _uploadControl('cleanupUploadBody', job) != true) {
-      throw const FormatException('Invalid private upload cleanup acknowledgement.');
+      throw const FormatException(
+        'Invalid private upload cleanup acknowledgement.',
+      );
     }
   }
 

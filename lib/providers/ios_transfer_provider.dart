@@ -12,6 +12,8 @@ import '../services/ios_transfer_media_probe.dart';
 import '../services/ios_transfer_session.dart';
 import '../services/ios_transfer_transport.dart';
 import '../services/ios_transfer_upload_admission.dart';
+import '../services/ios_transfer_copy_plan.dart';
+import '../services/link/lokal_desktop_source.dart';
 
 IosTransferSession? _createSession() {
   if (kIsWeb || !Platform.isIOS) return null;
@@ -37,6 +39,21 @@ IosTransferSession? _createSession() {
         );
       },
       readMedia: const IosTransferMediaProbe().inspect,
+      didComplete: (result, isCurrent) async {
+        if (!isCurrent() || !Database.isInitialized || result.song == null) {
+          return;
+        }
+        final server = await Database.networkServers.get(
+          result.receipt.serverId,
+        );
+        if (server != null && isCurrent()) {
+          await LokalDesktopSource.instance.completeNativeCopySidecars(
+            server,
+            result.song!,
+            stillCurrent: isCurrent,
+          );
+        }
+      },
     ),
   );
 }
@@ -54,4 +71,12 @@ final iosTransferSessionProvider = Provider<IosTransferSession?>((ref) {
     ref.onDispose(() => unawaited(session.dispose()));
   }
   return session;
+});
+
+final iosTransferCopyAdapterProvider = Provider<IosTransferCopyAdapter?>((ref) {
+  if (kIsWeb || !Platform.isIOS || !Database.isInitialized) return null;
+  final session = ref.read(iosTransferSessionProvider);
+  return session == null
+      ? null
+      : IosTransferCopyAdapter(isar: Database.instance, session: session);
 });

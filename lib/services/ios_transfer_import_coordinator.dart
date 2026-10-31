@@ -30,12 +30,18 @@ class IosTransferImportCoordinator {
     required this.native,
     required Future<IosTransferImportStore> Function() store,
     required this.readMedia,
+    this.didComplete,
     this.allowUnreleasedAdapterForIntegration = false,
   }) : _openStore = store;
 
   final IosTransferCoordinatorPort native;
   final Future<IosTransferImportStore> Function() _openStore;
   final IosTransferMediaReader readMedia;
+  final Future<void> Function(
+    IosTransferImportResult result,
+    bool Function() isCurrent,
+  )?
+  didComplete;
   final bool allowUnreleasedAdapterForIntegration;
   final _updates = StreamController<void>.broadcast();
   final _issues = <String, IosTransferCoordinatorIssue>{};
@@ -678,6 +684,14 @@ class IosTransferImportCoordinator {
       throw const FormatException('Incomplete native acknowledgement.');
     }
     _needsHistoryMaintenance = true;
+    // Optional sidecars cannot turn an acknowledged audio import into a
+    // failed transfer. Root mutation still drains this app-owned work.
+    try {
+      await didComplete?.call(result, () => _current(epoch));
+    } catch (_) {
+      /* audio already committed */
+    }
+    _check(epoch);
   }
 
   IosTransferCoordinatorIssue _classify(Object error) {

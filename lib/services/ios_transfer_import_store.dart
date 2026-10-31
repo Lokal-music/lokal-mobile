@@ -359,6 +359,7 @@ class IosTransferImportStore {
           ..filePath =
               'lokal://${identity.localServerId}/${Uri.encodeComponent(identity.sourceId)}'
           ..sourceType = 'lokal'
+          ..albumArtPath = 'lokal-cover://${identity.sourceId}'
           ..remoteId = identity.sourceId
           ..remoteServerId = identity.localServerId
           ..title = metadata.title
