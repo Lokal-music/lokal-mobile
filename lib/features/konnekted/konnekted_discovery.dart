@@ -1458,6 +1458,7 @@ Future<List<OnlineSource>> _playbackSources(
   bool stopOnExplicitSpatialFailure = false,
   bool quickAddonFallback = false,
   Map<String, Completer<void>>? automaticAddonAborts,
+  void Function(String sourceId)? onHttpAddonStreamReady,
 }) async {
   // This is a per-request backstop; the entire automatic search + stream
   // attempt has a shorter shared deadline so three slow requests cannot
@@ -1567,6 +1568,13 @@ Future<List<OnlineSource>> _playbackSources(
           final selectedSpatial = await addon.requestedSpatialCodec(
             cancel: sourceCancel,
           );
+          if (automaticAddonAborts?['w-${addon.configId}']?.isCompleted == true) {
+            throw const DiscoveryException('Request cancelled.');
+          }
+          // The HTTP connection and stream descriptor are ready. Full-file
+          // staging for an explicitly chosen spatial rendition may legitimately
+          // take much longer; it must not be killed by the lookup deadline.
+          onHttpAddonStreamReady?.call('w-${addon.configId}');
           if (selectedSpatial != null) {
             // HTTP add-ons use a separate protocol from Mornye packages.
             // A configured Atmos tier must pass through the native verifier,
@@ -1701,14 +1709,31 @@ final _autoHttpAddonCooldown = OnlineAddonCooldown();
 Future<T> boundedAutomaticAddonAttempt<T>(
   Future<T> Function() acquire, {
   required void Function() abort,
+  Future<void>? streamReady,
   Duration budget = const Duration(seconds: 3),
-}) => acquire().timeout(
-  budget,
-  onTimeout: () {
+}) async {
+  final expired = Completer<T>();
+  final timer = Timer(budget, () {
     abort();
-    throw const DiscoveryException('Automatic source timed out.');
-  },
-);
+    if (!expired.isCompleted) {
+      expired.completeError(
+        const DiscoveryException('Automatic source timed out.'),
+      );
+    }
+  });
+  // If the add-on supplied a stream descriptor, the remaining wait may be a
+  // real download/native spatial verification, not an unresponsive endpoint.
+  // Cancellation still propagates through the caller's normal user signal.
+  if (streamReady != null) {
+    unawaited(streamReady.then((_) => timer.cancel(),
+        onError: (Object _, StackTrace __) => timer.cancel()));
+  }
+  try {
+    return await Future.any([acquire(), expired.future]);
+  } finally {
+    timer.cancel();
+  }
+}
 
 /// Classify without logging signed audio URLs or provider credentials.
 String _onlineFailureKind(Object error) {
@@ -2019,6 +2044,7 @@ Future<Song?> findDiscoverySong(
     DiscoveryPlaybackCache cache() =>
         _playbackCache(web, additionalProtectedPaths);
     final automaticAddonAborts = <String, Completer<void>>{};
+    final streamLookupReady = <String, Completer<void>>{};
     final sources = await _playbackSources(
       web,
       settings,
@@ -2031,6 +2057,12 @@ Future<Song?> findDiscoverySong(
       quickAddonFallback:
           settings.activeAddons.length > 1 || settings.youtubeEnabled,
       automaticAddonAborts: automaticAddonAborts,
+      onHttpAddonStreamReady: (sourceId) {
+        final ready = streamLookupReady.putIfAbsent(
+          sourceId, () => Completer<void>(),
+        );
+        if (!ready.isCompleted) ready.complete();
+      },
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();
@@ -2189,6 +2221,9 @@ Future<Song?> findDiscoverySong(
         final song = source.id.startsWith('w-') && sources.length > 1
             ? await boundedAutomaticAddonAttempt<Song?>(
                 attempt,
+                streamReady: streamLookupReady.putIfAbsent(
+                  source.id, () => Completer<void>(),
+                ).future,
                 abort: () {
                   final pending = automaticAddonAborts.putIfAbsent(
                     source.id, () => Completer<void>(),
