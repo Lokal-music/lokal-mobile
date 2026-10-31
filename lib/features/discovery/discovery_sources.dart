@@ -668,13 +668,20 @@ class DiscoveryAddon {
     );
   }
 
-  Future<List<DiscoveryTrack>> search(String query) async {
+  Future<List<DiscoveryTrack>> search(
+    String query, {
+    Future<void>? cancel,
+  }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
     if (trimmed.length > 200) {
       throw const DiscoveryException('Search is limited to 200 characters.');
     }
-    final json = await _get(['search'], query: {...settings, 'q': trimmed});
+    final json = await _get(
+      ['search'],
+      query: {...settings, 'q': trimmed},
+      cancel: cancel,
+    );
     final rows = json['tracks'];
     if (rows is! List) {
       throw const DiscoveryException(
