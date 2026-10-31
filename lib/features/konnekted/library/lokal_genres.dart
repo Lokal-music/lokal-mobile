@@ -2,6 +2,7 @@ import 'package:flick/l10n/l10n.dart';
 import 'package:flick/core/theme/lokal_genre_palette.dart';
 import 'package:flick/core/theme/lokal_interaction.dart';
 import 'package:flick/core/theme/lokal_theme.dart';
+import 'package:flick/core/theme/app_theme.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/models/song.dart';
 import 'package:flutter/material.dart';
