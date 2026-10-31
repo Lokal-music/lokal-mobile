@@ -51,8 +51,9 @@ class YoutubeMusicPlaylistCache {
   Future<bool> get autoUpdate async =>
       (await _prefs()).getBool(autoUpdateKey) ?? false;
 
-  Future<void> setAutoUpdate(bool value) async =>
-      (await _prefs()).setBool(autoUpdateKey, value);
+  Future<void> setAutoUpdate(bool value) async {
+    await (await _prefs()).setBool(autoUpdateKey, value);
+  }
 
   Future<bool> due(String account, String resource) async {
     if (!await autoUpdate) return false;
