@@ -18,17 +18,17 @@ abstract final class LokalGenrePalette {
 
   static const _tones = <LokalGenreTone>[
     LokalGenreTone(Color(0xFF503787), Color(0xFF8260D1), Icons.graphic_eq_rounded, false),
-    LokalGenreTone(Color(0xFF866011), Color(0xFFB88723), Icons.music_note_rounded, false),
-    LokalGenreTone(Color(0xFF23503D), Color(0xFF3C8861), Icons.album_rounded, true),
-    LokalGenreTone(Color(0xFF075B79), Color(0xFF1583AA), Icons.audiotrack_rounded, false),
+    LokalGenreTone(Color(0xFF866011), Color(0xFF966B18), Icons.music_note_rounded, false),
+    LokalGenreTone(Color(0xFF23503D), Color(0xFF307755), Icons.album_rounded, true),
+    LokalGenreTone(Color(0xFF075B79), Color(0xFF116C8F), Icons.audiotrack_rounded, false),
     LokalGenreTone(Color(0xFF713B55), Color(0xFFA45D7F), Icons.music_video_rounded, true),
-    LokalGenreTone(Color(0xFF514F80), Color(0xFF757CB9), Icons.piano_rounded, false),
-    LokalGenreTone(Color(0xFF854D28), Color(0xFFB97443), Icons.headphones_rounded, false),
-    LokalGenreTone(Color(0xFF22586B), Color(0xFF33859A), Icons.equalizer_rounded, true),
-    LokalGenreTone(Color(0xFF4C6224), Color(0xFF77913D), Icons.library_music_rounded, false),
+    LokalGenreTone(Color(0xFF514F80), Color(0xFF5E68A0), Icons.piano_rounded, false),
+    LokalGenreTone(Color(0xFF854D28), Color(0xFF985C35), Icons.headphones_rounded, false),
+    LokalGenreTone(Color(0xFF22586B), Color(0xFF28748A), Icons.equalizer_rounded, true),
+    LokalGenreTone(Color(0xFF4C6224), Color(0xFF60762F), Icons.library_music_rounded, false),
     LokalGenreTone(Color(0xFF76404A), Color(0xFFA9616D), Icons.radio_rounded, true),
-    LokalGenreTone(Color(0xFF36517A), Color(0xFF527AAB), Icons.music_note_rounded, false),
-    LokalGenreTone(Color(0xFF604784), Color(0xFF9171C0), Icons.queue_music_rounded, true),
+    LokalGenreTone(Color(0xFF36517A), Color(0xFF496F9C), Icons.music_note_rounded, false),
+    LokalGenreTone(Color(0xFF604784), Color(0xFF795F9E), Icons.queue_music_rounded, true),
   ];
 
   static LokalGenreTone of(String name) {
