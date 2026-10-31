@@ -7,6 +7,7 @@ import 'package:flick/features/konnekted/konnekted_discovery.dart';
 import 'package:flick/features/spotify/spotify_api.dart';
 import 'package:flick/features/spotify/spotify_models.dart';
 import 'package:flick/features/spotify/spotify_oauth.dart';
+import 'package:flick/features/spotify/spotify_playlist_cache.dart';
 import 'package:flick/features/spotify/spotify_storage.dart';
 import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/models/song.dart';
@@ -28,6 +29,7 @@ class SpotifyPlaylistsScreen extends ConsumerStatefulWidget {
 class _SpotifyPlaylistsScreenState
     extends ConsumerState<SpotifyPlaylistsScreen> {
   late final SpotifyWebApi _api;
+  final SpotifyPlaylistCache _cache = SpotifyPlaylistCache.instance;
   List<SpotifyPlaylist> _playlists = const [];
   bool _loading = true;
   String? _error;
@@ -40,7 +42,7 @@ class _SpotifyPlaylistsScreenState
       store: settings.tokenStore,
       oauth: SpotifyOAuthService(tokenStore: settings.tokenStore),
     );
-    unawaited(_refresh());
+    unawaited(_load());
   }
 
   @override
@@ -49,22 +51,44 @@ class _SpotifyPlaylistsScreenState
     super.dispose();
   }
 
-  Future<void> _refresh() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load() async {
     try {
-      final result = await _api.getLibraryPlaylists();
-      if (mounted) setState(() => _playlists = result);
+      final cached = await _cache.playlists();
+      if (!mounted) return;
+      if (cached == null) {
+        await _refresh();
+        return;
+      }
+      setState(() { _playlists = cached; _loading = false; _error = null; });
+      // Local data is visible before an optional scheduled refresh starts.
+      if (await _cache.shouldAutoUpdateList() && mounted) {
+        unawaited(_refresh(silent: true));
+      }
+    } catch (_) {
+      if (mounted) setState(() {
+        _loading = false;
+        _error = 'Could not open the saved Spotify playlists.';
+      });
+    }
+  }
+
+  Future<void> _refresh({bool silent = false}) async {
+    if (!silent) setState(() { _loading = true; _error = null; });
+    try {
+      final result = await _cache.refreshList(_api);
+      if (mounted) setState(() { _playlists = result; _error = null; });
     } catch (error) {
       if (mounted) {
-        setState(() {
-          _playlists = const [];
-          _error = error is SpotifyApiException
-              ? error.message
-              : 'Could not load Spotify playlists. Retry or reconnect Spotify.';
-        });
+        final message = error is SpotifyApiException
+            ? error.message
+            : 'Could not update Spotify playlists. Retry or reconnect.';
+        if (_playlists.isEmpty) {
+          setState(() => _error = message);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -170,6 +194,7 @@ class _SpotifyPlaylistDetail extends ConsumerStatefulWidget {
 class _SpotifyPlaylistDetailState
     extends ConsumerState<_SpotifyPlaylistDetail> {
   late final SpotifyWebApi _api;
+  final SpotifyPlaylistCache _cache = SpotifyPlaylistCache.instance;
   List<LokalDiscoveryTrack> _tracks = const [];
   bool _loading = true;
   String? _error;
@@ -182,7 +207,7 @@ class _SpotifyPlaylistDetailState
       store: settings.tokenStore,
       oauth: SpotifyOAuthService(tokenStore: settings.tokenStore),
     );
-    unawaited(_refresh());
+    unawaited(_load());
   }
 
   @override
@@ -191,20 +216,50 @@ class _SpotifyPlaylistDetailState
     super.dispose();
   }
 
-  Future<void> _refresh() async {
-    setState(() { _loading = true; _error = null; });
+  Future<void> _load() async {
     try {
-      final tracks = await _api.getPlaylistTracks(widget.playlist.id, max: 1000);
-      if (mounted) setState(() =>
-        _tracks = tracks.map(spotifyDiscoveryTrack).toList(growable: false));
+      final cached = await _cache.tracks(widget.playlist.id);
+      if (!mounted) return;
+      if (cached == null) {
+        await _refresh();
+        return;
+      }
+      setState(() {
+        _tracks = cached.map(spotifyDiscoveryTrack).toList(growable: false);
+        _loading = false;
+        _error = null;
+      });
+      if (await _cache.shouldAutoUpdateTracks(widget.playlist.id) && mounted) {
+        unawaited(_refresh(silent: true));
+      }
+    } catch (_) {
+      if (mounted) setState(() {
+        _loading = false;
+        _error = 'Could not open the saved Spotify playlist.';
+      });
+    }
+  }
+
+  Future<void> _refresh({bool silent = false}) async {
+    if (!silent) setState(() { _loading = true; _error = null; });
+    try {
+      final tracks = await _cache.refreshTracks(_api, widget.playlist.id);
+      if (mounted) setState(() {
+        _tracks = tracks.map(spotifyDiscoveryTrack).toList(growable: false);
+        _error = null;
+      });
     } catch (error) {
       if (mounted) {
-        setState(() {
-          _tracks = const [];
-          _error = error is SpotifyApiException
-              ? error.message
-              : 'Could not read this playlist.';
-        });
+        final message = error is SpotifyApiException
+            ? error.message
+            : 'Could not update this playlist.';
+        if (_tracks.isEmpty) {
+          setState(() => _error = message);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _loading = false);
