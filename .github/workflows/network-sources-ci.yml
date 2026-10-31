@@ -73,7 +73,7 @@ jobs:
       - name: Run Rust SMB transport tests
         run: cargo test --locked --lib --manifest-path rust/Cargo.toml smb_api
       - name: Test Android native crash tombstone decoder
-        run: cd android && ./gradlew :app:testFullDebugUnitTest --no-daemon
+        run: cd android && bash ./gradlew :app:testFullDebugUnitTest --no-daemon
       - name: Compile mobile network code into Android test APK
         run: flutter build apk --debug --flavor full --target-platform android-arm64 --no-pub
       - name: Verify dependency locks
