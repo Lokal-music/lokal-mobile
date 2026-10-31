@@ -321,6 +321,7 @@ func runNetworkContracts(origin: String, length: Int64, checksum: String) throws
   try runHostContracts()
   try runUploadRuntimeContracts(origin: origin, length: length, checksum: checksum)
   try runUploadMatchContracts(origin: origin, length: length, checksum: checksum)
+  try runUploadSourceContracts(origin: origin, length: length, checksum: checksum)
   try runNetworkRetirementContracts(origin: origin, length: length, checksum: checksum)
   try runRuntimeImportContracts(origin: origin, length: length, checksum: checksum)
   try runTrackedRuntimeContracts(origin: origin, length: length, checksum: checksum)
@@ -1575,4 +1576,100 @@ private func runUploadMatchContracts(origin: String, length: Int64, checksum: St
     final["cookiesSeen"] as? Bool == false && Data(contentsOf: original) == bytes,
     "queries send only frozen fingerprint, refuse redirects/cookies and preserve original source")
   print("Native upload content-match/cleanup contracts passed: positive/negative/bounded query, durable no-resend recovery, reply replay, source-preparation retry, exact terminal cleanup, consent/account fencing and Forget drainage. No desktop exactly-once or Apple lifecycle claim.")
+}
+
+private func runUploadSourceContracts(origin: String, length: Int64, checksum: String) throws {
+  let manager = FileManager.default
+  let root = manager.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("lokal-upload-sources-" + UUID().uuidString)
+  let music = root.appendingPathComponent("Music")
+  try manager.createDirectory(at: music, withIntermediateDirectories: true)
+  defer { try? manager.removeItem(at: root) }
+  let album = music.appendingPathComponent("Café")
+  try manager.createDirectory(at: album, withIntermediateDirectories: false)
+  let bytes: Data = try native { reply in
+    URLSession.shared.dataTask(with: URL(string: origin + "/__upload_payload")!) { data, _, error in
+      if let error { reply(.failure(error)) } else { reply(.success(data ?? Data())) }
+    }.resume()
+  }
+  let original = album.appendingPathComponent("recording.wav")
+  try bytes.write(to: original)
+  let auth = try LokalTransferAuthorization(desktopID: "fixture-pc", origin: origin,
+    token: "transfer-fixture-token", pairingID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", desktopUserID: "fixture-account")
+  let ownership = LokalTransferImportOwnership()
+  let runtime = try PortableNativeUploadRuntime(container: root, importOwnership: ownership,
+    library: { try LokalTransferLibrary(root: music) }, credentials: { auth })
+  defer {
+    let done = DispatchSemaphore(value: 0)
+    runtime.shutdown { done.signal() }; _ = done.wait(timeout: .now() + 10)
+  }
+  let _: LokalTransferSummary = try native { runtime.recover($0) }
+  let owner = try ownership.attachClient(engineID: ownership.attachEngine(), clientID: UUID().uuidString.lowercased())
+  let ticket = try ownership.captureSubmission(owner)
+  let context: LokalTransferUploadSourceContext = try native { runtime.uploadSourceContext(submission: ticket, reply: $0) }
+  try require(context.rootPath == music.path && context.canonicalRootPath == music.path, "source root comes only from native library")
+  func grant(_ path: String = "Café/recording.wav") throws -> LokalTransferUploadSourceGrant {
+    try native { runtime.authorizeUploadSource(contextID: context.contextID, relativePath: path, songID: "42", submission: ticket, reply: $0) }
+  }
+  for path in ["../outside.wav", "/absolute.wav", "Café//recording.wav", "Café/./recording.wav"] {
+    try rejects("unsafe relative source is refused") { _ = try grant(path) }
+  }
+  let symlink = music.appendingPathComponent("link")
+  try manager.createSymbolicLink(at: symlink, withDestinationURL: album)
+  try rejects("symlink directory never authorizes even inside Music") { _ = try grant("link/recording.wav") }
+  let hardlink = album.appendingPathComponent("hard.wav")
+  guard link(original.path, hardlink.path) == 0 else { throw TestFailure.failed("create source hardlink") }
+  try rejects("multiply linked source is refused") { _ = try grant() }
+  try manager.removeItem(at: hardlink)
+  let source = try grant()
+  try require(source.songID == "42" && source.bytes == length && source.sha256 == checksum, "actual source hash bound to current song")
+  func job(_ song: String = "42") throws -> LokalTransferJob {
+    try LokalTransferJob(direction: .upload,
+      identity: LokalTransferIdentity(desktopID: auth.desktopID, sourceID: "authorized-source-" + song, localSongID: song,
+        origin: origin, pairingID: auth.pairingID, desktopUserID: auth.desktopUserID),
+      metadata: LokalTransferMetadata(title: "upload-success", artist: "Native fixture — Café", album: nil, fileExtension: "wav"),
+      nowMs: 1000, expectedBytes: length, expectedSHA256: checksum)
+  }
+  try rejects("grant cannot authorize another library song") {
+    let _: LokalTransferSummary = try native { runtime.enqueueAuthorizedUpload(try! job("43"), grantID: source.grantID, submission: ticket, reply: $0) }
+  }
+  let request = try job()
+  let fullDocument = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as! [String: Any]
+  let intentDocument = fullDocument.filter { ["id", "identity", "metadata", "createdMs", "expectedBytes", "expectedSHA256"].contains($0.key) }
+  var envelope: [String: Any] = ["clientID": UUID().uuidString.lowercased(), "grantID": source.grantID, "intent": intentDocument]
+  let decoded = try LokalTransferProtocol.uploadSubmission(JSONSerialization.data(withJSONObject: envelope))
+  try require(try decoded.job.intentFingerprint() == request.intentFingerprint(), "typed upload envelope preserves exact frozen intent")
+  var forged = intentDocument
+  forged["phase"] = "complete"; envelope["intent"] = forged
+  try rejects("Flutter cannot choose upload durable phase") {
+    _ = try LokalTransferProtocol.uploadSubmission(JSONSerialization.data(withJSONObject: envelope))
+  }
+  forged = intentDocument; forged["sourcePath"] = original.path; envelope["intent"] = forged
+  try rejects("Flutter cannot pass arbitrary upload absolute source") {
+    _ = try LokalTransferProtocol.uploadSubmission(JSONSerialization.data(withJSONObject: envelope))
+  }
+  let _: LokalTransferSummary = try native { runtime.enqueueAuthorizedUpload(request, grantID: source.grantID, submission: ticket, reply: $0) }
+  _ = try awaitJob(runtime, id: request.id, phase: [.complete])
+  try require(try Data(contentsOf: original) == bytes, "source authorization and POST preserve original bytes")
+  let replaced = try grant()
+  try manager.moveItem(at: original, to: album.appendingPathComponent("old.wav"))
+  try bytes.write(to: original)
+  try rejects("same-byte source replacement invalidates prior grant") {
+    let _: LokalTransferSummary = try native { runtime.enqueueAuthorizedUpload(try! job(), grantID: replaced.grantID, submission: ticket, reply: $0) }
+  }
+  let _: Bool = try native { runtime.releaseUploadSource(context.contextID, reply: $0) }
+  try rejects("released context cannot create new grants") { _ = try grant() }
+  let fresh: LokalTransferUploadSourceContext = try native { runtime.uploadSourceContext(submission: ticket, reply: $0) }
+  try ownership.retireSubmissions(owner)
+  let _: Bool = try native { runtime.drainUploadSources($0) }
+  try rejects("retired source context cannot reauthorize with a fresh ticket") {
+    let newTicket = try ownership.captureSubmission(owner)
+    let _: LokalTransferUploadSourceGrant = try native { runtime.authorizeUploadSource(contextID: fresh.contextID,
+      relativePath: "Café/recording.wav", songID: "42", submission: newTicket, reply: $0) }
+  }
+  let reader = try LokalTransferUploadSourceReader(root: music)
+  let displacedRoot = root.appendingPathComponent("old-Music")
+  try manager.moveItem(at: music, to: displacedRoot)
+  try manager.createDirectory(at: music, withIntermediateDirectories: false)
+  try rejects("replaced Music root invalidates all pinned source access") { try reader.validateRoot() }
+  print("Native source admission passed: actual Music hash and HTTP POST, Unicode paths, song binding, symlink/hardlink/traversal refusal, same-byte/root replacement, strict envelope and released/retired context refusal. Apple source/lifecycle acceptance pending.")
 }

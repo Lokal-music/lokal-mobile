@@ -214,6 +214,13 @@ final class LokalTransferLibrary: @unchecked Sendable {
 
   deinit { close(writer); close(directory); close(parent) }
 
+  /// Native-selected root only. Upload readers pin this directory separately
+  /// from the import writer; no Flutter absolute path can select a root.
+  func uploadSourceRoot() throws -> URL {
+    try checkRoot()
+    return root
+  }
+
   static func fileName(_ job: LokalTransferJob) throws -> String {
     try job.validate()
     let forbidden = CharacterSet.controlCharacters.union(CharacterSet(charactersIn: "\\/:*?\"<>|"))

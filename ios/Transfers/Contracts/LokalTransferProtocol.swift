@@ -83,6 +83,45 @@ enum LokalTransferProtocol {
     return try JSONDecoder().decode(type, from: data)
   }
 
+  struct UploadSource: Decodable, Sendable {
+    let contextID, relativePath, songID, clientID: String
+  }
+  struct UploadSourceRelease: Decodable, Sendable { let id, clientID: String }
+  static func uploadSource(_ data: Data) throws -> UploadSource {
+    let value = try object(UploadSource.self, data, keys: ["contextID", "relativePath", "songID", "clientID"])
+    guard UUID(uuidString: value.contextID)?.uuidString.lowercased() == value.contextID,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID,
+          let song = Int64(value.songID), song > 0, String(song) == value.songID else { throw LokalTransferError.invalidRecord }
+    _ = try LokalTransferUploadSourceReader.components(value.relativePath)
+    return value
+  }
+  static func uploadSourceRelease(_ data: Data) throws -> UploadSourceRelease {
+    let value = try object(UploadSourceRelease.self, data, keys: ["id", "clientID"])
+    guard UUID(uuidString: value.id)?.uuidString.lowercased() == value.id,
+          UUID(uuidString: value.clientID)?.uuidString.lowercased() == value.clientID else { throw LokalTransferError.invalidRecord }
+    return value
+  }
+  static func uploadSubmission(_ data: Data) throws -> (clientID: String, grantID: String?, job: LokalTransferJob) {
+    guard !data.isEmpty, data.count <= 64 * 1024,
+          let row = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          Set(row.keys).isSubset(of: ["clientID", "grantID", "intent"]),
+          let client = row["clientID"] as? String,
+          UUID(uuidString: client)?.uuidString.lowercased() == client,
+          var intent = row["intent"] as? [String: Any],
+          Set(intent.keys).isSubset(of: ["id", "identity", "metadata", "createdMs", "expectedBytes", "expectedSHA256"]),
+          row["grantID"] == nil || row["grantID"] is NSNull || row["grantID"] is String else {
+      throw LokalTransferError.invalidRecord
+    }
+    let grant = row["grantID"] as? String
+    if let grant { guard UUID(uuidString: grant)?.uuidString.lowercased() == grant else { throw LokalTransferError.invalidRecord } }
+    intent["direction"] = "upload"; intent["phase"] = "queued"; intent["revision"] = 1
+    intent["updatedMs"] = intent["createdMs"]
+    let job = try LokalTransferJob.decodeDocument(JSONSerialization.data(withJSONObject: intent))
+    guard let song = job.identity.localSongID, let id = Int64(song), id > 0, String(id) == song,
+          job.identity.pairingID != nil else { throw LokalTransferError.invalidRecord }
+    return (client, grant, job)
+  }
+
   static func control(_ data: Data) throws -> Control {
     let value = try object(Control.self, data, keys: ["id", "revision"])
     guard LokalTransferTaskBinding(value.id + ":" + String(value.revision)) != nil else {

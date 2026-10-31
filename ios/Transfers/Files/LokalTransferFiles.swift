@@ -695,3 +695,109 @@ final class LokalTransferFiles: @unchecked Sendable {
     #endif
   }
 }
+
+
+/// Read-only confinement for local original uploads. The runtime supplies the
+/// native Music root; every component is opened relative to its pinned inode.
+final class LokalTransferUploadSourceReader: @unchecked Sendable {
+  private let root: URL
+  private let directory: Int32
+  let canonicalPath: String
+  init(root: URL) throws {
+    guard root.isFileURL else { throw LokalTransferError.unsafeFile }
+    let fd = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    guard fd >= 0 else { throw LokalTransferError.unsafeFile }
+    guard let canonical = realpath(root.path, nil) else { close(fd); throw LokalTransferError.unsafeFile }
+    let path = String(cString: canonical); free(canonical)
+    let visible = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    var held = stat(), current = stat()
+    guard visible >= 0, fstat(fd, &held) == 0, fstat(visible, &current) == 0,
+          held.st_dev == current.st_dev, held.st_ino == current.st_ino else {
+      if visible >= 0 { close(visible) }
+      close(fd); throw LokalTransferError.unsafeFile
+    }
+    close(visible)
+    self.root = root; directory = fd; canonicalPath = path
+  }
+  deinit { close(directory) }
+  func validateRoot() throws {
+    let visible = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    guard visible >= 0 else { throw LokalTransferError.unsafeFile }
+    defer { close(visible) }
+    var held = stat(), current = stat()
+    guard fstat(directory, &held) == 0, fstat(visible, &current) == 0,
+          held.st_dev == current.st_dev, held.st_ino == current.st_ino else { throw LokalTransferError.unsafeFile }
+  }
+  static func components(_ path: String) throws -> [String] {
+    let parts = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+    guard !path.isEmpty, path.utf8.count <= 4096, parts.count <= 64,
+          !path.contains("\\"), !path.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+          parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." && $0.utf8.count <= 255 }) else {
+      throw LokalTransferError.unsafeFile
+    }
+    return parts
+  }
+  func openOriginal(_ relativePath: String) throws -> Int32 {
+    try validateRoot()
+    let parts = try Self.components(relativePath)
+    var current = fcntl(directory, F_DUPFD_CLOEXEC, 0)
+    guard current >= 0 else { throw LokalTransferError.unsafeFile }
+    defer { close(current) }
+    for component in parts.dropLast() {
+      let next = openat(current, component, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+      guard next >= 0 else { throw LokalTransferError.unsafeFile }
+      close(current); current = next
+    }
+    let fd = openat(current, parts.last!, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+    guard fd >= 0 else { throw LokalTransferError.unsafeFile }
+    do {
+      var info = stat()
+      guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG), info.st_nlink == 1,
+            info.st_size > 0, info.st_size <= LokalTransferFiles.maximumUploadBytes else { throw LokalTransferError.unsafeFile }
+      try validateRoot()
+      return fd
+    } catch { close(fd); throw error }
+  }
+  func validate(_ relativePath: String, descriptor: Int32) throws {
+    let visible = try openOriginal(relativePath)
+    defer { close(visible) }
+    var held = stat(), current = stat()
+    guard fstat(descriptor, &held) == 0, fstat(visible, &current) == 0,
+          held.st_nlink == 1, held.st_dev == current.st_dev, held.st_ino == current.st_ino,
+          held.st_size == current.st_size else { throw LokalTransferError.unsafeFile }
+  }
+}
+
+final class LokalTransferUploadSourceFile: @unchecked Sendable {
+  let descriptor: Int32
+  let reader: LokalTransferUploadSourceReader
+  let relativePath: String
+  let receipt: LokalTransferFileReceipt
+  init(reader: LokalTransferUploadSourceReader, relativePath: String, check: () throws -> Void) throws {
+    let fd = try reader.openOriginal(relativePath)
+    do {
+      try check()
+      var before = stat(), after = stat()
+      guard fstat(fd, &before) == 0 else { throw LokalTransferError.unsafeFile }
+      let hash = try LokalTransferFiles.digest(fd, checkCancellation: check)
+      guard fstat(fd, &after) == 0, before.st_size == after.st_size else { throw LokalTransferError.unsafeFile }
+      #if canImport(Darwin)
+      guard before.st_mtimespec.tv_sec == after.st_mtimespec.tv_sec,
+            before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec,
+            before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec,
+            before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else { throw LokalTransferError.unsafeFile }
+      #else
+      guard before.st_mtim.tv_sec == after.st_mtim.tv_sec, before.st_mtim.tv_nsec == after.st_mtim.tv_nsec,
+            before.st_ctim.tv_sec == after.st_ctim.tv_sec, before.st_ctim.tv_nsec == after.st_ctim.tv_nsec else {
+        throw LokalTransferError.unsafeFile
+      }
+      #endif
+      try reader.validate(relativePath, descriptor: fd)
+      try check()
+      descriptor = fd; self.reader = reader; self.relativePath = relativePath
+      receipt = LokalTransferFileReceipt(bytes: Int64(after.st_size), sha256: hash)
+    } catch { close(fd); throw error }
+  }
+  deinit { close(descriptor) }
+  func validate() throws { try reader.validate(relativePath, descriptor: descriptor) }
+}

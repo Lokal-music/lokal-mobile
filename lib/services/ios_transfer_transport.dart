@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../data/entities/ios_transfer_receipt_entity.dart';
 
 import '../models/ios_transfer_models.dart';
+import '../models/ios_transfer_upload.dart';
 import '../models/ios_transfer_import.dart';
 import '../models/ios_transfer_recovery.dart';
 import '../models/ios_transfer_cleanup.dart';
@@ -51,7 +52,7 @@ Future<Uint8List> _encodeSubmission(
 /// One application coordinator owns this transport. Native storage/networking
 /// survives Dart/engine replacement; this class owns only typed calls and the
 /// foreground change subscription. No credentials or durable Dart journal.
-class IosTransferTransport implements IosTransferCoordinatorPort {
+class IosTransferTransport implements IosTransferCoordinatorPort, IosTransferUploadPort {
   IosTransferTransport({
     this.channel = const MethodChannel('lokal/transfers'),
     bool? supported,
@@ -90,7 +91,7 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
       bytes = null;
     } else {
       bytes = Uint8List.fromList(utf8.encode(jsonEncode(payload)));
-      final budget = method == 'enqueue' ? iosTransferMaximumBytes : 8192;
+      final budget = method == 'enqueue' ? iosTransferMaximumBytes : method == 'enqueueUpload' ? 64 * 1024 : 8192;
       if (bytes.length > budget) {
         throw const FormatException('Transfer request exceeds its byte limit.');
       }
@@ -264,6 +265,67 @@ class IosTransferTransport implements IosTransferCoordinatorPort {
     checkOwner();
     guard?.call();
     return result;
+  }
+
+  Future<Object?> _uploadSourceCall(String method, Map<String, Object> payload) {
+    final epoch = _submissionEpoch;
+    void check() {
+      if (_submissionsPaused || _disposed || epoch != _submissionEpoch) {
+        throw StateError('Upload admission was retired by a library mutation.');
+      }
+    }
+    check();
+    return _importCall(method, payload, guard: check);
+  }
+
+  @override
+  Future<IosTransferUploadContext> uploadSourceContext() async =>
+      IosTransferUploadContext.fromJson(await _uploadSourceCall('uploadSourceContext', {}));
+
+  @override
+  Future<IosTransferUploadGrant> authorizeUploadSource({required String contextId,
+      required String relativePath, required String songId}) async {
+    uploadSourceId(contextId);
+    final parts = relativePath.split('/');
+    if (!validUploadSongId(songId) || relativePath.length > 4096 || parts.length > 64 ||
+        parts.any((part) => part.isEmpty || part == '.' || part == '..' ||
+          part.contains('\\') || part.codeUnits.any((unit) => unit < 32 || unit == 127))) {
+      throw const FormatException('Invalid upload source request.');
+    }
+    final grant = IosTransferUploadGrant.fromJson(await _uploadSourceCall('authorizeUploadSource', {
+      'contextID': contextId, 'relativePath': relativePath, 'songID': songId,
+    }));
+    if (grant.songId != songId) throw const FormatException('Upload source identity changed.');
+    return grant;
+  }
+
+  @override
+  Future<void> releaseUploadSource(String id) async {
+    uploadSourceId(id);
+    // Releasing authority is allowed while submissions are paused.
+    if (await _importCall('releaseUploadSource', {'id': id}) != true) {
+      throw StateError('Upload source release was not acknowledged.');
+    }
+  }
+
+  @override
+  Future<IosTransferSummary> enqueueUpload(IosTransferIntent intent, {String? grantId}) {
+    final task = _enqueueUpload(intent, grantId);
+    _submissions.add(task);
+    return task.whenComplete(() => _submissions.remove(task));
+  }
+
+  Future<IosTransferSummary> _enqueueUpload(IosTransferIntent intent, String? grantId) async {
+    intent.validate();
+    if (!validUploadSongId(intent.identity.localSongId ?? '') ||
+        intent.identity.scope.pairingId == null || intent.expectedBytes == null ||
+        intent.expectedBytes! > 1024 * 1024 * 1024 || intent.expectedSha256 == null) {
+      throw const FormatException('Invalid upload intent.');
+    }
+    if (grantId != null) uploadSourceId(grantId);
+    return IosTransferSummary.fromJson(await _uploadSourceCall('enqueueUpload', {
+      'intent': intent.toJson(), 'grantID': ?grantId,
+    }));
   }
 
   Future<Object?> _uploadControl(String method, IosTransferJob job) async {
