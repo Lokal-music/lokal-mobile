@@ -7,6 +7,7 @@ import '../../../data/database.dart';
 import '../../../data/repositories/song_repository.dart';
 import '../../../services/library_scanner_service.dart' show ScanProgress;
 import '../../../services/sources/network_source_service.dart';
+import '../../../services/sources/smb_service.dart';
 import 'network_server_edit_screen.dart';
 
 import 'package:flick/l10n/l10n.dart';
@@ -79,14 +80,36 @@ class _NetworkSourcesScreenState extends State<NetworkSourcesScreen> {
     await _syncServer(fresh.first);
   }
 
-  // ponytail: string sniffing across the per-protocol exception types; a
-  // shared AuthException hierarchy is the upgrade path.
-  bool _isAuthFailure(Object e) {
-    final s = e.toString();
+  // Keep a direct route back to server settings for failures requiring
+  // credentials, share configuration, or explicit TLS certificate approval.
+  bool _needsConnectionFix(Object e) {
+    final s = e.toString().toLowerCase();
     return s.contains('401') ||
+        s.contains('403') ||
         s.contains('has no stored credentials') ||
-        s.contains('Authentication failed') ||
-        s.contains('session expired');
+        s.contains('authentication failed') ||
+        s.contains('session expired') ||
+        s.contains('status_access_denied') ||
+        s.contains('certificate_verify_failed') ||
+        s.contains('certificate validation failed') ||
+        s.contains('handshakeexception');
+  }
+
+  String _syncFailureMessage(NetworkServerEntity server, Object error) {
+    final raw = error.toString().toLowerCase();
+    if (server.protocol == NetworkProtocol.smb &&
+        (raw.contains('status_access_denied') ||
+            raw.contains('authentication failed') ||
+            raw.contains('session setup'))) {
+      return '${server.label}: ${SmbService.describePingError(error)}';
+    }
+    if (server.protocol == NetworkProtocol.webdav &&
+        (raw.contains('certificate') || raw.contains('handshakeexception'))) {
+      return '${server.label}: WebDAV HTTPS certificate rejected. Open this '
+          'server, tap Test connection, then independently verify and approve '
+          'the displayed fingerprint. Certificates are never trusted silently.';
+    }
+    return l10n.syncFailed(error);
   }
 
   Future<void> _syncServer(NetworkServerEntity server) async {
@@ -105,16 +128,12 @@ class _NetworkSourcesScreenState extends State<NetworkSourcesScreen> {
       }
     } catch (e) {
       if (mounted) {
-        final authFailure = _isAuthFailure(e);
-        LokalToast.fromSnackBar(context, 
+        final needsFix = _needsConnectionFix(e);
+        LokalToast.fromSnackBar(context,
           SnackBar(
-            duration: const Duration(seconds: 6),
-            content: Text(
-              authFailure
-                  ? l10n.credentialsRejectedByReEnterThe(server.label)
-                  : l10n.syncFailed(e),
-            ),
-            action: authFailure
+            duration: const Duration(seconds: 8),
+            content: Text(_syncFailureMessage(server, e)),
+            action: needsFix
                 ? SnackBarAction(
                     label: l10n.fix,
                     onPressed: () => _openEditor(server: server),
