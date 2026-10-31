@@ -12,6 +12,7 @@ import 'package:flick/features/spotify/spotify_web_api.dart';
 import 'package:flick/features/library_jobs/library_jobs.dart';
 import 'package:flick/features/library_jobs/library_job_control.dart';
 import 'package:flick/core/theme/lokal_tokens.dart';
+import 'package:flick/core/theme/lokal_interaction.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/features/konnekted/konnekted_data.dart';
 import 'package:flick/features/konnekted/konnekted_home.dart';
@@ -457,7 +458,9 @@ class _ArtistRow extends ConsumerWidget {
             child: Icon(Icons.person_rounded, color: context.lokal.muted))
         : KonnektedArtwork(
             song: artist.songs.first, size: 52, radius: 26);
-    return InkWell(
+    return LokalPressable(
+      radius: 18,
+      semanticLabel: artist.name,
       onTap: () => pushLokal(
         context,
         LokalArtistPage(name: artist.name, songs: artist.songs,
