@@ -820,16 +820,6 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
     );
   }
 
-  Widget _heroButton(IconData icon, String label, VoidCallback onTap) =>
-      Tooltip(
-        message: label,
-        child: LokalGlassButton(
-          semanticLabel: label,
-          onPressed: onTap,
-          child: Icon(icon, color: Colors.white, size: 24),
-        ),
-      );
-
   Widget _control(IconData icon, String label, VoidCallback? onTap) => Tooltip(
     message: label,
     child: LokalGlassButton(
