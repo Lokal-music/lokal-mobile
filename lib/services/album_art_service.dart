@@ -59,9 +59,25 @@ class AlbumArtService {
       return null;
     }
     final prefix = '${uri.scheme}-cover://';
-    return marker != null && marker.startsWith(prefix)
-        ? '${uri.scheme}://${uri.host}/$marker'
-        : sourcePath;
+    if (marker != null && marker.startsWith(prefix)) {
+      return '${uri.scheme}://${uri.host}/$marker';
+    }
+    // Albums without a separate cover.jpg still share embedded art across
+    // their tracks. Do not issue the same prefix read once per track in a
+    // 20-song folder; persist one recovered image per NAS album directory.
+    final remoteId = networkRemoteIdFromAudioPath(sourcePath);
+    if (remoteId == null) return sourcePath;
+    try {
+      final remotePath = uri.scheme == 'webdav'
+          ? Uri.decodeComponent(remoteId)
+          : remoteId;
+      final slash = remotePath.lastIndexOf('/');
+      if (slash <= 0) return sourcePath;
+      return '${uri.scheme}://${uri.host}/folder/'
+          '${Uri.encodeComponent(remotePath.substring(0, slash))}';
+    } catch (_) {
+      return sourcePath;
+    }
   }
 
   Future<File> _networkIndexFile(String key) async {
