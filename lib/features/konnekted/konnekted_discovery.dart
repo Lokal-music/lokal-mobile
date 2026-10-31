@@ -1399,10 +1399,18 @@ Song progressiveAddonSong(DiscoveryTrack track, ResolvedDiscoveryAudio audio) {
   final hasRenditionDetails = audio.codec != null ||
       audio.quality != null ||
       audio.bitDepth != null ||
-      audio.sampleRate != null;
+      audio.sampleRate != null ||
+      audio.bitrate != null;
+  final selectedCodec = hasRenditionDetails
+      ? audio.codec : track.catalogueCodec;
+  // Exact selected-stream bitrate can fill the quality tag for a lossy
+  // rendition (for example Tidal HIGH AAC) without copying a different
+  // catalogue tier. A codec or a URL extension alone proves no bitrate.
+  final selectedQuality = audio.quality ??
+      measuredLossyBitrate(codec: audio.codec, bitsPerSecond: audio.bitrate);
   final audioInfo = advertisedOnlineAudio(
-    codec: hasRenditionDetails ? audio.codec : track.catalogueCodec,
-    quality: hasRenditionDetails ? audio.quality : track.catalogueQuality,
+    codec: selectedCodec,
+    quality: hasRenditionDetails ? selectedQuality : track.catalogueQuality,
     bitDepth: hasRenditionDetails ? audio.bitDepth : track.catalogueBitDepth,
     sampleRate: hasRenditionDetails ? audio.sampleRate : track.catalogueSampleRate,
     // A filename suffix is only a container hint; M4A and WebM may hold
