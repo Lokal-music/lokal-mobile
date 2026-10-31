@@ -377,15 +377,33 @@ class AlbumArtService {
         }
       }
 
-      // SMB and WebDAV directory listings cannot expose the APIC/FLAC
-      // PICTURE tag. Once playback has cached the original audio, recover its
-      // embedded artwork without another NAS read or full-file download.
-      // Preserve the opaque percent-encoded remoteId (critical for WebDAV).
+      // A NAS listing cannot expose embedded APIC/FLAC PICTURE tags.
+      // Reuse cached audio when available. Otherwise fetch at most a small
+      // FLAC/MP3 prefix, never the full audio file just to draw a list tile.
+      // Preserve the opaque encoded remoteId (especially WebDAV percent URLs).
       if (uri.scheme == 'smb' || uri.scheme == 'webdav') {
         final raw = networkRemoteIdFromAudioPath(audioSourcePath);
         if (raw == null) return null;
         final local = await NetworkCacheService().getPath(serverId, raw);
-        if (local != null) return _loadEmbeddedArtworkBytes(local);
+        if (local != null) {
+          final cached = await _loadEmbeddedArtworkBytes(local);
+          if (cached != null && cached.isNotEmpty) return cached;
+        }
+        final server = await Database.networkServers.get(serverId);
+        if (server != null) {
+          try {
+            final bytes = await service.getEmbeddedCoverArt(server, raw);
+            if (bytes.isNotEmpty) return Uint8List.fromList(bytes);
+          } catch (error) {
+            final errorKey = '${uri.scheme}:$serverId:embedded';
+            if (_reportedNetworkCoverErrors.add(errorKey)) {
+              AppLog.instance.add(
+                'NAS embedded cover prefix failed (${uri.scheme}, '
+                'server $serverId): $error',
+              );
+            }
+          }
+        }
       }
       return null;
     }
