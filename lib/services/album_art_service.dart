@@ -269,6 +269,21 @@ class AlbumArtService {
 
     try {
       final referenced = await _songRepository.getReferencedAlbumArtPaths();
+      // Remote-song DB rows retain their server markers, not the local image
+      // path. Honor the durable cover index too: without this, pruning would
+      // evict active NAS artwork as an "orphan" after 500 covers.
+      final indexDirectory = Directory('${dir.path}/network-index');
+      if (await indexDirectory.exists()) {
+        await for (final entity in indexDirectory.list(followLinks: false)) {
+          if (entity is! File) continue;
+          try {
+            final name = (await entity.readAsString()).trim();
+            if (RegExp(r'^embedded-artwork:[a-f0-9]{32}$').hasMatch(name)) {
+              referenced.add('${dir.path}/$name');
+            }
+          } catch (_) {}
+        }
+      }
 
       final files = <({File file, DateTime modified})>[];
       await for (final entity in dir.list(followLinks: false)) {
