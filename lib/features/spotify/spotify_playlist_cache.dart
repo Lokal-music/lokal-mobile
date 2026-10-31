@@ -131,10 +131,15 @@ class SpotifyPlaylistCache {
 
   Future<void> _failed(String? id) async {
     await _ensure();
-    final trackEntries = _state?['tracks'];
-    final raw = id == null
-        ? _state?['playlists']
-        : (trackEntries is Map ? trackEntries[id] : null);
+    // Use explicit branching: Dart can interpret the null-aware [] access
+    // next to a ternary '?' as a second conditional expression.
+    Object? raw;
+    if (id == null) {
+      raw = _state?['playlists'];
+    } else {
+      final trackEntries = _state?['tracks'];
+      raw = trackEntries is Map ? trackEntries[id] : null;
+    }
     final entry = _entry(raw);
     if (entry == null) return;
     entry['retryAfter'] = _timestamp + retryInterval.inMilliseconds;
