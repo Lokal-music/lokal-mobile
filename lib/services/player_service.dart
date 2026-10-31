@@ -3167,11 +3167,19 @@ class PlayerService {
     return true;
   }
 
-  /// Bit-perfect volume path: direct USB DAC or DAP internal hi-res engine.
+  bool get _isAndroidMixerBitPerfectPath =>
+      currentEngineType == AudioEngineType.rustOboe &&
+      Uac2PreferencesService.isAndroidMixerUsbSelectedSync &&
+      _uac2Service.isBitPerfectEnabledSync;
+
+  /// True while the selected active engine intends a hardware-protected route.
+  /// On the framework mixer the Android volume slider cannot control the
+  /// output; unlike libusb there is no UAC2 Feature Unit volume ownership.
   bool get _isBitPerfectVolumePath =>
       isBitPerfectModeEnabled &&
       (currentEngineType == AudioEngineType.usbDacExperimental ||
-          currentEngineType == AudioEngineType.dapInternalHighRes);
+          currentEngineType == AudioEngineType.dapInternalHighRes ||
+          _isAndroidMixerBitPerfectPath);
 
   String? get _currentUsbDsdMode =>
       _activeUsbDsdSongId == currentSongNotifier.value?.id
@@ -3254,9 +3262,14 @@ class PlayerService {
 
   VolumeTier _determineCurrentTier() => determineVolumeTier(
     isBitPerfectVolumePath: _isBitPerfectVolumePath,
-    volumeMode: _uac2Service.currentDeviceStatus?.volumeMode,
-    volumeControlWritable:
-        _uac2Service.currentDeviceStatus?.volumeControlWritable ?? false,
+    // Android's bit-perfect USB mixer does not expose hardware Feature
+    // Unit control through our libusb driver. Never promise app-side volume
+    // adjustment based on USB descriptors from a different transport.
+    volumeMode: _isAndroidMixerBitPerfectPath
+        ? null
+        : _uac2Service.currentDeviceStatus?.volumeMode,
+    volumeControlWritable: !_isAndroidMixerBitPerfectPath &&
+        (_uac2Service.currentDeviceStatus?.volumeControlWritable ?? false),
     hwVolumeFailed: _hwVolumeFailed,
     isDoP: _usbDsdWireActive,
     autoSwitchDsdForVolume: Uac2PreferencesService.autoSwitchDsdForVolumeSync,
