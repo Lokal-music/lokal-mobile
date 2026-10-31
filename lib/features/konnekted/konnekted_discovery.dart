@@ -1457,13 +1457,21 @@ Future<List<OnlineSource>> _playbackSources(
   bool respectEnabledDiscoverySources = false,
   bool stopOnExplicitSpatialFailure = false,
   bool quickAddonFallback = false,
+  Map<String, Completer<void>>? automaticAddonAborts,
 }) async {
-  // Automatic fallback must not serially wait the full 15-second default
-  // for every unhealthy HTTP add-on. Pinned/manual source playback retains
-  // the normal deadline. The shorter timeout still aborts network requests.
+  // This is a per-request backstop; the entire automatic search + stream
+  // attempt has a shorter shared deadline so three slow requests cannot
+  // accumulate. Manual selection and explicit downloads remain unrestricted.
   final addonWeb = quickAddonFallback
-      ? DiscoveryHttp(web.client, timeout: const Duration(seconds: 6))
+      ? DiscoveryHttp(web.client, timeout: const Duration(seconds: 4))
       : web;
+  Future<void>? addonCancel(String sourceId) {
+    if (automaticAddonAborts == null) return cancel;
+    final local = automaticAddonAborts
+        .putIfAbsent(sourceId, () => Completer<void>()).future;
+    if (cancel == null) return local;
+    return Future.any([local, cancel]);
+  }
   final registry = DiscoverySourceRegistry(addonWeb, settings);
   final youtube = YoutubeAudio(web);
   // Automatic Discovery should not resurrect native sources behind the
@@ -1545,15 +1553,20 @@ Future<List<OnlineSource>> _playbackSources(
         name: addon.displayName,
         addon: true,
         results: (query) async => [
-          for (final track in await addon.search(query))
+          for (final track in await addon.search(
+            query, cancel: addonCancel('w-${addon.configId}'),
+          ))
             OnlineResult(track, artwork: track.artwork),
         ],
         play: (found) async {
           onStatus?.call('Connecting to ${addon.displayName}…');
+          final sourceCancel = addonCancel('w-${addon.configId}');
           final audio = await registry.resolve(
-            found, cancel: cancel, forDownload: forDownload,
+            found, cancel: sourceCancel, forDownload: forDownload,
           );
-          final selectedSpatial = await addon.requestedSpatialCodec(cancel: cancel);
+          final selectedSpatial = await addon.requestedSpatialCodec(
+            cancel: sourceCancel,
+          );
           if (selectedSpatial != null) {
             // HTTP add-ons use a separate protocol from Mornye packages.
             // A configured Atmos tier must pass through the native verifier,
@@ -1639,8 +1652,8 @@ String _canonicalOnlineSourceId(String sourceId, DiscoveryTrack track) {
 /// Search playback and manual retries always remain available.
 class OnlineAddonCooldown {
   OnlineAddonCooldown({
-    this.failureThreshold = 2,
-    this.cooldown = const Duration(minutes: 2),
+    this.failureThreshold = 1,
+    this.cooldown = const Duration(seconds: 45),
   });
 
   final int failureThreshold;
@@ -1946,6 +1959,7 @@ Future<Song?> findDiscoverySong(
     DiscoveryException? failure;
     DiscoveryPlaybackCache cache() =>
         _playbackCache(web, additionalProtectedPaths);
+    final automaticAddonAborts = <String, Completer<void>>{};
     final sources = await _playbackSources(
       web,
       settings,
@@ -1956,6 +1970,7 @@ Future<Song?> findDiscoverySong(
       respectEnabledDiscoverySources: true,
       stopOnExplicitSpatialFailure: true,
       quickAddonFallback: true,
+      automaticAddonAborts: automaticAddonAborts,
     );
     final candidate = discoveryCandidate(track);
     final queries = recommendationQueries(candidate).take(3).toList();
