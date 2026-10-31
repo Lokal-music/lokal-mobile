@@ -148,6 +148,25 @@ void main() {
     pending.complete(1);
   });
 
+  test('verified spatial stream may keep staging beyond connection budget', () async {
+    final download = Completer<int>();
+    final descriptorReady = Completer<void>();
+    var aborted = false;
+    final waiting = boundedAutomaticAddonAttempt<int>(
+      () => download.future,
+      abort: () => aborted = true,
+      streamReady: descriptorReady.future,
+      budget: const Duration(milliseconds: 10),
+    );
+    descriptorReady.complete();
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(aborted, isFalse,
+        reason: 'A legitimate Atmos file transfer must not be aborted by the '
+            'connection lookup deadline');
+    download.complete(42);
+    expect(await waiting, 42);
+  });
+
   test('first genuine timeout cools unhealthy provider temporarily', () {
     final guard = OnlineAddonCooldown();
     final start = DateTime.utc(2026, 10, 31);
