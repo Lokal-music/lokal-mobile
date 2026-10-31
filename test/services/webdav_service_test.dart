@@ -51,6 +51,24 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('NAS href interoperability', () {
+    test('sync aborts on TLS handshake failure instead of retrying every folder', () async {
+      var requests = 0;
+      final service = WebdavService.create(
+        client: MockClient((_) async {
+          requests++;
+          throw const HandshakeException('CERTIFICATE_VERIFY_FAILED');
+        }),
+      );
+      await expectLater(
+        service.syncLibrary(_server()).toList(),
+        throwsA(isA<WebdavNetworkException>().having(
+          (error) => error.toString(), 'error',
+          contains('certificate'),
+        )),
+      );
+      expect(requests, 1);
+    });
+
     test('encoded share roots use decoded segments without double escaping', () {
       const base = 'https://dav.example.com/Music%20%25%20%C3%89t%C3%A9';
       final absolute = WebdavService.requestUriForTest(

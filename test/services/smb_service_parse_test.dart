@@ -77,6 +77,15 @@ void main() {
       );
     });
 
+    test('identifies rejected SMB SessionSetup credentials', () {
+      expect(
+        SmbService.describePingError(
+          Exception('Protocol error: STATUS_ACCESS_DENIED during SessionSetup'),
+        ),
+        allOf(contains('denied login'), contains('DOMAIN')),
+      );
+    });
+
     test('distinguishes denied share from denied directory listing', () {
       expect(
         SmbService.describePingError(

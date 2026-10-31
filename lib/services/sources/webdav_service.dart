@@ -723,6 +723,17 @@ class WebdavService implements NetworkSourceService {
           requestUrl: dir.url, shareRoot: rootPath,
         );
       } catch (e) {
+        // TLS/auth/URL failures affect the entire connection, not just one
+        // folder. Stop immediately instead of issuing the same broken request
+        // for every queued directory and hiding the actionable root cause.
+        if (e is HandshakeException || e is FormatException ||
+            e is SocketException) {
+          final reason = describePingFailure(e);
+          AppLog.instance.add(
+            'WebDAV sync connection failed on ${server.label}: $reason',
+          );
+          throw WebdavNetworkException(reason);
+        }
         scanIncomplete = true;
         scanErrors.add('${dir.path}: $e');
         AppLog.instance

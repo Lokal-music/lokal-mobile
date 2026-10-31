@@ -8,6 +8,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/utils/dev_log.dart';
+import '../core/utils/app_log.dart';
 import '../data/database.dart';
 import '../data/repositories/song_repository.dart';
 import '../src/rust/api/scanner.dart' as rust_scanner;
@@ -39,6 +40,9 @@ class AlbumArtService {
   final MusicFolderService _musicFolderService = MusicFolderService();
   final Map<String, Future<String?>> _inFlightResolutions = {};
   final Map<String, String> _resolvedPaths = {};
+  // Once per server/protocol until a successful fetch: network failures must
+  // be visible in exported diagnostics without flooding logs for every tile.
+  final Set<String> _reportedNetworkCoverErrors = {};
 
   // SMB and WebDAV each expose the same folder cover to every track in an
   // album. Bound outstanding NAS image operations and share one request per
@@ -354,11 +358,21 @@ class AlbumArtService {
       if (marker != null && marker.isNotEmpty) {
         final server = await Database.networkServers.get(serverId);
         if (server != null) {
+          final errorKey = '${uri.scheme}:$serverId';
           try {
             final bytes = await service.getCoverArt(server, marker);
-            if (bytes.isNotEmpty) return Uint8List.fromList(bytes);
-          } catch (_) {
-            // A missing/unreadable cover.jpg must not suppress embedded art.
+            if (bytes.isNotEmpty) {
+              _reportedNetworkCoverErrors.remove(errorKey);
+              return Uint8List.fromList(bytes);
+            }
+          } catch (error) {
+            // A missing/unreadable cover.jpg must not suppress embedded art,
+            // but silently hiding TLS/auth failures made diagnosis impossible.
+            if (_reportedNetworkCoverErrors.add(errorKey)) {
+              AppLog.instance.add(
+                'NAS cover fetch failed (${uri.scheme}, server $serverId): $error',
+              );
+            }
           }
         }
       }

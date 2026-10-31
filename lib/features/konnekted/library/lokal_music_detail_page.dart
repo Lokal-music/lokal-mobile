@@ -444,10 +444,10 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
           ),
         );
     }
-    final localCover = local
+    final localArtworkSong = local
         .where((song) => song.albumArt?.isNotEmpty == true)
-        .firstOrNull
-        ?.albumArt;
+        .firstOrNull ?? local.firstOrNull;
+    final localCover = localArtworkSong?.albumArt;
     final cachedPortrait = widget.isArtist
         ? ref.watch(
             artistMetadataProvider.select(
@@ -499,13 +499,19 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
                       artist: widget.artist,
                       url: discoveryImageUrl(heroImage),
                       placeholder: localCover?.isNotEmpty == true
-                          ? CachedImageWidget(imagePath: localCover, fit: BoxFit.cover,
+                          ? CachedImageWidget(imagePath: localCover,
+                              audioSourcePath: localArtworkSong?.filePath,
+                              fit: BoxFit.cover,
                               errorWidget: ColoredBox(color: pageColor))
                           : ColoredBox(color: pageColor),
                     )
                   else if (heroImage?.isNotEmpty == true)
                     CachedImageWidget(
                       imagePath: heroImage,
+                      // NAS art is an opaque cover marker, not a file URL.
+                      // The matching source path is needed to fetch it.
+                      audioSourcePath: widget.isArtist
+                          ? null : localArtworkSong?.filePath,
                       fit: BoxFit.cover,
                       placeholder: ColoredBox(color: pageColor),
                       errorWidget: ColoredBox(color: pageColor),
