@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:flick/core/theme/lokal_tokens.dart';
+import 'package:flick/core/theme/lokal_interaction.dart';
 import 'package:flick/data/database.dart';
 import 'package:flick/data/repositories/song_repository.dart';
 import 'package:flick/features/albums/widgets/identify_album_sheet.dart';
@@ -1112,8 +1113,9 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
     List<Song> library,
   ) {
     final songs = _albumSongs(album, groups), t = context.lokal;
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
+    return LokalPressable(
+      radius: 16,
+      semanticLabel: album.title,
       onTap: () => _openAlbum(album, groups),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
