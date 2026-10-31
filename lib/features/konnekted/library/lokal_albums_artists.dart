@@ -490,7 +490,7 @@ class _ArtistRow extends ConsumerWidget {
                       errorBuilder: (_, _, _) => fallback,
                     ),
                   ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
