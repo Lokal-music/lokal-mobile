@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/search_category.dart';
 
-enum SearchScope { library, online }
+enum SearchScope { all, library, online }
 
 const visibleSearchCategories = [
   SearchCategory.songs, SearchCategory.artists,
