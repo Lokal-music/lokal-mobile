@@ -553,137 +553,134 @@ class _LokalMusicDetailPageState extends ConsumerState<LokalMusicDetailPage> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
               child: Column(
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _control(
-                        Icons.shuffle_rounded,
-                        l10n.shuffle,
-                        rows.isEmpty || _busy
-                            ? null
-                            : () => _play(rows, shuffle: true),
-                      ),
-                      const SizedBox(width: 22),
-                      Semantics(
-                        button: true,
-                        label: l10n.play,
-                        child: FilledButton(
-                          onPressed: rows.isEmpty || _busy
-                              ? null
-                              : () => _play(rows),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: rows.isEmpty || _busy ? null : () => _play(rows),
+                          icon: _busy
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.play_arrow_rounded, size: 27),
+                          label: Text(
+                            l10n.play,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
                           style: FilledButton.styleFrom(
                             backgroundColor: t.accent,
                             foregroundColor: t.onAccent,
-                            shape: const CircleBorder(),
-                            padding: const EdgeInsets.all(22),
+                            minimumSize: const Size(0, 56),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(19),
+                            ),
                           ),
-                          child: _busy
-                              ? const SizedBox.square(
-                                  dimension: 36,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.play_arrow_rounded, size: 42),
                         ),
                       ),
-                      const SizedBox(width: 22),
+                      const SizedBox(width: 12),
+                      _control(
+                        Icons.shuffle_rounded,
+                        l10n.shuffle,
+                        rows.isEmpty || _busy ? null : () => _play(rows, shuffle: true),
+                      ),
+                      const SizedBox(width: 12),
                       _control(
                         widget.isArtist
-                            ? (_followed
-                                  ? Icons.star_rounded
-                                  : Icons.star_border_rounded)
-                            : (allLiked
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded),
+                            ? (_followed ? Icons.star_rounded : Icons.star_border_rounded)
+                            : (allLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded),
                         widget.isArtist
-                            ? (_followed
-                                  ? lokalText('Unfollow artist')
-                                  : lokalText('Follow artist'))
+                            ? (_followed ? lokalText('Unfollow artist') : lokalText('Follow artist'))
                             : lokalText('Like all'),
                         !widget.isArtist && local.isEmpty
-                            ? null
-                            : () => widget.isArtist
-                                  ? _follow()
-                                  : _like(local, !allLiked),
+                            ? null : () => widget.isArtist
+                                ? _follow() : _like(local, !allLiked),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _online
-                              ? lokalText('Online')
-                              : lokalText('In library'),
-                          style: TextStyle(
-                            color: t.text,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (_online)
-                        IconButton(
-                          tooltip: lokalText('Refresh'),
-                          onPressed: _loading
-                              ? null
-                              : () => _load(refresh: true),
-                          icon: Icon(Icons.refresh_rounded, color: t.muted),
-                        ),
-                      Switch.adaptive(
-                        value: _online,
-                        onChanged: _busy ? null : _setOnline,
-                        activeTrackColor: t.accent,
-                      ),
-                    ],
-                  ),
-                  if (_online) ...[
-                    if (_loading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: LinearProgressIndicator(),
-                      ),
-                    if (!_loading && (_page?.tracks.isEmpty ?? true))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          _error ??
-                              lokalText(
-                                'No online tracks found. Your library is still available.',
-                              ),
-                          style: TextStyle(color: t.muted),
-                        ),
-                      ),
-                    if (_page?.tracks.isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Text(
-                          widget.isArtist || _page!.completeAlbum
-                              ? lokalText(
-                                  'Catalogue: {source}',
-                                  args: {'source': _page!.label},
-                                )
-                              : lokalText(
-                                  'Search results from {source}; the full album could not be verified.',
-                                  args: {'source': _page!.label},
+                  const SizedBox(height: 16),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: t.surface.withValues(alpha: .8),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: t.border2.withValues(alpha: .65)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  lokalText('Online catalogue'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: t.text,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                          style: TextStyle(color: t.muted, fontSize: 12),
-                        ),
+                              ),
+                              if (_online)
+                                IconButton(
+                                  tooltip: lokalText('Refresh'),
+                                  onPressed: _loading ? null : () => _load(refresh: true),
+                                  icon: Icon(Icons.refresh_rounded, color: t.muted),
+                                ),
+                              Switch.adaptive(
+                                value: _online,
+                                onChanged: _busy ? null : _setOnline,
+                                activeTrackColor: t.accent,
+                              ),
+                            ],
+                          ),
+                          if (_online) ...[
+                            if (_loading)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: LinearProgressIndicator(),
+                              ),
+                            if (!_loading && (_page?.tracks.isEmpty ?? true))
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                child: Text(
+                                  _error ?? lokalText(
+                                    'No online tracks found. Your library is still available.'),
+                                  style: TextStyle(color: t.muted, fontSize: 13),
+                                ),
+                              ),
+                            if (_page?.tracks.isNotEmpty == true)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8, bottom: 6),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    widget.isArtist || _page!.completeAlbum
+                                        ? lokalText('Catalogue: {source}',
+                                            args: {'source': _page!.label})
+                                        : lokalText(
+                                            'Search results from {source}; the full album could not be verified.',
+                                            args: {'source': _page!.label}),
+                                    style: TextStyle(color: t.muted, fontSize: 12),
+                                  ),
+                                ),
+                              ),
+                            if (rows.any((row) => row.owned == null))
+                              TextButton.icon(
+                                onPressed: _busy ? null : () => _download(rows),
+                                icon: const Icon(Icons.download_rounded, size: 18),
+                                label: Text(lokalText('Download missing songs')),
+                              ),
+                          ],
+                        ],
                       ),
-                    if (rows.any((row) => row.owned == null))
-                      Align(
-                        alignment: Alignment.center,
-                        child: TextButton.icon(
-                          onPressed: _busy ? null : () => _download(rows),
-                          icon: const Icon(Icons.download_rounded, size: 18),
-                          label: Text(lokalText('Download missing songs')),
-                        ),
-                      ),
-                  ],
+                    ),
+                  ),
                 ],
               ),
             ),
