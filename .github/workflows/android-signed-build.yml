@@ -53,6 +53,13 @@ jobs:
         with:
           cache: 'true'
 
+      # Fail before Rust compilation and signing if the Spotify files have
+      # parser/type errors (the previous two stable release attempts did).
+      - name: Preflight Spotify Dart compilation
+        run: |
+          dart analyze --no-fatal-infos --no-fatal-warnings lib/features/spotify/spotify_web_api.dart
+          dart analyze --no-fatal-infos --no-fatal-warnings lib/features/spotify/spotify_playlist_cache.dart
+
       - name: Generate full-bleed CD launcher assets
         run: |
           python3 -m pip install --disable-pip-version-check Pillow
