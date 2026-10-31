@@ -51,6 +51,83 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('NAS href interoperability', () {
+    test('encoded share roots use decoded segments without double escaping', () {
+      const base = 'https://dav.example.com/Music%20%25%20%C3%89t%C3%A9';
+      final absolute = WebdavService.requestUriForTest(
+        base,
+        '$base/Album%20%231/100%25%20Real.flac',
+      );
+      expect(
+        absolute.toString(),
+        '$base/Album%20%231/100%25%20Real.flac',
+      );
+
+      final decoded = WebdavService.requestUriForTest(
+        base,
+        '/Music % Été/Album #1/100% Real.flac',
+      );
+      expect(decoded, absolute);
+      expect(
+        () => WebdavService.requestUriForTest(
+          base, '/Music % Another/cover.jpg',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('encoded share root and nested cover hrefs compare by decoded name', () {
+      const body = '<D:multistatus xmlns:D="DAV:">'
+          '<D:response><D:href>/Music%20%25/</D:href></D:response>'
+          '<D:response><D:href>/Music%20%25/Album%20%231/</D:href>'
+          '<D:propstat><D:prop><D:resourcetype><D:collection/>'
+          '</D:resourcetype></D:prop></D:propstat></D:response>'
+          '<D:response><D:href>/Music%20%25/Album%20%231/cover.jpg</D:href>'
+          '</D:response>'
+          '</D:multistatus>';
+      final entries = WebdavService.parseMultistatusForTest(
+        body,
+        '/Music %/',
+        requestUrl: 'https://dav.example.com/Music%20%25/',
+        shareRoot: '/Music %/',
+      );
+      expect(entries.map((entry) => entry.href).toList(), [
+        '/Music %/Album #1/',
+        '/Music %/Album #1/cover.jpg',
+      ]);
+    });
+
+    test('sync encodes the server root and nested URL exactly once', () async {
+      final seen = <Uri>[];
+      final server = _server()
+        ..baseUrl = 'https://dav.example.com/Music%20%25';
+      final service = WebdavService.create(
+        client: MockClient((request) async {
+          seen.add(request.url);
+          if (seen.length == 1) {
+            return http.Response(
+              '<D:multistatus xmlns:D="DAV:">'
+              '<D:response><D:href>/Music%20%25/</D:href></D:response>'
+              '<D:response><D:href>Album%20%231/</D:href>'
+              '<D:propstat><D:prop><D:resourcetype><D:collection/>'
+              '</D:resourcetype></D:prop></D:propstat></D:response>'
+              '</D:multistatus>', 207,
+            );
+          }
+          // Deliberately abort the walk before database purge; this test
+          // validates URL construction, not a successful sync transaction.
+          return http.Response('NAS unavailable', 503);
+        }),
+      );
+      await expectLater(
+        service.syncLibrary(server).toList(),
+        throwsA(isA<WebdavNetworkException>()),
+      );
+      expect(seen.map((uri) => uri.toString()).toList(), [
+        'https://dav.example.com/Music%20%25',
+        'https://dav.example.com/Music%20%25/Album%20%231/',
+      ]);
+    });
+
     test('legacy absolute NAS cover and audio paths never duplicate the origin', () {
       final cover = WebdavService.requestUriForTest(
         'https://192.168.8.1:6008/disk1_part1',
