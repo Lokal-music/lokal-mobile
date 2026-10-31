@@ -1107,15 +1107,17 @@ class YoutubeMusicAccount {
     String? params,
     Set<String> types = _mixContinuationTypes,
     DateTime? deadline,
+    Duration pageBudget = const Duration(seconds: 10),
+    int maxPages = 20,
   }) async {
     final pages = <Object?>[first];
     final seen = <String>{};
     final pending = _continuations(first, types: types);
-    final pageDeadline = DateTime.now().add(const Duration(seconds: 10));
+    final pageDeadline = DateTime.now().add(pageBudget);
     final stopAt = deadline != null && deadline.isBefore(pageDeadline)
         ? deadline
         : pageDeadline;
-    while (pending.isNotEmpty && seen.length < 20) {
+    while (pending.isNotEmpty && seen.length < maxPages) {
       if (stopAtMixShelf && _hasPersonalMixShelf(pages)) break;
       final token = pending.removeAt(0);
       if (!seen.add(token)) continue;
@@ -1151,7 +1153,7 @@ class YoutubeMusicAccount {
         );
       }
     }
-    if (pending.isNotEmpty && seen.length >= 20) {
+    if (pending.isNotEmpty && seen.length >= maxPages) {
       return (
         pages: pages,
         error: 'YouTube Music returned too many pages. Refresh to retry.',
@@ -1378,6 +1380,7 @@ class YoutubeMusicAccount {
     final pages = await _pages(
       'FEmusic_liked_playlists', first,
       types: _mixContinuationTypes,
+      pageBudget: const Duration(seconds: 60), maxPages: 100,
     );
     if (pages.error != null) {
       throw LokalDiscoveryFailure(pages.error!);
@@ -1534,6 +1537,7 @@ Future<List<LokalDiscoveryTrack>> youtubeMusicMix(
     final first = await browse('VL$id');
     final pages = await _pages(
       'VL$id', first, types: _mixContinuationTypes,
+      pageBudget: const Duration(seconds: 60), maxPages: 100,
     );
     if (pages.error != null) {
       throw LokalDiscoveryFailure(pages.error!);
