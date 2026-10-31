@@ -29,6 +29,12 @@ jobs:
           python3 -B -m unittest discover -s tool -p 'ci_*_test.py' -v
           python3 -B tool/native_test_cargokit_launcher.py
       - uses: ./.github/actions/android-toolchain
+      # Fast preflight: a malformed Spotify API file previously reached the
+      # signed release workflow before the full Flutter build caught it.
+      - name: Analyze Spotify library and playlist cache
+        run: |
+          dart analyze --no-fatal-infos --no-fatal-warnings lib/features/spotify/spotify_web_api.dart
+          dart analyze --no-fatal-infos --no-fatal-warnings lib/features/spotify/spotify_playlist_cache.dart
       - name: Focused suites from docs/BUILD.md, including share and picker
         run: >-
           flutter test --no-pub
