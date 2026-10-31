@@ -36,6 +36,9 @@ class LokalDetailHeader extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.8);
     final topInset = MediaQuery.paddingOf(context).top;
+    final artistScrim = t.isLight
+        ? Color.lerp(background, Colors.black, .86)!
+        : background;
     final artSize = (size.width * (size.width > 620 ? .36 : .63))
         .clamp(184.0, 314.0);
     final heroHeight = isArtist
@@ -69,8 +72,8 @@ class LokalDetailHeader extends StatelessWidget {
                   colors: [
                     Colors.black.withValues(alpha: .50),
                     Colors.transparent,
-                    background.withValues(alpha: .53),
-                    background,
+                    artistScrim.withValues(alpha: .75),
+                    artistScrim,
                   ],
                 ),
               ),
