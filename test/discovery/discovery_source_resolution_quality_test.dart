@@ -262,6 +262,41 @@ void main() {
     expect(calls, ['first']);
   });
 
+  test('HTTP providers presearch concurrently, bounded to three sources', () async {
+    final requests = <String>[];
+    final completions = <Completer<List<OnlineResult>>>[
+      for (var i = 0; i < 4; i++) Completer<List<OnlineResult>>(),
+    ];
+    final sources = <OnlineSource>[
+      for (var i = 0; i < 4; i++)
+        OnlineSource(
+          id: 'w-$i', name: 'HTTP $i',
+          results: (query) {
+            requests.add('$i:$query');
+            return completions[i].future;
+          },
+          play: (_) async => throw UnimplementedError(),
+        ),
+    ];
+    final prepared = prewarmHttpSourceMatches(
+      sources: sources,
+      candidate: const RecommendationCandidate(title: 'Song', artist: 'Artist'),
+      queries: ['Song Artist'],
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(requests, ['0:Song Artist', '1:Song Artist', '2:Song Artist']);
+    expect(prepared.keys, ['w-0', 'w-1', 'w-2']);
+    completions[2].complete([const OnlineResult(DiscoveryTrack(
+      id: 'third', title: 'Song', artist: 'Artist',
+      source: DiscoverySource.addon,
+    ))]);
+    expect((await prepared['w-2'])?.id, 'third');
+    for (final done in completions.take(2)) {
+      done.complete(const []);
+    }
+    await Future.wait([prepared['w-0']!, prepared['w-1']!]);
+  });
+
   test('Discovery starts two fallback searches concurrently', () async {
     final second = Completer<List<OnlineResult>>();
     final third = Completer<List<OnlineResult>>();
